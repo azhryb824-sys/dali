@@ -1,0 +1,5 @@
+Contact: https://dali-contracting.cust5467.chatgpt.site/contact
+Preferred-Languages: ar, en
+Canonical: https://dali-contracting.cust5467.chatgpt.site/.well-known/security.txt
+Policy: https://dali-contracting.cust5467.chatgpt.site/terms
+Expires: 2027-08-14T00:00:00.000Z

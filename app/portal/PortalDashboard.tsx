@@ -1,0 +1,1289 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { requirementsForProfession, workforceNationalities, workforceProfessions } from "@/lib/workforce-requirements";
+import OperationsWorkspace, { type OperationsTab } from "./OperationsWorkspace";
+import DocumentShareManager from "./DocumentShareManager";
+import WebsiteManager from "./WebsiteManager";
+import type { WebsiteContent } from "@/lib/website-content";
+import type { ChatAutomationConfig } from "@/lib/chat-automation";
+
+type PortalRole = "admin" | "manager" | "employee";
+type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "general";
+type RequestStatus = "new" | "reviewing" | "contacted" | "closed";
+type View = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "operations" | "conversations" | "documents" | "website" | "users";
+type RecordEntity = Exclude<PortalDepartment, "general">;
+
+type WorkforceRequest = {
+  id: number; trackingCode: string; fullName: string; mobile: string; email: string;
+  requestType: string; companyName: string | null; workSite: string | null; requiredStartDate: string | null;
+  duration: string | null; requestedCount: number | null; preferredContact: string | null;
+  specialization: string; details: string; status: string; source: string;
+  assignedTo: string | null; createdAt: string; updatedAt: string;
+  version: number;
+};
+type WorkforceRequestReply = {
+  id: number; requestId: number; senderEmail: string; senderName: string; recipientEmail: string;
+  subject: string; body: string; deliveryStatus: string; providerMessageId: string | null;
+  failureReason: string | null; sentAt: string | null; createdAt: string; updatedAt: string;
+};
+type PortalNotification = {
+  id: number; eventType: string; title: string; message: string; severity: string; module: string;
+  entityType: string | null; entityId: string | null; actionView: string | null; source: string;
+  createdAt: string; updatedAt: string; readAt: string | null;
+};
+type PortalUser = {
+  email: string; displayName: string; role: string; department: string; status: string;
+  requestedDepartment: string | null; requestedJobTitle: string | null; requestReason: string | null;
+  requestSubmittedAt: string | null; termsAcceptedAt: string | null; approvedBy: string | null;
+  approvedAt: string | null; suspendedAt: string | null;
+  createdAt: string; updatedAt: string; lastLoginAt: string | null;
+};
+type Activity = { id: number; actorEmail: string; action: string; entityType: string; entityId: string; createdAt: string };
+type EmployeeRecord = {
+  id: number; employeeNumber: string; fullName: string; jobTitle: string; department: string;
+  mobile: string; hireDate: string; status: string; createdAt: string; updatedAt: string;
+};
+type FinanceRecord = {
+  id: number; referenceCode: string; category: string; description: string; amountHalalas: number;
+  dueDate: string; workerId: number | null; contractId: number | null; documentId: number | null;
+  periodMonth: string | null; subCategory: string | null; paymentMethod: string | null; notes: string | null;
+  status: string; createdAt: string; updatedAt: string;
+};
+type LegalRecord = {
+  id: number; referenceCode: string; category: string; title: string; counterparty: string;
+  expiryDate: string | null; status: string; createdAt: string; updatedAt: string;
+};
+type WorkerRecord = {
+  id: number; workerNumber: string; iqamaNumber: string | null; fullName: string; nationality: string; profession: string;
+  mobile: string | null; beneficiaryName: string | null; clientSite: string; assignmentStartDate: string | null;
+  iqamaExpiry: string | null; status: string; createdAt: string; updatedAt: string;
+};
+type WorkerAttachment = {
+  id: number; workerId: number; documentType: string; requirementCode: string | null; title: string;
+  fileName: string; contentType: string; sizeBytes: number; createdBy: string; createdAt: string;
+};
+type CompanyDocument = {
+  id: number; referenceCode: string; title: string; category: string; documentType: string | null;
+  counterparty: string | null; fileName: string; contentType: string; sizeBytes: number;
+  expiryDate: string | null; retentionUntil: string | null; lockedUntil: string | null;
+  source: string; status: string; createdBy: string; createdAt: string; updatedAt: string;
+};
+type CompanyAsset = {
+  slot: string; fileName: string; contentType: string; sizeBytes: number; uploadedBy: string; updatedAt: string;
+};
+type WorkforceContract = {
+  id: number; referenceCode: string; documentId: number; clientName: string; clientCr: string | null; clientVat: string | null;
+  title: string; workSite: string; issueDate: string; startDate: string; endDate: string; amountHalalas: number;
+  details: string; status: string; createdBy: string; createdAt: string; updatedAt: string;
+};
+type ContractProfession = { id: number; contractId: number; profession: string; requiredCount: number; createdAt: string };
+type ContractAssignment = {
+  id: number; contractId: number; contractProfessionId: number; workerId: number; status: string;
+  assignedBy: string; assignedAt: string; releasedAt: string | null;
+};
+type VisitorConversation = {
+  id: string; trackingCode: string; visitorName: string; visitorEmail: string | null; visitorMobile: string;
+  subject: string; status: string; assignedTo: string | null; relatedRequestId: number | null;
+  lastVisitorMessageAt: string; lastStaffMessageAt: string | null; createdAt: string; updatedAt: string;
+};
+type VisitorMessage = {
+  id: number; conversationId: string; senderType: string; senderName: string; senderEmail: string | null;
+  body: string; readByVisitorAt: string | null; readByStaffAt: string | null; createdAt: string;
+};
+type BusinessHours = {
+  isOpen: boolean; timezone: string; workingDays: number[]; opensAt: string; closesAt: string; autoReply: string;
+  closedDates: string[]; specialOpenDates: string[]; exception?: "open" | "closed" | null; replyKey?: string; nextOpenLabel: string;
+};
+
+const requestStatuses: Record<RequestStatus, { label: string; className: string }> = {
+  new: { label: "جديد", className: "status-new" }, reviewing: { label: "قيد المراجعة", className: "status-reviewing" },
+  contacted: { label: "تم التواصل", className: "status-contacted" }, closed: { label: "مغلق", className: "status-closed" },
+};
+const recordStatus: Record<RecordEntity, Record<string, string>> = {
+  employees: { active: "على رأس العمل", leave: "في إجازة", suspended: "موقوف", ended: "منتهية خدمته" },
+  finance: { pending: "قيد المراجعة", approved: "معتمد", paid: "مدفوع", overdue: "متأخر" },
+  legal: { active: "ساري", reviewing: "قيد المراجعة", renewal: "يحتاج إلى تجديد", closed: "مغلق" },
+  workforce: { available: "متاح", assigned: "على رأس مشروع", leave: "في إجازة", suspended: "موقوف" },
+};
+const roleLabels: Record<PortalRole, string> = { admin: "مدير النظام", manager: "الإدارة", employee: "موظف" };
+const departmentLabels: Record<PortalDepartment, string> = {
+  employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية",
+  workforce: "شؤون العمالة", general: "صلاحية عامة",
+};
+const financeLabels: Record<string, string> = {
+  worker_salary: "راتب عامل", worker_advance: "سلفة عامل", worker_deduction: "خصم عامل", worker_expense: "مصروف عمالة",
+  workforce_invoice: "فاتورة عمالة", receipt_voucher: "سند قبض", payment_voucher: "سند صرف", progress_claim: "مستخلص عمالة",
+  invoice: "فاتورة عميل", expense: "مصروف", payroll: "مسير رواتب", advance: "عُهدة أو سلفة",
+};
+const workforceExpenseLabels: Record<string, string> = {
+  accommodation: "السكن", transportation: "النقل", iqama_visa: "الإقامة والتأشيرات", medical_insurance: "التأمين الطبي",
+  tickets: "التذاكر", uniforms_safety: "الزي ومعدات السلامة", training_certificates: "التدريب والشهادات",
+  treatment: "العلاج", meals: "الإعاشة والوجبات", other: "مصروف آخر",
+};
+const paymentMethodLabels: Record<string, string> = { bank_transfer: "تحويل بنكي", cash: "نقدي", cheque: "شيك", payroll_file: "ملف حماية الأجور", other: "أخرى" };
+const legalLabels: Record<string, string> = { contract: "عقد", case: "قضية", license: "ترخيص", compliance: "امتثال" };
+const documentCategoryLabels: Record<string, string> = { license: "ترخيص", contract: "عقد", certificate: "شهادة", finance: "مالي", legal: "قانوني", hr: "موارد بشرية", other: "أخرى" };
+const issuedTypeLabels: Record<string, string> = { workforce_contract: "عقد توفير عمالة", quotation: "عرض سعر", progress_claim: "مستخلص أعمال", invoice: "فاتورة", receipt: "سند قبض", payment_voucher: "سند صرف" };
+
+function safeRequestStatus(value: string): RequestStatus { return value in requestStatuses ? value as RequestStatus : "new"; }
+function formatDate(value: string | null, includeTime = false) {
+  if (!value) return "غير محدد";
+  const normalized = value.includes("T") ? value : `${value}T00:00:00`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "short", year: "numeric", ...(includeTime ? { hour: "numeric", minute: "2-digit" } : {}) }).format(date);
+}
+function formatMoney(halalas: number) {
+  return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 2 }).format(halalas / 100);
+}
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} بايت`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} كيلوبايت`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} ميجابايت`;
+}
+function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("") || "د"; }
+function daysUntil(value: string | null) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const target = new Date(`${value}T00:00:00`).getTime();
+  return Math.ceil((target - Date.now()) / 86400000);
+}
+function statusClass(status: string) {
+  if (["active", "approved", "paid", "available", "assigned"].includes(status)) return "status-contacted";
+  if (["overdue", "suspended", "ended"].includes(status)) return "status-new";
+  if (["leave", "pending", "reviewing", "renewal"].includes(status)) return "status-reviewing";
+  return "status-closed";
+}
+function workerRequirementStatus(worker: WorkerRecord, attachments: WorkerAttachment[]) {
+  const workerFiles = attachments.filter((item) => item.workerId === worker.id);
+  const requirements = requirementsForProfession(worker.profession);
+  const uploadedCodes = new Set(workerFiles.map((item) => item.requirementCode).filter(Boolean));
+  const missing = requirements.filter((item) => !uploadedCodes.has(item.code));
+  const hasPhoto = workerFiles.some((item) => item.documentType === "photo");
+  const total = requirements.length + 2;
+  const complete = requirements.length - missing.length + (hasPhoto ? 1 : 0) + (worker.iqamaNumber ? 1 : 0);
+  return { requirements, missing, hasPhoto, complete, total, percent: Math.round((complete / total) * 100), files: workerFiles };
+}
+
+type IconName = "home" | "employees" | "finance" | "legal" | "workforce" | "conversations" | "documents" | "website" | "users" | "search" | "bell" | "menu" | "close" | "plus" | "download" | "share" | "upload" | "stamp" | "mail" | "check";
+function Icon({ name }: { name: IconName }) {
+  const paths: Record<IconName, React.ReactNode> = {
+    home: <><path d="M3 10.8 12 3l9 7.8"/><path d="M5.5 9.5V21h13V9.5M9 21v-6h6v6"/></>,
+    employees: <><circle cx="9" cy="8" r="4"/><path d="M2.5 21c.7-4 2.8-6 6.5-6s5.8 2 6.5 6M16 4.5a4 4 0 0 1 0 7.5M17 15c2.5.5 3.9 2.4 4.5 6"/></>,
+    finance: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M7 15h3M15 13v4M13 15h4"/></>,
+    legal: <><path d="M12 3v18M6 6h12M7 6l-4 7h8L7 6ZM17 6l-4 7h8l-4-7ZM7 21h10"/></>,
+    workforce: <><path d="M4 20V7l8-4 8 4v13M8 20v-5h8v5M8 9h.01M12 9h.01M16 9h.01"/></>,
+    conversations: <><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 12h5"/></>,
+    documents: <><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h5M9 12h7M9 16h7"/></>,
+    website: <><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9S14.5 18.5 12 21M12 3C9.5 5.5 8.2 8.5 8.2 12S9.5 18.5 12 21"/></>,
+    users: <><circle cx="8" cy="8" r="3.5"/><circle cx="17" cy="8" r="3.5"/><path d="M1.5 21c.5-4 2.5-6 6.5-6s6 2 6.5 6M14 15c4.8-.2 7.4 1.8 8.5 6"/></>,
+    search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></>,
+    menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>, close: <><path d="m5 5 14 14M19 5 5 19"/></>,
+    plus: <><path d="M12 5v14M5 12h14"/></>,
+    download: <><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></>,
+    share: <><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.5-4.4M8.2 13.2l7.5 4.4"/></>,
+    upload: <><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></>,
+    stamp: <><path d="M8 13h8M9 13c0-3 1-4 1-7a2 2 0 0 1 4 0c0 3 1 4 1 7M5 13h14v4H5zM7 21h10"/></>,
+    mail: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></>,
+    check: <><path d="m5 12 4 4L19 6"/></>,
+  };
+  return <svg className="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
+
+export default function PortalDashboard({ currentUser, initialRequests, initialRequestReplies, initialNotifications, initialUsers, initialActivity, initialEmployees, initialFinance, initialLegal, initialWorkers, initialWorkerAttachments, initialDocuments, initialAssets, initialContracts, initialContractProfessions, initialContractAssignments, initialConversations, initialConversationMessages, initialBusinessHours, initialChatAutomation, initialWebsiteContent, canAccessWebsite, canManageWebsite, canManageChatSettings, canManageDocuments, canManageAssets, emailConfigured, signOutPath }: {
+  currentUser: { email: string; displayName: string; role: PortalRole; department: PortalDepartment };
+  initialRequests: WorkforceRequest[]; initialRequestReplies: WorkforceRequestReply[]; initialNotifications: PortalNotification[]; initialUsers: PortalUser[]; initialActivity: Activity[];
+  initialEmployees: EmployeeRecord[]; initialFinance: FinanceRecord[]; initialLegal: LegalRecord[]; initialWorkers: WorkerRecord[]; initialWorkerAttachments: WorkerAttachment[];
+  initialDocuments: CompanyDocument[]; initialAssets: CompanyAsset[]; canManageDocuments: boolean; canManageAssets: boolean;
+  initialContracts: WorkforceContract[]; initialContractProfessions: ContractProfession[]; initialContractAssignments: ContractAssignment[];
+  initialConversations: VisitorConversation[]; initialConversationMessages: VisitorMessage[]; initialBusinessHours: BusinessHours; canManageChatSettings: boolean;
+  initialChatAutomation: ChatAutomationConfig;
+  emailConfigured: boolean;
+  initialWebsiteContent: WebsiteContent; canAccessWebsite: boolean; canManageWebsite: boolean;
+  signOutPath: string;
+}) {
+  const router = useRouter();
+  const [view, setView] = useState<View>("overview");
+  const [requests, setRequests] = useState(initialRequests);
+  const [requestReplies, setRequestReplies] = useState(initialRequestReplies);
+  const [notifications, setNotifications] = useState(initialNotifications);
+  const [users, setUsers] = useState(initialUsers);
+  const [employees, setEmployees] = useState(initialEmployees);
+  const [finance, setFinance] = useState(initialFinance);
+  const [legal, setLegal] = useState(initialLegal);
+  const [workers, setWorkers] = useState(initialWorkers);
+  const [workerAttachments, setWorkerAttachments] = useState(initialWorkerAttachments);
+  const [documents, setDocuments] = useState(initialDocuments);
+  const [assets, setAssets] = useState(initialAssets);
+  const [contracts, setContracts] = useState(initialContracts);
+  const [contractProfessions, setContractProfessions] = useState(initialContractProfessions);
+  const [contractAssignments, setContractAssignments] = useState(initialContractAssignments);
+  const [conversations, setConversations] = useState(initialConversations);
+  const [conversationMessages, setConversationMessages] = useState(initialConversationMessages);
+  const [businessHours, setBusinessHours] = useState(initialBusinessHours);
+  const [chatAutomation, setChatAutomation] = useState(initialChatAutomation);
+  const latestConversationMessageId = useRef(initialConversationMessages.reduce((max, item) => Math.max(max, item.id), 0));
+  const latestConversationUpdatedAt = useRef(initialConversations.reduce((latest, item) => item.updatedAt > latest ? item.updatedAt : latest, ""));
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null);
+  const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
+  const [requestFilter, setRequestFilter] = useState<"all" | RequestStatus>("all");
+  const [query, setQuery] = useState("");
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [modal, setModal] = useState<RecordEntity | null>(null);
+  const [documentModal, setDocumentModal] = useState<"upload" | "issue" | null>(null);
+  const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
+  const [operationsTab, setOperationsTab] = useState<OperationsTab>("crm");
+  const [operationsQuery, setOperationsQuery] = useState("");
+  const [issuePreset, setIssuePreset] = useState("workforce_contract");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const canWrite = currentUser.role === "admin" || currentUser.role === "manager";
+  const canAccess = (department: RecordEntity) => currentUser.role !== "employee" || currentUser.department === department;
+  const canAccessDocuments = currentUser.role !== "employee" || currentUser.department === "legal" || currentUser.department === "finance";
+
+  useEffect(() => {
+    let idleTimer = 0;
+    let lastTouch = 0;
+    const endForIdle = () => { router.replace("/api/portal/session/end?returnTo=%2Fportal&reason=idle-timeout"); };
+    const registerActivity = () => {
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(endForIdle, 30 * 60_000);
+      if (Date.now() - lastTouch < 60_000) return;
+      lastTouch = Date.now();
+      void fetch("/api/portal/session/touch", { method: "POST", cache: "no-store" }).then((response) => {
+        if (response.status === 401 || response.status === 403) endForIdle();
+      }).catch(() => undefined);
+    };
+    const visibleActivity = () => { if (document.visibilityState === "visible") registerActivity(); };
+    const events: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "scroll", "touchstart"];
+    events.forEach((eventName) => window.addEventListener(eventName, registerActivity, { passive: true }));
+    document.addEventListener("visibilitychange", visibleActivity);
+    registerActivity();
+    return () => {
+      window.clearTimeout(idleTimer);
+      events.forEach((eventName) => window.removeEventListener(eventName, registerActivity));
+      document.removeEventListener("visibilitychange", visibleActivity);
+    };
+  }, [router]);
+
+  useEffect(() => {
+    const dialog = document.querySelector<HTMLElement>("[role='dialog'][aria-modal='true']");
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusableSelector = "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+    const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
+    focusables[0]?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dialog.parentElement?.querySelector<HTMLButtonElement>(".drawer-backdrop")?.click();
+        return;
+      }
+      if (event.key !== "Tab" || !focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => {
+      dialog.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [selectedId, selectedConversationId, selectedWorkerId, selectedContractId, modal, documentModal, chatSettingsOpen]);
+
+  const requestCounts = useMemo(() => ({
+    total: requests.length, new: requests.filter((item) => safeRequestStatus(item.status) === "new").length,
+    reviewing: requests.filter((item) => safeRequestStatus(item.status) === "reviewing").length,
+    contacted: requests.filter((item) => safeRequestStatus(item.status) === "contacted").length,
+  }), [requests]);
+  const selected = requests.find((item) => item.id === selectedId) ?? null;
+  const selectedConversation = conversations.find((item) => item.id === selectedConversationId) ?? null;
+  const selectedWorker = workers.find((item) => item.id === selectedWorkerId) ?? null;
+  const selectedContract = contracts.find((item) => item.id === selectedContractId) ?? null;
+  const financialTotal = finance.reduce((total, item) => total + item.amountHalalas, 0);
+  const payrollTotal = finance.filter((item) => item.category === "worker_salary").reduce((total, item) => total + item.amountHalalas, 0);
+  const advancesTotal = finance.filter((item) => item.category === "worker_advance").reduce((total, item) => total + item.amountHalalas, 0);
+  const deductionsTotal = finance.filter((item) => item.category === "worker_deduction").reduce((total, item) => total + item.amountHalalas, 0);
+  const workforceExpensesTotal = finance.filter((item) => item.category === "worker_expense").reduce((total, item) => total + item.amountHalalas, 0);
+  const workforceInvoicesTotal = finance.filter((item) => ["workforce_invoice", "progress_claim"].includes(item.category)).reduce((total, item) => total + item.amountHalalas, 0);
+  const legalAlerts = legal.filter((item) => item.status !== "closed" && daysUntil(item.expiryDate) <= 45).length;
+  const workerAlerts = workers.filter((item) => daysUntil(item.iqamaExpiry) <= 45).length;
+  const incompleteWorkerFiles = workers.filter((worker) => workerRequirementStatus(worker, workerAttachments).missing.length > 0 || !workerRequirementStatus(worker, workerAttachments).hasPhoto || !worker.iqamaNumber).length;
+  const activeBeneficiaries = new Set(workers.filter((item) => item.status === "assigned" && item.beneficiaryName).map((item) => item.beneficiaryName)).size;
+  const expiringDocuments = documents.filter((item) => item.status === "active" && daysUntil(item.expiryDate) >= 0 && daysUntil(item.expiryDate) <= 30);
+  const expiredDocuments = documents.filter((item) => item.status === "active" && daysUntil(item.expiryDate) < 0);
+  const documentAlerts = expiringDocuments.length + expiredDocuments.length;
+  const unreadNotifications = notifications.filter((item) => !item.readAt).length;
+  const unreadConversationMessages = conversationMessages.filter((item) => item.senderType === "visitor" && !item.readByStaffAt).length;
+  const waitingConversations = conversations.filter((item) => item.status === "waiting").length;
+
+  function changeView(next: View) { setView(next); setQuery(""); setMenuOpen(false); }
+  function notify(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 5000); }
+
+  const refreshNotifications = useCallback(async (silent = false) => {
+    try {
+      const response = await fetch("/api/portal/notifications", { cache: "no-store" });
+      const result = await response.json() as { notifications?: PortalNotification[]; error?: string };
+      if (!response.ok || !result.notifications) throw new Error(result.error || "تعذّر تحديث الإشعارات");
+      setNotifications(result.notifications);
+    } catch (error) {
+      if (!silent) {
+        setNotice(error instanceof Error ? error.message : "تعذّر تحديث الإشعارات.");
+        window.setTimeout(() => setNotice(""), 5000);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshNotifications(true);
+    }, 45000);
+    return () => window.clearInterval(timer);
+  }, [refreshNotifications]);
+
+  const refreshConversations = useCallback(async (silent = false, full = false) => {
+    try {
+      const params = full ? "" : `?afterMessageId=${latestConversationMessageId.current}&updatedAfter=${encodeURIComponent(latestConversationUpdatedAt.current)}`;
+      const response = await fetch(`/api/portal/conversations${params}`, { cache: "no-store" });
+      const result = await response.json() as { conversations?: VisitorConversation[]; messages?: VisitorMessage[]; businessHours?: BusinessHours; chatAutomation?: ChatAutomationConfig; delta?: boolean; error?: string };
+      if (!response.ok || !result.conversations || !result.messages || !result.businessHours) throw new Error(result.error || "تعذّر تحديث المحادثات");
+      setConversations((current) => result.delta ? [...result.conversations!, ...current.filter((item) => !result.conversations!.some((changed) => changed.id === item.id))].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 100) : result.conversations!);
+      setConversationMessages((current) => result.delta ? [...current, ...result.messages!.filter((item) => !current.some((existing) => existing.id === item.id))].slice(-1600) : result.messages!);
+      if (result.messages.length) latestConversationMessageId.current = Math.max(latestConversationMessageId.current, ...result.messages.map((item) => item.id));
+      if (result.conversations.length) latestConversationUpdatedAt.current = result.conversations.reduce((latest, item) => item.updatedAt > latest ? item.updatedAt : latest, latestConversationUpdatedAt.current);
+      setBusinessHours(result.businessHours);
+      if (result.chatAutomation) setChatAutomation(result.chatAutomation);
+    } catch (error) {
+      if (!silent) notify(error instanceof Error ? error.message : "تعذّر تحديث المحادثات.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentUser.role === "employee" && currentUser.department !== "workforce") return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshConversations(true);
+    }, 12000);
+    return () => window.clearInterval(timer);
+  }, [refreshConversations, currentUser.role, currentUser.department]);
+
+  async function openConversation(id: string) {
+    setSelectedConversationId(id);
+    try {
+      const response = await fetch(`/api/portal/conversations?conversationId=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const result = await response.json() as { messages?: VisitorMessage[] };
+      if (response.ok && result.messages) {
+        setConversationMessages((items) => [...items.filter((item) => item.conversationId !== id), ...result.messages!]);
+        if (result.messages.length) latestConversationMessageId.current = Math.max(latestConversationMessageId.current, ...result.messages.map((item) => item.id));
+      }
+    } catch { /* يحتفظ النظام بالبيانات المحملة مسبقاً عند تعذر الجلب التفصيلي */ }
+    const now = new Date().toISOString();
+    setConversationMessages((items) => items.map((item) => item.conversationId === id && item.senderType === "visitor" ? { ...item, readByStaffAt: item.readByStaffAt || now } : item));
+    try {
+      await fetch("/api/portal/conversations", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "mark-read", conversationId: id }),
+      });
+    } catch { /* polling will reconcile read state */ }
+  }
+
+  async function sendConversationReply(conversationId: string, form: HTMLFormElement) {
+    setBusy(`chat-reply-${conversationId}`);
+    try {
+      const body = String(new FormData(form).get("body") || "").trim();
+      const response = await fetch("/api/portal/conversations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ conversationId, body }),
+      });
+      const result = await response.json() as { conversation?: VisitorConversation; message?: VisitorMessage; error?: string };
+      if (!response.ok || !result.conversation || !result.message) throw new Error(result.error || "تعذّر إرسال الرد");
+      setConversations((items) => items.map((item) => item.id === conversationId ? { ...item, ...result.conversation } : item));
+      setConversationMessages((items) => [...items, result.message as VisitorMessage]);
+      form.reset();
+      notify("تم إرسال الرد للزائر داخل المحادثة مباشرة.");
+      void refreshNotifications(true);
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إرسال الرد."); }
+    finally { setBusy(null); }
+  }
+
+  async function updateConversationStatus(conversationId: string, status: "waiting" | "open" | "closed") {
+    setBusy(`chat-status-${conversationId}`);
+    try {
+      const response = await fetch("/api/portal/conversations", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "status", conversationId, status }),
+      });
+      const result = await response.json() as { conversation?: VisitorConversation; error?: string };
+      if (!response.ok || !result.conversation) throw new Error(result.error || "تعذّر تحديث المحادثة");
+      setConversations((items) => items.map((item) => item.id === conversationId ? { ...item, ...result.conversation } : item));
+      notify(status === "closed" ? "تم إغلاق المحادثة." : "تم تحديث حالة المحادثة.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تحديث المحادثة."); }
+    finally { setBusy(null); }
+  }
+
+  async function saveBusinessHours(form: HTMLFormElement) {
+    setBusy("chat-settings");
+    const data = new FormData(form);
+    const config = {
+      workingDays: data.getAll("workingDays").map(Number),
+      opensAt: String(data.get("opensAt") || ""),
+      closesAt: String(data.get("closesAt") || ""),
+      autoReply: String(data.get("autoReply") || ""),
+      closedDates: String(data.get("closedDates") || "").split(/[\s,،]+/).filter(Boolean),
+      specialOpenDates: String(data.get("specialOpenDates") || "").split(/[\s,،]+/).filter(Boolean),
+    };
+    const automation = {
+      enabled: data.get("automationEnabled") === "on",
+      welcomeEnabled: data.get("welcomeEnabled") === "on",
+      afterHoursEnabled: data.get("afterHoursEnabled") === "on",
+      intentRepliesEnabled: data.get("intentRepliesEnabled") === "on",
+      welcomeReply: String(data.get("welcomeReply") || ""),
+      rules: chatAutomation.rules.map((rule) => ({
+        ...rule,
+        enabled: data.get(`ruleEnabled:${rule.id}`) === "on",
+        keywords: String(data.get(`ruleKeywords:${rule.id}`) || "").split(/[\n,،]+/).map((item) => item.trim()).filter(Boolean),
+        response: String(data.get(`ruleResponse:${rule.id}`) || ""),
+      })),
+    };
+    try {
+      const response = await fetch("/api/portal/conversations", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "settings", config, automation }),
+      });
+      const result = await response.json() as { businessHours?: BusinessHours; chatAutomation?: ChatAutomationConfig; error?: string };
+      if (!response.ok || !result.businessHours || !result.chatAutomation) throw new Error(result.error || "تعذّر حفظ إعدادات المحادثة");
+      setBusinessHours(result.businessHours);
+      setChatAutomation(result.chatAutomation);
+      setChatSettingsOpen(false);
+      notify("تم تحديث ساعات الدوام ونظام الرد الآلي المتكامل.");
+      void refreshNotifications(true);
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر حفظ الإعدادات."); }
+    finally { setBusy(null); }
+  }
+
+  async function updateNotificationState(action: "read" | "read-all" | "dismiss", ids: number[] = []) {
+    try {
+      const response = await fetch("/api/portal/notifications", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, ids }),
+      });
+      const result = await response.json() as { notifications?: PortalNotification[]; error?: string };
+      if (!response.ok || !result.notifications) throw new Error(result.error || "تعذّر تحديث الإشعارات");
+      setNotifications(result.notifications);
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تحديث الإشعارات."); }
+  }
+
+  function openNotification(item: PortalNotification) {
+    if (!item.readAt) void updateNotificationState("read", [item.id]);
+    setNotificationsOpen(false);
+    setOperationsQuery("");
+    const actionView = item.actionView as View | null;
+    if (actionView && ["overview", "notifications", "employees", "finance", "legal", "workforce", "operations", "conversations", "documents", "website", "users"].includes(actionView)) changeView(actionView);
+    if (item.entityType === "workforce-request" && item.entityId) setSelectedId(Number(item.entityId));
+    if (item.entityType === "worker" && item.entityId) setSelectedWorkerId(Number(item.entityId));
+    if (item.entityType === "workforce-contract" && item.entityId) setSelectedContractId(Number(item.entityId));
+    if (item.entityType === "visitor-conversation" && item.entityId) void openConversation(item.entityId);
+    if (item.entityType === "data-subject-request") setOperationsTab("privacy");
+    if (item.entityType === "quote-version") setOperationsTab("quotes");
+    if (item.entityType === "work-order") setOperationsTab("orders");
+    if (item.entityType === "timesheet") setOperationsTab("timesheets");
+    if (item.entityType?.startsWith("integration-")) setOperationsTab("integrations");
+  }
+
+  async function sendRequestReply(requestId: number, form: HTMLFormElement) {
+    setBusy(`reply-${requestId}`);
+    try {
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const response = await fetch(`/api/portal/requests/${requestId}/reply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json() as { reply?: WorkforceRequestReply | null; request?: WorkforceRequest; error?: string };
+      if (result.reply) setRequestReplies((items) => [result.reply as WorkforceRequestReply, ...items.filter((item) => item.id !== result.reply!.id)]);
+      if (!response.ok || !result.reply || !result.request) throw new Error(result.error || "تعذّر إرسال الرد");
+      setRequests((items) => items.map((item) => item.id === requestId ? result.request as WorkforceRequest : item));
+      form.reset();
+      notify("تم إرسال الرد إلى بريد الزائر وحفظه في سجل الطلب.");
+      void refreshNotifications(true);
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إرسال الرد."); }
+    finally { setBusy(null); }
+  }
+
+  async function createRecord(entity: RecordEntity, form: HTMLFormElement) {
+    setBusy(`create-${entity}`);
+    const data = Object.fromEntries(new FormData(form).entries());
+    try {
+      const response = await fetch("/api/portal/records", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entity, data }) });
+      const result = await response.json() as { record?: EmployeeRecord | FinanceRecord | LegalRecord | WorkerRecord; error?: string };
+      if (!response.ok || !result.record) throw new Error(result.error || "تعذّر حفظ السجل");
+      if (entity === "employees") setEmployees((items) => [result.record as EmployeeRecord, ...items]);
+      if (entity === "finance") setFinance((items) => [result.record as FinanceRecord, ...items]);
+      if (entity === "legal") setLegal((items) => [result.record as LegalRecord, ...items]);
+      if (entity === "workforce") setWorkers((items) => [result.record as WorkerRecord, ...items]);
+      setModal(null); notify("تم حفظ السجل بنجاح.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر حفظ السجل."); }
+    finally { setBusy(null); }
+  }
+
+  async function createWorker(form: HTMLFormElement) {
+    setBusy("create-workforce");
+    try {
+      const response = await fetch("/api/portal/workers", { method: "POST", body: new FormData(form) });
+      const result = await response.json() as { worker?: WorkerRecord; attachments?: WorkerAttachment[]; error?: string };
+      if (!response.ok || !result.worker || !result.attachments) throw new Error(result.error || "تعذّر إنشاء ملف العامل");
+      setWorkers((items) => [result.worker as WorkerRecord, ...items]);
+      setWorkerAttachments((items) => [...result.attachments as WorkerAttachment[], ...items]);
+      setModal(null); notify("تم إنشاء ملف العامل وإرفاق متطلبات المهنة.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إنشاء ملف العامل."); }
+    finally { setBusy(null); }
+  }
+
+  async function uploadWorkerAttachment(workerId: number, form: HTMLFormElement) {
+    setBusy(`worker-attachment-${workerId}`);
+    const data = new FormData(form); data.set("workerId", String(workerId));
+    try {
+      const response = await fetch("/api/portal/workers/attachments", { method: "POST", body: data });
+      const result = await response.json() as { attachment?: WorkerAttachment; error?: string };
+      if (!response.ok || !result.attachment) throw new Error(result.error || "تعذّر رفع الشهادة");
+      setWorkerAttachments((items) => [result.attachment as WorkerAttachment, ...items]);
+      form.reset(); notify("تمت إضافة الشهادة إلى ملف العامل.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر رفع الشهادة."); }
+    finally { setBusy(null); }
+  }
+
+  async function updateRecordStatus(entity: RecordEntity, id: number, status: string) {
+    setBusy(`${entity}-${id}`);
+    try {
+      const response = await fetch("/api/portal/records", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ entity, id, status }) });
+      const result = await response.json() as { record?: EmployeeRecord | FinanceRecord | LegalRecord | WorkerRecord; error?: string };
+      if (!response.ok || !result.record) throw new Error(result.error || "تعذّر تحديث السجل");
+      if (entity === "employees") setEmployees((items) => items.map((item) => item.id === id ? result.record as EmployeeRecord : item));
+      if (entity === "finance") setFinance((items) => items.map((item) => item.id === id ? result.record as FinanceRecord : item));
+      if (entity === "legal") setLegal((items) => items.map((item) => item.id === id ? result.record as LegalRecord : item));
+      if (entity === "workforce") setWorkers((items) => items.map((item) => item.id === id ? result.record as WorkerRecord : item));
+      notify("تم تحديث حالة السجل.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تحديث السجل."); }
+    finally { setBusy(null); }
+  }
+
+  async function updateRequestStatus(id: number, status: RequestStatus) {
+    setBusy(`request-${id}`);
+    try {
+      const current = requests.find((item) => item.id === id);
+      const response = await fetch("/api/portal/requests", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, status, version: current?.version }) });
+      const data = await response.json() as { request?: WorkforceRequest };
+      if (!response.ok || !data.request) throw new Error();
+      setRequests((items) => items.map((item) => item.id === id ? data.request as WorkforceRequest : item));
+      notify("تم تحديث حالة الطلب.");
+    } catch { notify("تعذّر تحديث حالة الطلب."); } finally { setBusy(null); }
+  }
+
+  async function updateUser(email: string, role: PortalRole, department: PortalDepartment, status: "active" | "pending" | "suspended", reason: string) {
+    setBusy(`user-${email}`);
+    try {
+      const response = await fetch("/api/portal/users", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, role, department, status, reason }) });
+      const data = await response.json() as { user?: PortalUser; error?: string };
+      if (!response.ok || !data.user) throw new Error(data.error || "تعذّر تحديث صلاحية المستخدم.");
+      setUsers((items) => items.map((item) => item.email === email ? data.user as PortalUser : item));
+      notify("تم تحديث الصلاحية وإبطال الجلسات السابقة للمستخدم.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تحديث صلاحيات المستخدم."); } finally { setBusy(null); }
+  }
+
+  async function uploadDocument(form: HTMLFormElement) {
+    setBusy("upload-document");
+    try {
+      const response = await fetch("/api/portal/documents", { method: "POST", body: new FormData(form) });
+      const result = await response.json() as { document?: CompanyDocument; error?: string };
+      if (!response.ok || !result.document) throw new Error(result.error || "تعذّر رفع المستند");
+      setDocuments((items) => [result.document as CompanyDocument, ...items]);
+      setDocumentModal(null); notify("تم رفع المستند وحفظه في مركز المستندات.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر رفع المستند."); }
+    finally { setBusy(null); }
+  }
+
+  async function issueDocument(form: HTMLFormElement) {
+    setBusy("issue-document");
+    const data = Object.fromEntries(new FormData(form).entries()) as Record<string, FormDataEntryValue>;
+    if (data.documentType === "workforce_contract" && data.endDate) data.expiryDate = data.endDate;
+    try {
+      const response = await fetch("/api/portal/documents/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(data) });
+      const result = await response.json() as {
+        document?: CompanyDocument; contract?: WorkforceContract | null; professions?: ContractProfession[]; assignments?: ContractAssignment[];
+        workers?: WorkerRecord[]; financialRecord?: FinanceRecord | null;
+        capacity?: Array<{ profession: string; requiredCount: number; selectedCount: number; registeredCount: number; availableCount: number; registeredShortage: number; availableShortage: number; unassignedCount: number }> | null;
+        error?: string;
+      };
+      if (!response.ok || !result.document) throw new Error(result.error || "تعذّر إصدار المستند");
+      setDocuments((items) => [result.document as CompanyDocument, ...items]);
+      if (result.contract) setContracts((items) => [result.contract as WorkforceContract, ...items]);
+      if (result.professions?.length) setContractProfessions((items) => [...result.professions as ContractProfession[], ...items]);
+      if (result.assignments?.length) setContractAssignments((items) => [...result.assignments as ContractAssignment[], ...items]);
+      if (result.financialRecord) setFinance((items) => [result.financialRecord as FinanceRecord, ...items]);
+      if (result.workers?.length) setWorkers((items) => items.map((worker) => result.workers!.find((updated) => updated.id === worker.id) || worker));
+      setDocumentModal(null);
+      const unassigned = result.capacity?.reduce((total, item) => total + item.unassignedCount, 0) || 0;
+      const registeredShortage = result.capacity?.reduce((total, item) => total + item.registeredShortage, 0) || 0;
+      const availableShortage = result.capacity?.reduce((total, item) => total + item.availableShortage, 0) || 0;
+      if (registeredShortage) notify(`تم إصدار العقد. إجمالي العجز عن العمالة المسجلة ${registeredShortage} عامل، ويمكن استكمال الإسناد لاحقاً.`);
+      else if (availableShortage) notify(`تم إصدار العقد رغم وجود عجز تشغيلي مقداره ${availableShortage} عامل، ويمكن استكمال الإسناد لاحقاً.`);
+      else if (unassigned) notify(`تم إصدار العقد مع ترك ${unassigned} خانة عمالية دون إسناد لاستكمالها لاحقاً.`);
+      else notify("تم إصدار ملف PDF بالختم والتوقيع المعتمدين.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إصدار المستند."); }
+    finally { setBusy(null); }
+  }
+
+  function openIssueDocument(type: string) {
+    setIssuePreset(type);
+    setDocumentModal("issue");
+  }
+
+  async function assignWorkerToContract(contractId: number, contractProfessionId: number, workerId: number) {
+    setBusy(`contract-assign-${contractProfessionId}`);
+    try {
+      const response = await fetch(`/api/portal/contracts/${contractId}/workers`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contractProfessionId, workerId }),
+      });
+      const result = await response.json() as { assignment?: ContractAssignment; worker?: WorkerRecord; error?: string };
+      if (!response.ok || !result.assignment || !result.worker) throw new Error(result.error || "تعذّر إسناد العامل");
+      setContractAssignments((items) => [result.assignment as ContractAssignment, ...items]);
+      setWorkers((items) => items.map((item) => item.id === result.worker!.id ? result.worker as WorkerRecord : item));
+      notify("تم إسناد العامل إلى العقد وتحديث الجهة المستفيدة في ملفه.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إسناد العامل."); }
+    finally { setBusy(null); }
+  }
+
+  async function releaseWorkerFromContract(contractId: number, assignmentId: number) {
+    setBusy(`contract-release-${assignmentId}`);
+    try {
+      const response = await fetch(`/api/portal/contracts/${contractId}/workers`, {
+        method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ assignmentId }),
+      });
+      const result = await response.json() as { assignment?: ContractAssignment; worker?: WorkerRecord; error?: string };
+      if (!response.ok || !result.assignment || !result.worker) throw new Error(result.error || "تعذّر إنهاء الإسناد");
+      setContractAssignments((items) => items.map((item) => item.id === result.assignment!.id ? result.assignment as ContractAssignment : item));
+      setWorkers((items) => items.map((item) => item.id === result.worker!.id ? result.worker as WorkerRecord : item));
+      notify("تم إنهاء الإسناد وأصبح العامل متاحاً للعقود الأخرى.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إنهاء الإسناد."); }
+    finally { setBusy(null); }
+  }
+
+  async function uploadAsset(slot: "stamp" | "signature", form: HTMLFormElement) {
+    setBusy(`asset-${slot}`);
+    const data = new FormData(form); data.set("slot", slot);
+    try {
+      const response = await fetch("/api/portal/company-assets", { method: "POST", body: data });
+      const result = await response.json() as { asset?: CompanyAsset; error?: string };
+      if (!response.ok || !result.asset) throw new Error(result.error || "تعذّر حفظ الملف");
+      setAssets((items) => [result.asset as CompanyAsset, ...items.filter((item) => item.slot !== slot)]);
+      form.reset(); notify(slot === "stamp" ? "تم اعتماد ختم الشركة." : "تم اعتماد توقيع الشركة.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر حفظ الملف."); }
+    finally { setBusy(null); }
+  }
+
+  async function shareDocument(id: number) {
+    setBusy(`share-${id}`);
+    try {
+      const response = await fetch("/api/portal/documents/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ documentId: id }) });
+      const result = await response.json() as { shareUrl?: string; error?: string };
+      if (!response.ok || !result.shareUrl) throw new Error(result.error || "تعذّر إنشاء الرابط");
+      try { await navigator.clipboard.writeText(result.shareUrl); notify("تم نسخ رابط مشاركة صالح لمدة 7 أيام."); }
+      catch { window.prompt("انسخ رابط المشاركة — صالح لمدة 7 أيام", result.shareUrl); }
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إنشاء رابط المشاركة."); }
+    finally { setBusy(null); }
+  }
+
+  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", conversations: "المحادثات المباشرة", documents: "مركز المستندات", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
+  const visibleRequests = requests.filter((item) => {
+    const matchesStatus = requestFilter === "all" || safeRequestStatus(item.status) === requestFilter;
+    const haystack = `${item.fullName} ${item.mobile} ${item.email} ${item.trackingCode} ${item.specialization}`.toLowerCase();
+    return matchesStatus && (!query.trim() || haystack.includes(query.trim().toLowerCase()));
+  });
+
+  return <main className="admin-shell">
+    <aside className={`admin-sidebar ${menuOpen ? "sidebar-open" : ""}`}>
+      <div className="sidebar-brand"><Image src="/dally-logo.jpg" alt="شعار شركة دالي" width={545} height={280} sizes="160px"/><span>النظام الإداري</span></div>
+      <nav aria-label="أقسام النظام">
+        <button className={view === "overview" ? "active" : ""} onClick={() => changeView("overview")}><Icon name="home" /><span>نظرة عامة</span></button>
+        <button className={view === "notifications" ? "active" : ""} onClick={() => changeView("notifications")}><Icon name="bell" /><span>مركز الإشعارات</span>{unreadNotifications > 0 && <b>{unreadNotifications > 99 ? "99+" : unreadNotifications}</b>}</button>
+        {canAccess("workforce") && <button className={view === "conversations" ? "active" : ""} onClick={() => changeView("conversations")}><Icon name="conversations"/><span>المحادثات المباشرة</span>{(unreadConversationMessages > 0 || waitingConversations > 0) && <b>{Math.min(99, unreadConversationMessages || waitingConversations)}</b>}</button>}
+        {canAccess("employees") && <button className={view === "employees" ? "active" : ""} onClick={() => changeView("employees")}><Icon name="employees" /><span>إدارة الموظفين</span><small>{employees.length}</small></button>}
+        {canAccess("finance") && <button className={view === "finance" ? "active" : ""} onClick={() => changeView("finance")}><Icon name="finance" /><span>الإدارة المالية</span></button>}
+        {canAccess("legal") && <button className={view === "legal" ? "active" : ""} onClick={() => changeView("legal")}><Icon name="legal" /><span>الشؤون القانونية</span>{legalAlerts > 0 && <b>{legalAlerts}</b>}</button>}
+        {canAccess("workforce") && <button className={view === "workforce" ? "active" : ""} onClick={() => changeView("workforce")}><Icon name="workforce" /><span>شؤون العمالة</span>{(requestCounts.new + workerAlerts + incompleteWorkerFiles) > 0 && <b>{requestCounts.new + workerAlerts + incompleteWorkerFiles}</b>}</button>}
+        {canAccess("workforce") && <button className={view === "operations" ? "active" : ""} onClick={() => changeView("operations")}><Icon name="finance" /><span>المبيعات والتشغيل</span></button>}
+        {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مركز المستندات</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
+        {canAccessWebsite && <button className={view === "website" ? "active" : ""} onClick={() => changeView("website")}><Icon name="website"/><span>إدارة الموقع</span></button>}
+        {currentUser.role === "admin" && <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}><Icon name="users" /><span>المستخدمون والصلاحيات</span>{users.some((item) => item.status === "pending") && <i />}</button>}
+      </nav>
+      <div className="sidebar-foot"><div className="security-note"><span>✓</span><p><strong>اتصال محمي</strong>تُطبّق الصلاحيات من جهة الخادم.</p></div><a href={signOutPath}>تسجيل الخروج</a></div>
+    </aside>
+    {menuOpen && <button className="sidebar-backdrop" aria-label="إغلاق القائمة" onClick={() => setMenuOpen(false)} />}
+
+    <section className="admin-workspace">
+      <header className="admin-topbar">
+        <button className="mobile-menu" aria-label="فتح القائمة" onClick={() => setMenuOpen(true)}><Icon name="menu" /></button>
+        <div className="topbar-title"><span>شركة دالي للتشغيل والصيانة</span><strong>{viewTitle[view]}</strong></div>
+        <GlobalPortalSearch
+          value={globalQuery}
+          setValue={setGlobalQuery}
+          onSelect={(result) => {
+            setGlobalQuery("");
+            changeView(result.view);
+            if (result.kind === "request") setSelectedId(result.id);
+            if (result.kind === "worker") setSelectedWorkerId(result.id);
+            if (result.kind === "contract") setSelectedContractId(result.id);
+            if (result.kind === "conversation") void openConversation(result.stringId || "");
+            const operationsKinds: Record<string, OperationsTab> = { client: "crm", opportunity: "crm", quote: "quotes", "work-order": "orders", timesheet: "timesheets", "capacity-plan": "capacity", "privacy-request": "privacy" };
+            if (operationsKinds[result.kind]) { setOperationsTab(operationsKinds[result.kind]); setOperationsQuery(result.searchValue); }
+            else if (!["request", "worker", "contract", "conversation"].includes(result.kind)) setQuery(result.searchValue);
+          }}
+        />
+        <div className="topbar-actions">
+          <div className="notification-shell">
+            <button className="notification" aria-label="فتح مركز الإشعارات" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" />{unreadNotifications > 0 && <b>{unreadNotifications > 99 ? "99+" : unreadNotifications}</b>}</button>
+            {notificationsOpen && (
+              <NotificationPopover notifications={notifications} onOpen={openNotification} onReadAll={() => void updateNotificationState("read-all")} onViewAll={() => { setNotificationsOpen(false); changeView("notifications"); }}/>
+            )}
+          </div>
+          <div className="user-menu"><span>{initials(currentUser.displayName)}</span><p><strong>{currentUser.displayName}</strong><small>{roleLabels[currentUser.role]} · {departmentLabels[currentUser.department]}</small></p></div>
+        </div>
+      </header>
+      {notice && <div className="portal-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="إغلاق"><Icon name="close" /></button></div>}
+
+      <div className="admin-content">
+        {view === "overview" && <>
+          <div className="content-heading"><div><p className="admin-eyebrow">مركز العمليات</p><h1>مرحباً، {currentUser.displayName.split(" ")[0]}</h1><span>{currentUser.role === "employee" ? `مساحة عملك في قسم ${departmentLabels[currentUser.department]}.` : "متابعة موحّدة لأعمال الشركة من لوحة واحدة."}</span></div><time>{new Intl.DateTimeFormat("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}</time></div>
+          <section className="metric-grid module-metrics">
+            {canAccess("employees") && <button onClick={() => changeView("employees")}><span className="metric-icon red"><Icon name="employees" /></span><p>الموظفون<strong>{employees.length}</strong></p><small>{employees.filter((item) => item.status === "active").length} على رأس العمل</small></button>}
+            {canAccess("finance") && <button onClick={() => changeView("finance")}><span className="metric-icon navy"><Icon name="finance" /></span><p>السجلات المالية<strong>{finance.length}</strong></p><small>{formatMoney(financialTotal)} إجمالي مسجّل</small></button>}
+            {canAccess("legal") && <button onClick={() => changeView("legal")}><span className="metric-icon sand"><Icon name="legal" /></span><p>الملفات القانونية<strong>{legal.length}</strong></p><small>{legalAlerts} تنبيه خلال 45 يوماً</small></button>}
+            {canAccess("workforce") && <button onClick={() => changeView("workforce")}><span className="metric-icon green"><Icon name="workforce" /></span><p>العمالة<strong>{workers.length}</strong></p><small>{workers.filter((item) => item.status === "available").length} متاح · {activeBeneficiaries} جهة مستفيدة</small></button>}
+            {canAccess("workforce") && <button onClick={() => changeView("conversations")}><span className="metric-icon red"><Icon name="conversations"/></span><p>المحادثات<strong>{conversations.length}</strong></p><small>{waitingConversations} تنتظر الرد · {unreadConversationMessages} رسالة غير مقروءة</small></button>}
+            {canAccessDocuments && <button onClick={() => changeView("documents")}><span className="metric-icon navy"><Icon name="documents" /></span><p>مستندات الشركة<strong>{documents.length}</strong></p><small>{documentAlerts} تنبيه انتهاء خلال 30 يوماً أو مستند منتهٍ</small></button>}
+          </section>
+          {currentUser.role === "employee" && currentUser.department === "general" ? <section className="employee-home"><p className="admin-eyebrow">الحساب مفعّل</p><h1>لم يُحدَّد قسمك بعد</h1><p>يرجى التواصل مع مدير النظام لإسناد حسابك إلى أحد الأقسام التشغيلية الأربعة.</p><div className="employee-account"><span>البريد الوظيفي</span><strong>{currentUser.email}</strong><span>الصلاحية الحالية</span><strong>{roleLabels[currentUser.role]}</strong></div></section> :
+          <section className="overview-grid">
+            <article className="panel operations-panel"><div className="panel-head"><div><h2>الأقسام التشغيلية</h2><p>الوحدات المتاحة وفقاً لصلاحية حسابك</p></div></div><div className="department-grid">
+              {canAccess("employees") && <DepartmentCard icon="employees" title="إدارة الموظفين" text="ملفات الموظفين وحالتهم الوظيفية وبيانات التعيين." count={`${employees.length} موظف`} onClick={() => changeView("employees")} />}
+              {canAccess("finance") && <DepartmentCard icon="finance" title="الإدارة المالية" text="الفواتير والمصروفات والرواتب والعُهد المالية." count={`${finance.length} سجل`} onClick={() => changeView("finance")} />}
+              {canAccess("legal") && <DepartmentCard icon="legal" title="الشؤون القانونية" text="العقود والقضايا والتراخيص ومواعيد التجديد." count={`${legalAlerts} تنبيه`} onClick={() => changeView("legal")} />}
+              {canAccess("workforce") && <DepartmentCard icon="workforce" title="شؤون العمالة" text="بيانات العمال والتوزيع على المواقع وطلبات العملاء." count={`${requestCounts.total} طلب`} onClick={() => changeView("workforce")} />}
+              {canAccess("workforce") && <DepartmentCard icon="finance" title="المبيعات والتشغيل" text="العملاء والفرص والعروض وأوامر التشغيل والدوام والسعة." count="دورة مترابطة" onClick={() => changeView("operations")} />}
+              {canAccess("workforce") && <DepartmentCard icon="conversations" title="المحادثات المباشرة" text="الرد الفوري على زوار الموقع ومتابعة الرسائل غير المقروءة." count={`${waitingConversations} تنتظر الرد`} onClick={() => changeView("conversations")} />}
+              {canAccessDocuments && <DepartmentCard icon="documents" title="مركز المستندات" text="المرفقات والعقود والإصدارات الرسمية والتنبيهات." count={`${documents.length} مستند`} onClick={() => changeView("documents")} />}
+              {canAccessWebsite && <DepartmentCard icon="website" title="إدارة الموقع الإلكتروني" text="الأقسام والمحتوى والنشر وإعدادات الظهور في محركات البحث." count={`الإصدار ${initialWebsiteContent.version}`} onClick={() => changeView("website")} />}
+            </div></article>
+            {currentUser.role !== "employee" && <article className="panel activity-panel"><div className="panel-head"><div><h2>سجل النشاط</h2><p>آخر التحديثات الإدارية</p></div></div><div className="activity-list">{initialActivity.length === 0 ? <div className="empty-small">لا يوجد نشاط مسجّل بعد.</div> : initialActivity.map((item) => <div key={item.id}><span>✓</span><p><strong>{activityLabel(item.action)}</strong><small>{item.actorEmail}</small></p><time>{formatDate(item.createdAt, true)}</time></div>)}</div></article>}
+          </section>}
+        </>}
+
+        {view === "notifications" && <NotificationCenterView
+          notifications={notifications}
+          onOpen={openNotification}
+          onRead={(id) => void updateNotificationState("read", [id])}
+          onDismiss={(id) => void updateNotificationState("dismiss", [id])}
+          onReadAll={() => void updateNotificationState("read-all")}
+          onRefresh={() => void refreshNotifications()}
+        />}
+
+        {view === "conversations" && canAccess("workforce") && <ConversationCenter
+          conversations={conversations}
+          messages={conversationMessages}
+          businessHours={businessHours}
+          automation={chatAutomation}
+          query={query}
+          setQuery={setQuery}
+          canManageSettings={canManageChatSettings}
+          onSelect={(id) => void openConversation(id)}
+          onRefresh={() => void refreshConversations()}
+          onOpenSettings={() => setChatSettingsOpen(true)}
+        />}
+
+        {view === "employees" && canAccess("employees") && <ModuleSection eyebrow="الموارد البشرية" title="إدارة الموظفين" description="ملفات الموظفين وحالتهم الوظيفية وبيانات الالتحاق." actionLabel="إضافة موظف" canWrite={canWrite} onAdd={() => setModal("employees")}>
+          <section className="metric-grid compact-metrics"><Metric label="إجمالي الموظفين" value={employees.length} note="جميع الملفات المسجّلة"/><Metric label="على رأس العمل" value={employees.filter((item) => item.status === "active").length} note="حسابات نشطة"/><Metric label="في إجازة" value={employees.filter((item) => item.status === "leave").length} note="إجازات حالية"/><Metric label="ملفات موقوفة" value={employees.filter((item) => ["suspended", "ended"].includes(item.status)).length} note="تحتاج إلى متابعة"/></section>
+          <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث باسم الموظف أو الرقم أو المسمى"><EmployeeTable records={employees} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} /></ManagementPanel>
+        </ModuleSection>}
+
+        {view === "finance" && canAccess("finance") && <ModuleSection eyebrow="مالية القوى العاملة" title="الإدارة المالية" description="رواتب العمالة والسلف والخصميات والمصروفات والفواتير والسندات المرتبطة بالعامل والعقد." actionLabel="إضافة حركة مالية" canWrite={canWrite} onAdd={() => setModal("finance")}>
+          <section className="metric-grid compact-metrics finance-metrics"><Metric label="رواتب العمالة" value={formatMoney(payrollTotal)} note="إجمالي الرواتب المسجّلة"/><Metric label="السلف" value={formatMoney(advancesTotal)} note="سلف العمالة"/><Metric label="الخصميات" value={formatMoney(deductionsTotal)} note="خصميات مسجّلة"/><Metric label="مصروفات العمالة" value={formatMoney(workforceExpensesTotal)} note="سكن ونقل وإقامات وغيرها"/><Metric label="فواتير ومستخلصات" value={formatMoney(workforceInvoicesTotal)} note="مرتبطة بعقود العمالة"/><Metric label="إجمالي الحركات" value={formatMoney(financialTotal)} note={`${finance.length} حركة مالية`}/></section>
+          {canWrite && <FinanceDocumentActions onIssue={openIssueDocument}/>} 
+          <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالمرجع أو العامل أو العقد أو البيان"><FinanceTable records={finance} workers={workers} contracts={contracts} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("finance", id, status)} /></ManagementPanel>
+        </ModuleSection>}
+
+        {view === "legal" && canAccess("legal") && <ModuleSection eyebrow="العقود والامتثال" title="الشؤون القانونية" description="متابعة العقود والقضايا والتراخيص والتنبيهات النظامية." actionLabel="إضافة ملف قانوني" canWrite={canWrite} onAdd={() => setModal("legal")}>
+          <section className="metric-grid compact-metrics"><Metric label="إجمالي الملفات" value={legal.length} note="كل السجلات"/><Metric label="عقود سارية" value={legal.filter((item) => item.category === "contract" && item.status === "active").length} note="عقود فعّالة"/><Metric label="قيد المراجعة" value={legal.filter((item) => item.status === "reviewing").length} note="ملفات مفتوحة"/><Metric label="تنبيهات التجديد" value={legalAlerts} note="خلال 45 يوماً"/></section>
+          <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالعنوان أو الطرف أو المرجع"><LegalTable records={legal} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("legal", id, status)} /></ManagementPanel>
+        </ModuleSection>}
+
+        {view === "workforce" && canAccess("workforce") && <ModuleSection eyebrow="التشغيل الميداني" title="شؤون العمالة" description="إدارة ملفات العمال وتوزيعهم على المواقع ومتابعة طلبات العملاء." actionLabel="إضافة عامل" canWrite={canWrite} onAdd={() => setModal("workforce")}>
+          <section className="metric-grid compact-metrics workforce-metrics"><Metric label="إجمالي العمالة" value={workers.length} note="كل الملفات المسجّلة"/><Metric label="مرتبطون بجهات" value={workers.filter((item) => item.status === "assigned").length} note={`${activeBeneficiaries} جهة مستفيدة حالياً`}/><Metric label="متاحون للعقود" value={workers.filter((item) => item.status === "available").length} note="جاهزون للإسناد"/><Metric label="ملفات تحتاج استكمالاً" value={incompleteWorkerFiles} note={`${workerAlerts} تنبيه إقامة`}/></section>
+          <WorkforceOperations workers={workers} attachments={workerAttachments}/>
+          <ContractOperations contracts={contracts} professions={contractProfessions} assignments={contractAssignments} onSelect={setSelectedContractId}/>
+          <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالاسم أو رقم الإقامة أو المهنة أو الجهة"><WorkerTable records={workers} attachments={workerAttachments} query={query} onSelect={setSelectedWorkerId}/></ManagementPanel>
+          <section className="panel request-panel workforce-requests"><div className="panel-head"><div><h2>طلبات القوى العاملة من الموقع</h2><p>الطلبات الواردة مباشرة من العملاء</p></div><span className="panel-count">{requestCounts.new} جديد</span></div><div className="table-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بالاسم أو رقم الطلب" /></label><div className="filter-tabs" role="group" aria-label="تصفية الطلبات">{(["all", "new", "reviewing", "contacted", "closed"] as const).map((value) => <button key={value} className={requestFilter === value ? "active" : ""} onClick={() => setRequestFilter(value)}>{value === "all" ? "الكل" : requestStatuses[value].label}</button>)}</div></div><RequestTable requests={visibleRequests} onSelect={setSelectedId}/></section>
+        </ModuleSection>}
+
+        {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin"}/>}
+
+        {view === "documents" && canAccessDocuments && <DocumentCenter
+          documents={documents}
+          assets={assets}
+          query={query}
+          setQuery={setQuery}
+          canManageDocuments={canManageDocuments}
+          canManageAssets={canManageAssets}
+          busy={busy}
+          expiringDocuments={expiringDocuments}
+          expiredDocuments={expiredDocuments}
+          onUpload={() => setDocumentModal("upload")}
+          onIssue={() => openIssueDocument("workforce_contract")}
+          onShare={shareDocument}
+          onUploadAsset={uploadAsset}
+        />}
+
+        {view === "website" && canAccessWebsite && <WebsiteManager initialContent={initialWebsiteContent} canManage={canManageWebsite}/>}
+
+        {view === "users" && currentUser.role === "admin" && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني.">
+          <section className="panel users-panel"><div className="panel-head"><div><h2>حسابات النظام</h2><p>{users.filter((item) => item.status === "pending").length} حساب بانتظار الاعتماد · لا توجد كلمات مرور محفوظة في النظام</p></div></div><div className="user-list">{users.map((item) => <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}`} onSave={updateUser}/>)}</div></section>
+        </ModuleSection>}
+      </div>
+    </section>
+
+    {modal && modal !== "workforce" && modal !== "finance" && <RecordModal entity={modal} busy={busy === `create-${modal}`} onClose={() => setModal(null)} onSubmit={createRecord}/>} 
+    {modal === "finance" && <FinanceRecordModal busy={busy === "create-finance"} workers={workers} contracts={contracts} onClose={() => setModal(null)} onSubmit={(form) => createRecord("finance", form)}/>} 
+    {modal === "workforce" && <WorkerModal busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker}/>}
+    {documentModal === "upload" && <UploadDocumentModal busy={busy === "upload-document"} onClose={() => setDocumentModal(null)} onSubmit={uploadDocument}/>}
+    {documentModal === "issue" && <IssueDocumentModal initialType={issuePreset} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} onClose={() => setDocumentModal(null)} onSubmit={issueDocument}/>} 
+    {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours}/>}
+    {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus}/>}
+    {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply}/>}
+    {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment}/>} 
+    {selectedContract && <ContractDrawer contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract}/>} 
+  </main>;
+}
+
+function UserAccessCard({ user, self, busy, onSave }: {
+  user: PortalUser;
+  self: boolean;
+  busy: boolean;
+  onSave: (email: string, role: PortalRole, department: PortalDepartment, status: "active" | "pending" | "suspended", reason: string) => Promise<void>;
+}) {
+  const [role, setRole] = useState<PortalRole>(user.role as PortalRole);
+  const [department, setDepartment] = useState<PortalDepartment>(user.department as PortalDepartment);
+  const [status, setStatus] = useState<"active" | "pending" | "suspended">(user.status as "active" | "pending" | "suspended");
+  const [reason, setReason] = useState("");
+  const requestComplete = Boolean(user.requestSubmittedAt && user.termsAcceptedAt);
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void onSave(user.email, role, department, status, reason).then(() => setReason(""));
+  }
+  return <article className={`user-access-card ${user.status}`}>
+    <form onSubmit={submit}>
+      <div className="user-access-identity"><span className="user-avatar">{initials(user.displayName)}</span><div className="user-identity"><strong>{user.displayName}</strong><small>{user.email}</small><time>آخر دخول: {user.lastLoginAt ? formatDate(user.lastLoginAt, true) : "لم يسجّل الدخول"}</time></div><span className={`access-request-state ${requestComplete ? "complete" : "incomplete"}`}>{requestComplete ? "طلب مكتمل" : "بيانات ناقصة"}</span></div>
+      {user.requestSubmittedAt && <div className="user-request-context"><div><span>المسمى</span><strong>{user.requestedJobTitle || "غير محدد"}</strong></div><div><span>القسم المطلوب</span><strong>{departmentLabels[(user.requestedDepartment || "general") as PortalDepartment] || user.requestedDepartment}</strong></div><p>{user.requestReason}</p><time>أُرسل {formatDate(user.requestSubmittedAt, true)}</time></div>}
+      <div className="user-access-controls">
+        <label>الدور<select value={role} disabled={self || busy} onChange={(event) => setRole(event.target.value as PortalRole)}><option value="admin">مدير النظام</option><option value="manager">الإدارة</option><option value="employee">موظف</option></select></label>
+        <label>القسم<select value={department} disabled={self || busy} onChange={(event) => setDepartment(event.target.value as PortalDepartment)}><option value="general">صلاحية عامة</option><option value="employees">إدارة الموظفين</option><option value="finance">الإدارة المالية</option><option value="legal">الشؤون القانونية</option><option value="workforce">شؤون العمالة</option></select></label>
+        <label>الحالة<select value={status} disabled={self || busy} onChange={(event) => setStatus(event.target.value as "active" | "pending" | "suspended")}><option value="active" disabled={!requestComplete && user.status !== "active"}>نشط</option><option value="pending">قيد الاعتماد</option><option value="suspended">موقوف</option></select></label>
+      </div>
+      {!self && <div className="user-access-decision"><label>سبب القرار أو التغيير<textarea value={reason} onChange={(event) => setReason(event.target.value)} required minLength={10} maxLength={1000} rows={2} placeholder="اكتب مبررًا واضحًا يظهر في سجل التدقيق."/></label><button className="admin-primary" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ القرار الأمني"}</button></div>}
+      {self && <p className="self-access-note">لا يمكن تعديل صلاحية حسابك من جلستك الحالية؛ يمنع ذلك الرفع الذاتي للصلاحيات أو تعطيل حساب مدير النظام بالخطأ.</p>}
+    </form>
+  </article>;
+}
+
+function DepartmentCard({ icon, title, text, count, onClick }: { icon: IconName; title: string; text: string; count: string; onClick: () => void }) {
+  return <button onClick={onClick}><span><Icon name={icon}/></span><div><strong>{title}</strong><p>{text}</p><small>{count}</small></div><b>←</b></button>;
+}
+function Metric({ label, value, note }: { label: string; value: string | number; note: string }) {
+  return <article><p>{label}<strong>{value}</strong></p><small>{note}</small></article>;
+}
+function ModuleSection({ eyebrow, title, description, actionLabel, canWrite = false, onAdd, children }: { eyebrow: string; title: string; description: string; actionLabel?: string; canWrite?: boolean; onAdd?: () => void; children: React.ReactNode }) {
+  return <><div className="content-heading module-heading"><div><p className="admin-eyebrow">{eyebrow}</p><h1>{title}</h1><span>{description}</span></div>{canWrite && actionLabel && onAdd && <button className="admin-primary" onClick={onAdd}><Icon name="plus"/>{actionLabel}</button>}</div>{children}</>;
+}
+function ManagementPanel({ query, setQuery, placeholder, children }: { query: string; setQuery: (value: string) => void; placeholder: string; children: React.ReactNode }) {
+  return <section className="panel management-panel"><div className="table-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={placeholder}/></label></div>{children}</section>;
+}
+
+type GlobalSearchResult = { key: string; kind: string; id: number; stringId?: string; view: View; title: string; meta: string; searchValue: string };
+function GlobalPortalSearch({ value, setValue, onSelect }: { value: string; setValue: (value: string) => void; onSelect: (result: GlobalSearchResult) => void }) {
+  const [open, setOpen] = useState(false);
+  const [results, setResults] = useState<GlobalSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        wrapRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        setOpen(true);
+      }
+    };
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, []);
+  useEffect(() => {
+    const query = value.trim();
+    if (query.length < 2) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/portal/search?q=${encodeURIComponent(query)}`, { cache: "no-store", signal: controller.signal });
+        const result = await response.json() as { results?: GlobalSearchResult[] };
+        if (response.ok) setResults(result.results || []);
+      } catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) setResults([]); }
+      finally { setLoading(false); }
+    }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [value]);
+
+  const visibleResults = value.trim().length < 2 ? [] : results;
+
+  return <div className="global-search" ref={wrapRef}><label><Icon name="search"/><input value={value} role="combobox" aria-controls="global-search-results" aria-autocomplete="list" onFocus={() => setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 120)} onChange={(event) => { setValue(event.target.value); setOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); if (event.key === "Enter" && visibleResults[0]) { event.preventDefault(); onSelect(visibleResults[0]); setOpen(false); } }} placeholder="ابحث في جميع أقسام النظام..." aria-label="بحث شامل في النظام" aria-expanded={open && value.trim().length >= 2}/><kbd>⌘ K</kbd></label>{open && value.trim().length >= 2 && <div className="global-search-results" id="global-search-results" role="listbox">{loading ? <div className="global-search-empty">جارٍ البحث في السجلات المصرح بها...</div> : visibleResults.length ? visibleResults.map((result) => <button key={result.key} role="option" aria-selected="false" onMouseDown={(event) => event.preventDefault()} onClick={() => { onSelect(result); setOpen(false); }}><span><Icon name={result.view === "conversations" ? "conversations" : result.view === "workforce" || result.view === "operations" ? "workforce" : result.view === "employees" ? "employees" : result.view === "finance" ? "finance" : result.view === "legal" ? "legal" : result.view === "documents" ? "documents" : result.view === "website" ? "website" : "users"}/></span><p><strong>{result.title}</strong><small>{result.meta}</small></p><b>←</b></button>) : <div className="global-search-empty">لا توجد نتائج مطابقة في الأقسام المتاحة لحسابك.</div>}</div>}</div>;
+}
+
+function NotificationPopover({ notifications, onOpen, onReadAll, onViewAll }: { notifications: PortalNotification[]; onOpen: (item: PortalNotification) => void; onReadAll: () => void; onViewAll: () => void }) {
+  const recent = notifications.slice(0, 7);
+  const unread = notifications.filter((item) => !item.readAt).length;
+  return <aside className="notification-popover" aria-label="الإشعارات الحديثة"><header><div><strong>الإشعارات</strong><span>{unread} غير مقروء</span></div>{unread > 0 && <button onClick={onReadAll}>تعليم الكل كمقروء</button>}</header><div>{recent.length ? recent.map((item) => <button key={item.id} className={`${item.severity} ${item.readAt ? "read" : "unread"}`} onClick={() => onOpen(item)}><span className="notification-dot"/><p><strong>{item.title}</strong><small>{item.message}</small><time>{formatDate(item.createdAt, true)}</time></p></button>) : <div className="notification-empty"><Icon name="bell"/><strong>لا توجد إشعارات حالياً</strong><span>ستظهر هنا الأحداث التي تحتاج إلى انتباهك.</span></div>}</div><footer><button onClick={onViewAll}>فتح مركز الإشعارات ←</button></footer></aside>;
+}
+
+function NotificationCenterView({ notifications, onOpen, onRead, onDismiss, onReadAll, onRefresh }: {
+  notifications: PortalNotification[]; onOpen: (item: PortalNotification) => void; onRead: (id: number) => void; onDismiss: (id: number) => void; onReadAll: () => void; onRefresh: () => void;
+}) {
+  const [filter, setFilter] = useState<"all" | "unread" | "critical" | "warning">("all");
+  const visible = notifications.filter((item) => filter === "all" || filter === "unread" ? (filter === "all" ? true : !item.readAt) : item.severity === filter);
+  const critical = notifications.filter((item) => item.severity === "critical").length;
+  const warning = notifications.filter((item) => item.severity === "warning").length;
+  const unread = notifications.filter((item) => !item.readAt).length;
+  return <><div className="content-heading module-heading notification-heading"><div><p className="admin-eyebrow">رصد تشغيلي موحّد</p><h1>مركز الإشعارات</h1><span>تنبيهات الطلبات والمراسلات والعقود والعمالة والمستندات والمالية والصلاحيات في مكان واحد.</span></div><div className="heading-actions"><button className="admin-secondary" onClick={onRefresh}>تحديث</button>{unread > 0 && <button className="admin-primary" onClick={onReadAll}><Icon name="check"/>تعليم الكل كمقروء</button>}</div></div><section className="metric-grid compact-metrics notification-metrics"><Metric label="غير مقروء" value={unread} note="تحتاج إلى مراجعة"/><Metric label="عاجل" value={critical} note="يتطلب إجراء سريعاً"/><Metric label="تحذيرات" value={warning} note="مواعيد أو نواقص"/><Metric label="إجمالي نشط" value={notifications.length} note="بعد استبعاد المحلول"/></section><section className="panel notification-center"><div className="notification-filter-tabs">{([['all','الكل'],['unread','غير المقروء'],['critical','العاجل'],['warning','التحذيرات']] as const).map(([value, label]) => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}</button>)}</div><div className="notification-list">{visible.length ? visible.map((item) => <article key={item.id} className={`${item.severity} ${item.readAt ? "read" : "unread"}`}><button className="notification-main" onClick={() => onOpen(item)}><span className="notification-module"><Icon name={item.module === "conversations" ? "conversations" : item.module === "workforce" ? "workforce" : item.module === "finance" ? "finance" : item.module === "legal" ? "legal" : item.module === "documents" ? "documents" : item.module === "users" ? "users" : item.module === "employees" ? "employees" : "bell"}/></span><p><strong>{item.title}</strong><span>{item.message}</span><small>{formatDate(item.createdAt, true)} · {item.source === "system-check" ? "فحص تلقائي" : "حدث تشغيلي"}</small></p><b>فتح السجل ←</b></button><div className="notification-item-actions">{!item.readAt && <button onClick={() => onRead(item.id)}>مقروء</button>}<button onClick={() => onDismiss(item.id)}>إخفاء</button></div></article>) : <div className="notification-empty large"><Icon name="check"/><strong>لا توجد إشعارات ضمن هذا التصنيف</strong><span>النظام يحدّث التنبيهات تلقائياً عند دخول البوابة وكل 45 ثانية أثناء العمل.</span></div>}</div></section></>;
+}
+
+const conversationStatusLabels: Record<string, string> = { waiting: "تنتظر الرد", open: "جارية", closed: "مغلقة" };
+const workingDayLabels = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+function ConversationCenter({ conversations, messages, businessHours, automation, query, setQuery, canManageSettings, onSelect, onRefresh, onOpenSettings }: {
+  conversations: VisitorConversation[]; messages: VisitorMessage[]; businessHours: BusinessHours; automation: ChatAutomationConfig; query: string; setQuery: (value: string) => void;
+  canManageSettings: boolean; onSelect: (id: string) => void; onRefresh: () => void; onOpenSettings: () => void;
+}) {
+  const needle = query.trim().toLowerCase();
+  const rows = conversations.filter((item) => !needle || JSON.stringify(item).toLowerCase().includes(needle));
+  const unread = messages.filter((item) => item.senderType === "visitor" && !item.readByStaffAt).length;
+  const lastMessage = (id: string) => messages.filter((item) => item.conversationId === id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const unreadFor = (id: string) => messages.filter((item) => item.conversationId === id && item.senderType === "visitor" && !item.readByStaffAt).length;
+  return <>
+    <div className="content-heading module-heading chat-heading"><div><p className="admin-eyebrow">تواصل لحظي مع زوار الموقع</p><h1>المحادثات المباشرة</h1><span>استقبال فوري، وتصنيف تلقائي للاحتياج، وتحويل واضح إلى الموظف المخوّل.</span></div><div className="heading-actions"><button className="admin-secondary" onClick={onRefresh}>تحديث الآن</button>{canManageSettings && <button className="admin-primary" onClick={onOpenSettings}>إعدادات الرد الآلي</button>}</div></div>
+    <section className="metric-grid compact-metrics chat-metrics"><Metric label="تنتظر الرد" value={conversations.filter((item) => item.status === "waiting").length} note="أولوية فريق الخدمة"/><Metric label="رسائل غير مقروءة" value={unread} note="من زوار الموقع"/><Metric label="محادثات جارية" value={conversations.filter((item) => item.status === "open").length} note="تم الرد عليها"/><Metric label="إجمالي المحادثات" value={conversations.length} note="سجل محفوظ وقابل للبحث"/></section>
+    <section className={`business-hours-panel ${businessHours.isOpen ? "open" : "closed"}`}><span><Icon name="conversations"/></span><div><strong>{businessHours.isOpen ? "الفريق متاح الآن للمحادثة" : "الموقع حالياً خارج ساعات الدوام"}</strong><p>الدوام من {businessHours.opensAt} إلى {businessHours.closesAt} بتوقيت مكة · {businessHours.isOpen ? "الرد البشري متاح" : `العودة ${businessHours.nextOpenLabel}`}</p></div><b>{automation.enabled ? `${automation.rules.filter((rule) => rule.enabled).length} مسارات آلية` : "الرد الآلي متوقف"}</b></section>
+    <section className="panel live-conversation-panel"><div className="panel-head"><div><h2>صندوق المحادثات</h2><p>تحديث تفاضلي تلقائي كل 12 ثانية أثناء العمل</p></div><span className="panel-count">{rows.length} محادثة</span></div><div className="table-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث برقم المحادثة أو اسم الزائر أو الجوال"/></label><div className="conversation-legend"><span><i className="waiting"/>تنتظر الرد</span><span><i className="open"/>جارية</span><span><i className="closed"/>مغلقة</span></div></div>{rows.length ? <div className="conversation-table-wrap"><table className="management-table conversation-table"><thead><tr><th>المحادثة</th><th>الزائر</th><th>الموضوع</th><th>آخر رسالة</th><th>المسؤول</th><th>الحالة</th><th></th></tr></thead><tbody>{rows.map((item) => { const latest = lastMessage(item.id); const unreadCount = unreadFor(item.id); return <tr key={item.id} onClick={() => onSelect(item.id)} className={unreadCount ? "unread" : ""}><td><strong dir="ltr">{item.trackingCode}</strong><small>{formatDate(item.createdAt, true)}</small></td><td><strong>{item.visitorName}</strong><small dir="ltr">{item.visitorMobile}</small></td><td>{item.subject}</td><td><strong>{latest?.senderType === "visitor" ? item.visitorName : latest?.senderType === "system" ? "الرد الآلي" : latest?.senderName || "—"}</strong><small>{latest?.body.slice(0, 70) || "لا توجد رسائل"}</small></td><td>{item.assignedTo ? <span dir="ltr">{item.assignedTo}</span> : "غير مسندة"}</td><td><span className={`conversation-status ${item.status}`}>{conversationStatusLabels[item.status] || item.status}</span></td><td>{unreadCount > 0 ? <b className="conversation-unread">{unreadCount}</b> : <button aria-label={`فتح ${item.trackingCode}`}>←</button>}</td></tr>; })}</tbody></table></div> : <EmptyRows label="ستظهر هنا أول محادثة يبدأها زائر الموقع."/>}</section>
+  </>;
+}
+
+function ConversationDrawer({ conversation, messages, businessHours, busy, onClose, onReply, onStatus }: {
+  conversation: VisitorConversation; messages: VisitorMessage[]; businessHours: BusinessHours; busy: string | null; onClose: () => void;
+  onReply: (conversationId: string, form: HTMLFormElement) => Promise<void>; onStatus: (conversationId: string, status: "waiting" | "open" | "closed") => Promise<void>;
+}) {
+  const messageBox = useRef<HTMLDivElement>(null);
+  useEffect(() => { messageBox.current?.scrollTo({ top: messageBox.current.scrollHeight }); }, [messages]);
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onReply(conversation.id, event.currentTarget); }
+  return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="إغلاق المحادثة" onClick={onClose}/><aside className="request-drawer portal-chat-drawer" role="dialog" aria-modal="true" aria-label={`محادثة ${conversation.trackingCode}`}><div className="drawer-head"><div><span>{conversation.trackingCode}</span><h2>{conversation.visitorName}</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><div className="portal-chat-contact"><div><span>{initials(conversation.visitorName)}</span><p><strong>{conversation.subject}</strong><small dir="ltr">{conversation.visitorMobile} · {conversation.visitorEmail || "دون بريد"}</small></p></div><select value={conversation.status} disabled={busy === `chat-status-${conversation.id}`} onChange={(event) => void onStatus(conversation.id, event.target.value as "waiting" | "open" | "closed")}><option value="waiting">تنتظر الرد</option><option value="open">جارية</option><option value="closed">مغلقة</option></select></div><div className={`portal-chat-hours ${businessHours.isOpen ? "open" : "closed"}`}><strong>{businessHours.isOpen ? "ضمن ساعات الدوام" : "خارج ساعات الدوام"}</strong><span>{businessHours.isOpen ? "يمكن الرد المباشر الآن." : "استلم الزائر الرد الآلي عند أول رسالة خارج الدوام."}</span></div><div className="portal-chat-messages" ref={messageBox}>{messages.length ? messages.map((message) => <article key={message.id} className={message.senderType}><header><strong>{message.senderType === "visitor" ? conversation.visitorName : message.senderType === "system" ? "الرد الآلي" : message.senderName}</strong><time>{formatDate(message.createdAt, true)}</time></header><p>{message.body}</p>{message.senderType === "staff" && <small>{message.readByVisitorAt ? "قرأها الزائر" : "أُرسلت للزائر"}</small>}</article>) : <div className="empty-operational">لا توجد رسائل في هذه المحادثة.</div>}</div><form className="portal-chat-composer" onSubmit={submit}><label><span>الرد المباشر</span><textarea name="body" required minLength={2} maxLength={4000} rows={4} placeholder="اكتب الرد الذي سيظهر للزائر فوراً..."/></label><div><small>سيُنسب الرد إلى حسابك ويُحفظ في سجل النشاط.</small><button className="admin-primary" disabled={busy === `chat-reply-${conversation.id}`}>{busy === `chat-reply-${conversation.id}` ? "جارٍ الإرسال..." : conversation.status === "closed" ? "إعادة الفتح والرد" : "إرسال الرد"}</button></div></form></aside></div>;
+}
+
+function ChatSettingsModal({ businessHours, automation, busy, onClose, onSubmit }: { businessHours: BusinessHours; automation: ChatAutomationConfig; busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+  return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق إعدادات الرد الآلي" onClick={onClose}/><section className="record-modal chat-settings-modal" role="dialog" aria-modal="true" aria-label="إعدادات نظام الرد الآلي"><div className="drawer-head"><div><span>المحادثة المباشرة</span><h2>نظام الرد الآلي وساعات الخدمة</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}>
+    <fieldset className="span-two automation-switches"><legend>حالة النظام</legend><label><input type="checkbox" name="automationEnabled" defaultChecked={automation.enabled}/><span><strong>تشغيل المساعد الآلي</strong><small>يعطّل هذا الخيار جميع الردود الآلية دفعة واحدة.</small></span></label><label><input type="checkbox" name="welcomeEnabled" defaultChecked={automation.welcomeEnabled}/><span><strong>ترحيب خلال الدوام</strong><small>إشعار فوري باستلام المحادثة.</small></span></label><label><input type="checkbox" name="afterHoursEnabled" defaultChecked={automation.afterHoursEnabled}/><span><strong>رد خارج الدوام</strong><small>يتضمن موعد العودة القادم تلقائياً.</small></span></label><label><input type="checkbox" name="intentRepliesEnabled" defaultChecked={automation.intentRepliesEnabled}/><span><strong>توجيه بحسب نية الزائر</strong><small>يطابق الكلمات ويرسل الإرشاد المناسب مرة واحدة.</small></span></label></fieldset>
+    <label className="span-two">رسالة الترحيب خلال الدوام<textarea name="welcomeReply" required minLength={10} maxLength={900} rows={4} defaultValue={automation.welcomeReply}/></label>
+    <fieldset className="span-two"><legend>أيام العمل الرسمية</legend><div className="working-days">{workingDayLabels.map((label, day) => <label key={label}><input type="checkbox" name="workingDays" value={day} defaultChecked={businessHours.workingDays.includes(day)}/><span>{label}</span></label>)}</div></fieldset>
+    <label>بداية الدوام<input name="opensAt" type="time" required defaultValue={businessHours.opensAt}/></label><label>نهاية الدوام<input name="closesAt" type="time" required defaultValue={businessHours.closesAt}/></label>
+    <label>إغلاقات استثنائية<textarea name="closedDates" rows={3} placeholder="2026-09-23، 2027-02-22" defaultValue={businessHours.closedDates.join("، ")}/></label><label>أيام فتح استثنائية<textarea name="specialOpenDates" rows={3} placeholder="2026-08-15" defaultValue={businessHours.specialOpenDates.join("، ")}/></label>
+    <label className="span-two">رسالة خارج الدوام<textarea name="autoReply" required minLength={10} maxLength={700} rows={5} defaultValue={businessHours.autoReply}/></label>
+    <p className="form-hint span-two automation-placeholders">يمكن استخدام المتغيرات <code>{"{{name}}"}</code> و<code>{"{{trackingCode}}"}</code> و<code>{"{{nextOpen}}"}</code> و<code>{"{{subject}}"}</code>. يعتمد احتساب الموعد على توقيت مكة والإغلاقات الاستثنائية.</p>
+    <section className="span-two automation-rules"><header><div><strong>مسارات التوجيه الذكي</strong><span>يرسل كل مسار مرة واحدة فقط في المحادثة، حتى عند تكرار الرسالة.</span></div><b>{automation.rules.filter((rule) => rule.enabled).length} مفعّل</b></header>{automation.rules.map((rule) => <article key={rule.id}><label className="automation-rule-toggle"><input type="checkbox" name={`ruleEnabled:${rule.id}`} defaultChecked={rule.enabled}/><span>{rule.label}</span></label><label>الكلمات الدالة<input name={`ruleKeywords:${rule.id}`} required maxLength={500} defaultValue={rule.keywords.join("، ")}/></label><label className="wide">الرد المخصص<textarea name={`ruleResponse:${rule.id}`} required minLength={10} maxLength={900} rows={3} defaultValue={rule.response}/></label></article>)}</section>
+    <div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ النظام وتشغيله"}</button></div>
+  </form></section></div>;
+}
+
+function FinanceDocumentActions({ onIssue }: { onIssue: (type: string) => void }) {
+  return <section className="panel finance-document-actions"><div><span><Icon name="documents"/></span><p><strong>الإصدارات المالية الرسمية</strong><small>تُحفظ تلقائياً في مركز المستندات وتُربط بالسجل المالي.</small></p></div><div><button onClick={() => onIssue("invoice")}>إصدار فاتورة</button><button onClick={() => onIssue("receipt")}>سند قبض</button><button onClick={() => onIssue("payment_voucher")}>سند صرف</button><button onClick={() => onIssue("progress_claim")}>مستخلص عمالة</button></div></section>;
+}
+
+function DocumentCenter({ documents, assets, query, setQuery, canManageDocuments, canManageAssets, busy, expiringDocuments, expiredDocuments, onUpload, onIssue, onShare, onUploadAsset }: {
+  documents: CompanyDocument[]; assets: CompanyAsset[]; query: string; setQuery: (value: string) => void;
+  canManageDocuments: boolean; canManageAssets: boolean; busy: string | null;
+  expiringDocuments: CompanyDocument[]; expiredDocuments: CompanyDocument[];
+  onUpload: () => void; onIssue: () => void; onShare: (id: number) => Promise<void>;
+  onUploadAsset: (slot: "stamp" | "signature", form: HTMLFormElement) => Promise<void>;
+}) {
+  const rows = filterRecords(documents, query);
+  const generatedCount = documents.filter((item) => item.source === "generated").length;
+  return <>
+    <div className="content-heading module-heading documents-heading"><div><p className="admin-eyebrow">الحفظ والإصدار الرسمي</p><h1>مركز المستندات</h1><span>إدارة ملفات الشركة، ومشاركة النسخ، وإصدار العقود والمستندات الرسمية.</span></div>{canManageDocuments && <div className="heading-actions"><button className="admin-secondary" onClick={onUpload}><Icon name="upload"/>رفع مستند</button><button className="admin-primary" onClick={onIssue}><Icon name="plus"/>إنشاء PDF</button></div>}</div>
+
+    {(expiringDocuments.length > 0 || expiredDocuments.length > 0) && <section className="expiry-alert" role="status"><span><Icon name="bell"/></span><div><strong>توجد مستندات تحتاج إلى متابعة</strong><p>{expiredDocuments.length > 0 ? `${expiredDocuments.length} مستند منتهٍ، ` : ""}{expiringDocuments.length} مستند تنتهي صلاحيته خلال أقل من 30 يوماً.</p></div><div className="alert-docs">{[...expiredDocuments, ...expiringDocuments].slice(0, 3).map((item) => <small key={item.id}>{item.title} · {expiryText(item.expiryDate)}</small>)}</div></section>}
+
+    <section className="metric-grid compact-metrics document-metrics"><Metric label="إجمالي المستندات" value={documents.length} note="المرفوع والمُصدر"/><Metric label="تنتهي خلال 30 يوماً" value={expiringDocuments.length} note="تحتاج إلى تجديد"/><Metric label="مستندات منتهية" value={expiredDocuments.length} note="تحتاج إلى إجراء"/><Metric label="ملفات PDF صادرة" value={generatedCount} note="بالختم والتوقيع"/></section>
+
+    <section className="documents-layout">
+      <article className="panel document-library"><div className="panel-head"><div><h2>مكتبة مستندات الشركة</h2><p>تنزيل آمن وروابط مشاركة مؤقتة صالحة لمدة 7 أيام</p></div><span className="panel-count">{rows.length} مستند</span></div><div className="table-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بالعنوان أو المرجع أو الجهة"/></label></div><DocumentTable documents={rows} canShare={canManageDocuments} busy={busy} onShare={onShare}/></article>
+      <CompanyAssetsPanel assets={assets} canManage={canManageAssets} busy={busy} onUpload={onUploadAsset}/>
+    </section>
+    {canManageDocuments && <DocumentShareManager documents={documents.map(({ id, referenceCode, title }) => ({ id, referenceCode, title }))}/>}
+  </>;
+}
+
+function expiryText(value: string | null) {
+  const days = daysUntil(value);
+  if (!Number.isFinite(days)) return "دون تاريخ انتهاء";
+  if (days < 0) return `منتهٍ منذ ${Math.abs(days)} يوم`;
+  if (days === 0) return "ينتهي اليوم";
+  if (days <= 30) return `متبقٍ ${days} يوم`;
+  return formatDate(value);
+}
+
+function DocumentTable({ documents, canShare, busy, onShare }: { documents: CompanyDocument[]; canShare: boolean; busy: string | null; onShare: (id: number) => Promise<void> }) {
+  if (!documents.length) return <EmptyRows label="ارفع أول مستند أو أنشئ ملف PDF ليظهر هنا."/>;
+  return <div className="management-table-wrap"><table className="management-table documents-table"><thead><tr><th>المرجع</th><th>المستند</th><th>التصنيف</th><th>الجهة</th><th>الانتهاء</th><th>الحجم</th><th>الإجراءات</th></tr></thead><tbody>{documents.map((item) => { const days = daysUntil(item.expiryDate); const expiryClass = days < 0 ? "expired" : days <= 30 ? "expiring" : ""; return <tr key={item.id}><td dir="ltr"><b>{item.referenceCode}</b></td><td><strong>{item.title}</strong><small>{item.source === "generated" ? issuedTypeLabels[item.documentType || ""] || "PDF صادر" : item.fileName}{item.lockedUntil ? ` · حجز نظامي حتى ${formatDate(item.lockedUntil)}` : item.retentionUntil ? ` · مراجعة الاحتفاظ ${formatDate(item.retentionUntil)}` : ""}</small></td><td><span className={`doc-kind ${item.source === "generated" ? "generated" : ""}`}>{item.source === "generated" ? "صادر من النظام" : documentCategoryLabels[item.category] || item.category}</span></td><td>{item.counterparty || "—"}</td><td><span className={`expiry-pill ${expiryClass}`}>{expiryText(item.expiryDate)}</span></td><td>{formatBytes(item.sizeBytes)}</td><td><div className="document-actions"><a href={`/api/portal/documents/${item.id}`} aria-label={`تنزيل ${item.title}`}><Icon name="download"/><span>تنزيل</span></a>{canShare && <button disabled={busy === `share-${item.id}`} onClick={() => void onShare(item.id)} aria-label={`مشاركة ${item.title}`}><Icon name="share"/><span>{busy === `share-${item.id}` ? "جارٍ الإنشاء" : "مشاركة"}</span></button>}</div></td></tr>; })}</tbody></table></div>;
+}
+
+function CompanyAssetsPanel({ assets, canManage, busy, onUpload }: { assets: CompanyAsset[]; canManage: boolean; busy: string | null; onUpload: (slot: "stamp" | "signature", form: HTMLFormElement) => Promise<void> }) {
+  return <aside className="panel company-assets"><div className="panel-head"><div><h2>الختم والتوقيع</h2><p>أصول محمية تُدرج آلياً في كل PDF صادر</p></div><Icon name="stamp"/></div><div className="asset-list">{(["stamp", "signature"] as const).map((slot) => { const asset = assets.find((item) => item.slot === slot); const label = slot === "stamp" ? "ختم الشركة" : "التوقيع المفوض"; return <form key={slot} onSubmit={(event) => { event.preventDefault(); void onUpload(slot, event.currentTarget); }}><div className={`asset-status ${asset ? "ready" : "missing"}`}><span>{asset ? "✓" : "!"}</span><p><strong>{label}</strong><small>{asset ? `${asset.fileName} · ${formatDate(asset.updatedAt, true)}` : "لم يُرفع بعد"}</small></p></div>{canManage && <><label className="asset-file"><input type="file" name="file" accept="image/png,image/jpeg" required/><span><Icon name="upload"/>{asset ? "استبدال الملف" : "رفع الملف"}</span></label><button className="asset-submit" type="submit" disabled={busy === `asset-${slot}`}>{busy === `asset-${slot}` ? "جارٍ الحفظ..." : "اعتماد"}</button></>}</form>; })}</div><div className="asset-security"><strong>حماية الأصول الرسمية</strong><p>لا تظهر الصور في الواجهة ولا تدخل روابط المشاركة. استخدامها محصور بإصدار ملفات PDF وسجل العمليات.</p></div></aside>;
+}
+
+function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+  return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة رفع المستند" onClick={onClose}/><section className="record-modal document-modal" role="dialog" aria-modal="true" aria-label="رفع مستند شركة"><div className="drawer-head"><div><span>مركز المستندات</span><h2>رفع مستند شركة</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}><label className="span-two">عنوان المستند<input name="title" required maxLength={180} placeholder="مثال: السجل التجاري للشركة"/></label><label>التصنيف<select name="category" required defaultValue=""><option value="" disabled>اختر التصنيف</option><option value="license">ترخيص</option><option value="contract">عقد</option><option value="certificate">شهادة</option><option value="finance">مالي</option><option value="legal">قانوني</option><option value="hr">موارد بشرية</option><option value="other">أخرى</option></select></label><label>الجهة أو الطرف المرتبط<input name="counterparty" maxLength={160} placeholder="اختياري"/></label><label>تاريخ الانتهاء أو التجديد<input name="expiryDate" type="date"/></label><label>مراجعة الاحتفاظ حتى<input name="retentionUntil" type="date"/></label><label>حجز نظامي حتى<input name="lockedUntil" type="date"/></label><label>الملف<input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"/></label><p className="form-hint span-two">الحد الأقصى 20 ميجابايت. يُستخدم تاريخ الاحتفاظ للمراجعة الدورية، ويمنع الحجز النظامي أي حذف آلي قبل انتهائه.</p><div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ الرفع..." : "رفع وحفظ المستند"}</button></div></form></section></div>;
+}
+
+function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { busy: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  const [category, setCategory] = useState("worker_salary");
+  const workerRelated = ["worker_salary", "worker_advance", "worker_deduction", "worker_expense"].includes(category);
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+  return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة الحركة المالية" onClick={onClose}/><section className="record-modal finance-modal" role="dialog" aria-modal="true" aria-label="إضافة حركة مالية للعمالة"><div className="drawer-head"><div><span>الإدارة المالية</span><h2>إضافة حركة مالية للعمالة</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}>
+    <label>نوع الحركة<select name="category" value={category} onChange={(event) => setCategory(event.target.value)}><option value="worker_salary">راتب عامل</option><option value="worker_advance">سلفة عامل</option><option value="worker_deduction">خصم عامل</option><option value="worker_expense">مصروف خاص بالعمالة</option><option value="workforce_invoice">فاتورة عمالة</option><option value="receipt_voucher">سند قبض</option><option value="payment_voucher">سند صرف</option><option value="progress_claim">مستخلص عمالة</option></select></label><label>المبلغ بالريال<input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr"/></label>
+    {workerRelated && <label className="span-two">العامل<select name="workerId" required defaultValue=""><option value="" disabled>اختر العامل</option>{workers.map((worker) => <option value={worker.id} key={worker.id}>{worker.fullName} — {worker.profession} — {worker.iqamaNumber}</option>)}</select></label>}
+    <label>العقد المرتبط<select name="contractId" defaultValue=""><option value="">دون عقد محدد</option>{contracts.map((contract) => <option value={contract.id} key={contract.id}>{contract.referenceCode} — {contract.clientName}</option>)}</select></label>
+    {category === "worker_salary" && <label>شهر الراتب<input name="periodMonth" required type="month"/></label>}
+    {category === "worker_expense" && <label>نوع المصروف<select name="subCategory" required defaultValue=""><option value="" disabled>اختر نوع المصروف</option>{Object.entries(workforceExpenseLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>}
+    <label>تاريخ الاستحقاق أو الصرف<input name="dueDate" required type="date" defaultValue={new Date().toISOString().slice(0, 10)}/></label><label>طريقة الدفع<select name="paymentMethod" defaultValue="bank_transfer"><option value="bank_transfer">تحويل بنكي</option><option value="cash">نقدي</option><option value="cheque">شيك</option><option value="payroll_file">ملف حماية الأجور</option><option value="other">أخرى</option></select></label>
+    <label className="span-two">البيان<input name="description" required minLength={3} maxLength={240} placeholder="مثال: راتب شهر أغسطس للعامل أو مصروف تجديد إقامة"/></label><label className="span-two">ملاحظات<textarea name="notes" maxLength={1000} rows={4} placeholder="تفاصيل إضافية أو رقم مرجع خارجي..."/></label>
+    <p className="form-hint span-two">يظهر السجل في كشف العامل والعقد، ويمكن إصدار الفواتير والسندات الرسمية من لوحة المالية.</p><div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ الحركة المالية"}</button></div>
+  </form></section></div>;
+}
+
+function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts, onClose, onSubmit }: { initialType: string; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  type DraftProfession = { key: string; profession: string; requiredCount: number };
+  const [documentType, setDocumentType] = useState(initialType);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [professions, setProfessions] = useState<DraftProfession[]>([{ key: "profession-1", profession: workforceProfessions[0].label, requiredCount: 1 }]);
+  const [selectedWorkers, setSelectedWorkers] = useState<Record<string, number[]>>({});
+  const isContract = documentType === "workforce_contract";
+  const capacity = professions.map((item) => {
+    const registered = workers.filter((worker) => worker.profession === item.profession).length;
+    const available = workers.filter((worker) => worker.profession === item.profession && worker.status === "available").length;
+    return { ...item, registered, available, selected: selectedWorkers[item.key]?.length || 0, registeredShortage: Math.max(0, item.requiredCount - registered), availableShortage: Math.max(0, item.requiredCount - available) };
+  });
+  const totalShortage = capacity.reduce((sum, item) => sum + item.availableShortage, 0);
+
+  function setProfessionValue(key: string, value: string) {
+    setProfessions((items) => items.map((item) => item.key === key ? { ...item, profession: value } : item));
+    setSelectedWorkers((items) => ({ ...items, [key]: [] }));
+  }
+  function setProfessionCount(key: string, value: number) {
+    const requiredCount = Math.max(1, Math.min(100000, value || 1));
+    setProfessions((items) => items.map((item) => item.key === key ? { ...item, requiredCount } : item));
+    setSelectedWorkers((items) => ({ ...items, [key]: (items[key] || []).slice(0, requiredCount) }));
+  }
+  function addProfession() {
+    const used = new Set(professions.map((item) => item.profession));
+    const next = workforceProfessions.find((item) => !used.has(item.label));
+    if (!next) return;
+    setProfessions((items) => [...items, { key: `profession-${Date.now()}`, profession: next.label, requiredCount: 1 }]);
+  }
+  function removeProfession(key: string) {
+    if (professions.length === 1) return;
+    setProfessions((items) => items.filter((item) => item.key !== key));
+    setSelectedWorkers((items) => { const next = { ...items }; delete next[key]; return next; });
+  }
+  function toggleWorker(key: string, workerId: number, maximum: number) {
+    setSelectedWorkers((items) => {
+      const current = items[key] || [];
+      const next = current.includes(workerId) ? current.filter((id) => id !== workerId) : current.length < maximum ? [...current, workerId] : current;
+      return { ...items, [key]: next };
+    });
+  }
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+
+  const serializedProfessions = JSON.stringify(professions.map((item) => ({ profession: item.profession, requiredCount: item.requiredCount, workerIds: selectedWorkers[item.key] || [] })));
+  return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إصدار المستند" onClick={onClose}/><section className="record-modal document-modal issue-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف PDF رسمي"><div className="drawer-head"><div><span>الإصدار الرسمي</span><h2>{isContract ? "إنشاء عقد توفير عمالة" : "إنشاء ملف PDF"}</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div>
+    {!assetsReady && <div className="asset-required"><Icon name="stamp"/><p><strong>الختم والتوقيع غير مكتملين</strong><span>يجب أن يرفع مدير النظام الأصلين المعتمدين قبل الإصدار.</span></p></div>}
+    {isContract && <div className="contract-wizard-steps"><button type="button" className={step === 1 ? "active" : "done"} onClick={() => setStep(1)}>1 بيانات العقد</button><button type="button" className={step === 2 ? "active" : step > 2 ? "done" : ""} onClick={() => setStep(2)}>2 المهن والأعداد</button><button type="button" className={step === 3 ? "active" : ""} onClick={() => setStep(3)}>3 اختيار العمالة</button></div>}
+    <form onSubmit={submit}>
+      <input type="hidden" name="professions" value={serializedProfessions}/>
+      <div className={`issue-form-step span-two ${!isContract || step === 1 ? "visible" : ""}`}>
+        <label>نوع المستند<select name="documentType" value={documentType} onChange={(event) => { setDocumentType(event.target.value); setStep(1); }}><option value="workforce_contract">عقد مقاولات لتوفير العمالة</option><option value="quotation">عرض سعر</option><option value="progress_claim">مستخلص أعمال</option><option value="invoice">فاتورة</option><option value="receipt">سند قبض</option><option value="payment_voucher">سند صرف</option></select></label>
+        <label>تاريخ الإصدار<input name="issueDate" required type="date" defaultValue={new Date().toISOString().slice(0, 10)}/></label><label>اسم العميل أو الجهة<input name="clientName" required maxLength={160}/></label><label>عنوان المستند<input name="title" required maxLength={180} placeholder="موضوع المستند"/></label><label>السجل التجاري للعميل<input name="clientCr" maxLength={30} dir="ltr" placeholder="اختياري"/></label><label>الرقم الضريبي للعميل<input name="clientVat" maxLength={30} dir="ltr" placeholder="اختياري"/></label><label>القيمة بالريال<input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr"/></label>
+        {isContract ? <><label>موقع العمل<input name="workSite" required maxLength={180}/></label><label>بداية العقد<input name="startDate" required type="date"/></label><label>نهاية العقد<input name="endDate" required type="date"/></label></> : <><label>{documentType === "quotation" ? "صلاحية العرض حتى" : "تاريخ الاستحقاق / الانتهاء"}<input name="expiryDate" type="date"/></label>{["invoice", "receipt", "payment_voucher", "progress_claim"].includes(documentType) && <label className="span-two">العقد المرتبط<select name="linkedContractId" defaultValue=""><option value="">دون عقد محدد</option>{contracts.map((contract) => <option value={contract.id} key={contract.id}>{contract.referenceCode} — {contract.clientName}</option>)}</select></label>}</>}
+        <label className="span-two">التفاصيل والشروط<textarea name="details" required minLength={5} maxLength={4000} rows={6} placeholder={isContract ? "اكتب نطاق العمل، ساعات العمل، الالتزامات، وآلية الدفع..." : "اكتب بنود المستند وتفاصيل المبلغ والخدمة..."}/></label>
+      </div>
+
+      {isContract && <div className={`issue-form-step span-two ${step === 2 ? "visible" : ""}`}><div className="profession-builder-head"><div><strong>المهن المطلوبة في العقد</strong><small>يمكن إضافة أكثر من مهنة، ولكل مهنة عدد مستقل. اكتب داخل حقل المهنة للبحث السريع.</small></div><button type="button" onClick={addProfession} disabled={professions.length >= workforceProfessions.length}><Icon name="plus"/> إضافة مهنة</button></div><div className="profession-builder">{capacity.map((item) => <article key={item.key}><label>المهنة<SearchableCombobox name={`profession_${item.key}`} value={item.profession} options={workforceProfessions.map((option) => option.label).filter((label) => label === item.profession || !professions.some((other) => other.key !== item.key && other.profession === label))} onChange={(value) => setProfessionValue(item.key, value)} placeholder="ابحث عن المهنة" required/></label><label>العدد المطلوب<input type="number" min="1" max="100000" value={item.requiredCount} onChange={(event) => setProfessionCount(item.key, Number(event.target.value))}/></label><div><span><b>{item.available}</b> متاح</span><span><b>{item.registered}</b> مسجل</span></div><p className={item.registeredShortage || item.availableShortage ? "shortage" : "ready"}>{item.registeredShortage ? `أقل من المطلوب في السجلات بفارق ${item.registeredShortage}` : item.availableShortage ? `عجز تشغيلي حالي: ${item.availableShortage}` : "العدد متاح حالياً"}</p>{professions.length > 1 && <button className="remove-profession" type="button" onClick={() => removeProfession(item.key)}>حذف</button>}</article>)}</div><p className="form-hint">وجود عجز لا يمنع إنشاء العقد؛ سيظهر التنبيه ويظل استكمال العمالة متاحاً لاحقاً.</p></div>}
+
+      {isContract && <div className={`issue-form-step span-two ${step === 3 ? "visible" : ""}`}><div className="selection-intro"><strong>اختيار العمالة المتاحة</strong><p>اختيار الأسماء اختياري. يمكنك تخطي هذه الخطوة وإنشاء العقد ثم إضافة العمالة لاحقاً.</p></div><div className="worker-selection-groups">{capacity.map((item) => { const candidates = workers.filter((worker) => worker.profession === item.profession && worker.status === "available"); const selected = selectedWorkers[item.key] || []; return <section key={item.key}><header><div><strong>{item.profession}</strong><small>مطلوب {item.requiredCount} · مختار {selected.length}</small></div><span className={selected.length === item.requiredCount ? "complete" : ""}>{item.requiredCount - selected.length} متبقٍ</span></header><div>{candidates.length ? candidates.map((worker) => <label key={worker.id} className={selected.includes(worker.id) ? "selected" : ""}><input type="checkbox" checked={selected.includes(worker.id)} disabled={!selected.includes(worker.id) && selected.length >= item.requiredCount} onChange={() => toggleWorker(item.key, worker.id, item.requiredCount)}/><span>{initials(worker.fullName)}</span><p><strong>{worker.fullName}</strong><small>{worker.workerNumber} · إقامة {worker.iqamaNumber || "غير مسجلة"}</small></p></label>) : <p className="empty-operational">لا توجد عمالة متاحة بهذه المهنة حالياً.</p>}</div></section>; })}</div>{totalShortage > 0 && <div className="contract-shortage-summary"><Icon name="bell"/><p><strong>يمكن إصدار العقد رغم العجز</strong><span>إجمالي العجز التشغيلي الحالي {totalShortage} عامل عبر المهن المطلوبة.</span></p></div>}</div>}
+
+      <p className="form-hint span-two">سيُنشأ رقم مرجعي تلقائي، ويُحفظ الملف في المركز، ويُدرج الختم والتوقيع المعتمدان في النسخة الصادرة.</p><div className="modal-actions span-two">{isContract && step > 1 ? <button type="button" onClick={() => setStep((step - 1) as 1 | 2)}>السابق</button> : <button type="button" onClick={onClose}>إلغاء</button>}{isContract && step < 3 ? <button className="admin-primary" type="button" onClick={(event) => { if (step === 1 && !event.currentTarget.form?.reportValidity()) return; setStep((step + 1) as 2 | 3); }}>التالي</button> : <button className="admin-primary" type="submit" disabled={busy || !assetsReady}>{busy ? "جارٍ الإصدار..." : isContract && totalShortage ? "إصدار العقد رغم العجز" : "إصدار واعتماد PDF"}</button>}</div>
+    </form>
+  </section></div>;
+}
+function StatusControl({ entity, id, value, canWrite, busy, onStatus }: { entity: RecordEntity; id: number; value: string; canWrite: boolean; busy: string | null; onStatus: (id: number, status: string) => void }) {
+  if (!canWrite) return <span className={`status-pill ${statusClass(value)}`}>{recordStatus[entity][value] ?? value}</span>;
+  return <select className="status-select" value={value} disabled={busy === `${entity}-${id}`} onChange={(event) => onStatus(id, event.target.value)}>{Object.entries(recordStatus[entity]).map(([status, label]) => <option value={status} key={status}>{label}</option>)}</select>;
+}
+function EmptyRows({ label }: { label: string }) { return <div className="empty-table"><span>⌁</span><strong>لا توجد سجلات بعد</strong><p>{label}</p></div>; }
+function filterRecords<T>(records: T[], query: string) { const needle = query.trim().toLowerCase(); return needle ? records.filter((item) => JSON.stringify(item).toLowerCase().includes(needle)) : records; }
+
+function EmployeeTable({ records, query, canWrite, busy, onStatus }: { records: EmployeeRecord[]; query: string; canWrite: boolean; busy: string | null; onStatus: (id: number, status: string) => void }) {
+  const rows = filterRecords(records, query); if (!rows.length) return <EmptyRows label="أضف أول ملف موظف ليظهر هنا."/>;
+  return <div className="management-table-wrap"><table className="management-table"><thead><tr><th>الرقم الوظيفي</th><th>الموظف</th><th>المسمى</th><th>الإدارة</th><th>تاريخ الالتحاق</th><th>الحالة</th></tr></thead><tbody>{rows.map((item) => <tr key={item.id}><td dir="ltr">{item.employeeNumber}</td><td><strong>{item.fullName}</strong><small dir="ltr">{item.mobile}</small></td><td>{item.jobTitle}</td><td>{item.department}</td><td>{formatDate(item.hireDate)}</td><td><StatusControl entity="employees" id={item.id} value={item.status} canWrite={canWrite} busy={busy} onStatus={onStatus}/></td></tr>)}</tbody></table></div>;
+}
+function FinanceTable({ records, workers, contracts, query, canWrite, busy, onStatus }: { records: FinanceRecord[]; workers: WorkerRecord[]; contracts: WorkforceContract[]; query: string; canWrite: boolean; busy: string | null; onStatus: (id: number, status: string) => void }) {
+  const rows = filterRecords(records, query); if (!rows.length) return <EmptyRows label="أضف أول عملية مالية ليظهر السجل هنا."/>;
+  return <div className="management-table-wrap"><table className="management-table finance-table"><thead><tr><th>المرجع</th><th>النوع</th><th>العامل / العقد</th><th>البيان</th><th>المبلغ</th><th>الفترة والطريقة</th><th>الاستحقاق</th><th>الحالة</th></tr></thead><tbody>{rows.map((item) => { const worker = workers.find((entry) => entry.id === item.workerId); const contract = contracts.find((entry) => entry.id === item.contractId); return <tr key={item.id}><td dir="ltr">{item.referenceCode}</td><td><strong>{financeLabels[item.category] ?? item.category}</strong><small>{item.subCategory ? workforceExpenseLabels[item.subCategory] || item.subCategory : ""}</small></td><td><strong>{worker?.fullName || contract?.clientName || "غير مرتبط"}</strong><small>{worker ? `${worker.profession} · ${worker.iqamaNumber}` : contract?.referenceCode || ""}</small></td><td><strong>{item.description}</strong><small>{contract ? contract.title : item.notes || ""}</small></td><td className={`money-cell ${item.category === "worker_deduction" ? "deduction" : ""}`}>{item.category === "worker_deduction" ? "− " : ""}{formatMoney(item.amountHalalas)}</td><td><strong>{item.periodMonth || "—"}</strong><small>{item.paymentMethod ? paymentMethodLabels[item.paymentMethod] || item.paymentMethod : "غير محدد"}</small></td><td>{formatDate(item.dueDate)}</td><td><StatusControl entity="finance" id={item.id} value={item.status} canWrite={canWrite} busy={busy} onStatus={onStatus}/></td></tr>; })}</tbody></table></div>;
+}
+function LegalTable({ records, query, canWrite, busy, onStatus }: { records: LegalRecord[]; query: string; canWrite: boolean; busy: string | null; onStatus: (id: number, status: string) => void }) {
+  const rows = filterRecords(records, query); if (!rows.length) return <EmptyRows label="أضف أول عقد أو ملف قانوني ليظهر هنا."/>;
+  return <div className="management-table-wrap"><table className="management-table"><thead><tr><th>المرجع</th><th>النوع</th><th>العنوان</th><th>الطرف الآخر</th><th>الانتهاء/التجديد</th><th>الحالة</th></tr></thead><tbody>{rows.map((item) => <tr key={item.id}><td dir="ltr">{item.referenceCode}</td><td>{legalLabels[item.category] ?? item.category}</td><td><strong>{item.title}</strong></td><td>{item.counterparty}</td><td className={daysUntil(item.expiryDate) <= 45 ? "date-alert" : ""}>{formatDate(item.expiryDate)}</td><td><StatusControl entity="legal" id={item.id} value={item.status} canWrite={canWrite} busy={busy} onStatus={onStatus}/></td></tr>)}</tbody></table></div>;
+}
+
+function WorkforceOperations({ workers, attachments }: { workers: WorkerRecord[]; attachments: WorkerAttachment[] }) {
+  const assigned = workers.filter((item) => item.status === "assigned").length;
+  const utilization = workers.length ? Math.round((assigned / workers.length) * 100) : 0;
+  const completeFiles = workers.filter((worker) => workerRequirementStatus(worker, attachments).percent === 100).length;
+  const beneficiaries = Array.from(workers.reduce((map, worker) => {
+    if (worker.status === "assigned" && worker.beneficiaryName) map.set(worker.beneficiaryName, (map.get(worker.beneficiaryName) || 0) + 1);
+    return map;
+  }, new Map<string, number>())).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const professions = workforceProfessions.map((profession) => ({
+    label: profession.label,
+    total: workers.filter((worker) => worker.profession === profession.label).length,
+    available: workers.filter((worker) => worker.profession === profession.label && worker.status === "available").length,
+  })).filter((item) => item.total > 0).sort((a, b) => b.total - a.total).slice(0, 5);
+
+  return <section className="workforce-command-grid"><article className="panel allocation-panel"><div className="panel-head"><div><h2>التوزيع التشغيلي الحالي</h2><p>الجهات المستفيدة ونسبة إشغال القوى العاملة</p></div><span className="live-indicator">مباشر</span></div><div className="allocation-body"><div className="utilization-ring" style={{ background: `conic-gradient(var(--admin-red) ${utilization}%, #e8edf0 0)` }}><span><strong>{utilization}%</strong><small>نسبة الإشغال</small></span></div><div className="beneficiary-list">{beneficiaries.length ? beneficiaries.map(([name, count]) => <div key={name}><p><strong>{name}</strong><small>{count} عامل</small></p><span><i style={{ width: `${Math.max(12, Math.round((count / Math.max(assigned, 1)) * 100))}%` }}/></span></div>) : <div className="empty-operational">لا توجد عمالة مسندة إلى جهات حالياً.</div>}</div></div></article><article className="panel readiness-panel"><div className="panel-head"><div><h2>الجاهزية حسب المهنة</h2><p>المسجل والمتاح للعقود الجديدة</p></div><span className="readiness-score">{completeFiles}/{workers.length} مكتمل</span></div><div className="profession-readiness">{professions.length ? professions.map((item) => <div key={item.label}><span>{item.label}</span><p><strong>{item.available}</strong> متاح من {item.total}</p><div><i style={{ width: `${Math.round((item.available / item.total) * 100)}%` }}/></div></div>) : <div className="empty-operational">أضف العمالة لتظهر مؤشرات الجاهزية.</div>}</div></article></section>;
+}
+
+function ContractOperations({ contracts, professions, assignments, onSelect }: { contracts: WorkforceContract[]; professions: ContractProfession[]; assignments: ContractAssignment[]; onSelect: (id: number) => void }) {
+  const rows = contracts.slice(0, 12);
+  return <section className="panel contracts-panel"><div className="panel-head"><div><h2>عقود توفير العمالة</h2><p>المهن المطلوبة والعمالة المسندة والجهات المستفيدة</p></div><span className="panel-count">{contracts.filter((item) => item.status === "active").length} نشط</span></div>{rows.length ? <div className="management-table-wrap"><table className="management-table contracts-table"><thead><tr><th>العقد</th><th>الجهة المستفيدة</th><th>المهن المطلوبة</th><th>التغطية</th><th>المدة</th><th>الحالة</th><th><span className="sr-only">إدارة</span></th></tr></thead><tbody>{rows.map((contract) => { const contractProfessionRows = professions.filter((item) => item.contractId === contract.id); const activeAssignments = assignments.filter((item) => item.contractId === contract.id && item.status === "active"); const required = contractProfessionRows.reduce((sum, item) => sum + item.requiredCount, 0); const assigned = activeAssignments.length; const labels = contractProfessionRows.map((item) => `${item.profession} (${item.requiredCount})`).join("، "); return <tr key={contract.id}><td><strong dir="ltr">{contract.referenceCode}</strong><small>{contract.title}</small></td><td><strong>{contract.clientName}</strong><small>{contract.workSite}</small></td><td><strong>{contractProfessionRows.length} مهنة</strong><small>{labels || "لم تُسجّل المهن"}</small></td><td><div className="contract-fill"><span><i style={{ width: `${required ? Math.min(100, Math.round((assigned / required) * 100)) : 0}%` }}/></span><small>{assigned} من {required} · متبقٍ {Math.max(0, required - assigned)}</small></div></td><td><strong>{formatDate(contract.startDate)}</strong><small>حتى {formatDate(contract.endDate)}</small></td><td><span className={`status-pill ${contract.status === "active" ? "status-contacted" : "status-closed"}`}>{contract.status === "active" ? "نشط" : contract.status}</span></td><td><button className="worker-view" onClick={() => onSelect(contract.id)}>إدارة العمالة ←</button></td></tr>; })}</tbody></table></div> : <EmptyRows label="أنشئ عقد توفير عمالة ليظهر هنا مع المهن والأعداد."/>}</section>;
+}
+
+function ContractDrawer({ contract, professions, assignments, workers, canWrite, busy, onClose, onAssign, onRelease }: {
+  contract: WorkforceContract; professions: ContractProfession[]; assignments: ContractAssignment[]; workers: WorkerRecord[]; canWrite: boolean; busy: string | null; onClose: () => void;
+  onAssign: (contractId: number, contractProfessionId: number, workerId: number) => Promise<void>;
+  onRelease: (contractId: number, assignmentId: number) => Promise<void>;
+}) {
+  const [choices, setChoices] = useState<Record<number, string>>({});
+  const activeAssignments = assignments.filter((item) => item.status === "active");
+  const requiredTotal = professions.reduce((sum, item) => sum + item.requiredCount, 0);
+  return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="إغلاق إدارة العقد" onClick={onClose}/><aside className="request-drawer contract-drawer" role="dialog" aria-modal="true" aria-label={`إدارة عمالة العقد ${contract.referenceCode}`}><div className="drawer-head"><div><span dir="ltr">{contract.referenceCode}</span><h2>إدارة عمالة العقد</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div>
+    <div className="contract-drawer-summary"><div><span>الجهة المستفيدة</span><strong>{contract.clientName}</strong><small>{contract.workSite}</small></div><div><span>التغطية الحالية</span><strong>{activeAssignments.length} / {requiredTotal}</strong><small>متبقٍ {Math.max(0, requiredTotal - activeAssignments.length)} عامل</small></div><div><span>مدة العقد</span><strong>{formatDate(contract.startDate)}</strong><small>حتى {formatDate(contract.endDate)}</small></div></div>
+    <a className="contract-pdf-link" href={`/api/portal/documents/${contract.documentId}`}><Icon name="download"/> تنزيل نسخة العقد المعتمدة</a>
+    <div className="contract-profession-sections">{professions.map((profession) => { const professionAssignments = activeAssignments.filter((item) => item.contractProfessionId === profession.id); const assignedIds = new Set(professionAssignments.map((item) => item.workerId)); const candidates = workers.filter((worker) => worker.profession === profession.profession && worker.status === "available" && !assignedIds.has(worker.id)); const remaining = Math.max(0, profession.requiredCount - professionAssignments.length); return <section key={profession.id}><header><div><strong>{profession.profession}</strong><small>مطلوب {profession.requiredCount} عامل</small></div><span className={remaining === 0 ? "complete" : ""}>{professionAssignments.length}/{profession.requiredCount}</span></header><div className="contract-assigned-list">{professionAssignments.map((assignment) => { const worker = workers.find((item) => item.id === assignment.workerId); return <article key={assignment.id}><span>{initials(worker?.fullName || "عامل")}</span><p><strong>{worker?.fullName || `عامل رقم ${assignment.workerId}`}</strong><small>{worker?.iqamaNumber || "رقم الإقامة غير متاح"} · {formatDate(assignment.assignedAt)}</small></p>{canWrite && <button disabled={busy === `contract-release-${assignment.id}`} onClick={() => void onRelease(contract.id, assignment.id)}>{busy === `contract-release-${assignment.id}` ? "جارٍ..." : "إنهاء الإسناد"}</button>}</article>; })}{!professionAssignments.length && <p className="empty-operational">لم تُسند عمالة لهذه المهنة بعد.</p>}</div>{canWrite && remaining > 0 && <div className="contract-add-worker"><label>إضافة عامل متاح<select value={choices[profession.id] || ""} onChange={(event) => setChoices((items) => ({ ...items, [profession.id]: event.target.value }))}><option value="">اختر العامل</option>{candidates.map((worker) => <option value={worker.id} key={worker.id}>{worker.fullName} — {worker.iqamaNumber}</option>)}</select></label><button className="admin-primary" disabled={!choices[profession.id] || busy === `contract-assign-${profession.id}`} onClick={() => choices[profession.id] && void onAssign(contract.id, profession.id, Number(choices[profession.id]))}>{busy === `contract-assign-${profession.id}` ? "جارٍ الإسناد..." : "إضافة إلى العقد"}</button>{!candidates.length && <small>لا توجد عمالة متاحة مطابقة للمهنة حالياً.</small>}</div>}{remaining === 0 && <p className="profession-complete-note">اكتمل العدد المطلوب لهذه المهنة؛ لن يسمح النظام بإضافة عامل آخر.</p>}</section>; })}</div>
+  </aside></div>;
+}
+
+function WorkerTable({ records, attachments, query, onSelect }: { records: WorkerRecord[]; attachments: WorkerAttachment[]; query: string; onSelect: (id: number) => void }) {
+  const rows = filterRecords(records, query); if (!rows.length) return <EmptyRows label="أضف أول ملف عامل متكامل ليظهر هنا."/>;
+  return <div className="management-table-wrap"><table className="management-table workforce-table"><thead><tr><th>العامل</th><th>المهنة</th><th>الجهة المستفيدة</th><th>موقع العمل</th><th>انتهاء الإقامة</th><th>اكتمال الملف</th><th>الحالة</th><th><span className="sr-only">عرض</span></th></tr></thead><tbody>{rows.map((item) => { const profile = workerRequirementStatus(item, attachments); const photo = profile.files.find((file) => file.documentType === "photo"); return <tr key={item.id}><td><div className="worker-identity">{photo ? <Image unoptimized src={`/api/portal/workers/attachments/${photo.id}?inline=1`} alt={`صورة ${item.fullName}`} width={56} height={56}/> : <span>{initials(item.fullName)}</span>}<p><strong>{item.fullName}</strong><small dir="ltr">{item.iqamaNumber || "رقم الإقامة غير مسجل"}</small></p></div></td><td><strong>{item.profession}</strong><small>{item.nationality}</small></td><td><strong>{item.beneficiaryName || "غير مسند"}</strong><small>{item.status === "assigned" ? "مستفيد حالي" : "متاح للإسناد"}</small></td><td>{item.clientSite}</td><td className={daysUntil(item.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(item.iqamaExpiry)}</td><td><div className="file-completion"><span><i style={{ width: `${profile.percent}%` }}/></span><small>{profile.percent}% · {profile.missing.length ? `${profile.missing.length} ناقص` : "مكتمل"}</small></div></td><td><span className={`status-pill ${statusClass(item.status)}`}>{recordStatus.workforce[item.status] || item.status}</span></td><td><button className="worker-view" onClick={() => onSelect(item.id)}>عرض الملف ←</button></td></tr>; })}</tbody></table></div>;
+}
+
+function RecordModal({ entity, busy, onClose, onSubmit }: { entity: Exclude<RecordEntity, "finance" | "workforce">; busy: boolean; onClose: () => void; onSubmit: (entity: RecordEntity, form: HTMLFormElement) => Promise<void> }) {
+  const titles = { employees: "إضافة موظف", legal: "إضافة ملف قانوني" };
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(entity, event.currentTarget); }
+  return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق النافذة" onClick={onClose}/><section className="record-modal" role="dialog" aria-modal="true" aria-label={titles[entity]}><div className="drawer-head"><div><span>سجل جديد</span><h2>{titles[entity]}</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}>
+    {entity === "employees" && <><label>الرقم الوظيفي<input name="employeeNumber" required maxLength={30} placeholder="EMP-001" dir="ltr"/></label><label>الاسم الكامل<input name="fullName" required maxLength={120}/></label><label>المسمى الوظيفي<input name="jobTitle" required maxLength={100}/></label><label>الإدارة أو القسم<input name="department" required maxLength={100}/></label><label>رقم الجوال<input name="mobile" required type="tel" maxLength={20} dir="ltr"/></label><label>تاريخ الالتحاق<input name="hireDate" required type="date"/></label></>}
+    {entity === "legal" && <><label>نوع الملف<select name="category" required defaultValue=""><option value="" disabled>اختر النوع</option><option value="contract">عقد</option><option value="case">قضية</option><option value="license">ترخيص</option><option value="compliance">امتثال</option></select></label><label>العنوان<input name="title" required maxLength={180}/></label><label>الطرف الآخر أو الجهة<input name="counterparty" required maxLength={160}/></label><label>تاريخ الانتهاء أو التجديد<input name="expiryDate" type="date"/></label></>}
+    <div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ السجل"}</button></div>
+  </form></section></div>;
+}
+
+function SearchableCombobox({ name, value, options, onChange, placeholder, required = false }: { name: string; value: string; options: readonly string[]; onChange: (value: string) => void; placeholder: string; required?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const hasExactSelection = options.includes(value);
+  const filtered = options.filter((option) => hasExactSelection || !value.trim() || option.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 40);
+  const listId = `combobox-${name.replace(/[^a-zA-Z0-9_-]/g, "-")}-options`;
+  return <div className="searchable-combobox"><div><Icon name="search"/><input name={name} value={value} required={required} autoComplete="off" placeholder={placeholder} role="combobox" aria-controls={listId} aria-expanded={open} aria-autocomplete="list" onFocus={() => setOpen(true)} onBlur={() => window.setTimeout(() => setOpen(false), 120)} onChange={(event) => { onChange(event.target.value); setOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); if (event.key === "Enter" && open && filtered[0]) { event.preventDefault(); onChange(filtered[0]); setOpen(false); } }}/><button type="button" aria-label="عرض الخيارات" onMouseDown={(event) => event.preventDefault()} onClick={() => setOpen((visible) => !visible)}>⌄</button></div>{open && <div className="combobox-options" id={listId} role="listbox">{filtered.length ? filtered.map((option) => <button type="button" role="option" aria-selected={option === value} key={option} className={option === value ? "selected" : ""} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(option); setOpen(false); }}>{option}{option === value && <Icon name="check"/>}</button>) : <p>لا توجد خيارات مطابقة. اكتب جزءاً من الاسم للبحث.</p>}</div>}</div>;
+}
+
+function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  const [profession, setProfession] = useState(workforceProfessions[0].label);
+  const [nationality, setNationality] = useState("");
+  const requirements = requirementsForProfession(profession);
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+  return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إضافة عامل" onClick={onClose}/><section className="record-modal worker-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف عامل"><div className="drawer-head"><div><span>شؤون العمالة</span><h2>إنشاء ملف عامل متكامل</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><div className="worker-modal-steps"><span className="active">1 البيانات</span><span className="active">2 متطلبات المهنة</span><span className="active">3 الجاهزية للعقود</span></div><form onSubmit={submit}>
+    <p className="form-section-title span-two">البيانات الأساسية</p><label>رقم العامل<input name="workerNumber" required maxLength={30} placeholder="WRK-001" dir="ltr"/></label><label>رقم الإقامة<input name="iqamaNumber" required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} placeholder="10 أرقام" dir="ltr"/></label><label>الاسم الكامل<input name="fullName" required maxLength={120}/></label><label>الجنسية<SearchableCombobox name="nationality" value={nationality} options={workforceNationalities} onChange={setNationality} placeholder="اكتب للبحث عن الجنسية" required/></label><label>رقم الجوال<input name="mobile" required type="tel" maxLength={20} dir="ltr"/></label><label>تاريخ انتهاء الإقامة<input name="iqamaExpiry" required type="date"/></label><label className="span-two">المهنة<SearchableCombobox name="profession" value={profession} options={workforceProfessions.map((item) => item.label)} onChange={setProfession} placeholder="اكتب للبحث عن المهنة" required/></label>
+    <p className="form-section-title span-two">الصورة ومتطلبات المهنة</p><label className="span-two file-drop">صورة العامل<input name="photo" type="file" required accept="image/png,image/jpeg"/><small>PNG أو JPG — بحد أقصى 5 ميجابايت</small></label>{requirements.map((requirement) => <label className="span-two file-drop requirement-file" key={requirement.code}>{requirement.label}<input name={`requirement:${requirement.code}`} type="file" required accept="application/pdf,image/png,image/jpeg"/><small>مطلوب لمهنة {profession}</small></label>)}<label className="span-two file-drop">شهادات إضافية<input name="extraCertificates" type="file" multiple accept="application/pdf,image/png,image/jpeg"/><small>يمكن تحديد عدة ملفات إضافية مرتبطة بخبرة العامل</small></label>
+    <p className="form-hint span-two">لن يُنشأ الملف قبل إرفاق الصورة وجميع المستندات المطلوبة للمهنة. يُسجّل العامل متاحاً، ثم تُحدّد الجهة المستفيدة تلقائياً عند اختياره في عقد نشط.</p><div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ إنشاء الملف..." : "إنشاء ملف العامل"}</button></div>
+  </form></section></div>;
+}
+
+function WorkerDrawer({ worker, attachments, contracts, contractAssignments, canWrite, busy, onClose, onUploadAttachment }: {
+  worker: WorkerRecord; attachments: WorkerAttachment[]; contracts: WorkforceContract[]; contractAssignments: ContractAssignment[]; canWrite: boolean; busy: string | null; onClose: () => void;
+  onUploadAttachment: (workerId: number, form: HTMLFormElement) => Promise<void>;
+}) {
+  const profile = workerRequirementStatus(worker, attachments);
+  const photo = attachments.find((item) => item.documentType === "photo");
+  const missingOptions = profile.missing;
+  const activeAssignment = contractAssignments.find((item) => item.workerId === worker.id && item.status === "active");
+  const activeContract = contracts.find((item) => item.id === activeAssignment?.contractId);
+  function submitAttachment(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onUploadAttachment(worker.id, event.currentTarget); }
+  return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="إغلاق ملف العامل" onClick={onClose}/><aside className="request-drawer worker-drawer" role="dialog" aria-modal="true" aria-label={`ملف العامل ${worker.fullName}`}><div className="drawer-head"><div><span>{worker.workerNumber}</span><h2>ملف العامل</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><div className="worker-profile-head">{photo ? <Image unoptimized src={`/api/portal/workers/attachments/${photo.id}?inline=1`} alt={`صورة ${worker.fullName}`} width={96} height={96}/> : <span>{initials(worker.fullName)}</span>}<div><h3>{worker.fullName}</h3><p>{worker.profession} · {worker.nationality}</p><small dir="ltr">إقامة: {worker.iqamaNumber || "غير مسجل"}</small></div><b className={`status-pill ${statusClass(worker.status)}`}>{recordStatus.workforce[worker.status] || worker.status}</b></div><div className="profile-completion"><div><strong>اكتمال الملف</strong><span>{profile.percent}%</span></div><p><i style={{ width: `${profile.percent}%` }}/></p><small>{profile.missing.length ? `متبقٍ ${profile.missing.length} مستند مهني` : "جميع متطلبات المهنة مكتملة"}</small></div>
+    <div className="drawer-section worker-facts"><h3>البيانات التشغيلية</h3><dl><div><dt>الجوال</dt><dd dir="ltr">{worker.mobile || "غير مسجل"}</dd></div><div><dt>انتهاء الإقامة</dt><dd className={daysUntil(worker.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(worker.iqamaExpiry)}</dd></div><div><dt>الجهة المستفيدة</dt><dd>{activeContract?.clientName || worker.beneficiaryName || "غير مسند"}</dd></div><div><dt>العقد النشط</dt><dd>{activeContract?.referenceCode || "لا يوجد عقد نشط"}</dd></div><div><dt>موقع العمل</dt><dd>{activeContract?.workSite || worker.clientSite}</dd></div><div><dt>بداية الإسناد</dt><dd>{formatDate(activeAssignment?.assignedAt || worker.assignmentStartDate)}</dd></div></dl></div>
+    <div className="drawer-section"><h3>الصورة والشهادات</h3><div className="worker-file-list">{attachments.map((item) => <a key={item.id} href={`/api/portal/workers/attachments/${item.id}`}><span><Icon name={item.documentType === "photo" ? "employees" : "documents"}/></span><p><strong>{item.title}</strong><small>{item.fileName} · {formatBytes(item.sizeBytes)}</small></p><Icon name="download"/></a>)}</div>{!attachments.length && <div className="empty-operational">لا توجد مرفقات في هذا الملف.</div>}{canWrite && <form className="attachment-upload" onSubmit={submitAttachment}><strong>إضافة شهادة إلى الملف</strong><label>نوع المستند<select name="requirementCode" defaultValue={missingOptions[0]?.code || ""}>{missingOptions.map((item) => <option key={item.code} value={item.code}>{item.label} — مطلوب</option>)}<option value="">شهادة إضافية</option></select></label><label>عنوان الشهادة<input name="title" maxLength={160} placeholder="يستخدم للشهادة الإضافية"/></label><label>الملف<input name="file" type="file" required accept="application/pdf,image/png,image/jpeg"/></label><button className="admin-primary" disabled={busy === `worker-attachment-${worker.id}`}>{busy === `worker-attachment-${worker.id}` ? "جارٍ الرفع..." : "رفع الشهادة"}</button></form>}</div>
+    <div className="drawer-section"><h3>مصدر الجهة المستفيدة</h3><div className="contract-source-note"><Icon name="documents"/><p><strong>{activeContract ? "الإسناد مرتبط بعقد نشط" : "العامل متاح للعقود"}</strong><span>{activeContract ? `تُحدّث الجهة والموقع من العقد ${activeContract.referenceCode}. لإلغاء الإسناد أو تغييره افتح إدارة العقد.` : "تظهر العمالة في خطوة الاختيار عند إنشاء عقد يتضمن مهنتها، ويمكن إضافتها لاحقاً من إدارة العقد."}</span></p></div>{!canWrite && <p className="readonly-note">صلاحية حسابك تتيح الاطلاع والتنزيل فقط.</p>}</div>
+  </aside></div>;
+}
+
+function RequestTable({ requests, onSelect }: { requests: WorkforceRequest[]; onSelect: (id: number) => void }) {
+  if (!requests.length) return <EmptyRows label="ستظهر طلبات الموقع هنا بمجرد وصولها."/>;
+  return <div className="request-table-wrap"><table className="request-table"><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الاحتياج</th><th>التاريخ</th><th>الحالة</th><th><span className="sr-only">الإجراء</span></th></tr></thead><tbody>{requests.map((item) => { const status = requestStatuses[safeRequestStatus(item.status)]; return <tr key={item.id} onClick={() => onSelect(item.id)}><td><b>{item.trackingCode}</b></td><td><strong>{item.companyName || item.fullName}</strong><small>{item.companyName ? `${item.fullName} · ${item.mobile}` : item.mobile}</small></td><td><span>{item.specialization}</span>{item.requestType === "quotation" && <small className="quote-request-kind">طلب عرض سعر</small>}</td><td>{formatDate(item.createdAt)}</td><td><span className={`status-pill ${status.className}`}>{status.label}</span></td><td><button aria-label={`عرض طلب ${item.trackingCode}`}>←</button></td></tr>; })}</tbody></table></div>;
+}
+function RequestDrawer({ request, replies, emailConfigured, canWrite, statusBusy, replyBusy, onClose, onStatus, onReply }: {
+  request: WorkforceRequest; replies: WorkforceRequestReply[]; emailConfigured: boolean; canWrite: boolean; statusBusy: boolean; replyBusy: boolean;
+  onClose: () => void; onStatus: (id: number, status: RequestStatus) => void; onReply: (id: number, form: HTMLFormElement) => Promise<void>;
+}) {
+  function submitReply(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onReply(request.id, event.currentTarget); }
+  const deliveryLabels: Record<string, string> = { sent: "تم الإرسال", pending: "قيد الإرسال", failed: "فشل الإرسال", configuration_required: "تحتاج تهيئة البريد" };
+  return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="إغلاق تفاصيل الطلب" onClick={onClose}/><aside className="request-drawer visitor-request-drawer" role="dialog" aria-modal="true" aria-label="تفاصيل طلب الزائر"><div className="drawer-head"><div><span>{request.trackingCode}</span><h2>{request.requestType === "quotation" ? "طلب عرض سعر" : "طلب الزائر والردود"}</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><div className="drawer-status"><span>حالة الطلب</span>{canWrite ? <select value={safeRequestStatus(request.status)} disabled={statusBusy} onChange={(event) => onStatus(request.id, event.target.value as RequestStatus)}>{Object.entries(requestStatuses).map(([value, meta]) => <option value={value} key={value}>{meta.label}</option>)}</select> : <span className={`status-pill ${requestStatuses[safeRequestStatus(request.status)].className}`}>{requestStatuses[safeRequestStatus(request.status)].label}</span>}</div><div className="drawer-section"><h3>بيانات الزائر</h3><dl><div><dt>الاسم</dt><dd>{request.fullName}</dd></div><div><dt>الشركة أو الجهة</dt><dd>{request.companyName || "غير محددة"}</dd></div><div><dt>رقم الجوال</dt><dd dir="ltr">{request.mobile}</dd></div><div><dt>البريد الإلكتروني</dt><dd dir="ltr">{request.email}</dd></div></dl></div><div className="drawer-section"><h3>{request.requestType === "quotation" ? "بيانات عرض السعر" : "موضوع الطلب"}</h3><dl><div><dt>نوع الاحتياج</dt><dd>{request.specialization}</dd></div><div><dt>موقع العمل</dt><dd>{request.workSite || "غير محدد"}</dd></div>{request.requestType === "quotation" && <><div><dt>العدد التقريبي</dt><dd>{request.requestedCount || "غير محدد"}</dd></div><div><dt>تاريخ البدء</dt><dd>{formatDate(request.requiredStartDate)}</dd></div><div><dt>مدة التعاقد</dt><dd>{request.duration || "غير محددة"}</dd></div><div><dt>التواصل المفضل</dt><dd>{request.preferredContact === "phone" ? "اتصال هاتفي" : request.preferredContact === "email" ? "بريد إلكتروني" : "الجوال أو البريد"}</dd></div></>}<div><dt>تاريخ الطلب</dt><dd>{formatDate(request.createdAt, true)}</dd></div></dl><p className="request-details">{request.details}</p></div>
+    {canWrite && <div className="drawer-section reply-composer"><div className="reply-section-title"><span><Icon name="mail"/></span><div><h3>الرد عبر البريد الإلكتروني</h3><p>سيُحفظ النص وحالة التسليم في سجل الطلب، وتتحول الحالة تلقائياً إلى «تم التواصل» بعد نجاح الإرسال.</p></div></div>{!emailConfigured && <div className="email-configuration-alert"><strong>خدمة البريد غير مهيأة</strong><span>يجب على مدير النظام إضافة مفتاح خدمة الإرسال وبريد المرسل قبل تفعيل زر الإرسال.</span></div>}<form onSubmit={submitReply}><label>عنوان الرسالة<input name="subject" required minLength={3} maxLength={180} defaultValue={`رد شركة دالي للتشغيل والصيانة على طلبكم ${request.trackingCode}`}/></label><label>نص الرد<textarea name="body" required minLength={2} maxLength={10000} rows={8} placeholder="اكتب الرد الذي سيصل إلى بريد الزائر كما هو..."/></label><button className="admin-primary" disabled={replyBusy || !emailConfigured}>{replyBusy ? "جارٍ الإرسال..." : "إرسال الرد وحفظه"}<Icon name="mail"/></button></form></div>}
+    <div className="drawer-section reply-history"><div className="reply-section-title"><span><Icon name="documents"/></span><div><h3>سجل المراسلات</h3><p>{replies.length} رسالة مرتبطة بهذا الطلب</p></div></div>{replies.length ? <div className="reply-list">{replies.map((reply) => <article key={reply.id}><header><p><strong>{reply.subject}</strong><small>بواسطة {reply.senderName} · {formatDate(reply.sentAt || reply.createdAt, true)}</small></p><span className={`reply-status ${reply.deliveryStatus}`}>{deliveryLabels[reply.deliveryStatus] || reply.deliveryStatus}</span></header><p>{reply.body}</p><footer><span>إلى: <b dir="ltr">{reply.recipientEmail}</b></span>{reply.deliveryStatus === "sent" && <span><Icon name="check"/> موثّق في سجل التسليم</span>}</footer></article>)}</div> : <div className="empty-operational">لم يُرسل رد على هذا الطلب بعد.</div>}</div><div className="drawer-actions"><a href={`tel:${request.mobile}`}>اتصال بالعميل</a><a href={`mailto:${request.email}`}>فتح البريد الخارجي</a></div></aside></div>;
+}
+function activityLabel(action: string) {
+  const securityLabels: Record<string, string> = {
+    "portal-session-started": "بدء جلسة إدارية آمنة",
+    "portal-session-ended": "إنهاء جلسة إدارية",
+    "portal-session-expired": "انتهاء جلسة إدارية",
+    "portal-session-anomaly": "إيقاف جلسة غير معتادة",
+    "portal-access-request-submitted": "تقديم طلب انضمام",
+    "portal-access-request-updated": "تحديث طلب انضمام",
+    "chat-automation-updated": "تحديث نظام الرد الآلي",
+  };
+  if (securityLabels[action]) return securityLabels[action];
+  const labels: Record<string, string> = { "request-status-updated": "تحديث حالة طلب", "user-access-updated": "تحديث صلاحية مستخدم", "employee-created": "إضافة موظف", "financial-record-created": "إضافة سجل مالي", "legal-record-created": "إضافة ملف قانوني", "worker-created": "إضافة عامل", "worker-profile-created": "إنشاء ملف عامل متكامل", "worker-assignment-updated": "تحديث إسناد عامل", "worker-certificate-uploaded": "إضافة شهادة عامل", "company-document-uploaded": "رفع مستند شركة", "official-pdf-issued": "إصدار ملف PDF رسمي", "workforce-contract-created": "إنشاء عقد توفير عمالة", "contract-worker-assigned": "إسناد عامل إلى عقد", "contract-worker-released": "إنهاء إسناد عامل", "document-share-created": "إنشاء رابط مشاركة", "document-downloaded": "تنزيل مستند", "company-stamp-updated": "تحديث ختم الشركة", "company-signature-updated": "تحديث توقيع الشركة", "live-chat-replied": "الرد على محادثة زائر", "live-chat-closed": "إغلاق محادثة زائر", "live-chat-status-updated": "تحديث حالة محادثة", "business-hours-updated": "تحديث ساعات الدوام" };
+  return labels[action] ?? "تحديث سجل إداري";
+}

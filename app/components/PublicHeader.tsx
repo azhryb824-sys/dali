@@ -1,0 +1,56 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import type { WebsiteContent } from "@/lib/website-content";
+
+export default function PublicHeader({ content }: { content: WebsiteContent }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchItems = useMemo(() => {
+    const base = [
+      { title: "من نحن", text: content.site.description, href: "/about", keywords: `${content.site.companyName} ${content.site.city} ${content.site.district}` },
+      ...(content.visibility.hajj ? [{ title: "حلول موسم الحج", text: "فرق تشغيل وقوى عاملة للاحتياج الموسمي في مكة", href: "/hajj", keywords: "الحج موسم مشاعر مقدسة جاهزية تشغيل" }] : []),
+      { title: "طلب عرض سعر", text: "شاركنا احتياجك ليقترح فريق دالي الحل المناسب", href: "/contact", keywords: "تواصل استفسار سعر طلب شراكة" },
+      ...(content.visibility.faq ? [{ title: "الأسئلة الشائعة", text: "إجابات عن الخدمات والتعاقد والعمالة", href: "/faq", keywords: "معلومات أسئلة" }] : []),
+    ];
+    const paths = { services: "/services", sectors: "/sectors", locations: "/locations", projects: "/projects", credentials: "/credentials", articles: "/insights", jobs: "/careers", partners: "/partners" } as const;
+    const managed = Object.entries(content.collections).flatMap(([key, entries]) => entries
+      .filter((item) => item.status === "published")
+      .map((item) => ({
+        title: item.shortTitle || item.title,
+        text: item.summary,
+        href: `${paths[key as keyof typeof paths]}${["credentials", "partners"].includes(key) ? "" : `/${item.slug}`}`,
+        keywords: `${item.focusKeywords} ${item.tags.join(" ")}`,
+      })));
+    return [...base, ...managed];
+  }, [content]);
+  const results = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    return searchItems.filter((item) => `${item.title} ${item.text} ${item.keywords}`.toLowerCase().includes(needle)).slice(0, 6);
+  }, [query, searchItems]);
+
+  return <>
+    <div className="location-bar"><span>{content.site.tagline}</span><span>{content.site.city} · {content.site.district}</span></div>
+    <header className="site-header">
+      <Link className="brand" href="/" aria-label={`${content.site.companyName} - الرئيسية`}><Image src="/dally-logo.jpg" alt={`شعار ${content.site.companyName}`} width={545} height={280} sizes="180px"/></Link>
+      <button className="menu-btn" type="button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? "إغلاق القائمة" : "فتح القائمة"} aria-expanded={menuOpen}>☰</button>
+      <nav className={menuOpen ? "open" : ""} onClick={() => setMenuOpen(false)} aria-label="التنقل الرئيسي">
+        <Link href="/about">من نحن</Link>
+        {content.visibility.services && <Link href="/services">خدماتنا</Link>}
+        {content.visibility.sectors && <Link href="/sectors">القطاعات</Link>}
+        {content.visibility.locations && <Link href="/locations">مناطق الخدمة</Link>}
+        {content.visibility.hajj && <Link href="/hajj">موسم الحج</Link>}
+        {content.visibility.articles && <Link href="/insights">المعرفة</Link>}
+      </nav>
+      <div className="site-search">
+        <label><span aria-hidden="true">⌕</span><input value={query} role="combobox" aria-controls="site-search-results" aria-autocomplete="list" onFocus={() => setSearchOpen(true)} onBlur={() => window.setTimeout(() => setSearchOpen(false), 120)} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") setSearchOpen(false); if (event.key === "Enter" && results[0]) { event.preventDefault(); window.location.href = results[0].href; } }} placeholder="ابحث في الموقع" aria-label="البحث في جميع أقسام الموقع" aria-expanded={searchOpen && query.trim().length >= 2}/></label>
+        {searchOpen && query.trim().length >= 2 && <div className="site-search-results" id="site-search-results" role="listbox">{results.length ? results.map((item) => <Link href={item.href} role="option" aria-selected="false" key={item.href} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(""); setSearchOpen(false); }}><strong>{item.title}</strong><span>{item.text}</span></Link>) : <p>لا توجد نتائج مطابقة. <Link href={`/search?q=${encodeURIComponent(query)}`}>البحث الموسع</Link></p>}</div>}
+      </div>
+      <Link className="header-cta" href="/contact#quote">اطلب عرض سعر <span aria-hidden="true">←</span></Link>
+    </header>
+  </>;
+}

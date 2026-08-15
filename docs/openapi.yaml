@@ -1,0 +1,140 @@
+openapi: 3.1.0
+info:
+  title: Dali Operations and Maintenance Platform API
+  version: 1.0.0
+  description: عقد المسارات الرئيسية للموقع العام والبوابات المحمية.
+servers:
+  - url: https://dali-contracting.cust5467.chatgpt.site
+paths:
+  /api/health:
+    get:
+      summary: فحص جاهزية قاعدة البيانات
+      responses:
+        "200": { description: الخدمة جاهزة }
+        "503": { description: الخدمة متدهورة }
+  /api/workforce-requests:
+    post:
+      summary: إنشاء طلب تواصل أو عرض سعر
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublicRequest" }
+      responses:
+        "201": { description: أُنشئ الطلب }
+        "400": { description: بيانات غير صحيحة }
+        "429": { description: تجاوز حد الطلبات }
+  /api/chat:
+    get:
+      summary: جلب الرسائل الجديدة لمحادثة عامة
+      responses:
+        "200": { description: حالة المحادثة والرسائل }
+    post:
+      summary: بدء محادثة أو إرسال رسالة
+      responses:
+        "201": { description: أُنشئت المحادثة أو الرسالة }
+        "429": { description: تجاوز حد الرسائل }
+  /api/privacy-requests:
+    post:
+      summary: تقديم طلب متعلق بحقوق صاحب البيانات
+      responses:
+        "201": { description: أُنشئ الطلب مع رقم تتبع }
+  /api/portal/operations:
+    get:
+      summary: بيانات المبيعات والتشغيل المصرح بها
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "200": { description: قائمة مرقمة }
+        "403": { description: غير مصرح }
+    post:
+      summary: إنشاء عميل أو فرصة أو عرض أو أمر تشغيل أو كشف دوام
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "201": { description: أُنشئ السجل }
+        "409": { description: تعارض أو طلب مكرر }
+    patch:
+      summary: تنفيذ انتقال حالة محكوم
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "200": { description: حُدث السجل }
+        "409": { description: تعارض إصدار أو انتقال غير مسموح }
+  /api/client/quotes:
+    patch:
+      summary: قبول العميل أو رفضه عرضاً مرسلاً
+      security: [{ chatgptIdentity: [] }]
+      responses:
+        "200": { description: حُفظ القرار }
+        "403": { description: لا يملك المستخدم صلاحية الاعتماد }
+        "409": { description: العرض غير متاح أو منتهي }
+  /api/client/timesheets:
+    patch:
+      summary: اعتماد العميل أو رفضه كشف دوام
+      security: [{ chatgptIdentity: [] }]
+      responses:
+        "200": { description: حُفظ القرار }
+  /api/portal/integrations:
+    get:
+      summary: حالة طابور التكامل للمدير
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "200": { description: الأحداث دون حمولاتها الحساسة }
+    post:
+      summary: معالجة الطابور أو إعادة المحاولة أو صيانة البيانات المؤقتة
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "200": { description: نتيجة العملية }
+  /api/portal/access-request:
+    post:
+      summary: استكمال طلب انضمام حساب معلّق
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "200": { description: حُفظ طلب الانضمام }
+        "401": { description: الهوية أو الجلسة غير صالحة }
+        "409": { description: الحساب معتمد بالفعل }
+  /api/portal/conversations:
+    get:
+      summary: جلب المحادثات المصرح بها وإعدادات الرد الآلي
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "200": { description: المحادثات والرسائل والإعدادات }
+    post:
+      summary: إرسال رد موظف مباشر
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "201": { description: أُرسل الرد }
+    patch:
+      summary: تحديث حالة المحادثة أو إعدادات الرد الآلي للمدير
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "200": { description: حُفظ التحديث }
+  /api/portal/session/touch:
+    post:
+      summary: تمديد مهلة الخمول بعد نشاط مستخدم حقيقي
+      security: [{ chatgptIdentity: [], portalSession: [] }]
+      responses:
+        "200": { description: الجلسة نشطة }
+        "401": { description: الجلسة غير صالحة أو منتهية }
+components:
+  securitySchemes:
+    chatgptIdentity:
+      type: apiKey
+      in: header
+      name: oai-authenticated-user-email
+      description: هوية موثقة تضيفها طبقة الاستضافة ولا يقبلها التطبيق مباشرة من الإنترنت.
+    portalSession:
+      type: apiKey
+      in: cookie
+      name: __Host-dali_ps
+      description: رمز جلسة إداري عشوائي؛ لا تُحفظ في قاعدة البيانات إلا بصمته SHA-256.
+  schemas:
+    PublicRequest:
+      type: object
+      required: [fullName, mobile, email, specialization, details, idempotencyKey]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 120 }
+        mobile: { type: string, minLength: 8, maxLength: 20 }
+        email: { type: string, format: email }
+        requestType: { type: string, enum: [general, quotation] }
+        specialization: { type: string, maxLength: 120 }
+        details: { type: string, minLength: 5, maxLength: 3000 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 100 }

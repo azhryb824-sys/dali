@@ -1,0 +1,938 @@
+import { sql } from "drizzle-orm";
+import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+
+export const workforceRequests = sqliteTable(
+  "workforce_requests",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    trackingCode: text("tracking_code").notNull().unique(),
+    fullName: text("full_name").notNull(),
+    mobile: text("mobile").notNull(),
+    email: text("email").notNull(),
+    requestType: text("request_type").notNull().default("general"),
+    companyName: text("company_name"),
+    workSite: text("work_site"),
+    requiredStartDate: text("required_start_date"),
+    duration: text("duration"),
+    requestedCount: integer("requested_count"),
+    preferredContact: text("preferred_contact"),
+    specialization: text("specialization").notNull(),
+    details: text("details").notNull(),
+    status: text("status").notNull().default("new"),
+    source: text("source").notNull().default("public-website"),
+    assignedTo: text("assigned_to"),
+    clientId: integer("client_id"),
+    opportunityId: integer("opportunity_id"),
+    idempotencyKey: text("idempotency_key").unique(),
+    privacyNoticeVersion: text("privacy_notice_version"),
+    privacyAcknowledgedAt: text("privacy_acknowledged_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    index("workforce_requests_status_idx").on(table.status),
+    index("workforce_requests_request_type_idx").on(table.requestType),
+    index("workforce_requests_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const visitorConversations = sqliteTable(
+  "visitor_conversations",
+  {
+    id: text("id").primaryKey(),
+    trackingCode: text("tracking_code").notNull().unique(),
+    publicTokenHash: text("public_token_hash").notNull().unique(),
+    visitorName: text("visitor_name").notNull(),
+    visitorEmail: text("visitor_email"),
+    visitorMobile: text("visitor_mobile").notNull(),
+    subject: text("subject").notNull(),
+    status: text("status").notNull().default("waiting"),
+    assignedTo: text("assigned_to"),
+    relatedRequestId: integer("related_request_id"),
+    sourceHash: text("source_hash"),
+    lastVisitorMessageAt: text("last_visitor_message_at").notNull(),
+    lastStaffMessageAt: text("last_staff_message_at"),
+    lastAutoReplyKey: text("last_auto_reply_key"),
+    tokenExpiresAt: text("token_expires_at"),
+    firstResponseAt: text("first_response_at"),
+    slaDueAt: text("sla_due_at"),
+    closedAt: text("closed_at"),
+    privacyNoticeVersion: text("privacy_notice_version"),
+    privacyAcknowledgedAt: text("privacy_acknowledged_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("visitor_conversations_status_idx").on(table.status),
+    index("visitor_conversations_updated_at_idx").on(table.updatedAt),
+    index("visitor_conversations_assigned_to_idx").on(table.assignedTo),
+    index("visitor_conversations_related_request_idx").on(table.relatedRequestId),
+    index("visitor_conversations_source_hash_idx").on(table.sourceHash),
+  ],
+);
+
+export const visitorMessages = sqliteTable(
+  "visitor_messages",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    conversationId: text("conversation_id").notNull(),
+    senderType: text("sender_type").notNull(),
+    senderName: text("sender_name").notNull(),
+    senderEmail: text("sender_email"),
+    body: text("body").notNull(),
+    clientMessageId: text("client_message_id").unique(),
+    readByVisitorAt: text("read_by_visitor_at"),
+    readByStaffAt: text("read_by_staff_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("visitor_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+    index("visitor_messages_sender_type_idx").on(table.senderType),
+    index("visitor_messages_staff_read_idx").on(table.readByStaffAt),
+  ],
+);
+
+export const portalSettings = sqliteTable(
+  "portal_settings",
+  {
+    key: text("key").primaryKey(),
+    valueJson: text("value_json").notNull(),
+    updatedBy: text("updated_by").notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("portal_settings_updated_at_idx").on(table.updatedAt)],
+);
+
+export const workforceRequestReplies = sqliteTable(
+  "workforce_request_replies",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    requestId: integer("request_id").notNull(),
+    senderEmail: text("sender_email").notNull(),
+    senderName: text("sender_name").notNull(),
+    recipientEmail: text("recipient_email").notNull(),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    deliveryStatus: text("delivery_status").notNull().default("pending"),
+    providerMessageId: text("provider_message_id"),
+    failureReason: text("failure_reason"),
+    sentAt: text("sent_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("workforce_request_replies_request_id_idx").on(table.requestId),
+    index("workforce_request_replies_status_idx").on(table.deliveryStatus),
+    index("workforce_request_replies_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const portalUsers = sqliteTable(
+  "portal_users",
+  {
+    email: text("email").primaryKey(),
+    displayName: text("display_name").notNull(),
+    role: text("role").notNull().default("employee"),
+    department: text("department").notNull().default("general"),
+    status: text("status").notNull().default("pending"),
+    requestedDepartment: text("requested_department"),
+    requestedJobTitle: text("requested_job_title"),
+    requestReason: text("request_reason"),
+    requestSubmittedAt: text("request_submitted_at"),
+    termsAcceptedAt: text("terms_accepted_at"),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    suspendedAt: text("suspended_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastLoginAt: text("last_login_at"),
+    lastActivityAt: text("last_activity_at"),
+  },
+  (table) => [
+    index("portal_users_status_idx").on(table.status),
+    index("portal_users_role_idx").on(table.role),
+    index("portal_users_department_idx").on(table.department),
+  ],
+);
+
+export const portalSessions = sqliteTable(
+  "portal_sessions",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
+    status: text("status").notNull().default("active"),
+    userAgentHash: text("user_agent_hash").notNull(),
+    sourceHash: text("source_hash"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastActivityAt: text("last_activity_at").notNull(),
+    idleExpiresAt: text("idle_expires_at").notNull(),
+    absoluteExpiresAt: text("absolute_expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    revocationReason: text("revocation_reason"),
+  },
+  (table) => [
+    index("portal_sessions_user_status_idx").on(table.userEmail, table.status),
+    index("portal_sessions_idle_expires_idx").on(table.idleExpiresAt),
+    check("portal_sessions_status_check", sql`${table.status} in ('active', 'revoked', 'expired')`),
+  ],
+);
+
+export const employees = sqliteTable(
+  "employees",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    employeeNumber: text("employee_number").notNull().unique(),
+    fullName: text("full_name").notNull(),
+    jobTitle: text("job_title").notNull(),
+    department: text("department").notNull(),
+    mobile: text("mobile").notNull(),
+    hireDate: text("hire_date").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("employees_status_idx").on(table.status),
+    index("employees_department_idx").on(table.department),
+  ],
+);
+
+export const financialRecords = sqliteTable(
+  "financial_records",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    referenceCode: text("reference_code").notNull().unique(),
+    category: text("category").notNull(),
+    description: text("description").notNull(),
+    amountHalalas: integer("amount_halalas").notNull(),
+    dueDate: text("due_date").notNull(),
+    workerId: integer("worker_id"),
+    contractId: integer("contract_id"),
+    documentId: integer("document_id"),
+    periodMonth: text("period_month"),
+    subCategory: text("sub_category"),
+    paymentMethod: text("payment_method"),
+    notes: text("notes"),
+    status: text("status").notNull().default("pending"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("financial_records_status_idx").on(table.status),
+    index("financial_records_due_date_idx").on(table.dueDate),
+    index("financial_records_category_idx").on(table.category),
+    index("financial_records_worker_id_idx").on(table.workerId),
+    index("financial_records_contract_id_idx").on(table.contractId),
+    index("financial_records_document_id_idx").on(table.documentId),
+    index("financial_records_period_month_idx").on(table.periodMonth),
+  ],
+);
+
+export const legalRecords = sqliteTable(
+  "legal_records",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    referenceCode: text("reference_code").notNull().unique(),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    counterparty: text("counterparty").notNull(),
+    expiryDate: text("expiry_date"),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("legal_records_status_idx").on(table.status),
+    index("legal_records_expiry_date_idx").on(table.expiryDate),
+  ],
+);
+
+export const workers = sqliteTable(
+  "workers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    workerNumber: text("worker_number").notNull().unique(),
+    iqamaNumber: text("iqama_number").unique(),
+    fullName: text("full_name").notNull(),
+    nationality: text("nationality").notNull(),
+    profession: text("profession").notNull(),
+    mobile: text("mobile"),
+    beneficiaryName: text("beneficiary_name"),
+    clientSite: text("client_site").notNull(),
+    assignmentStartDate: text("assignment_start_date"),
+    iqamaExpiry: text("iqama_expiry"),
+    status: text("status").notNull().default("available"),
+    clientId: integer("client_id"),
+    workOrderId: integer("work_order_id"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("workers_status_idx").on(table.status),
+    index("workers_profession_idx").on(table.profession),
+    index("workers_beneficiary_name_idx").on(table.beneficiaryName),
+    index("workers_iqama_expiry_idx").on(table.iqamaExpiry),
+  ],
+);
+
+export const workerAttachments = sqliteTable(
+  "worker_attachments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    workerId: integer("worker_id").notNull(),
+    documentType: text("document_type").notNull(),
+    requirementCode: text("requirement_code"),
+    title: text("title").notNull(),
+    fileName: text("file_name").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    validationStatus: text("validation_status").notNull().default("legacy"),
+    validationDetails: text("validation_details"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("worker_attachments_worker_id_idx").on(table.workerId),
+    index("worker_attachments_requirement_code_idx").on(table.requirementCode),
+  ],
+);
+
+export const portalActivity = sqliteTable(
+  "portal_activity",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    actorEmail: text("actor_email").notNull(),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    beforeJson: text("before_json"),
+    afterJson: text("after_json"),
+    reason: text("reason"),
+    correlationId: text("correlation_id"),
+    source: text("source").notNull().default("portal"),
+    ipHash: text("ip_hash"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("portal_activity_created_at_idx").on(table.createdAt)],
+);
+
+export const portalNotifications = sqliteTable(
+  "portal_notifications",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    eventType: text("event_type").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    severity: text("severity").notNull().default("info"),
+    module: text("module").notNull().default("overview"),
+    entityType: text("entity_type"),
+    entityId: text("entity_id"),
+    targetRole: text("target_role"),
+    targetDepartment: text("target_department"),
+    targetEmail: text("target_email"),
+    actionView: text("action_view"),
+    dedupeKey: text("dedupe_key").unique(),
+    source: text("source").notNull().default("event"),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("portal_notifications_status_created_idx").on(table.status, table.createdAt),
+    index("portal_notifications_module_idx").on(table.module),
+    index("portal_notifications_target_department_idx").on(table.targetDepartment),
+    index("portal_notifications_target_email_idx").on(table.targetEmail),
+  ],
+);
+
+export const portalNotificationReads = sqliteTable(
+  "portal_notification_reads",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    notificationId: integer("notification_id").notNull(),
+    userEmail: text("user_email").notNull(),
+    readAt: text("read_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    dismissedAt: text("dismissed_at"),
+  },
+  (table) => [
+    uniqueIndex("portal_notification_reads_user_notification_unique").on(table.notificationId, table.userEmail),
+    index("portal_notification_reads_user_idx").on(table.userEmail),
+  ],
+);
+
+export const companyDocuments = sqliteTable(
+  "company_documents",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    referenceCode: text("reference_code").notNull().unique(),
+    title: text("title").notNull(),
+    category: text("category").notNull(),
+    documentType: text("document_type"),
+    counterparty: text("counterparty"),
+    fileName: text("file_name").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    expiryDate: text("expiry_date"),
+    source: text("source").notNull().default("uploaded"),
+    status: text("status").notNull().default("active"),
+    metadataJson: text("metadata_json"),
+    validationStatus: text("validation_status").notNull().default("legacy"),
+    validationDetails: text("validation_details"),
+    retentionUntil: text("retention_until"),
+    lockedUntil: text("locked_until"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("company_documents_category_idx").on(table.category),
+    index("company_documents_expiry_date_idx").on(table.expiryDate),
+    index("company_documents_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const documentShareLinks = sqliteTable(
+  "document_share_links",
+  {
+    id: text("id").primaryKey(),
+    documentId: integer("document_id").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    maxDownloads: integer("max_downloads").notNull().default(20),
+    downloadCount: integer("download_count").notNull().default(0),
+    lastAccessedAt: text("last_accessed_at"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("document_share_links_document_id_idx").on(table.documentId),
+    index("document_share_links_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
+export const companyAssets = sqliteTable(
+  "company_assets",
+  {
+    slot: text("slot").primaryKey(),
+    fileName: text("file_name").notNull(),
+    storageKey: text("storage_key").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    validationStatus: text("validation_status").notNull().default("legacy"),
+    validationDetails: text("validation_details"),
+    uploadedBy: text("uploaded_by").notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("company_assets_updated_at_idx").on(table.updatedAt)],
+);
+
+export const workforceContracts = sqliteTable(
+  "workforce_contracts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    referenceCode: text("reference_code").notNull().unique(),
+    documentId: integer("document_id").notNull().unique(),
+    clientName: text("client_name").notNull(),
+    clientCr: text("client_cr"),
+    clientVat: text("client_vat"),
+    title: text("title").notNull(),
+    workSite: text("work_site").notNull(),
+    issueDate: text("issue_date").notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    amountHalalas: integer("amount_halalas").notNull().default(0),
+    details: text("details").notNull(),
+    status: text("status").notNull().default("active"),
+    clientId: integer("client_id"),
+    opportunityId: integer("opportunity_id"),
+    quoteVersionId: integer("quote_version_id"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("workforce_contracts_client_name_idx").on(table.clientName),
+    index("workforce_contracts_status_idx").on(table.status),
+    index("workforce_contracts_end_date_idx").on(table.endDate),
+  ],
+);
+
+export const contractProfessions = sqliteTable(
+  "contract_professions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    contractId: integer("contract_id").notNull(),
+    profession: text("profession").notNull(),
+    requiredCount: integer("required_count").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("contract_professions_contract_profession_unique").on(table.contractId, table.profession),
+    index("contract_professions_contract_id_idx").on(table.contractId),
+    index("contract_professions_profession_idx").on(table.profession),
+  ],
+);
+
+export const contractWorkerAssignments = sqliteTable(
+  "contract_worker_assignments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    contractId: integer("contract_id").notNull(),
+    contractProfessionId: integer("contract_profession_id").notNull(),
+    workerId: integer("worker_id").notNull(),
+    status: text("status").notNull().default("active"),
+    assignedBy: text("assigned_by").notNull(),
+    assignedAt: text("assigned_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    releasedAt: text("released_at"),
+  },
+  (table) => [
+    uniqueIndex("contract_worker_assignments_contract_worker_unique").on(table.contractId, table.workerId),
+    index("contract_worker_assignments_contract_id_idx").on(table.contractId),
+    index("contract_worker_assignments_profession_id_idx").on(table.contractProfessionId),
+    index("contract_worker_assignments_worker_id_idx").on(table.workerId),
+    index("contract_worker_assignments_status_idx").on(table.status),
+  ],
+);
+
+export const clients = sqliteTable(
+  "clients",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientCode: text("client_code").notNull().unique(),
+    legalName: text("legal_name").notNull(),
+    tradeName: text("trade_name"),
+    commercialRegistration: text("commercial_registration").unique(),
+    vatNumber: text("vat_number"),
+    sector: text("sector"),
+    city: text("city").notNull().default("مكة المكرمة"),
+    address: text("address"),
+    status: text("status").notNull().default("prospect"),
+    ownerEmail: text("owner_email"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    index("clients_legal_name_idx").on(table.legalName),
+    index("clients_status_idx").on(table.status),
+    index("clients_owner_idx").on(table.ownerEmail),
+    check("clients_status_check", sql`${table.status} in ('prospect', 'active', 'inactive', 'blocked')`),
+  ],
+);
+
+export const clientContacts = sqliteTable(
+  "client_contacts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    fullName: text("full_name").notNull(),
+    jobTitle: text("job_title"),
+    mobile: text("mobile"),
+    email: text("email"),
+    preferredChannel: text("preferred_channel").notNull().default("either"),
+    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("client_contacts_client_idx").on(table.clientId),
+    index("client_contacts_email_idx").on(table.email),
+    check("client_contacts_channel_check", sql`${table.preferredChannel} in ('phone', 'email', 'either')`),
+  ],
+);
+
+export const salesOpportunities = sqliteTable(
+  "sales_opportunities",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    opportunityCode: text("opportunity_code").notNull().unique(),
+    clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+    contactId: integer("contact_id").references(() => clientContacts.id, { onDelete: "set null" }),
+    sourceRequestId: integer("source_request_id").references(() => workforceRequests.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    stage: text("stage").notNull().default("new"),
+    expectedValueHalalas: integer("expected_value_halalas").notNull().default(0),
+    expectedCloseDate: text("expected_close_date"),
+    probability: integer("probability").notNull().default(10),
+    ownerEmail: text("owner_email").notNull(),
+    lossReason: text("loss_reason"),
+    notes: text("notes"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    index("sales_opportunities_client_idx").on(table.clientId),
+    index("sales_opportunities_stage_idx").on(table.stage),
+    index("sales_opportunities_owner_idx").on(table.ownerEmail),
+    uniqueIndex("sales_opportunities_source_request_unique").on(table.sourceRequestId),
+    check("sales_opportunities_stage_check", sql`${table.stage} in ('new', 'qualified', 'proposal', 'negotiation', 'won', 'lost')`),
+    check("sales_opportunities_probability_check", sql`${table.probability} between 0 and 100`),
+  ],
+);
+
+export const quoteVersions = sqliteTable(
+  "quote_versions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quoteCode: text("quote_code").notNull(),
+    opportunityId: integer("opportunity_id").notNull().references(() => salesOpportunities.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull().default(1),
+    status: text("status").notNull().default("draft"),
+    issueDate: text("issue_date").notNull(),
+    validUntil: text("valid_until").notNull(),
+    subtotalHalalas: integer("subtotal_halalas").notNull().default(0),
+    discountHalalas: integer("discount_halalas").notNull().default(0),
+    totalHalalas: integer("total_halalas").notNull().default(0),
+    assumptions: text("assumptions"),
+    terms: text("terms"),
+    approvalReason: text("approval_reason"),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    acceptedAt: text("accepted_at"),
+    clientDecisionBy: text("client_decision_by"),
+    clientDecisionReason: text("client_decision_reason"),
+    clientDecisionAt: text("client_decision_at"),
+    documentId: integer("document_id").references(() => companyDocuments.id, { onDelete: "set null" }),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    recordVersion: integer("record_version").notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex("quote_versions_code_version_unique").on(table.quoteCode, table.versionNumber),
+    index("quote_versions_opportunity_idx").on(table.opportunityId),
+    index("quote_versions_status_idx").on(table.status),
+    index("quote_versions_valid_until_idx").on(table.validUntil),
+    check("quote_versions_status_check", sql`${table.status} in ('draft', 'pending_approval', 'approved', 'sent', 'accepted', 'rejected', 'expired', 'superseded')`),
+  ],
+);
+
+export const quoteItems = sqliteTable(
+  "quote_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    quoteVersionId: integer("quote_version_id").notNull().references(() => quoteVersions.id, { onDelete: "cascade" }),
+    profession: text("profession").notNull(),
+    quantity: integer("quantity").notNull(),
+    durationMonths: integer("duration_months").notNull().default(1),
+    unitPriceHalalas: integer("unit_price_halalas").notNull(),
+    lineTotalHalalas: integer("line_total_halalas").notNull(),
+    notes: text("notes"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    index("quote_items_quote_idx").on(table.quoteVersionId),
+    check("quote_items_quantity_check", sql`${table.quantity} > 0`),
+    check("quote_items_duration_check", sql`${table.durationMonths} > 0`),
+  ],
+);
+
+export const workOrders = sqliteTable(
+  "work_orders",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    workOrderCode: text("work_order_code").notNull().unique(),
+    clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "restrict" }),
+    contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "set null" }),
+    quoteVersionId: integer("quote_version_id").references(() => quoteVersions.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    workSite: text("work_site").notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date"),
+    supervisorEmail: text("supervisor_email"),
+    status: text("status").notNull().default("planned"),
+    notes: text("notes"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    index("work_orders_client_idx").on(table.clientId),
+    index("work_orders_contract_idx").on(table.contractId),
+    index("work_orders_status_idx").on(table.status),
+    index("work_orders_dates_idx").on(table.startDate, table.endDate),
+    check("work_orders_status_check", sql`${table.status} in ('planned', 'staffing', 'active', 'paused', 'completed', 'cancelled')`),
+  ],
+);
+
+export const workOrderRequirements = sqliteTable(
+  "work_order_requirements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    workOrderId: integer("work_order_id").notNull().references(() => workOrders.id, { onDelete: "cascade" }),
+    profession: text("profession").notNull(),
+    requiredCount: integer("required_count").notNull(),
+    filledCount: integer("filled_count").notNull().default(0),
+    shiftName: text("shift_name"),
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+  },
+  (table) => [
+    uniqueIndex("work_order_requirements_unique").on(table.workOrderId, table.profession, table.shiftName),
+    index("work_order_requirements_order_idx").on(table.workOrderId),
+    check("work_order_requirements_count_check", sql`${table.requiredCount} > 0 and ${table.filledCount} >= 0`),
+  ],
+);
+
+export const timesheets = sqliteTable(
+  "timesheets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    timesheetCode: text("timesheet_code").notNull().unique(),
+    workOrderId: integer("work_order_id").notNull().references(() => workOrders.id, { onDelete: "restrict" }),
+    clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "restrict" }),
+    periodStart: text("period_start").notNull(),
+    periodEnd: text("period_end").notNull(),
+    status: text("status").notNull().default("draft"),
+    submittedBy: text("submitted_by"),
+    submittedAt: text("submitted_at"),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    rejectionReason: text("rejection_reason"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex("timesheets_order_period_unique").on(table.workOrderId, table.periodStart, table.periodEnd),
+    index("timesheets_client_idx").on(table.clientId),
+    index("timesheets_status_idx").on(table.status),
+    check("timesheets_status_check", sql`${table.status} in ('draft', 'submitted', 'approved', 'rejected', 'invoiced')`),
+  ],
+);
+
+export const timeEntries = sqliteTable(
+  "time_entries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    timesheetId: integer("timesheet_id").notNull().references(() => timesheets.id, { onDelete: "cascade" }),
+    workerId: integer("worker_id").notNull().references(() => workers.id, { onDelete: "restrict" }),
+    workDate: text("work_date").notNull(),
+    regularMinutes: integer("regular_minutes").notNull().default(0),
+    overtimeMinutes: integer("overtime_minutes").notNull().default(0),
+    attendanceStatus: text("attendance_status").notNull().default("present"),
+    notes: text("notes"),
+  },
+  (table) => [
+    uniqueIndex("time_entries_sheet_worker_date_unique").on(table.timesheetId, table.workerId, table.workDate),
+    index("time_entries_worker_idx").on(table.workerId),
+    check("time_entries_minutes_check", sql`${table.regularMinutes} >= 0 and ${table.overtimeMinutes} >= 0`),
+    check("time_entries_attendance_check", sql`${table.attendanceStatus} in ('present', 'absent', 'leave', 'sick', 'holiday')`),
+  ],
+);
+
+export const workflowApprovals = sqliteTable(
+  "workflow_approvals",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    step: text("step").notNull(),
+    status: text("status").notNull().default("pending"),
+    requestedBy: text("requested_by").notNull(),
+    assignedRole: text("assigned_role"),
+    assignedEmail: text("assigned_email"),
+    decisionBy: text("decision_by"),
+    decisionReason: text("decision_reason"),
+    decidedAt: text("decided_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("workflow_approvals_entity_idx").on(table.entityType, table.entityId),
+    index("workflow_approvals_status_idx").on(table.status),
+    check("workflow_approvals_status_check", sql`${table.status} in ('pending', 'approved', 'rejected', 'cancelled')`),
+  ],
+);
+
+export const workflowStatusHistory = sqliteTable(
+  "workflow_status_history",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    reason: text("reason"),
+    actorEmail: text("actor_email").notNull(),
+    correlationId: text("correlation_id").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("workflow_status_history_entity_idx").on(table.entityType, table.entityId, table.createdAt),
+    index("workflow_status_history_correlation_idx").on(table.correlationId),
+  ],
+);
+
+export const integrationOutbox = sqliteTable(
+  "integration_outbox",
+  {
+    id: text("id").primaryKey(),
+    eventType: text("event_type").notNull(),
+    aggregateType: text("aggregate_type").notNull(),
+    aggregateId: text("aggregate_id").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    availableAt: text("available_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    processedAt: text("processed_at"),
+    lastError: text("last_error"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("integration_outbox_status_available_idx").on(table.status, table.availableAt),
+    index("integration_outbox_aggregate_idx").on(table.aggregateType, table.aggregateId),
+    check("integration_outbox_status_check", sql`${table.status} in ('pending', 'processing', 'processed', 'failed')`),
+  ],
+);
+
+export const publicRateLimits = sqliteTable(
+  "public_rate_limits",
+  {
+    key: text("key").primaryKey(),
+    windowStartedAt: text("window_started_at").notNull(),
+    requestCount: integer("request_count").notNull().default(0),
+    blockedUntil: text("blocked_until"),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("public_rate_limits_updated_idx").on(table.updatedAt)],
+);
+
+export const operationRequests = sqliteTable(
+  "operation_requests",
+  {
+    key: text("key").primaryKey(),
+    actorEmail: text("actor_email").notNull(),
+    action: text("action").notNull(),
+    status: text("status").notNull().default("processing"),
+    responseJson: text("response_json"),
+    errorMessage: text("error_message"),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("operation_requests_actor_idx").on(table.actorEmail, table.createdAt),
+    index("operation_requests_expiry_idx").on(table.expiresAt),
+    check("operation_requests_status_check", sql`${table.status} in ('processing', 'completed', 'failed')`),
+  ],
+);
+
+export const clientPortalUsers = sqliteTable(
+  "client_portal_users",
+  {
+    email: text("email").primaryKey(),
+    clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    status: text("status").notNull().default("pending"),
+    canApproveQuotes: integer("can_approve_quotes", { mode: "boolean" }).notNull().default(false),
+    canApproveTimesheets: integer("can_approve_timesheets", { mode: "boolean" }).notNull().default(false),
+    invitedBy: text("invited_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastLoginAt: text("last_login_at"),
+  },
+  (table) => [
+    index("client_portal_users_client_idx").on(table.clientId),
+    index("client_portal_users_status_idx").on(table.status),
+    check("client_portal_users_status_check", sql`${table.status} in ('pending', 'active', 'suspended')`),
+  ],
+);
+
+export const workerPortalUsers = sqliteTable(
+  "worker_portal_users",
+  {
+    email: text("email").primaryKey(),
+    workerId: integer("worker_id").notNull().references(() => workers.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    status: text("status").notNull().default("pending"),
+    invitedBy: text("invited_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastLoginAt: text("last_login_at"),
+  },
+  (table) => [
+    uniqueIndex("worker_portal_users_worker_unique").on(table.workerId),
+    index("worker_portal_users_status_idx").on(table.status),
+    check("worker_portal_users_status_check", sql`${table.status} in ('pending', 'active', 'suspended')`),
+  ],
+);
+
+export const portalUserPermissions = sqliteTable(
+  "portal_user_permissions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
+    resource: text("resource").notNull(),
+    action: text("action").notNull(),
+    scope: text("scope").notNull().default("department"),
+    allowed: integer("allowed", { mode: "boolean" }).notNull().default(true),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("portal_user_permissions_unique").on(table.userEmail, table.resource, table.action, table.scope),
+    index("portal_user_permissions_user_idx").on(table.userEmail),
+    check("portal_user_permissions_scope_check", sql`${table.scope} in ('own', 'department', 'all')`),
+  ],
+);
+
+export const dataSubjectRequests = sqliteTable(
+  "data_subject_requests",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    trackingCode: text("tracking_code").notNull().unique(),
+    requestType: text("request_type").notNull(),
+    fullName: text("full_name").notNull(),
+    email: text("email").notNull(),
+    mobile: text("mobile"),
+    details: text("details"),
+    status: text("status").notNull().default("received"),
+    assignedTo: text("assigned_to"),
+    dueAt: text("due_at").notNull(),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("data_subject_requests_status_due_idx").on(table.status, table.dueAt),
+    check("data_subject_requests_type_check", sql`${table.requestType} in ('access', 'correction', 'deletion', 'withdraw_consent', 'complaint')`),
+    check("data_subject_requests_status_check", sql`${table.status} in ('received', 'verifying', 'processing', 'completed', 'rejected')`),
+  ],
+);
+
+export const capacityPlans = sqliteTable(
+  "capacity_plans",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    planCode: text("plan_code").notNull().unique(),
+    seasonName: text("season_name").notNull(),
+    location: text("location").notNull(),
+    profession: text("profession").notNull(),
+    requiredCount: integer("required_count").notNull(),
+    availableCount: integer("available_count").notNull().default(0),
+    reservedCount: integer("reserved_count").notNull().default(0),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    status: text("status").notNull().default("planning"),
+    ownerEmail: text("owner_email").notNull(),
+    notes: text("notes"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("capacity_plans_season_idx").on(table.seasonName),
+    index("capacity_plans_dates_idx").on(table.startDate, table.endDate),
+    check("capacity_plans_counts_check", sql`${table.requiredCount} > 0 and ${table.availableCount} >= 0 and ${table.reservedCount} >= 0`),
+    check("capacity_plans_status_check", sql`${table.status} in ('planning', 'approved', 'active', 'completed', 'cancelled')`),
+  ],
+);
