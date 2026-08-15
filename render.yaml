@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: dali
+    runtime: node
+    region: frankfurt
+    plan: starter
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:render
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: dali-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.13.0
+      - key: AUTH_MODE
+        value: credentials
+      - key: DATABASE_URL
+        value: file:/var/data/dali.db
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: PORTAL_ADMIN_EMAIL
+        sync: false
+      - key: PORTAL_ADMIN_EMAILS
+        sync: false
+      - key: PORTAL_ADMIN_NAME
+        sync: false
+      - key: PORTAL_ADMIN_PASSWORD_HASH
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_REPLY_TO
+        sync: false

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { readCredentialIdentity } from "@/lib/credential-auth";
 
 export type ChatGPTUser = {
   displayName: string;
@@ -18,7 +19,10 @@ const CALLBACK_PATH = "/callback";
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestHeaders = await headers();
   const email = requestHeaders.get(USER_EMAIL_HEADER);
-  if (!email) return null;
+  if (!email) {
+    const identity = await readCredentialIdentity();
+    return identity ? { displayName: identity.displayName, email: identity.email, fullName: identity.displayName } : null;
+  }
 
   const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
   const fullName =
@@ -37,10 +41,12 @@ export async function requireChatGPTUser(returnTo: string): Promise<ChatGPTUser>
 }
 
 export function chatGPTSignInPath(returnTo: string): string {
+  if (process.env.AUTH_MODE === "credentials") return `/login?returnTo=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
   return `${SIGN_IN_PATH}?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
 }
 
 export function chatGPTSignOutPath(returnTo = "/"): string {
+  if (process.env.AUTH_MODE === "credentials") return `/api/auth/logout?returnTo=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
 }
 

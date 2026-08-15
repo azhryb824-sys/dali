@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  output: "standalone",
   async headers() {
     const securityHeaders = [
       {
@@ -44,6 +45,8 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       { source: "/portal/:path*", headers: protectedNoStoreHeaders },
       { source: "/api/portal/:path*", headers: protectedNoStoreHeaders },
+      { source: "/login", headers: protectedNoStoreHeaders },
+      { source: "/api/auth/:path*", headers: protectedNoStoreHeaders },
       { source: "/client/:path*", headers: protectedNoStoreHeaders },
       { source: "/api/client/:path*", headers: protectedNoStoreHeaders },
       { source: "/worker/:path*", headers: protectedNoStoreHeaders },

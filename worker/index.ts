@@ -33,7 +33,7 @@ interface ExecutionContext {
 
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    setRuntimeEnv(env);
+    setRuntimeEnv(env as unknown as import("../lib/runtime-env").DaliRuntimeEnv);
     const url = new URL(request.url);
 
     if (url.pathname === "/_vinext/image" || url.pathname === "/_next/image") {

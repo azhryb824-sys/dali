@@ -1,4 +1,5 @@
 import { getRuntimeEnv } from "@/lib/runtime-env";
+import { getSqlClient } from "@/db";
 
 type RateLimitOptions = {
   scope: string;
@@ -109,7 +110,7 @@ export async function enforcePublicRateLimit(request: Request, options: RateLimi
   const sourceHash = await requestSourceHash(request);
   const key = await sha256(`${options.scope}|${sourceHash}`);
   const database = getRuntimeEnv().DB;
-  const row = await database.prepare(`
+  const statement = `
     INSERT INTO public_rate_limits (key, window_started_at, request_count, blocked_until, updated_at)
     VALUES (?, ?, 1, NULL, ?)
     ON CONFLICT(key) DO UPDATE SET
@@ -129,17 +130,11 @@ export async function enforcePublicRateLimit(request: Request, options: RateLimi
       END,
       updated_at = excluded.updated_at
     RETURNING request_count, blocked_until
-  `).bind(
-    key,
-    now.toISOString(),
-    now.toISOString(),
-    windowStart,
-    windowStart,
-    now.toISOString(),
-    windowStart,
-    options.limit,
-    blockUntil,
-  ).first<{ request_count: number; blocked_until: string | null }>();
+  `;
+  const args = [key, now.toISOString(), now.toISOString(), windowStart, windowStart, now.toISOString(), windowStart, options.limit, blockUntil];
+  const row = database
+    ? await database.prepare(statement).bind(...args).first<{ request_count: number; blocked_until: string | null }>()
+    : ((await getSqlClient().execute({ sql: statement, args })).rows[0] as unknown as { request_count: number; blocked_until: string | null } | undefined);
 
   const blocked = Boolean(row?.blocked_until && row.blocked_until > now.toISOString());
   return {

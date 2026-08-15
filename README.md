@@ -9,6 +9,19 @@ Drizzle support.
 - Node.js `>=22.13.0`
 - Linux with `flock`, `curl`, and GNU `timeout`
 
+## Render deployment
+
+The repository includes `render.yaml` for a persistent Render Web Service. It runs the Vinext standalone Node server, applies the existing SQLite migrations at startup, stores the database at `/var/data/dali.db`, and stores uploaded documents under `/var/data/uploads`.
+
+Required secret environment values:
+
+- `PORTAL_ADMIN_EMAIL` and `PORTAL_ADMIN_EMAILS`: the first administrative email address (use the same value for both).
+- `PORTAL_ADMIN_NAME`: the administrator display name.
+- `PORTAL_ADMIN_PASSWORD_HASH`: generate it locally with `npm run auth:hash -- 'your-long-password'` and store only the resulting hash.
+- `AUTH_SECRET`: generated automatically by the Render blueprint and must contain at least 32 random characters.
+
+Optional email delivery values are `RESEND_API_KEY`, `EMAIL_FROM`, and `EMAIL_REPLY_TO`. The persistent disk in the blueprint is required to prevent loss of the SQLite database and uploaded files during deploys or restarts.
+
 ## Sites Lifecycle
 
 The Sites lifecycle CLI runs the locked dependency install before returning this checkout. Edit the source under `app/`, then checkpoint when a coherent milestone is ready to inspect or share. The remote Sites builder runs `npm run build` against the pushed commit. Do not repeat install or build as a normal pre-checkpoint step.

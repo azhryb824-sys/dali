@@ -1,14 +1,21 @@
-import { drizzle } from "drizzle-orm/d1";
+import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
+import { drizzle as drizzleLibsql } from "drizzle-orm/libsql";
+import { createClient, type Client } from "@libsql/client";
 import * as schema from "./schema";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 
-export function getDb() {
-  const database = getRuntimeEnv().DB;
-  if (!database) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
-    );
-  }
+let nodeClient: Client | undefined;
 
-  return drizzle(database, { schema });
+export function getDb(): DrizzleD1Database<typeof schema> {
+  const database = getRuntimeEnv().DB;
+  if (database) return drizzle(database, { schema });
+  return drizzleLibsql(getSqlClient(), { schema }) as unknown as DrizzleD1Database<typeof schema>;
+}
+
+export function getSqlClient() {
+  nodeClient ??= createClient({
+    url: process.env.DATABASE_URL || "file:.data/dali.db",
+    authToken: process.env.DATABASE_AUTH_TOKEN,
+  });
+  return nodeClient;
 }
