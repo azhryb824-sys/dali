@@ -66,3 +66,28 @@ export async function sendVisitorReplyEmail(input: {
   }
   return { providerMessageId: result.id };
 }
+
+export async function sendPasswordResetEmail(input: { to: string; recipientName: string; resetUrl: string; idempotencyKey: string }) {
+  const env = getRuntimeEnv();
+  const apiKey = env.RESEND_API_KEY?.trim();
+  const from = env.EMAIL_FROM?.trim();
+  if (!apiKey || !from) throw new Error("EMAIL_NOT_CONFIGURED");
+  if (!emailAddress(input.to)) throw new Error("INVALID_RECIPIENT");
+  const safeName = escapeHtml(input.recipientName);
+  const safeUrl = escapeHtml(input.resetUrl);
+  const response = await fetch(RESEND_ENDPOINT, {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json", "idempotency-key": input.idempotencyKey },
+    body: JSON.stringify({
+      from,
+      to: [input.to],
+      subject: "إعادة تعيين كلمة مرور بوابة دالي",
+      text: `مرحباً ${input.recipientName}،\n\nاستخدم الرابط التالي لإعادة تعيين كلمة المرور خلال 30 دقيقة:\n${input.resetUrl}\n\nإذا لم تطلب ذلك فتجاهل الرسالة.`,
+      html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Tahoma,Arial;background:#f4f7f8;padding:30px"><main style="max-width:600px;margin:auto;background:#fff;border-top:6px solid #001d2d;padding:30px"><h2>إعادة تعيين كلمة المرور</h2><p>مرحباً ${safeName}،</p><p>اضغط الرابط التالي خلال 30 دقيقة. يُستخدم الرابط مرة واحدة فقط.</p><p><a href="${safeUrl}" style="background:#e21c25;color:#fff;padding:12px 22px;text-decoration:none;display:inline-block">تعيين كلمة مرور جديدة</a></p><p style="color:#65747b;font-size:12px">إذا لم تطلب إعادة التعيين فتجاهل هذه الرسالة.</p></main></body></html>`,
+      tags: [{ name: "type", value: "password-reset" }],
+    }),
+  });
+  const result = await response.json().catch(() => ({})) as { id?: string; message?: string };
+  if (!response.ok || !result.id) throw new Error(`EMAIL_PROVIDER_ERROR:${result.message || response.status}`);
+  return result.id;
+}

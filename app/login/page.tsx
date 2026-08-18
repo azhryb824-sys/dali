@@ -4,7 +4,7 @@ import { getChatGPTUser } from "@/app/chatgpt-auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ returnTo?: string; error?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ returnTo?: string; error?: string; reset?: string }> }) {
   const query = await searchParams;
   const returnTo = query.returnTo?.startsWith("/portal") && !query.returnTo.startsWith("//") ? query.returnTo : "/portal";
   if (await getChatGPTUser()) redirect(returnTo);
@@ -16,12 +16,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <h1>تسجيل الدخول الآمن</h1>
         <p className="gate-copy">أدخل رقم الهوية الوطنية أو الإقامة وكلمة المرور. تُحد الجلسة تلقائيًا ويُسجل كل دخول في سجل النشاط.</p>
         {query.error && <p role="alert" className="gate-status suspended">بيانات الدخول غير صحيحة أو تجاوزت الحد المسموح.</p>}
+        {query.reset && <p role="status" className="operations-notice">تم تحديث كلمة المرور. يمكنك تسجيل الدخول الآن.</p>}
         <form className="access-request-form" method="post" action="/api/auth/login">
           <input type="hidden" name="returnTo" value={returnTo} />
           <label><span>رقم الهوية / الإقامة</span><input name="identifier" inputMode="numeric" pattern="[0-9]{10}" minLength={10} maxLength={10} autoComplete="username" dir="ltr" required /></label>
           <label><span>كلمة المرور</span><input name="password" type="password" autoComplete="current-password" minLength={12} required /></label>
           <button type="submit">دخول آمن</button>
         </form>
+        <a className="gate-signout" href="/forgot-password">نسيت كلمة المرور؟</a>
       </section>
     </main>
   );

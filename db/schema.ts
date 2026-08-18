@@ -156,6 +156,32 @@ export const portalUsers = sqliteTable(
   ],
 );
 
+export const portalAuthCredentials = sqliteTable(
+  "portal_auth_credentials",
+  {
+    identifier: text("identifier").primaryKey(),
+    email: text("email").notNull().unique(),
+    displayName: text("display_name").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("portal_auth_credentials_email_idx").on(table.email)],
+);
+
+export const passwordResetTokens = sqliteTable(
+  "password_reset_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    identifier: text("identifier").notNull().references(() => portalAuthCredentials.identifier, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("password_reset_tokens_identifier_idx").on(table.identifier), index("password_reset_tokens_expires_idx").on(table.expiresAt)],
+);
+
 export const portalSessions = sqliteTable(
   "portal_sessions",
   {

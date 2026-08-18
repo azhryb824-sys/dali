@@ -1,4 +1,7 @@
-import { createIdentityToken, identityCookie, verifyConfiguredPassword } from "@/lib/credential-auth";
+import { eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { portalAuthCredentials } from "@/db/schema";
+import { createIdentityToken, identityCookie, verifyConfiguredPassword, verifyPasswordHash } from "@/lib/credential-auth";
 import { enforcePublicRateLimit, rateLimitResponse, rejectCrossSiteRequest } from "@/lib/security";
 
 export async function POST(request: Request) {
@@ -12,9 +15,16 @@ export async function POST(request: Request) {
   const configuredIdentifier = (process.env.PORTAL_ADMIN_IDENTIFIER || process.env.PORTAL_ADMIN_ID || "").replace(/\D/g, "");
   const requested = String(form.get("returnTo") || "/portal");
   const returnTo = requested.startsWith("/portal") && !requested.startsWith("//") ? requested : "/portal";
-  if (!/^\d{10}$/.test(identifier) || !configuredEmail || !configuredIdentifier || identifier !== configuredIdentifier || !(await verifyConfiguredPassword(password))) {
+  const db = getDb();
+  const stored = /^\d{10}$/.test(identifier) ? await db.query.portalAuthCredentials.findFirst({ where: eq(portalAuthCredentials.identifier, identifier) }) : null;
+  const validStored = stored ? await verifyPasswordHash(password, stored.passwordHash) : false;
+  const validBootstrap = !stored && identifier === configuredIdentifier && Boolean(configuredEmail) && await verifyConfiguredPassword(password);
+  if (!/^\d{10}$/.test(identifier) || (!validStored && !validBootstrap)) {
     return Response.redirect(new URL(`/login?error=1&returnTo=${encodeURIComponent(returnTo)}`, request.url), 303);
   }
-  const token = await createIdentityToken(configuredEmail, process.env.PORTAL_ADMIN_NAME || "مدير النظام");
+  const email = stored?.email || configuredEmail;
+  const displayName = stored?.displayName || process.env.PORTAL_ADMIN_NAME || "مدير النظام";
+  if (!stored) await db.insert(portalAuthCredentials).values({ identifier, email, displayName, passwordHash: process.env.PORTAL_ADMIN_PASSWORD_HASH! }).onConflictDoNothing();
+  const token = await createIdentityToken(email, displayName);
   return new Response(null, { status: 303, headers: { location: new URL(returnTo, request.url).toString(), "set-cookie": identityCookie(request, token), "cache-control": "no-store" } });
 }

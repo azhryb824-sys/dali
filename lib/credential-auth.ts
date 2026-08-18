@@ -65,7 +65,10 @@ export function clearIdentityCookies(request: Request) {
 }
 
 export async function verifyConfiguredPassword(password: string) {
-  const encoded = process.env.PORTAL_ADMIN_PASSWORD_HASH || "";
+  return verifyPasswordHash(password, process.env.PORTAL_ADMIN_PASSWORD_HASH || "");
+}
+
+export async function verifyPasswordHash(password: string, encoded: string) {
   const [algorithm, iterationsValue, saltValue, expectedValue] = encoded.split("$");
   const iterations = Number(iterationsValue);
   if (algorithm !== "pbkdf2" || !Number.isInteger(iterations) || iterations < 210_000 || !saltValue || !expectedValue) return false;
@@ -76,4 +79,16 @@ export async function verifyConfiguredPassword(password: string) {
   let difference = 0;
   for (let index = 0; index < derived.length; index += 1) difference |= derived[index] ^ expected[index];
   return difference === 0;
+}
+
+export async function hashPassword(password: string) {
+  const iterations = 310_000;
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const derived = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, 256));
+  return `pbkdf2$${iterations}$${bytesToBase64Url(salt)}$${bytesToBase64Url(derived)}`;
+}
+
+export async function sha256(value: string) {
+  return bytesToBase64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
 }

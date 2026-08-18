@@ -141,6 +141,13 @@
       "when": 1787071595945,
       "tag": "0019_pink_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1787075700000,
+      "tag": "0020_password_reset_credentials",
+      "breakpoints": true
     }
   ]
 }
