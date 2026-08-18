@@ -188,7 +188,22 @@ export const employees = sqliteTable(
     jobTitle: text("job_title").notNull(),
     department: text("department").notNull(),
     mobile: text("mobile").notNull(),
+    email: text("email"),
+    nationalId: text("national_id"),
+    nationality: text("nationality"),
+    bankName: text("bank_name"),
+    iban: text("iban"),
+    baseSalaryHalalas: integer("base_salary_halalas").notNull().default(0),
+    housingAllowanceHalalas: integer("housing_allowance_halalas").notNull().default(0),
+    transportAllowanceHalalas: integer("transport_allowance_halalas").notNull().default(0),
+    otherAllowanceHalalas: integer("other_allowance_halalas").notNull().default(0),
+    annualLeaveDays: integer("annual_leave_days").notNull().default(21),
+    leaveBalanceDays: integer("leave_balance_days").notNull().default(21),
     hireDate: text("hire_date").notNull(),
+    probationEndDate: text("probation_end_date"),
+    contractEndDate: text("contract_end_date"),
+    terminationDate: text("termination_date"),
+    terminationReason: text("termination_reason"),
     status: text("status").notNull().default("active"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -196,6 +211,78 @@ export const employees = sqliteTable(
   (table) => [
     index("employees_status_idx").on(table.status),
     index("employees_department_idx").on(table.department),
+  ],
+);
+
+export const employeeMovements = sqliteTable(
+  "employee_movements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+    movementType: text("movement_type").notNull(),
+    effectiveDate: text("effective_date").notNull(),
+    amountHalalas: integer("amount_halalas").notNull().default(0),
+    description: text("description").notNull(),
+    status: text("status").notNull().default("approved"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("employee_movements_employee_date_idx").on(table.employeeId, table.effectiveDate),
+    index("employee_movements_type_status_idx").on(table.movementType, table.status),
+    check("employee_movements_type_check", sql`${table.movementType} in ('salary_adjustment','allowance','bonus','advance','deduction','leave','return_from_leave','suspension','termination','note')`),
+    check("employee_movements_status_check", sql`${table.status} in ('draft','approved','cancelled')`),
+    check("employee_movements_amount_check", sql`${table.amountHalalas} >= 0`),
+  ],
+);
+
+export const payrollRuns = sqliteTable(
+  "payroll_runs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    runNumber: text("run_number").notNull().unique(),
+    periodMonth: text("period_month").notNull().unique(),
+    paymentDate: text("payment_date").notNull(),
+    status: text("status").notNull().default("draft"),
+    totalGrossHalalas: integer("total_gross_halalas").notNull().default(0),
+    totalDeductionsHalalas: integer("total_deductions_halalas").notNull().default(0),
+    totalNetHalalas: integer("total_net_halalas").notNull().default(0),
+    journalEntryId: integer("journal_entry_id"),
+    paymentJournalEntryId: integer("payment_journal_entry_id"),
+    createdBy: text("created_by").notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    paidBy: text("paid_by"),
+    paidAt: text("paid_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("payroll_runs_status_payment_idx").on(table.status, table.paymentDate),
+    check("payroll_runs_status_check", sql`${table.status} in ('draft','approved','processing','paid','cancelled')`),
+    check("payroll_runs_totals_check", sql`${table.totalGrossHalalas} >= 0 and ${table.totalDeductionsHalalas} >= 0 and ${table.totalNetHalalas} >= 0`),
+  ],
+);
+
+export const payrollItems = sqliteTable(
+  "payroll_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    payrollRunId: integer("payroll_run_id").notNull().references(() => payrollRuns.id, { onDelete: "cascade" }),
+    employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+    baseSalaryHalalas: integer("base_salary_halalas").notNull(),
+    allowancesHalalas: integer("allowances_halalas").notNull().default(0),
+    bonusHalalas: integer("bonus_halalas").notNull().default(0),
+    deductionsHalalas: integer("deductions_halalas").notNull().default(0),
+    netPayHalalas: integer("net_pay_halalas").notNull(),
+    notes: text("notes"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("payroll_items_run_employee_idx").on(table.payrollRunId, table.employeeId),
+    index("payroll_items_employee_idx").on(table.employeeId),
+    check("payroll_items_amounts_check", sql`${table.baseSalaryHalalas} >= 0 and ${table.allowancesHalalas} >= 0 and ${table.bonusHalalas} >= 0 and ${table.deductionsHalalas} >= 0 and ${table.netPayHalalas} >= 0`),
   ],
 );
 
@@ -207,10 +294,16 @@ export const financialRecords = sqliteTable(
     category: text("category").notNull(),
     description: text("description").notNull(),
     amountHalalas: integer("amount_halalas").notNull(),
+    subtotalHalalas: integer("subtotal_halalas"),
+    vatHalalas: integer("vat_halalas").notNull().default(0),
+    vatRateBps: integer("vat_rate_bps").notNull().default(0),
     dueDate: text("due_date").notNull(),
     workerId: integer("worker_id"),
     contractId: integer("contract_id"),
     documentId: integer("document_id"),
+    journalEntryId: integer("journal_entry_id"),
+    postingStatus: text("posting_status").notNull().default("unposted"),
+    postedAt: text("posted_at"),
     periodMonth: text("period_month"),
     subCategory: text("sub_category"),
     paymentMethod: text("payment_method"),
@@ -227,6 +320,8 @@ export const financialRecords = sqliteTable(
     index("financial_records_contract_id_idx").on(table.contractId),
     index("financial_records_document_id_idx").on(table.documentId),
     index("financial_records_period_month_idx").on(table.periodMonth),
+    index("financial_records_posting_status_idx").on(table.postingStatus),
+    check("financial_records_posting_status_check", sql`${table.postingStatus} in ('unposted','draft','posted','reversed','not_applicable')`),
   ],
 );
 
@@ -246,6 +341,57 @@ export const legalRecords = sqliteTable(
   (table) => [
     index("legal_records_status_idx").on(table.status),
     index("legal_records_expiry_date_idx").on(table.expiryDate),
+  ],
+);
+
+export const complianceObligations = sqliteTable(
+  "compliance_obligations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    obligationCode: text("obligation_code").notNull().unique(),
+    title: text("title").notNull(),
+    category: text("category").notNull(),
+    authority: text("authority").notNull(),
+    ownerDepartment: text("owner_department").notNull(),
+    issueDate: text("issue_date"),
+    expiryDate: text("expiry_date").notNull(),
+    reminderDays: integer("reminder_days").notNull().default(30),
+    riskLevel: text("risk_level").notNull().default("medium"),
+    status: text("status").notNull().default("active"),
+    documentId: integer("document_id"),
+    legalRecordId: integer("legal_record_id").references(() => legalRecords.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdBy: text("created_by").notNull(),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: text("reviewed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("compliance_obligations_expiry_status_idx").on(table.expiryDate, table.status),
+    index("compliance_obligations_category_risk_idx").on(table.category, table.riskLevel),
+    check("compliance_obligations_category_check", sql`${table.category} in ('license','certificate','insurance','labor','tax','municipal','contractual','data_protection','safety','other')`),
+    check("compliance_obligations_risk_check", sql`${table.riskLevel} in ('low','medium','high','critical')`),
+    check("compliance_obligations_status_check", sql`${table.status} in ('draft','active','under_review','renewal','expired','suspended','closed')`),
+    check("compliance_obligations_reminder_check", sql`${table.reminderDays} between 1 and 365`),
+  ],
+);
+
+export const complianceReviews = sqliteTable(
+  "compliance_reviews",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    obligationId: integer("obligation_id").notNull().references(() => complianceObligations.id, { onDelete: "cascade" }),
+    reviewDate: text("review_date").notNull(),
+    outcome: text("outcome").notNull(),
+    notes: text("notes").notNull(),
+    nextReviewDate: text("next_review_date"),
+    reviewedBy: text("reviewed_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("compliance_reviews_obligation_date_idx").on(table.obligationId, table.reviewDate),
+    check("compliance_reviews_outcome_check", sql`${table.outcome} in ('compliant','action_required','renewal_required','non_compliant','closed')`),
   ],
 );
 
@@ -447,7 +593,17 @@ export const workforceContracts = sqliteTable(
     endDate: text("end_date").notNull(),
     amountHalalas: integer("amount_halalas").notNull().default(0),
     details: text("details").notNull(),
-    status: text("status").notNull().default("active"),
+    status: text("status").notNull().default("draft"),
+    versionNumber: integer("version_number").notNull().default(1),
+    parentContractId: integer("parent_contract_id"),
+    amendmentType: text("amendment_type"),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    signedAt: text("signed_at"),
+    effectiveAt: text("effective_at"),
+    suspendedAt: text("suspended_at"),
+    terminatedAt: text("terminated_at"),
+    cancellationReason: text("cancellation_reason"),
     clientId: integer("client_id"),
     opportunityId: integer("opportunity_id"),
     quoteVersionId: integer("quote_version_id"),
@@ -459,6 +615,27 @@ export const workforceContracts = sqliteTable(
     index("workforce_contracts_client_name_idx").on(table.clientName),
     index("workforce_contracts_status_idx").on(table.status),
     index("workforce_contracts_end_date_idx").on(table.endDate),
+    index("workforce_contracts_parent_idx").on(table.parentContractId),
+    check("workforce_contracts_status_check", sql`${table.status} in ('draft','internal_review','legal_review','approved','sent','signed','active','suspended','expired','terminated','cancelled','superseded')`),
+  ],
+);
+
+export const contractClauses = sqliteTable(
+  "contract_clauses",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    contractId: integer("contract_id").notNull().references(() => workforceContracts.id, { onDelete: "cascade" }),
+    clauseNumber: integer("clause_number").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    isOptional: integer("is_optional", { mode: "boolean" }).notNull().default(false),
+    isIncluded: integer("is_included", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("contract_clauses_number_unique").on(table.contractId, table.clauseNumber),
+    index("contract_clauses_contract_idx").on(table.contractId),
   ],
 );
 
@@ -523,6 +700,71 @@ export const clients = sqliteTable(
     index("clients_status_idx").on(table.status),
     index("clients_owner_idx").on(table.ownerEmail),
     check("clients_status_check", sql`${table.status} in ('prospect', 'active', 'inactive', 'blocked')`),
+  ],
+);
+
+export const suppliers = sqliteTable(
+  "suppliers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    supplierCode: text("supplier_code").notNull().unique(),
+    legalName: text("legal_name").notNull(),
+    commercialRegistration: text("commercial_registration"),
+    vatNumber: text("vat_number"),
+    contactName: text("contact_name"),
+    mobile: text("mobile"),
+    email: text("email"),
+    address: text("address"),
+    status: text("status").notNull().default("active"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("suppliers_name_idx").on(table.legalName),
+    index("suppliers_status_idx").on(table.status),
+    check("suppliers_status_check", sql`${table.status} in ('active','inactive','blocked')`),
+  ],
+);
+
+export const purchaseInvoices = sqliteTable(
+  "purchase_invoices",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    referenceCode: text("reference_code").notNull().unique(),
+    supplierInvoiceNumber: text("supplier_invoice_number").notNull(),
+    expenseType: text("expense_type").notNull().default("supplier_invoice"),
+    supplierId: integer("supplier_id").references(() => suppliers.id, { onDelete: "restrict" }),
+    employeeId: integer("employee_id").references(() => employees.id, { onDelete: "restrict" }),
+    contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
+    documentId: integer("document_id").notNull().references(() => companyDocuments.id, { onDelete: "restrict" }),
+    invoiceDate: text("invoice_date").notNull(),
+    dueDate: text("due_date").notNull(),
+    description: text("description").notNull(),
+    subtotalHalalas: integer("subtotal_halalas").notNull(),
+    vatHalalas: integer("vat_halalas").notNull().default(0),
+    totalHalalas: integer("total_halalas").notNull(),
+    status: text("status").notNull().default("draft"),
+    journalEntryId: integer("journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
+    paymentJournalEntryId: integer("payment_journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
+    postingStatus: text("posting_status").notNull().default("unposted"),
+    createdBy: text("created_by").notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    paidBy: text("paid_by"),
+    paidAt: text("paid_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("purchase_invoice_supplier_number_unique").on(table.supplierId, table.supplierInvoiceNumber),
+    index("purchase_invoices_due_status_idx").on(table.dueDate, table.status),
+    index("purchase_invoices_supplier_idx").on(table.supplierId),
+    index("purchase_invoices_employee_idx").on(table.employeeId),
+    check("purchase_invoices_type_check", sql`${table.expenseType} in ('supplier_invoice','employee_expense')`),
+    check("purchase_invoices_status_check", sql`${table.status} in ('draft','approved','posted','payment_pending','paid','cancelled')`),
+    check("purchase_invoices_posting_check", sql`${table.postingStatus} in ('unposted','draft','posted','reversed')`),
+    check("purchase_invoices_amount_check", sql`${table.subtotalHalalas} >= 0 and ${table.vatHalalas} >= 0 and ${table.totalHalalas} = ${table.subtotalHalalas} + ${table.vatHalalas}`),
   ],
 );
 
@@ -935,4 +1177,188 @@ export const capacityPlans = sqliteTable(
     check("capacity_plans_counts_check", sql`${table.requiredCount} > 0 and ${table.availableCount} >= 0 and ${table.reservedCount} >= 0`),
     check("capacity_plans_status_check", sql`${table.status} in ('planning', 'approved', 'active', 'completed', 'cancelled')`),
   ],
+);
+
+// Enterprise accounting foundation. Source documents remain operational records;
+// only posted journal lines are allowed to change ledger balances.
+export const chartOfAccounts = sqliteTable(
+  "chart_of_accounts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    code: text("code").notNull().unique(),
+    nameAr: text("name_ar").notNull(),
+    accountType: text("account_type").notNull(),
+    normalBalance: text("normal_balance").notNull(),
+    parentId: integer("parent_id"),
+    isPosting: integer("is_posting", { mode: "boolean" }).notNull().default(true),
+    isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("chart_of_accounts_parent_idx").on(table.parentId),
+    index("chart_of_accounts_type_status_idx").on(table.accountType, table.status),
+    check("chart_of_accounts_type_check", sql`${table.accountType} in ('asset','liability','equity','revenue','expense')`),
+    check("chart_of_accounts_balance_check", sql`${table.normalBalance} in ('debit','credit')`),
+    check("chart_of_accounts_status_check", sql`${table.status} in ('active','inactive')`),
+  ],
+);
+
+export const fiscalPeriods = sqliteTable(
+  "fiscal_periods",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    periodCode: text("period_code").notNull().unique(),
+    nameAr: text("name_ar").notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    status: text("status").notNull().default("open"),
+    closedBy: text("closed_by"),
+    closedAt: text("closed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("fiscal_periods_dates_idx").on(table.startDate, table.endDate),
+    check("fiscal_periods_status_check", sql`${table.status} in ('future','open','soft_closed','closed')`),
+    check("fiscal_periods_date_check", sql`${table.endDate} >= ${table.startDate}`),
+  ],
+);
+
+export const costCenters = sqliteTable(
+  "cost_centers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    code: text("code").notNull().unique(),
+    nameAr: text("name_ar").notNull(),
+    centerType: text("center_type").notNull().default("contract"),
+    contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
+    status: text("status").notNull().default("active"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("cost_centers_type_status_idx").on(table.centerType, table.status),
+    uniqueIndex("cost_centers_contract_unique").on(table.contractId),
+    check("cost_centers_type_check", sql`${table.centerType} in ('contract','department','project','administrative')`),
+    check("cost_centers_status_check", sql`${table.status} in ('active','inactive','closed')`),
+  ],
+);
+
+export const journalEntries = sqliteTable(
+  "journal_entries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    entryNumber: text("entry_number").notNull().unique(),
+    entryDate: text("entry_date").notNull(),
+    fiscalPeriodId: integer("fiscal_period_id").notNull().references(() => fiscalPeriods.id, { onDelete: "restrict" }),
+    description: text("description").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id"),
+    reversalOfId: integer("reversal_of_id"),
+    status: text("status").notNull().default("draft"),
+    createdBy: text("created_by").notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    postedBy: text("posted_by"),
+    postedAt: text("posted_at"),
+    voidReason: text("void_reason"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("journal_entries_period_status_idx").on(table.fiscalPeriodId, table.status),
+    index("journal_entries_source_idx").on(table.sourceType, table.sourceId),
+    index("journal_entries_date_idx").on(table.entryDate),
+    check("journal_entries_status_check", sql`${table.status} in ('draft','approved','posted','reversed','void')`),
+  ],
+);
+
+export const journalLines = sqliteTable(
+  "journal_lines",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    journalEntryId: integer("journal_entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
+    lineNumber: integer("line_number").notNull(),
+    accountId: integer("account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    description: text("description"),
+    debitHalalas: integer("debit_halalas").notNull().default(0),
+    creditHalalas: integer("credit_halalas").notNull().default(0),
+    clientId: integer("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
+    workerId: integer("worker_id").references(() => workers.id, { onDelete: "restrict" }),
+    employeeId: integer("employee_id").references(() => employees.id, { onDelete: "restrict" }),
+    costCenterCode: text("cost_center_code"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("journal_lines_entry_line_unique").on(table.journalEntryId, table.lineNumber),
+    index("journal_lines_account_idx").on(table.accountId),
+    index("journal_lines_contract_idx").on(table.contractId),
+    check("journal_lines_amount_check", sql`${table.debitHalalas} >= 0 and ${table.creditHalalas} >= 0 and ((${table.debitHalalas} > 0 and ${table.creditHalalas} = 0) or (${table.creditHalalas} > 0 and ${table.debitHalalas} = 0))`),
+  ],
+);
+
+export const bankAccounts = sqliteTable(
+  "bank_accounts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountCode: text("account_code").notNull().unique(),
+    bankName: text("bank_name").notNull(),
+    accountName: text("account_name").notNull(),
+    iban: text("iban").notNull().unique(),
+    currency: text("currency").notNull().default("SAR"),
+    ledgerAccountId: integer("ledger_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("bank_accounts_status_idx").on(table.status),
+    check("bank_accounts_status_check", sql`${table.status} in ('active','inactive','closed')`),
+  ],
+);
+
+export const bankReconciliations = sqliteTable(
+  "bank_reconciliations",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    reconciliationNumber: text("reconciliation_number").notNull().unique(),
+    bankAccountId: integer("bank_account_id").notNull().references(() => bankAccounts.id, { onDelete: "restrict" }),
+    statementDate: text("statement_date").notNull(),
+    statementBalanceHalalas: integer("statement_balance_halalas").notNull(),
+    ledgerBalanceHalalas: integer("ledger_balance_halalas").notNull(),
+    outstandingDepositsHalalas: integer("outstanding_deposits_halalas").notNull().default(0),
+    outstandingPaymentsHalalas: integer("outstanding_payments_halalas").notNull().default(0),
+    differenceHalalas: integer("difference_halalas").notNull(),
+    status: text("status").notNull().default("draft"),
+    notes: text("notes"),
+    createdBy: text("created_by").notNull(),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: text("reviewed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("bank_reconciliations_bank_date_unique").on(table.bankAccountId, table.statementDate),
+    index("bank_reconciliations_status_date_idx").on(table.status, table.statementDate),
+    check("bank_reconciliations_status_check", sql`${table.status} in ('draft','reviewed','closed','cancelled')`),
+    check("bank_reconciliations_outstanding_check", sql`${table.outstandingDepositsHalalas} >= 0 and ${table.outstandingPaymentsHalalas} >= 0`),
+  ],
+);
+
+export const accountingPostingRules = sqliteTable(
+  "accounting_posting_rules",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    eventType: text("event_type").notNull().unique(),
+    debitAccountId: integer("debit_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    creditAccountId: integer("credit_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    taxAccountId: integer("tax_account_id").references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    updatedBy: text("updated_by").notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [index("accounting_posting_rules_active_idx").on(table.active)],
 );

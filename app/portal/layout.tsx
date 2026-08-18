@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import "./portal.css";
 import "./enhancements.css";
+import "./contract-lifecycle.css";
+import "./hr-workspace.css";
+import "./compliance-workspace.css";
+import "./financial-posting.css";
+import "./purchasing-workspace.css";
+import "./reports-workspace.css";
+import "./report-pdf-action.css";
+import "./bank-reconciliation.css";
 
 export const metadata: Metadata = {
   title: { absolute: "النظام الإداري | شركة دالي للتشغيل والصيانة" },

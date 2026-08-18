@@ -243,7 +243,7 @@ test("renders the public site and protects request workflows", async () => {
     assert.equal(unauthorized.status, 401, path);
   }
 
-  for (const path of ["/api/portal/operations", "/api/portal/search?q=test", "/api/portal/integrations", "/api/portal/documents/share", "/api/portal/website"]) {
+  for (const path of ["/api/portal/operations", "/api/portal/search?q=test", "/api/portal/integrations", "/api/portal/documents/share", "/api/portal/website", "/api/portal/accounting", "/api/portal/hr", "/api/portal/compliance", "/api/portal/finance/posting", "/api/portal/purchasing", "/api/portal/reports", "/api/portal/reports/pdf", "/api/portal/banking/reconciliations"]) {
     const unauthorized = await worker.fetch(new Request(`http://localhost${path}`), env, context);
     assert.equal(unauthorized.status, 403, path);
   }

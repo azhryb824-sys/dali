@@ -1,0 +1,43 @@
+.contract-lifecycle {
+  padding: 18px;
+  border: 1px solid #d8e2e6;
+  border-right: 4px solid var(--admin-red);
+  background: #f9fbfc;
+}
+
+.contract-lifecycle > p {
+  margin: -5px 0 14px;
+  color: var(--admin-muted);
+  line-height: 1.8;
+}
+
+.contract-lifecycle > div {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(220px, 2fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.contract-lifecycle select,
+.contract-lifecycle textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  background: #fff;
+  color: var(--admin-navy);
+  font: inherit;
+}
+
+.planned-assignment {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #fff4d9;
+  color: #8b6412;
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .contract-lifecycle > div {
+    grid-template-columns: 1fr;
+  }
+}

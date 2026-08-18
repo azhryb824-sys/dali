@@ -94,6 +94,8 @@ export async function POST(request: Request) {
     const endDate = cleanDate(payload.endDate, true);
     const legacyWorkerCount = Number(payload.workerCount || 0);
     const amount = Number(payload.amount || 0);
+    const vatEnabled = payload.vatEnabled === true || payload.vatEnabled === "on" || payload.vatEnabled === "true";
+    const vatRate = vatEnabled ? Number(payload.vatRate || 15) : 0;
     const linkedContractId = parsePositiveId(payload.linkedContractId);
 
     if (!isDocumentType(documentType) || clientName.length < 2 || title.length < 3 || !issueDate || expiryDate === "" || details.length < 5) {
@@ -101,6 +103,9 @@ export async function POST(request: Request) {
     }
     if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000) {
       return Response.json({ error: "قيمة المستند غير صحيحة" }, { status: 400 });
+    }
+    if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100 || (vatEnabled && !clientVat)) {
+      return Response.json({ error: vatEnabled && !clientVat ? "أدخل الرقم الضريبي للعميل عند تفعيل الضريبة" : "نسبة الضريبة غير صحيحة" }, { status: 400 });
     }
 
     const professionInputs = documentType === "workforce_contract"
@@ -160,7 +165,10 @@ export async function POST(request: Request) {
     });
 
     const referenceCode = makeReference(prefixes[documentType]);
-    const amountHalalas = amount ? Math.round(amount * 100) : undefined;
+    const subtotalHalalas = amount ? Math.round(amount * 100) : undefined;
+    const vatRateBps = vatEnabled ? Math.round(vatRate * 100) : 0;
+    const vatHalalas = subtotalHalalas && vatRateBps ? Math.round((subtotalHalalas * vatRateBps) / 10000) : 0;
+    const amountHalalas = subtotalHalalas ? subtotalHalalas + vatHalalas : undefined;
     const pdfBytes = await generateIssuedPdf({
       documentType,
       referenceCode,
@@ -171,6 +179,9 @@ export async function POST(request: Request) {
       issueDate,
       expiryDate: documentType === "workforce_contract" ? endDate || undefined : expiryDate || undefined,
       amountHalalas,
+      subtotalHalalas,
+      vatHalalas,
+      vatRateBps,
       details,
       workSite: workSite || undefined,
       startDate: startDate || undefined,
@@ -213,7 +224,7 @@ export async function POST(request: Request) {
       sizeBytes: pdfBytes.byteLength,
       expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
       source: "generated",
-      metadataJson: JSON.stringify({ clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, workSite, startDate, endDate, paymentTerms, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
+      metadataJson: JSON.stringify({ clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
       createdBy: access.user.email,
     }).returning();
     savedDocumentId = saved.id;
@@ -253,19 +264,10 @@ export async function POST(request: Request) {
           contractId: contract!.id,
           contractProfessionId: professionRecord.id,
           workerId,
+          status: "planned",
           assignedBy: access.user.email,
         }))).returning();
         assignmentRecords.push(...inserted);
-      }
-      for (const workerId of selectedIds) {
-        const [updated] = await db.update(workers).set({
-          status: "assigned",
-          beneficiaryName: clientName,
-          clientSite: workSite,
-          assignmentStartDate: startDate,
-          updatedAt: new Date().toISOString(),
-        }).where(eq(workers.id, workerId)).returning();
-        if (updated) updatedWorkers.push(updated);
       }
     }
 
@@ -282,6 +284,9 @@ export async function POST(request: Request) {
         category: financialCategory[documentType]!,
         description: `${issuedDocumentLabels[documentType]} ${referenceCode} — ${clientName}`,
         amountHalalas,
+        subtotalHalalas,
+        vatHalalas,
+        vatRateBps,
         dueDate: expiryDate || issueDate,
         contractId: linkedContractId,
         documentId: saved.id,

@@ -93,10 +93,15 @@ export async function POST(request: Request) {
       const department = cleanText(data.department, 100);
       const mobile = cleanText(data.mobile, 20);
       const hireDate = cleanDate(data.hireDate);
-      if (!employeeNumber || fullName.length < 2 || !jobTitle || !department || !/^\+?[0-9\s()-]{8,20}$/.test(mobile) || !hireDate) {
+      const nationalId = cleanText(data.nationalId, 20) || null;
+      const nationality = cleanText(data.nationality, 80) || null;
+      const email = cleanText(data.email, 160).toLowerCase() || null;
+      const iban = cleanText(data.iban, 40).replaceAll(" ", "").toUpperCase() || null;
+      const baseSalaryHalalas = Math.round(Number(data.baseSalary || 0) * 100);
+      if (!employeeNumber || fullName.length < 2 || !jobTitle || !department || !/^\+?[0-9\s()-]{8,20}$/.test(mobile) || !hireDate || (nationalId && !/^\d{10}$/.test(nationalId)) || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) || (iban && !/^SA\d{22}$/.test(iban)) || !Number.isSafeInteger(baseSalaryHalalas) || baseSalaryHalalas < 0) {
         return Response.json({ error: "بيانات الموظف غير مكتملة أو غير صحيحة" }, { status: 400 });
       }
-      const [saved] = await db.insert(employees).values({ employeeNumber, fullName, jobTitle, department, mobile, hireDate, updatedAt: now }).returning();
+      const [saved] = await db.insert(employees).values({ employeeNumber, fullName, jobTitle, department, mobile, hireDate, nationalId, nationality, email, bankName: cleanText(data.bankName, 120) || null, iban, baseSalaryHalalas, updatedAt: now }).returning();
       await recordActivity(access.user.email, "employee-created", "employee", saved.id, undefined, saved);
       return Response.json({ record: saved }, { status: 201 });
     }
