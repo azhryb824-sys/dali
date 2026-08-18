@@ -4,6 +4,7 @@ import { companyDocuments, quoteVersions, salesOpportunities, workforceContracts
 import { attachmentHeaders } from "@/lib/company-documents";
 import { requireClientApiAccess } from "@/lib/client-access";
 import { getRuntimeEnv } from "@/lib/runtime-env";
+import { regenerateWorkforceContractPdf } from "@/lib/workforce-contract-pdf";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const access = await requireClientApiAccess();
@@ -20,6 +21,11 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (!contract && !quote) return Response.json({ error: "المستند غير مرتبط بحسابك" }, { status: 403 });
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, id) });
   if (!document || document.status !== "active") return Response.json({ error: "المستند غير متاح" }, { status: 404 });
+  if (contract && document.source === "generated" && document.documentType === "workforce_contract") {
+    const regenerated = await regenerateWorkforceContractPdf(id);
+    if (!regenerated) return Response.json({ error: "تعذّر إعادة إنشاء العقد" }, { status: 404 });
+    return new Response(new Uint8Array(regenerated.bytes).buffer, { headers: attachmentHeaders(document.fileName, "application/pdf") });
+  }
   const object = await getRuntimeEnv().BUCKET.get(document.storageKey);
   if (!object) return Response.json({ error: "الملف غير متاح" }, { status: 404 });
   return new Response(object.body, { headers: attachmentHeaders(document.fileName, document.contentType, object.httpEtag) });

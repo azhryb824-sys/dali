@@ -45,6 +45,7 @@ export async function GET(request: Request) {
       }
     }
     const results: Result[] = [
+      ...(["هوية", "الهوية", "شعار", "الشعار", "ألوان", "الخطوط", "brand"].some((term) => term.includes(query.toLowerCase()) || query.toLowerCase().includes(term)) ? [{ key: "brand-identity", kind: "brand-identity", id: 0, view: "brand", title: "الهوية البصرية", meta: "الشعار والألوان والخطوط وجميع ملفات PDF", searchValue: "الهوية البصرية" }] : []),
       ...websiteResults,
       ...requestRows.map((item) => ({ key: `request-${item.id}`, kind: "request", id: item.id, view: "workforce", title: `${item.trackingCode} · ${item.fullName}`, meta: `طلب زائر · ${item.specialization}`, searchValue: item.trackingCode })),
       ...workerRows.map((item) => ({ key: `worker-${item.id}`, kind: "worker", id: item.id, view: "workforce", title: item.fullName, meta: `عامل · ${item.profession} · ${item.iqamaNumber || item.workerNumber}`, searchValue: item.fullName })),

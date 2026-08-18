@@ -80,6 +80,15 @@ export async function POST(request: Request) {
     const expiryDate = cleanDate(payload.expiryDate, true);
     const details = cleanText(payload.details, 4000);
     const workSite = cleanText(payload.workSite, 180);
+    const clientAddress = cleanText(payload.clientAddress, 240);
+    const clientRepresentative = cleanText(payload.clientRepresentative, 160);
+    const clientRepresentativeTitle = cleanText(payload.clientRepresentativeTitle, 120);
+    const paymentTerms = cleanText(payload.paymentTerms, 1200);
+    const workingHours = cleanText(payload.workingHours, 240);
+    const weeklyOff = cleanText(payload.weeklyOff, 120);
+    const accommodationParty = cleanText(payload.accommodationParty, 120);
+    const transportParty = cleanText(payload.transportParty, 120);
+    const specialTerms = cleanText(payload.specialTerms, 2000);
     const legacyProfession = cleanText(payload.profession, 120);
     const startDate = cleanDate(payload.startDate, true);
     const endDate = cleanDate(payload.endDate, true);
@@ -166,6 +175,15 @@ export async function POST(request: Request) {
       workSite: workSite || undefined,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
+      clientAddress: clientAddress || undefined,
+      clientRepresentative: clientRepresentative || undefined,
+      clientRepresentativeTitle: clientRepresentativeTitle || undefined,
+      paymentTerms: paymentTerms || undefined,
+      workingHours: workingHours || undefined,
+      weeklyOff: weeklyOff || undefined,
+      accommodationParty: accommodationParty || undefined,
+      transportParty: transportParty || undefined,
+      specialTerms: specialTerms || undefined,
       professions: professionInputs.map((item) => ({
         profession: item.profession,
         requiredCount: item.requiredCount,
@@ -195,7 +213,7 @@ export async function POST(request: Request) {
       sizeBytes: pdfBytes.byteLength,
       expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
       source: "generated",
-      metadataJson: JSON.stringify({ clientCr, clientVat, issueDate, amountHalalas, workSite, startDate, endDate, professions: professionInputs, capacity, linkedContractId }),
+      metadataJson: JSON.stringify({ clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, workSite, startDate, endDate, paymentTerms, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
       createdBy: access.user.email,
     }).returning();
     savedDocumentId = saved.id;
