@@ -13,8 +13,19 @@ export function getDb(): DrizzleD1Database<typeof schema> {
 }
 
 export function getSqlClient() {
+  const databaseUrl = process.env.DATABASE_URL;
+  
+  if (!databaseUrl) {
+    throw new Error(
+      "DATABASE_URL environment variable is not configured. " +
+      "Please set DATABASE_URL to a valid libsql:// URL or use Cloudflare D1 binding. " +
+      "For local development, use 'file:/var/data/dali.db' or 'libsql://'. " +
+      "For Render deployment, configure a proper database URL in environment variables."
+    );
+  }
+
   nodeClient ??= createClient({
-    url: process.env.DATABASE_URL || "file:.data/dali.db",
+    url: databaseUrl,
     authToken: process.env.DATABASE_AUTH_TOKEN,
   });
   return nodeClient;
