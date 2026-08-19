@@ -1,0 +1,75 @@
+name: Verify production deployment
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - .github/workflows/production-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      BASE_URL: https://dali-ql1q.onrender.com
+    steps:
+      - name: Verify liveness, readiness, and login page
+        shell: bash
+        run: |
+          set -u
+          live_code="000"
+          ready_code="000"
+          login_code="000"
+
+          for attempt in $(seq 1 36); do
+            live_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-live.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health/live" || true)"
+            ready_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-ready.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health/ready" || true)"
+            login_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-login.html --write-out '%{http_code}' \
+              "${BASE_URL}/login" || true)"
+
+            echo "attempt=${attempt} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+
+            if [[ "$live_code" == "200" \
+              && "$ready_code" == "200" \
+              && "$login_code" == "200" ]] \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-live.json \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
+              && grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
+              && grep -Eq '"auth"[[:space:]]*:[[:space:]]*"(ok|external)"' /tmp/dali-ready.json \
+              && grep -q 'تسجيل الدخول الآمن' /tmp/dali-login.html; then
+              echo "Production deployment is live and ready."
+              cat /tmp/dali-live.json
+              cat /tmp/dali-ready.json
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::Production smoke verification did not become ready within the bounded retry window."
+          echo "Final HTTP codes: live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+          echo "--- live response ---"
+          cat /tmp/dali-live.json 2>/dev/null || true
+          echo
+          echo "--- ready response ---"
+          cat /tmp/dali-ready.json 2>/dev/null || true
+          echo
+          echo "--- login response preview ---"
+          head -c 1000 /tmp/dali-login.html 2>/dev/null || true
+          echo
+          exit 1
