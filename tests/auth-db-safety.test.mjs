@@ -17,6 +17,11 @@ test("production startup requires explicit persistent database configuration", a
   assert.match(startup, /DATABASE_URL_MISSING/);
   assert.match(startup, /UPLOADS_DIR_MISSING/);
   assert.match(startup, /DATABASE_FILE_PATH_MUST_BE_ABSOLUTE/);
+  assert.match(startup, /RENDER_DATABASE_URL_RECOVERED/);
+  assert.match(startup, /RENDER_DATABASE_RECOVERY_FILE_MISSING/);
+  assert.match(startup, /dali-predeploy-/);
+  assert.match(startup, /copyFile/);
+  assert.match(startup, /backups\.slice\(12\)/);
   assert.match(database, /DATABASE_URL_UNSUPPORTED/);
   assert.doesNotMatch(database, /file:\.data\/dali\.db/);
   assert.match(render, /DATABASE_URL\n\s+value: file:\/var\/data\/dali\.db/);
@@ -56,6 +61,9 @@ test("liveness and readiness are separate deployment signals", async () => {
   assert.match(legacy, /\.\/live\/route/);
   assert.doesNotMatch(live, /getSqlClient|getDb|SELECT 1/);
   assert.match(ready, /SELECT 1 AS healthy/);
+  assert.match(ready, /portal_auth_credentials/);
+  assert.match(ready, /hasStoredCredential/);
+  assert.match(ready, /adminConfig\.complete \|\| await hasStoredCredential\(\)/);
   assert.match(ready, /status: 503/);
 });
 

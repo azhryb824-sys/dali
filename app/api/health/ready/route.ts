@@ -12,12 +12,21 @@ async function checkDatabase() {
   if (Number(healthy?.healthy) !== 1) throw new OperationalError("DATABASE_CHECK_FAILED");
 }
 
-function checkCredentialAuthentication() {
+async function hasStoredCredential() {
+  const runtime = getRuntimeEnv();
+  const credential = runtime.DB
+    ? await runtime.DB.prepare("SELECT identifier FROM portal_auth_credentials LIMIT 1").first<{ identifier: string }>()
+    : (await getSqlClient().execute("SELECT identifier FROM portal_auth_credentials LIMIT 1")).rows[0];
+  return Boolean(credential && "identifier" in credential && credential.identifier);
+}
+
+async function checkCredentialAuthentication() {
   if (getConfiguredAuthMode() !== "credentials") return "external" as const;
-  const adminConfig = getPortalAdminConfig();
-  if (!adminConfig.complete) throw new OperationalError("AUTH_BOOTSTRAP_CONFIGURATION_INVALID");
   if (getConfiguredAuthSecret().length < 32) throw new OperationalError("AUTH_SECRET_INVALID");
-  return "ok" as const;
+
+  const adminConfig = getPortalAdminConfig();
+  if (adminConfig.complete || await hasStoredCredential()) return "ok" as const;
+  throw new OperationalError("AUTH_BOOTSTRAP_CONFIGURATION_INVALID");
 }
 
 export async function GET() {
@@ -34,7 +43,7 @@ export async function GET() {
   }
 
   try {
-    auth = checkCredentialAuthentication();
+    auth = await checkCredentialAuthentication();
   } catch (error) {
     auth = "unavailable";
     errorCodes.push(safeOperationalErrorCode(error, "AUTH_CONFIGURATION_INVALID"));
