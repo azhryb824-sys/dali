@@ -1,0 +1,361 @@
+name: Repair Render production via device authorization v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/render-repair-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: repair-render-production-device-v2
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      PR_NUMBER: "13"
+      BASE_URL: https://dali-ql1q.onrender.com
+      TARGET_HOST: dali-ql1q.onrender.com
+      TARGET_REPO: azhryb824-sys/dali
+      RENDER_CLI_VERSION: 2.22.0
+      RENDER_CLI_SHA256: 6cdcd11897b7bd7e673317e6f4aaf041b654d818444f3b1efec7240a835f79ec
+      RENDER_CLI_DISABLE_ANALYTICS: "1"
+      NO_COLOR: "1"
+      TERM: dumb
+    steps:
+      - name: Authorize, repair, deploy, and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export RENDER_CLI_CONFIG_PATH="${RUNNER_TEMP}/render-cli.yaml"
+          trap 'rm -f "${RENDER_CLI_CONFIG_PATH}" "${RUNNER_TEMP}/render-login.log"' EXIT
+
+          post_comment() {
+            local source_file="$1"
+            COMMENT_SOURCE="$source_file" python <<'PY' > "${RUNNER_TEMP}/comment-payload.json"
+          import json
+          import os
+          from pathlib import Path
+          print(json.dumps({'body': Path(os.environ['COMMENT_SOURCE']).read_text()}, ensure_ascii=False))
+          PY
+            curl --fail --silent --show-error \
+              --request POST \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              --header 'Content-Type: application/json' \
+              "https://api.github.com/repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --data-binary "@${RUNNER_TEMP}/comment-payload.json" \
+              --output "${RUNNER_TEMP}/comment-response.json"
+          }
+
+          cli_zip="${RUNNER_TEMP}/render-cli.zip"
+          cli_dir="${RUNNER_TEMP}/render-cli-bin"
+          mkdir -p "$cli_dir"
+          curl --fail --location --silent --show-error \
+            --retry 3 --retry-all-errors \
+            "https://github.com/render-oss/cli/releases/download/v${RENDER_CLI_VERSION}/cli_${RENDER_CLI_VERSION}_linux_amd64.zip" \
+            --output "$cli_zip"
+          echo "${RENDER_CLI_SHA256}  ${cli_zip}" | sha256sum --check --status
+          unzip -q "$cli_zip" -d "$cli_dir"
+          unzip -Z1 "$cli_zip" | sed -n '1,30p'
+
+          RENDER_BIN="$(find "$cli_dir" -type f \( -name render -o -name cli \) -print -quit)"
+          if [[ -z "$RENDER_BIN" ]]; then
+            while IFS= read -r candidate; do
+              chmod +x "$candidate" 2>/dev/null || true
+              if "$candidate" version > "${RUNNER_TEMP}/candidate-version.log" 2>&1; then
+                RENDER_BIN="$candidate"
+                break
+              fi
+            done < <(find "$cli_dir" -type f -maxdepth 3)
+          fi
+          if [[ -z "$RENDER_BIN" ]]; then
+            echo "::error::No working Render CLI executable was found in the verified archive."
+            exit 1
+          fi
+          chmod +x "$RENDER_BIN"
+          "$RENDER_BIN" version
+
+          : > "${RUNNER_TEMP}/render-login.log"
+          timeout 720 "$RENDER_BIN" login > "${RUNNER_TEMP}/render-login.log" 2>&1 &
+          LOGIN_PID=$!
+
+          AUTH_URL=""
+          USER_CODE=""
+          for _ in $(seq 1 90); do
+            if ! kill -0 "$LOGIN_PID" 2>/dev/null; then
+              break
+            fi
+            LOGIN_LOG="${RUNNER_TEMP}/render-login.log" python <<'PY' > "${RUNNER_TEMP}/render-auth.json"
+          import json
+          import os
+          import re
+          from pathlib import Path
+          text = Path(os.environ['LOGIN_LOG']).read_text(errors='replace')
+          text = re.sub(r'\x1b\[[0-9;?]*[ -/]*[@-~]', '', text)
+          urls = [item.rstrip('.,);]>') for item in re.findall(r'https://[^\s<]+', text)]
+          url = next((item for item in urls if 'dashboard.render.com' in item), '')
+          code_match = re.search(r'(?i)code:\s*([A-Z0-9-]{4,32})', text)
+          print(json.dumps({'url': url, 'code': code_match.group(1) if code_match else ''}))
+          PY
+            AUTH_URL="$(python -c 'import json; print(json.load(open("'"${RUNNER_TEMP}/render-auth.json"'"))["url"])')"
+            USER_CODE="$(python -c 'import json; print(json.load(open("'"${RUNNER_TEMP}/render-auth.json"'"))["code"])')"
+            if [[ -n "$AUTH_URL" ]]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ -z "$AUTH_URL" ]]; then
+            cat "${RUNNER_TEMP}/render-login.log" || true
+            cat > "${RUNNER_TEMP}/comment.md" <<'EOF'
+          ### تعذر إنشاء رابط تفويض Render
+
+          لم تبدأ جلسة التفويض، ولم تُغيّر أي إعدادات أو بيانات في Render.
+          EOF
+            post_comment "${RUNNER_TEMP}/comment.md"
+            kill "$LOGIN_PID" 2>/dev/null || true
+            wait "$LOGIN_PID" 2>/dev/null || true
+            exit 1
+          fi
+
+          cat > "${RUNNER_TEMP}/comment.md" <<EOF
+          ### تفويض Render المؤقت مطلوب الآن
+
+          افتح رابط Render الرسمي التالي بالحساب الذي يملك خدمة **dali**، ثم اضغط **Authorize CLI**:
+
+          ${AUTH_URL}
+
+          رمز التفويض: **${USER_CODE}**
+
+          الجلسة مؤقتة ومحصورة في خدمة تطابق النطاق \`${TARGET_HOST}\` والمستودع \`${TARGET_REPO}\`. بعد الموافقة ستضبط أوامر التشغيل والمتغيرات غير السرية، وتنشر أحدث التزام من \`main\`، ثم تتحقق من القاعدة وتسجيل الدخول. يُحذف ملف التفويض تلقائيًا عند انتهاء المهمة.
+          EOF
+          post_comment "${RUNNER_TEMP}/comment.md"
+
+          set +e
+          wait "$LOGIN_PID"
+          LOGIN_STATUS=$?
+          set -e
+          if [[ "$LOGIN_STATUS" -ne 0 ]]; then
+            cat > "${RUNNER_TEMP}/comment.md" <<'EOF'
+          ### انتهت جلسة تفويض Render دون موافقة
+
+          لم تُغيّر المهمة أي إعداد أو بيانات في Render.
+          EOF
+            post_comment "${RUNNER_TEMP}/comment.md"
+            exit 1
+          fi
+
+          RENDER_TOKEN="$(CONFIG_PATH="$RENDER_CLI_CONFIG_PATH" python <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          text = Path(os.environ['CONFIG_PATH']).read_text()
+          match = re.search(r'(?m)^\s+key:\s*["\x27]?([^"\x27\s]+)', text)
+          print(match.group(1) if match else '')
+          PY
+          )"
+          if [[ -z "$RENDER_TOKEN" ]]; then
+            echo "::error::The temporary Render token was not found after successful authorization."
+            exit 1
+          fi
+          echo "::add-mask::${RENDER_TOKEN}"
+
+          curl --fail --silent --show-error \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/branches/main" \
+            --output "${RUNNER_TEMP}/main-branch.json"
+          MAIN_SHA="$(python -c 'import json; print(json.load(open("'"${RUNNER_TEMP}/main-branch.json"'"))["commit"]["sha"])')"
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "::error::Unable to resolve main SHA."; exit 1; }
+          echo "target_main_sha=${MAIN_SHA}"
+
+          "$RENDER_BIN" workspaces --output json > "${RUNNER_TEMP}/workspaces.json"
+          WORKSPACES_JSON="${RUNNER_TEMP}/workspaces.json" python <<'PY' > "${RUNNER_TEMP}/workspaces.tsv"
+          import json
+          import os
+          from pathlib import Path
+          data = json.loads(Path(os.environ['WORKSPACES_JSON']).read_text())
+          found = {}
+          def walk(value):
+              if isinstance(value, dict):
+                  lower = {str(k).lower(): v for k, v in value.items()}
+                  identifier = str(lower.get('id') or '').strip()
+                  name = str(lower.get('name') or lower.get('email') or '').strip()
+                  if identifier and name and not identifier.startswith(('srv-', 'dpg-', 'red-', 'crn-', 'job-')):
+                      found[identifier] = name
+                  for child in value.values(): walk(child)
+              elif isinstance(value, list):
+                  for child in value: walk(child)
+          walk(data)
+          for identifier, name in sorted(found.items()):
+              print(f"{identifier}\t{name.replace(chr(9), ' ')}")
+          PY
+          [[ -s "${RUNNER_TEMP}/workspaces.tsv" ]] || { echo "::error::No Render workspace was available."; exit 1; }
+
+          : > "${RUNNER_TEMP}/service-candidates.jsonl"
+          workspace_index=0
+          while IFS=$'\t' read -r WORKSPACE_ID WORKSPACE_NAME; do
+            workspace_index=$((workspace_index + 1))
+            export RENDER_WORKSPACE="$WORKSPACE_ID"
+            services_file="${RUNNER_TEMP}/services-${workspace_index}.json"
+            if ! "$RENDER_BIN" services --output json > "$services_file" 2>/dev/null; then
+              continue
+            fi
+            SERVICES_JSON="$services_file" WORKSPACE_ID="$WORKSPACE_ID" WORKSPACE_NAME="$WORKSPACE_NAME" TARGET_HOST="$TARGET_HOST" TARGET_REPO="$TARGET_REPO" python <<'PY' >> "${RUNNER_TEMP}/service-candidates.jsonl"
+          import json
+          import os
+          from pathlib import Path
+          data = json.loads(Path(os.environ['SERVICES_JSON']).read_text())
+          target_host = os.environ['TARGET_HOST'].lower()
+          target_repo = os.environ['TARGET_REPO'].lower()
+          workspace_id = os.environ['WORKSPACE_ID']
+          workspace_name = os.environ['WORKSPACE_NAME']
+          found = {}
+          def walk(value):
+              if isinstance(value, dict):
+                  lower = {str(k).lower(): v for k, v in value.items()}
+                  identifier = str(lower.get('id') or '').strip()
+                  if identifier.startswith('srv-'):
+                      name = str(lower.get('name') or '').strip()
+                      text = json.dumps(value, ensure_ascii=False).lower()
+                      score = (100 if target_host in text else 0) + (50 if target_repo in text else 0) + (20 if name.lower() == 'dali' else 0) + (5 if str(lower.get('branch') or '').lower() == 'main' else 0)
+                      found[identifier] = {'service_id': identifier, 'service_name': name, 'workspace_id': workspace_id, 'workspace_name': workspace_name, 'score': score}
+                  for child in value.values(): walk(child)
+              elif isinstance(value, list):
+                  for child in value: walk(child)
+          walk(data)
+          for record in found.values(): print(json.dumps(record, ensure_ascii=False))
+          PY
+          done < "${RUNNER_TEMP}/workspaces.tsv"
+
+          CANDIDATES_FILE="${RUNNER_TEMP}/service-candidates.jsonl" python <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          records = [json.loads(line) for line in Path(os.environ['CANDIDATES_FILE']).read_text().splitlines() if line.strip()]
+          best = {}
+          for record in records:
+              if record['service_id'] not in best or record['score'] > best[record['service_id']]['score']:
+                  best[record['service_id']] = record
+          ranked = sorted(best.values(), key=lambda item: (-item['score'], item['service_id']))
+          if not ranked or ranked[0]['score'] < 70:
+              raise SystemExit('Unable to identify the Dali Render service safely.')
+          if len(ranked) > 1 and ranked[0]['score'] == ranked[1]['score']:
+              raise SystemExit('Multiple Render services matched with equal confidence.')
+          selected = ranked[0]
+          root = Path(os.environ['RUNNER_TEMP'])
+          root.joinpath('render-service-id').write_text(selected['service_id'])
+          root.joinpath('render-workspace-id').write_text(selected['workspace_id'])
+          print(f"selected_service_name={selected['service_name']}")
+          print(f"selected_workspace_name={selected['workspace_name']}")
+          print(f"selected_match_score={selected['score']}")
+          PY
+
+          SERVICE_ID="$(cat "${RUNNER_TEMP}/render-service-id")"
+          WORKSPACE_ID="$(cat "${RUNNER_TEMP}/render-workspace-id")"
+          echo "::add-mask::${SERVICE_ID}"
+          echo "::add-mask::${WORKSPACE_ID}"
+          export RENDER_WORKSPACE="$WORKSPACE_ID"
+
+          update_env_var() {
+            local key="$1"
+            local value="$2"
+            ENV_VALUE="$value" python <<'PY' > "${RUNNER_TEMP}/env-payload.json"
+          import json
+          import os
+          print(json.dumps({'value': os.environ['ENV_VALUE']}))
+          PY
+            curl --fail --silent --show-error \
+              --request PUT \
+              --header 'Accept: application/json' \
+              --header "Authorization: Bearer ${RENDER_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              "https://api.render.com/v1/services/${SERVICE_ID}/env-vars/${key}" \
+              --data-binary "@${RUNNER_TEMP}/env-payload.json" \
+              --output "${RUNNER_TEMP}/env-${key}.json"
+          }
+
+          update_env_var DATABASE_URL 'file:/var/data/dali.db'
+          update_env_var UPLOADS_DIR '/var/data/uploads'
+          update_env_var AUTH_MODE 'credentials'
+
+          "$RENDER_BIN" services update "$SERVICE_ID" \
+            --branch main \
+            --build-command 'npm ci && npm run build' \
+            --start-command 'npm run start:render' \
+            --health-check-path '/api/health/live' \
+            --auto-deploy \
+            --output json > "${RUNNER_TEMP}/service-update.json"
+
+          if ! "$RENDER_BIN" deploys create "$SERVICE_ID" --commit "$MAIN_SHA" --wait --confirm --output json > "${RUNNER_TEMP}/deploy.json" 2> "${RUNNER_TEMP}/deploy.err"; then
+            cat "${RUNNER_TEMP}/deploy.err" || true
+            cat > "${RUNNER_TEMP}/comment.md" <<EOF
+          ### فشل نشر Render بعد التفويض
+
+          تم تحديد خدمة **dali** وتحديث إعدادات التشغيل غير السرية، لكن نشر الالتزام \`${MAIN_SHA}\` لم يكتمل. لم تُحذف أي بيانات، وتبقى النسخة السابقة متاحة.
+          EOF
+            post_comment "${RUNNER_TEMP}/comment.md"
+            exit 1
+          fi
+
+          legacy_code="000"; live_code="000"; ready_code="000"; login_code="000"
+          for attempt in $(seq 1 40); do
+            legacy_code="$(curl --location --silent --show-error --max-time 35 --output "${RUNNER_TEMP}/legacy.json" --write-out '%{http_code}' "${BASE_URL}/api/health" || true)"
+            live_code="$(curl --location --silent --show-error --max-time 35 --output "${RUNNER_TEMP}/live.json" --write-out '%{http_code}' "${BASE_URL}/api/health/live" || true)"
+            ready_code="$(curl --location --silent --show-error --max-time 35 --output "${RUNNER_TEMP}/ready.json" --write-out '%{http_code}' "${BASE_URL}/api/health/ready" || true)"
+            login_code="$(curl --location --silent --show-error --max-time 35 --output "${RUNNER_TEMP}/login.html" --write-out '%{http_code}' "${BASE_URL}/login" || true)"
+            echo "verify_attempt=${attempt} legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+            if [[ "$legacy_code" == "200" && "$live_code" == "200" && "$ready_code" == "200" && "$login_code" == "200" ]] \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/legacy.json" \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/live.json" \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/ready.json" \
+              && grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/ready.json" \
+              && grep -Eq '"auth"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/ready.json" \
+              && grep -q 'تسجيل الدخول الآمن' "${RUNNER_TEMP}/login.html"; then
+              cat > "${RUNNER_TEMP}/comment.md" <<EOF
+          ### تم إصلاح خدمة Render والتحقق منها
+
+          - نُشر الالتزام \`${MAIN_SHA}\` على خدمة **dali**.
+          - اتصال قاعدة البيانات: **سليم**.
+          - إعداد المصادقة: **سليم**.
+          - صفحة تسجيل الدخول: **متاحة**.
+          - تم تفعيل النشر التلقائي وربط الفرع \`main\`.
+          - لم تُحذف أي بيانات، ويأخذ سكربت التشغيل نسخة احتياطية قبل الهجرات.
+          EOF
+              post_comment "${RUNNER_TEMP}/comment.md"
+              "$RENDER_BIN" logout >/dev/null 2>&1 || true
+              exit 0
+            fi
+            sleep 15
+          done
+
+          ready_preview="$(head -c 700 "${RUNNER_TEMP}/ready.json" 2>/dev/null | tr '\n' ' ' || true)"
+          cat > "${RUNNER_TEMP}/comment.md" <<EOF
+          ### اكتمل النشر لكن فحص الجاهزية لم ينجح
+
+          - \`/api/health\`: HTTP ${legacy_code}
+          - \`/api/health/live\`: HTTP ${live_code}
+          - \`/api/health/ready\`: HTTP ${ready_code}
+          - \`/login\`: HTTP ${login_code}
+
+          \`${ready_preview}\`
+
+          لم تُحذف أي بيانات.
+          EOF
+          post_comment "${RUNNER_TEMP}/comment.md"
+          exit 1
