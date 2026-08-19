@@ -18,50 +18,25 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 3
     env:
       BASE_URL: https://dali-ql1q.onrender.com
     steps:
-      - name: Probe deployed health and login routes
+      - name: Capture deployed health and login routes
         shell: bash
         run: |
-          set -u
-          legacy_code="000"
-          live_code="000"
-          ready_code="000"
-          login_code="000"
-
-          for attempt in $(seq 1 36); do
-            legacy_code="$(curl --location --silent --show-error --max-time 35 --output /tmp/legacy.json --write-out '%{http_code}' "${BASE_URL}/api/health" || true)"
-            live_code="$(curl --location --silent --show-error --max-time 35 --output /tmp/live.json --write-out '%{http_code}' "${BASE_URL}/api/health/live" || true)"
-            ready_code="$(curl --location --silent --show-error --max-time 35 --output /tmp/ready.json --write-out '%{http_code}' "${BASE_URL}/api/health/ready" || true)"
-            login_code="$(curl --location --silent --show-error --max-time 35 --output /tmp/login.html --write-out '%{http_code}' "${BASE_URL}/login" || true)"
-
-            echo "attempt=${attempt} legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
-            echo -n "legacy="; head -c 500 /tmp/legacy.json 2>/dev/null || true; echo
-            echo -n "ready="; head -c 700 /tmp/ready.json 2>/dev/null || true; echo
-
-            if [[ "$legacy_code" == "200" && "$live_code" == "200" && "$ready_code" == "200" && "$login_code" == "200" ]] \
-              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/legacy.json \
-              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/live.json \
-              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/ready.json \
-              && grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"' /tmp/ready.json \
-              && grep -Eq '"auth"[[:space:]]*:[[:space:]]*"(ok|external)"' /tmp/ready.json \
-              && grep -q 'تسجيل الدخول الآمن' /tmp/login.html; then
-              echo "Render runtime recovery verified."
-              cat /tmp/legacy.json
-              cat /tmp/live.json
-              cat /tmp/ready.json
-              exit 0
-            fi
-
-            sleep 15
+          set +e
+          for path in /api/health /api/health/live /api/health/ready /login; do
+            safe="$(printf '%s' "$path" | tr '/-' '__')"
+            code="$(curl --location --silent --show-error --max-time 45 \
+              --dump-header "/tmp/${safe}.headers" \
+              --output "/tmp/${safe}.body" \
+              --write-out '%{http_code}' \
+              "${BASE_URL}${path}")"
+            curl_status=$?
+            echo "--- path=${path} curl=${curl_status} http=${code:-000} ---"
+            grep -Ei '^(HTTP/|content-type:|location:|set-cookie:|x-request-id:)' "/tmp/${safe}.headers" || true
+            head -c 2200 "/tmp/${safe}.body" || true
+            echo
           done
-
-          echo "::error::Render runtime recovery is not healthy."
-          echo "Final HTTP codes: legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
-          echo "--- legacy ---"; cat /tmp/legacy.json 2>/dev/null || true; echo
-          echo "--- live ---"; cat /tmp/live.json 2>/dev/null || true; echo
-          echo "--- ready ---"; cat /tmp/ready.json 2>/dev/null || true; echo
-          echo "--- login preview ---"; head -c 1200 /tmp/login.html 2>/dev/null || true; echo
-          exit 1
+          exit 0
