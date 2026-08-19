@@ -1,5 +1,6 @@
 import { chatGPTSignOutPath } from "@/app/chatgpt-auth";
 import { clearPortalSessionCookies, revokeCurrentPortalSession } from "@/lib/portal-session";
+import { externalRequestUrl } from "@/lib/request-origin";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -8,7 +9,7 @@ export async function GET(request: Request) {
   const reason = (url.searchParams.get("reason") || "logout").slice(0, 40);
   await revokeCurrentPortalSession(request, reason).catch(() => undefined);
   const headers = new Headers({
-    location: new URL(chatGPTSignOutPath(returnTo), request.url).toString(),
+    location: externalRequestUrl(request, chatGPTSignOutPath(returnTo)).toString(),
     "cache-control": "no-store",
   });
   for (const cookie of clearPortalSessionCookies(request)) headers.append("set-cookie", cookie);
