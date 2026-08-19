@@ -31,8 +31,11 @@ test("production startup and runtime require the existing persistent database", 
   assert.match(startup, /copyFile/);
   assert.match(startup, /backups\.slice\(12\)/);
 
-  assert.match(database, /from "@libsql\/client\/node"/);
-  assert.doesNotMatch(database, /from "@libsql\/client"/);
+  assert.match(database, /import type \{ Client \} from "@libsql\/client"/);
+  assert.doesNotMatch(database, /import \{[^}]*createClient[^}]*\} from "@libsql\/client"/);
+  assert.match(database, /createRequire\(import\.meta\.url\)/);
+  assert.match(database, /nodeRequire\("@libsql\/client\/node"\)/);
+  assert.match(database, /NODE_LIBSQL_CLIENT_UNAVAILABLE/);
   assert.match(database, /DATABASE_URL_UNSUPPORTED/);
   assert.match(database, /RENDER_DATABASE_PATH = "\/var\/data\/dali\.db"/);
   assert.match(database, /getBuiltinModule/);
