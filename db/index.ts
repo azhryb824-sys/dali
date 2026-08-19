@@ -1,6 +1,6 @@
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
 import { drizzle as drizzleLibsql } from "drizzle-orm/libsql";
-import { createClient, type Client } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client/node";
 import * as schema from "./schema";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { OperationalError } from "@/lib/operational-error";
