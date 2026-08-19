@@ -21,10 +21,16 @@ test("production startup and runtime require the existing persistent database", 
     source("render.yaml"),
   ]);
 
+  assert.match(startup, /from "@libsql\/client\/node"/);
+  assert.doesNotMatch(startup, /from "@libsql\/client"/);
   assert.doesNotMatch(startup, /process\.env\.DATABASE_URL\s*\|\|/);
   assert.match(startup, /DATABASE_URL_MISSING/);
   assert.match(startup, /UPLOADS_DIR_MISSING/);
   assert.match(startup, /DATABASE_FILE_PATH_MUST_BE_ABSOLUTE/);
+  assert.match(startup, /function isRenderRuntime\(\)/);
+  assert.match(startup, /RENDER_EXTERNAL_HOSTNAME/);
+  assert.match(startup, /RENDER_SERVICE_ID/);
+  assert.match(startup, /if \(!isRenderRuntime\(\)\) return/);
   assert.match(startup, /RENDER_DATABASE_URL_RECOVERED/);
   assert.match(startup, /RENDER_DATABASE_RECOVERY_FILE_MISSING/);
   assert.match(startup, /dali-predeploy-/);
