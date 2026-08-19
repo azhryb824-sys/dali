@@ -11,7 +11,10 @@ export async function GET() {
       : (await getSqlClient().execute("SELECT 1 AS healthy")).rows[0];
     if (Number(healthy?.healthy) !== 1) throw new Error("database-check-failed");
     return jsonNoStore({ status: "ok", services: { database: "ok" }, responseTimeMs: Date.now() - startedAt, timestamp: new Date().toISOString() });
-  } catch {
-    return jsonNoStore({ status: "degraded", services: { database: "unavailable" }, responseTimeMs: Date.now() - startedAt, timestamp: new Date().toISOString() }, { status: 503 });
+  } catch (error) {
+    const rawCode = typeof error === "object" && error && "code" in error ? String(error.code) : "UNKNOWN";
+    const errorCode = /^[A-Z0-9_:-]{1,80}$/.test(rawCode) ? rawCode : "UNKNOWN";
+    console.error("[health] database check failed", { errorCode });
+    return jsonNoStore({ status: "degraded", services: { database: "unavailable" }, errorCode, responseTimeMs: Date.now() - startedAt, timestamp: new Date().toISOString() }, { status: 503 });
   }
 }
