@@ -15,6 +15,8 @@ export async function GET() {
     const rawCode = typeof error === "object" && error && "code" in error ? String(error.code) : "UNKNOWN";
     const errorCode = /^[A-Z0-9_:-]{1,80}$/.test(rawCode) ? rawCode : "UNKNOWN";
     console.error("[health] database check failed", { errorCode });
-    return jsonNoStore({ status: "degraded", services: { database: "unavailable" }, errorCode, responseTimeMs: Date.now() - startedAt, timestamp: new Date().toISOString() }, { status: 503 });
+    // Render uses this route as a liveness probe. Keep the web process deployable
+    // while reporting database readiness explicitly in the response body.
+    return jsonNoStore({ status: "degraded", services: { database: "unavailable" }, errorCode, responseTimeMs: Date.now() - startedAt, timestamp: new Date().toISOString() });
   }
 }
