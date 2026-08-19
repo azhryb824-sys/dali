@@ -52,7 +52,9 @@ export function rejectCrossSiteRequest(request: Request) {
     const requestUrl = new URL(request.url);
     const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
     const host = request.headers.get("host")?.split(",")[0]?.trim();
-    const allowedHosts = new Set([requestUrl.host, forwardedHost, host].filter(Boolean));
+    const renderHost = process.env.RENDER_EXTERNAL_HOSTNAME?.trim();
+    const renderUrlHost = process.env.RENDER_EXTERNAL_URL ? new URL(process.env.RENDER_EXTERNAL_URL).host : undefined;
+    const allowedHosts = new Set([requestUrl.host, forwardedHost, host, renderHost, renderUrlHost].filter(Boolean));
     return !allowedHosts.has(originUrl.host);
   } catch {
     return true;
