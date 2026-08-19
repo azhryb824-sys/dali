@@ -3,8 +3,8 @@ import type { ChatGPTUser } from "@/app/chatgpt-auth";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { getDb } from "@/db";
 import { portalUserPermissions, portalUsers } from "@/db/schema";
-import { getRuntimeEnv } from "@/lib/runtime-env";
 import { emitPortalNotification } from "@/lib/portal-notifications";
+import { getPortalAdminConfig, normalizePortalEmail } from "@/lib/portal-auth-config";
 import { verifyPortalSession } from "@/lib/portal-session";
 
 export type PortalRole = "admin" | "manager" | "employee";
@@ -19,27 +19,6 @@ export type PortalAccess = {
   user: ChatGPTUser;
 };
 
-function normalizeEmail(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function configuredAdminEmails() {
-  const runtime = getRuntimeEnv();
-  return new Set(
-    (runtime.PORTAL_ADMIN_EMAILS ?? "")
-      .split(",")
-      .map(normalizeEmail)
-      .filter(Boolean),
-  );
-}
-
-// Authorized user identifiers with admin access
-function authorizedUserIdentifiers() {
-  return new Set([
-    "1000000001", // Authorized admin user
-  ]);
-}
-
 function isPortalRole(value: string): value is PortalRole {
   return value === "admin" || value === "manager" || value === "employee";
 }
@@ -52,44 +31,14 @@ function isPortalDepartment(value: string): value is PortalDepartment {
   return value === "employees" || value === "finance" || value === "legal" || value === "workforce" || value === "general";
 }
 
-export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogin?: boolean; userIdentifier?: string } = {}): Promise<PortalAccess> {
+export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogin?: boolean } = {}): Promise<PortalAccess> {
   const db = getDb();
-  const email = normalizeEmail(user.email);
+  const email = normalizePortalEmail(user.email);
   const now = new Date().toISOString();
   const existing = await db.query.portalUsers.findFirst({ where: eq(portalUsers.email, email) });
   const activityDue = !existing?.lastActivityAt || Date.now() - new Date(existing.lastActivityAt).getTime() >= 15 * 60 * 1000;
 
-  // Check if user email is in admin emails list
-  if (configuredAdminEmails().has(email)) {
-    await db
-      .insert(portalUsers)
-      .values({
-        email,
-        displayName: user.displayName,
-        role: "admin",
-        department: "general",
-        status: "active",
-        lastLoginAt: options.markLogin ? now : null,
-        lastActivityAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: portalUsers.email,
-        set: {
-          displayName: user.displayName,
-          role: "admin",
-          department: "general",
-          status: "active",
-          ...(options.markLogin ? { lastLoginAt: now } : {}),
-          ...(activityDue ? { lastActivityAt: now } : {}),
-        },
-      });
-
-    return { authorized: true, role: "admin", department: "general", status: "active", user: { ...user, email } };
-  }
-
-  // Check if user identifier is in authorized identifiers list
-  if (options.userIdentifier && authorizedUserIdentifiers().has(options.userIdentifier)) {
+  if (getPortalAdminConfig().emails.has(email)) {
     await db
       .insert(portalUsers)
       .values({
@@ -160,22 +109,22 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
   return { authorized: status === "active", role, department, status, user: { ...user, email } };
 }
 
-export async function requirePortalApiRole(allowed: PortalRole[], userIdentifier?: string) {
+export async function requirePortalApiRole(allowed: PortalRole[]) {
   const user = await getChatGPTUser();
   if (!user) return null;
   const session = await verifyPortalSession(user.email);
   if (session.status !== "valid") return null;
-  const access = await resolvePortalAccess(user, { userIdentifier });
+  const access = await resolvePortalAccess(user);
   if (!access.authorized || !allowed.includes(access.role)) return null;
   return access;
 }
 
-export async function requirePortalSessionIdentity(userIdentifier?: string) {
+export async function requirePortalSessionIdentity() {
   const user = await getChatGPTUser();
   if (!user) return null;
   const session = await verifyPortalSession(user.email);
   if (session.status !== "valid") return null;
-  return resolvePortalAccess(user, { userIdentifier });
+  return resolvePortalAccess(user);
 }
 
 export function canAccessPortalDepartment(
@@ -211,7 +160,7 @@ export async function hasPortalPermission(
   if (access.role === "admin") return true;
   const explicit = await getDb().query.portalUserPermissions.findFirst({
     where: and(
-      eq(portalUserPermissions.userEmail, normalizeEmail(access.user.email)),
+      eq(portalUserPermissions.userEmail, normalizePortalEmail(access.user.email)),
       eq(portalUserPermissions.resource, resource),
       eq(portalUserPermissions.action, action),
     ),

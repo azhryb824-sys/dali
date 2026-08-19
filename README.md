@@ -13,14 +13,22 @@ Drizzle support.
 
 The repository includes `render.yaml` for a persistent Render Web Service. It runs the Vinext standalone Node server, applies the existing SQLite migrations at startup, stores the database at `/var/data/dali.db`, and stores uploaded documents under `/var/data/uploads`.
 
-Required secret environment values:
+Required environment values:
 
-- `PORTAL_ADMIN_EMAIL` and `PORTAL_ADMIN_EMAILS`: the first administrative email address (use the same value for both).
+- `DATABASE_URL`: use `file:/var/data/dali.db` with the attached persistent disk. Production startup fails rather than silently creating another database when this value is missing or unsupported.
+- `UPLOADS_DIR`: use the absolute persistent path `/var/data/uploads`.
+- `PORTAL_ADMIN_IDENTIFIER`: the initial administrator's 10-digit national ID or Iqama number.
+- `PORTAL_ADMIN_EMAIL`: the primary administrative email address.
+- `PORTAL_ADMIN_EMAILS`: an optional comma-separated administrator allowlist. The primary email is accepted from either variable, but setting the same primary address in both keeps the blueprint explicit.
 - `PORTAL_ADMIN_NAME`: the administrator display name.
 - `PORTAL_ADMIN_PASSWORD_HASH`: generate it locally with `npm run auth:hash -- 'your-long-password'` and store only the resulting hash.
 - `AUTH_SECRET`: generated automatically by the Render blueprint and must contain at least 32 random characters.
 
+Changing `PORTAL_ADMIN_PASSWORD_HASH` does not overwrite the password hash of an account that already exists in `portal_auth_credentials`. Use the password-reset flow for an existing account so the database record and active sessions are updated consistently.
+
 Optional email delivery values are `RESEND_API_KEY`, `EMAIL_FROM`, and `EMAIL_REPLY_TO`. The persistent disk in the blueprint is required to prevent loss of the SQLite database and uploaded files during deploys or restarts.
+
+Render uses `/api/health/live` as its process liveness probe. Operational monitoring and release verification must call `/api/health/ready`; it returns HTTP `503` when the database or credential-auth configuration is unavailable. The legacy `/api/health` endpoint also reports readiness.
 
 ## Sites Lifecycle
 
@@ -107,7 +115,9 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm run dev`: start the Vite/Vinext development server
 - `npm run build`: build and validate the deployable Sites artifact
 - `npm run start`: start the built Vinext application
-- `npm test`: build, validate, and verify the rendered development-preview metadata
+- `npm run typecheck`: run strict TypeScript checks without emitting files
+- `npm run lint`: run the repository lint rules
+- `npm test`: build, validate, and run all regression tests
 - `npm run validate:artifact`: recheck an existing artifact's manifest and ESM `default.fetch` export
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 

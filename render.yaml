@@ -7,7 +7,7 @@ services:
     branch: main
     buildCommand: npm ci && npm run build
     startCommand: npm run start:render
-    healthCheckPath: /api/health
+    healthCheckPath: /api/health/live
     autoDeploy: true
     disk:
       name: dali-data
@@ -24,6 +24,8 @@ services:
         value: /var/data/uploads
       - key: AUTH_SECRET
         generateValue: true
+      - key: PORTAL_ADMIN_IDENTIFIER
+        sync: false
       - key: PORTAL_ADMIN_EMAIL
         sync: false
       - key: PORTAL_ADMIN_EMAILS

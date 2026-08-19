@@ -1,5 +1,6 @@
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { getSqlClient } from "@/db";
+import { allowedRequestOrigins } from "@/lib/request-origin";
 
 type RateLimitOptions = {
   scope: string;
@@ -48,14 +49,7 @@ export function rejectCrossSiteRequest(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return false;
   try {
-    const originUrl = new URL(origin);
-    const requestUrl = new URL(request.url);
-    const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-    const host = request.headers.get("host")?.split(",")[0]?.trim();
-    const renderHost = process.env.RENDER_EXTERNAL_HOSTNAME?.trim();
-    const renderUrlHost = process.env.RENDER_EXTERNAL_URL ? new URL(process.env.RENDER_EXTERNAL_URL).host : undefined;
-    const allowedHosts = new Set([requestUrl.host, forwardedHost, host, renderHost, renderUrlHost].filter(Boolean));
-    return !allowedHosts.has(originUrl.host);
+    return !allowedRequestOrigins(request).has(new URL(origin).origin);
   } catch {
     return true;
   }

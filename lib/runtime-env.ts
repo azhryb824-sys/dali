@@ -16,7 +16,13 @@ export type DaliRuntimeEnv = {
   ASSETS: Fetcher;
   BUCKET: StorageBucket;
   DB?: D1Database;
+  AUTH_MODE?: string;
+  AUTH_SECRET?: string;
+  PORTAL_ADMIN_EMAIL?: string;
   PORTAL_ADMIN_EMAILS?: string;
+  PORTAL_ADMIN_IDENTIFIER?: string;
+  PORTAL_ADMIN_NAME?: string;
+  PORTAL_ADMIN_PASSWORD_HASH?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
   EMAIL_REPLY_TO?: string;
@@ -89,7 +95,13 @@ function getNodeRuntimeEnv(): DaliRuntimeEnv {
       connect() { throw new Error("ASSETS.connect is unavailable in the Node runtime."); },
     } as Fetcher,
     BUCKET: bucket,
+    AUTH_MODE: process.env.AUTH_MODE,
+    AUTH_SECRET: process.env.AUTH_SECRET,
+    PORTAL_ADMIN_EMAIL: process.env.PORTAL_ADMIN_EMAIL,
     PORTAL_ADMIN_EMAILS: process.env.PORTAL_ADMIN_EMAILS,
+    PORTAL_ADMIN_IDENTIFIER: process.env.PORTAL_ADMIN_IDENTIFIER || process.env.PORTAL_ADMIN_ID,
+    PORTAL_ADMIN_NAME: process.env.PORTAL_ADMIN_NAME,
+    PORTAL_ADMIN_PASSWORD_HASH: process.env.PORTAL_ADMIN_PASSWORD_HASH,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
     EMAIL_REPLY_TO: process.env.EMAIL_REPLY_TO,

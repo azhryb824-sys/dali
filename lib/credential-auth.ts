@@ -1,4 +1,6 @@
 import { headers } from "next/headers";
+import { getConfiguredAuthSecret, getPortalAdminConfig } from "@/lib/portal-auth-config";
+import { isSecureExternalRequest } from "@/lib/request-origin";
 
 export const IDENTITY_COOKIE = "__Host-dali_identity";
 const DEV_IDENTITY_COOKIE = "dali_identity_dev";
@@ -15,8 +17,8 @@ function base64UrlToBytes(value: string) {
 }
 
 async function hmac(value: string) {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret || secret.length < 32) throw new Error("AUTH_SECRET must contain at least 32 characters.");
+  const secret = getConfiguredAuthSecret();
+  if (!secret || secret.length < 32) throw new Error("AUTH_SECRET_INVALID");
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value)));
 }
@@ -37,8 +39,16 @@ export async function readCredentialIdentity() {
     .map((name) => cookieHeader.split(";").map((item) => item.trim()).find((item) => item.startsWith(`${name}=`)))
     .find(Boolean)?.split("=").slice(1).join("=");
   if (!token) return null;
-  const [payload, signature] = decodeURIComponent(token).split(".");
+
+  let payload = "";
+  let signature = "";
+  try {
+    [payload, signature] = decodeURIComponent(token).split(".");
+  } catch {
+    return null;
+  }
   if (!payload || !signature) return null;
+
   const expected = await hmac(payload);
   const received = base64UrlToBytes(signature);
   let difference = expected.length ^ received.length;
@@ -54,18 +64,18 @@ export async function readCredentialIdentity() {
 }
 
 export function identityCookie(request: Request, token: string) {
-  const secure = new URL(request.url).protocol === "https:";
+  const secure = isSecureExternalRequest(request);
   const name = secure ? IDENTITY_COOKIE : DEV_IDENTITY_COOKIE;
   return `${name}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_SECONDS}${secure ? "; Secure" : ""}; Priority=High`;
 }
 
 export function clearIdentityCookies(request: Request) {
-  const secure = new URL(request.url).protocol === "https:";
+  const secure = isSecureExternalRequest(request);
   return [IDENTITY_COOKIE, DEV_IDENTITY_COOKIE].map((name) => `${name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure && name === IDENTITY_COOKIE ? "; Secure" : ""}; Priority=High`);
 }
 
 export async function verifyConfiguredPassword(password: string) {
-  return verifyPasswordHash(password, process.env.PORTAL_ADMIN_PASSWORD_HASH || "");
+  return verifyPasswordHash(password, getPortalAdminConfig().passwordHash);
 }
 
 export async function verifyPasswordHash(password: string, encoded: string) {

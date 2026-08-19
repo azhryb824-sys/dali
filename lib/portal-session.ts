@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { portalSessions } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
+import { isSecureExternalRequest } from "@/lib/request-origin";
 import { requestSourceHash, sha256 } from "@/lib/security";
 
 export const PORTAL_SESSION_COOKIE = "__Host-dali_ps";
@@ -32,17 +33,15 @@ function cookieFromHeader(cookieHeader: string | null) {
 }
 
 export function portalSessionCookie(request: Request, token: string) {
-  const secure = new URL(request.url).protocol === "https:";
+  const secure = isSecureExternalRequest(request);
   const name = secure ? PORTAL_SESSION_COOKIE : PORTAL_DEV_SESSION_COOKIE;
   return `${name}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${PORTAL_ABSOLUTE_TIMEOUT_HOURS * 3600}${secure ? "; Secure" : ""}; Priority=High`;
 }
 
 export function clearPortalSessionCookies(request: Request) {
-  const secure = new URL(request.url).protocol === "https:";
-  const names = secure
-    ? [PORTAL_SESSION_COOKIE, PORTAL_LEGACY_SESSION_COOKIE]
-    : [PORTAL_DEV_SESSION_COOKIE, PORTAL_LEGACY_SESSION_COOKIE];
-  return names.map((name) => `${name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? "; Secure" : ""}; Priority=High`);
+  const secure = isSecureExternalRequest(request);
+  return [PORTAL_SESSION_COOKIE, PORTAL_DEV_SESSION_COOKIE, PORTAL_LEGACY_SESSION_COOKIE]
+    .map((name) => `${name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure && name === PORTAL_SESSION_COOKIE ? "; Secure" : ""}; Priority=High`);
 }
 
 function safePortalReturnPath(value: string | null) {

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { readCredentialIdentity } from "@/lib/credential-auth";
+import { getConfiguredAuthMode } from "@/lib/portal-auth-config";
 
 export type ChatGPTUser = {
   displayName: string;
@@ -41,12 +42,12 @@ export async function requireChatGPTUser(returnTo: string): Promise<ChatGPTUser>
 }
 
 export function chatGPTSignInPath(returnTo: string): string {
-  if (process.env.AUTH_MODE !== "chatgpt") return `/login?returnTo=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
+  if (getConfiguredAuthMode() !== "chatgpt") return `/login?returnTo=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
   return `${SIGN_IN_PATH}?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
 }
 
 export function chatGPTSignOutPath(returnTo = "/"): string {
-  if (process.env.AUTH_MODE !== "chatgpt") return `/api/auth/logout?returnTo=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
+  if (getConfiguredAuthMode() !== "chatgpt") return `/api/auth/logout?returnTo=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
 }
 
