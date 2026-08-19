@@ -46,7 +46,9 @@ export function getConfiguredAuthSecret() {
 export function getConfiguredAuthMode() {
   const runtime = getRuntimeEnv();
   const env = nodeEnvironment();
-  return firstConfiguredValue(runtime.AUTH_MODE, env.AUTH_MODE) || "chatgpt";
+  const configured = firstConfiguredValue(runtime.AUTH_MODE, env.AUTH_MODE);
+  if (configured) return configured;
+  return env.RENDER === "true" ? "credentials" : "chatgpt";
 }
 
 export function getPortalAdminConfig() {
