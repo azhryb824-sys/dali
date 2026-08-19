@@ -1,4 +1,4 @@
-name: Verify Render SQLite recovery
+name: Inspect Render deployment gate
 
 on:
   pull_request:
@@ -9,77 +9,76 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: verify-node-sqlite-render
+  group: inspect-render-deployment-gate
   cancel-in-progress: true
 
 jobs:
-  monitor:
+  inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 4
     env:
       BASE_URL: https://dali-ql1q.onrender.com
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
     steps:
-      - name: Inspect current SQLite-ready Render release
+      - name: Inspect main CI runs and public Render health
         shell: bash
         run: |
-          set -u
-          legacy_code="000"
-          live_code="000"
-          ready_code="000"
-          login_code="000"
+          set -euo pipefail
 
-          for attempt in $(seq 1 10); do
-            legacy_code="$(curl --location --silent --show-error --max-time 35 \
-              --output /tmp/dali-legacy.json --write-out '%{http_code}' \
-              "${BASE_URL}/api/health" || true)"
-            live_code="$(curl --location --silent --show-error --max-time 35 \
-              --output /tmp/dali-live.json --write-out '%{http_code}' \
-              "${BASE_URL}/api/health/live" || true)"
-            ready_code="$(curl --location --silent --show-error --max-time 35 \
-              --output /tmp/dali-ready.json --write-out '%{http_code}' \
-              "${BASE_URL}/api/health/ready" || true)"
-            login_code="$(curl --location --silent --show-error --max-time 35 \
-              --output /tmp/dali-login.html --write-out '%{http_code}' \
-              "${BASE_URL}/login" || true)"
+          curl --fail --silent --show-error \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/actions/runs?branch=main&per_page=50" \
+            --output /tmp/main-runs.json
 
-            legacy_preview="$(head -c 300 /tmp/dali-legacy.json 2>/dev/null | tr '\n' ' ' || true)"
-            ready_preview="$(head -c 700 /tmp/dali-ready.json 2>/dev/null | tr '\n' ' ' || true)"
-            echo "attempt=${attempt} legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
-            echo "legacy=${legacy_preview}"
-            echo "ready=${ready_preview}"
+          python <<'PY'
+          import json
+          from pathlib import Path
 
-            if [[ "$legacy_code" == "200" \
-              && "$live_code" == "200" \
-              && "$ready_code" == "200" \
-              && "$login_code" == "200" ]] \
-              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-legacy.json \
-              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-live.json \
-              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
-              && grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
-              && grep -Eq '"auth"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
-              && grep -q 'تسجيل الدخول الآمن' /tmp/dali-login.html; then
-              echo "Render SQLite recovery verified."
-              cat /tmp/dali-legacy.json
-              cat /tmp/dali-live.json
-              cat /tmp/dali-ready.json
-              exit 0
-            fi
+          targets = {
+              '4a57a480c1c671373268bebb4b2df0b25c1f84d6',
+              'ee6017226d85553d24baefc469250269a9293a95',
+              '353ba5e535ed9e86d8bc0e40efb23db7554fd6db',
+          }
+          payload = json.loads(Path('/tmp/main-runs.json').read_text())
+          runs = payload.get('workflow_runs', [])
+          print(f"main_run_count={len(runs)}")
+          for run in runs:
+              sha = str(run.get('head_sha') or '')
+              if sha in targets:
+                  print(
+                      'target_run '
+                      f"sha={sha} "
+                      f"name={run.get('name')} "
+                      f"event={run.get('event')} "
+                      f"status={run.get('status')} "
+                      f"conclusion={run.get('conclusion')} "
+                      f"run_id={run.get('id')} "
+                      f"created_at={run.get('created_at')} "
+                      f"updated_at={run.get('updated_at')}"
+                  )
+          print('latest_main_runs')
+          for run in runs[:12]:
+              print(
+                  f"sha={str(run.get('head_sha') or '')[:12]} "
+                  f"name={run.get('name')} event={run.get('event')} "
+                  f"status={run.get('status')} conclusion={run.get('conclusion')} "
+                  f"run_id={run.get('id')}"
+              )
+          PY
 
-            sleep 12
+          for path in /api/health /api/health/live /api/health/ready /login; do
+            safe="$(printf '%s' "$path" | tr '/-' '__')"
+            code="$(curl --location --silent --show-error --max-time 35 \
+              --output "/tmp/${safe}.body" --write-out '%{http_code}' \
+              "${BASE_URL}${path}" || true)"
+            echo "render path=${path} http=${code:-000}"
+            head -c 700 "/tmp/${safe}.body" 2>/dev/null || true
+            echo
           done
-
-          echo "::error::Render is not SQLite-ready yet."
-          echo "Final HTTP codes: legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
-          echo "--- legacy ---"
-          cat /tmp/dali-legacy.json 2>/dev/null || true
-          echo
-          echo "--- live ---"
-          cat /tmp/dali-live.json 2>/dev/null || true
-          echo
-          echo "--- ready ---"
-          cat /tmp/dali-ready.json 2>/dev/null || true
-          echo
-          exit 1
