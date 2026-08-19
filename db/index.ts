@@ -21,9 +21,9 @@ function nodeBuiltinModule<T>(specifier: string): T {
   if (typeof process === "undefined") throw new OperationalError("NODE_RUNTIME_UNAVAILABLE");
   const getBuiltinModule = (process as ProcessWithBuiltinModule).getBuiltinModule;
   if (typeof getBuiltinModule !== "function") throw new OperationalError("NODE_BUILTIN_MODULE_UNAVAILABLE");
-  const module = getBuiltinModule(specifier) as T | undefined;
-  if (!module) throw new OperationalError("NODE_BUILTIN_MODULE_UNAVAILABLE");
-  return module;
+  const builtin = getBuiltinModule(specifier) as T | undefined;
+  if (!builtin) throw new OperationalError("NODE_BUILTIN_MODULE_UNAVAILABLE");
+  return builtin;
 }
 
 function loadNodeCreateClient() {
