@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    paths:
-      - .github/workflows/production-smoke.yml
   workflow_dispatch:
 
 permissions:
@@ -27,11 +24,15 @@ jobs:
         shell: bash
         run: |
           set -u
+          legacy_code="000"
           live_code="000"
           ready_code="000"
           login_code="000"
 
           for attempt in $(seq 1 36); do
+            legacy_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-legacy-health.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health" || true)"
             live_code="$(curl --location --silent --show-error --max-time 35 \
               --output /tmp/dali-live.json --write-out '%{http_code}' \
               "${BASE_URL}/api/health/live" || true)"
@@ -42,17 +43,20 @@ jobs:
               --output /tmp/dali-login.html --write-out '%{http_code}' \
               "${BASE_URL}/login" || true)"
 
-            echo "attempt=${attempt} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+            echo "attempt=${attempt} legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
 
-            if [[ "$live_code" == "200" \
+            if [[ "$legacy_code" == "200" \
+              && "$live_code" == "200" \
               && "$ready_code" == "200" \
               && "$login_code" == "200" ]] \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-legacy-health.json \
               && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-live.json \
               && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
               && grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
               && grep -Eq '"auth"[[:space:]]*:[[:space:]]*"(ok|external)"' /tmp/dali-ready.json \
               && grep -q 'تسجيل الدخول الآمن' /tmp/dali-login.html; then
               echo "Production deployment is live and ready."
+              cat /tmp/dali-legacy-health.json
               cat /tmp/dali-live.json
               cat /tmp/dali-ready.json
               exit 0
@@ -62,7 +66,10 @@ jobs:
           done
 
           echo "::error::Production smoke verification did not become ready within the bounded retry window."
-          echo "Final HTTP codes: live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+          echo "Final HTTP codes: legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+          echo "--- legacy health response ---"
+          cat /tmp/dali-legacy-health.json 2>/dev/null || true
+          echo
           echo "--- live response ---"
           cat /tmp/dali-live.json 2>/dev/null || true
           echo
