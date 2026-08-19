@@ -6,7 +6,7 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("production startup requires explicit persistent database configuration", async () => {
+test("production startup and runtime require the existing persistent database", async () => {
   const [startup, database, render] = await Promise.all([
     source("scripts/render-start.mjs"),
     source("db/index.ts"),
@@ -22,13 +22,22 @@ test("production startup requires explicit persistent database configuration", a
   assert.match(startup, /dali-predeploy-/);
   assert.match(startup, /copyFile/);
   assert.match(startup, /backups\.slice\(12\)/);
+
   assert.match(database, /DATABASE_URL_UNSUPPORTED/);
+  assert.match(database, /RENDER_DATABASE_PATH = "\/var\/data\/dali\.db"/);
+  assert.match(database, /getBuiltinModule/);
+  assert.match(database, /statSync\(RENDER_DATABASE_PATH\)/);
+  assert.match(database, /information\.size < 1/);
+  assert.match(database, /RENDER_DATABASE_RECOVERY_FILE_MISSING/);
+  assert.match(database, /RENDER_DATABASE_RECOVERY_FILE_INVALID/);
+  assert.match(database, /RENDER_DATABASE_URL_RECOVERED/);
   assert.doesNotMatch(database, /file:\.data\/dali\.db/);
+
   assert.match(render, /DATABASE_URL\n\s+value: file:\/var\/data\/dali\.db/);
   assert.match(render, /UPLOADS_DIR\n\s+value: \/var\/data\/uploads/);
 });
 
-test("portal authorization uses trusted email configuration instead of hardcoded identifiers", async () => {
+test("portal authorization uses trusted configuration instead of hardcoded identifiers", async () => {
   const [access, login, config, releaseNotes] = await Promise.all([
     source("lib/portal-access.ts"),
     source("app/api/auth/login/route.ts"),
@@ -42,6 +51,7 @@ test("portal authorization uses trusted email configuration instead of hardcoded
   assert.match(config, /PORTAL_ADMIN_EMAIL/);
   assert.match(config, /PORTAL_ADMIN_EMAILS/);
   assert.match(config, /PORTAL_ADMIN_IDENTIFIER/);
+  assert.match(config, /env\.RENDER === "true" \? "credentials" : "chatgpt"/);
   assert.match(login, /normalizePortalIdentifier/);
   assert.match(login, /portalUsers/);
   assert.match(login, /PORTAL_ADMIN_BOOTSTRAP_CONFLICT/);
