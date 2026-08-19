@@ -11,6 +11,11 @@ function firstConfiguredValue(...values: Array<string | undefined>) {
   return values.map((value) => value?.trim()).find(Boolean) || "";
 }
 
+function isRenderEnvironment(env: Record<string, string | undefined>) {
+  return env.RENDER === "true"
+    || Boolean(env.RENDER_SERVICE_ID || env.RENDER_EXTERNAL_HOSTNAME || env.RENDER_EXTERNAL_URL || env.RENDER_INSTANCE_ID);
+}
+
 export function normalizePortalEmail(value: string) {
   return value.trim().toLowerCase();
 }
@@ -48,7 +53,7 @@ export function getConfiguredAuthMode() {
   const env = nodeEnvironment();
   const configured = firstConfiguredValue(runtime.AUTH_MODE, env.AUTH_MODE);
   if (configured) return configured;
-  return env.RENDER === "true" ? "credentials" : "chatgpt";
+  return isRenderEnvironment(env) ? "credentials" : "chatgpt";
 }
 
 export function getPortalAdminConfig() {
