@@ -18,11 +18,11 @@ concurrency:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 5
     env:
       BASE_URL: https://dali-ql1q.onrender.com
     steps:
-      - name: Wait for SQLite-ready Render release
+      - name: Inspect current SQLite-ready Render release
         shell: bash
         run: |
           set -u
@@ -31,7 +31,7 @@ jobs:
           ready_code="000"
           login_code="000"
 
-          for attempt in $(seq 1 64); do
+          for attempt in $(seq 1 10); do
             legacy_code="$(curl --location --silent --show-error --max-time 35 \
               --output /tmp/dali-legacy.json --write-out '%{http_code}' \
               "${BASE_URL}/api/health" || true)"
@@ -68,10 +68,10 @@ jobs:
               exit 0
             fi
 
-            sleep 15
+            sleep 12
           done
 
-          echo "::error::Render did not expose a SQLite-ready release during the bounded monitoring window."
+          echo "::error::Render is not SQLite-ready yet."
           echo "Final HTTP codes: legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
           echo "--- legacy ---"
           cat /tmp/dali-legacy.json 2>/dev/null || true
