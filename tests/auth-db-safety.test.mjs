@@ -6,6 +6,14 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
+test("the Node libSQL entrypoint supports local SQLite", async () => {
+  const { createClient } = await import("@libsql/client/node");
+  const client = createClient({ url: "file::memory:" });
+  const result = await client.execute("SELECT 1 AS healthy");
+  assert.equal(Number(result.rows[0]?.healthy), 1);
+  client.close();
+});
+
 test("production startup requires explicit persistent database configuration", async () => {
   const [startup, database, render] = await Promise.all([
     source("scripts/render-start.mjs"),
@@ -22,6 +30,8 @@ test("production startup requires explicit persistent database configuration", a
   assert.match(startup, /dali-predeploy-/);
   assert.match(startup, /copyFile/);
   assert.match(startup, /backups\.slice\(12\)/);
+  assert.match(database, /from "@libsql\/client\/node"/);
+  assert.doesNotMatch(database, /from "@libsql\/client"/);
   assert.match(database, /DATABASE_URL_UNSUPPORTED/);
   assert.doesNotMatch(database, /file:\.data\/dali\.db/);
   assert.match(render, /DATABASE_URL\n\s+value: file:\/var\/data\/dali\.db/);
@@ -42,6 +52,8 @@ test("portal authorization uses trusted email configuration instead of hardcoded
   assert.match(config, /PORTAL_ADMIN_EMAIL/);
   assert.match(config, /PORTAL_ADMIN_EMAILS/);
   assert.match(config, /PORTAL_ADMIN_IDENTIFIER/);
+  assert.match(config, /isRenderRuntime/);
+  assert.match(config, /isRenderRuntime\(env\) \? "credentials" : "chatgpt"/);
   assert.match(login, /normalizePortalIdentifier/);
   assert.match(login, /portalUsers/);
   assert.match(login, /PORTAL_ADMIN_BOOTSTRAP_CONFLICT/);
