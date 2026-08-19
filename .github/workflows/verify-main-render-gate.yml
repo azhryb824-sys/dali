@@ -1,0 +1,99 @@
+name: Verify main for Render deployment
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/verify-main-render-gate.yml
+  workflow_dispatch:
+
+permissions:
+  checks: write
+  contents: read
+  statuses: write
+
+jobs:
+  verify-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTH_MODE: credentials
+      DATABASE_URL: file:/tmp/dali-main-gate.db
+      UPLOADS_DIR: /tmp/dali-main-gate-uploads
+      AUTH_SECRET: ci-auth-secret-for-dali-with-more-than-32-characters
+      PORTAL_ADMIN_IDENTIFIER: "1234567890"
+      PORTAL_ADMIN_EMAIL: admin@example.test
+      PORTAL_ADMIN_EMAILS: admin@example.test
+      PORTAL_ADMIN_NAME: CI Administrator
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact main commit
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Capture validated SHA
+        run: echo "VALIDATED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate test administrator password hash
+        run: echo "PORTAL_ADMIN_PASSWORD_HASH=$(node scripts/hash-password.mjs 'ci-test-password-2026!')" >> "$GITHUB_ENV"
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Build and regression tests
+        run: npm test
+
+      - name: Publish successful Render gate on validated main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          headers=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+
+          python <<'PY' >/tmp/check-run.json
+          import json, os
+          print(json.dumps({
+              "name": "Render deployment gate",
+              "head_sha": os.environ["VALIDATED_SHA"],
+              "status": "completed",
+              "conclusion": "success",
+              "output": {
+                  "title": "Validated main for Render",
+                  "summary": "TypeScript, ESLint, build, migrations, and regression tests passed on the exact main commit."
+              }
+          }))
+          PY
+          curl --fail --silent --show-error -X POST "${headers[@]}" \
+            "${api}/check-runs" \
+            --data-binary @/tmp/check-run.json \
+            --output /tmp/check-response.json
+
+          python <<'PY' >/tmp/status.json
+          import json
+          print(json.dumps({
+              "state": "success",
+              "context": "render/verified-main",
+              "description": "Exact main commit passed the full Dali verification suite"
+          }))
+          PY
+          curl --fail --silent --show-error -X POST "${headers[@]}" \
+            "${api}/statuses/${VALIDATED_SHA}" \
+            --data-binary @/tmp/status.json \
+            --output /tmp/status-response.json
+
+          echo "published_render_gate_for=${VALIDATED_SHA}"
