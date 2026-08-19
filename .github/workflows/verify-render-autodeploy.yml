@@ -1,0 +1,85 @@
+name: Monitor Render auto-deploy recovery
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/verify-render-autodeploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monitor-render-autodeploy
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_URL: https://dali-ql1q.onrender.com
+    steps:
+      - name: Wait for the new Render release
+        shell: bash
+        run: |
+          set -u
+          legacy_code="000"
+          live_code="000"
+          ready_code="000"
+          login_code="000"
+
+          for attempt in $(seq 1 70); do
+            legacy_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-legacy.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health" || true)"
+            live_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-live.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health/live" || true)"
+            ready_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-ready.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health/ready" || true)"
+            login_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-login.html --write-out '%{http_code}' \
+              "${BASE_URL}/login" || true)"
+
+            legacy_preview="$(head -c 260 /tmp/dali-legacy.json 2>/dev/null | tr '\n' ' ' || true)"
+            ready_preview="$(head -c 420 /tmp/dali-ready.json 2>/dev/null | tr '\n' ' ' || true)"
+            echo "attempt=${attempt} legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+            echo "legacy=${legacy_preview}"
+            echo "ready=${ready_preview}"
+
+            if [[ "$legacy_code" == "200" \
+              && "$live_code" == "200" \
+              && "$ready_code" == "200" \
+              && "$login_code" == "200" ]] \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-legacy.json \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-live.json \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
+              && grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
+              && grep -Eq '"auth"[[:space:]]*:[[:space:]]*"(ok|external)"' /tmp/dali-ready.json \
+              && grep -q 'تسجيل الدخول الآمن' /tmp/dali-login.html; then
+              echo "Render auto-deploy recovery verified."
+              cat /tmp/dali-legacy.json
+              cat /tmp/dali-live.json
+              cat /tmp/dali-ready.json
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::Render did not expose a ready release during the bounded monitoring window."
+          echo "Final HTTP codes: legacy=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+          echo "--- legacy ---"
+          cat /tmp/dali-legacy.json 2>/dev/null || true
+          echo
+          echo "--- live ---"
+          head -c 1600 /tmp/dali-live.json 2>/dev/null || true
+          echo
+          echo "--- ready ---"
+          cat /tmp/dali-ready.json 2>/dev/null || true
+          echo
+          exit 1
