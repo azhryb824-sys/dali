@@ -48,6 +48,8 @@ test("production startup and runtime require the existing persistent database", 
   assert.match(database, /RENDER_DATABASE_URL_RECOVERED/);
   assert.doesNotMatch(database, /file:\.data\/dali\.db/);
 
+  assert.match(render, /autoDeployTrigger: commit/);
+  assert.doesNotMatch(render, /^\s*autoDeploy:/m);
   assert.match(render, /DATABASE_URL\n\s+value: file:\/var\/data\/dali\.db/);
   assert.match(render, /UPLOADS_DIR\n\s+value: \/var\/data\/uploads/);
 });
