@@ -1,0 +1,9 @@
+/* تنسيق مستقل لشاشة الدخول حتى لا تتأثر بنماذج إدارة المستخدمين. */
+.login-credentials-form{width:min(520px,100%);margin:26px auto 18px;padding:22px;border:1px solid #dfe6e9;border-radius:10px;background:#f8fafb;display:grid;grid-template-columns:1fr;gap:16px;text-align:right}
+.login-credentials-form label{display:grid;grid-template-columns:1fr;gap:8px;color:#263b47;font-size:14px;font-weight:600}
+.login-credentials-form input{box-sizing:border-box;width:100%;height:48px;border:1px solid #cbd7dc;border-radius:7px;background:#fff;padding:0 14px;color:#102a38;font:inherit;font-size:16px;line-height:1;outline:0;transition:border-color .18s,box-shadow .18s}
+.login-credentials-form input:focus{border-color:#e21c25;box-shadow:0 0 0 3px rgba(226,28,37,.1)}
+.login-credentials-form button{width:100%;min-height:50px;border:0;border-radius:7px;background:#001d2d;color:#fff;font:inherit;font-size:15px;font-weight:700;cursor:pointer;transition:background .18s,transform .18s}
+.login-credentials-form button:hover{background:#063448}
+.login-credentials-form button:active{transform:translateY(1px)}
+@media(max-width:620px){.login-credentials-form{margin-top:22px;padding:16px}.login-credentials-form input{height:46px}.login-credentials-form button{min-height:48px}}
