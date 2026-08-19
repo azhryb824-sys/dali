@@ -53,13 +53,13 @@ test("liveness and readiness are separate deployment signals", async () => {
   ]);
 
   assert.match(render, /healthCheckPath: \/api\/health\/live/);
-  assert.match(legacy, /\.\/ready\/route/);
+  assert.match(legacy, /\.\/live\/route/);
   assert.doesNotMatch(live, /getSqlClient|getDb|SELECT 1/);
   assert.match(ready, /SELECT 1 AS healthy/);
   assert.match(ready, /status: 503/);
 });
 
-test("live stays healthy while ready reports an unavailable database", async () => {
+test("legacy and live stay healthy while ready reports an unavailable database", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("auth-db-safety-test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
@@ -76,9 +76,11 @@ test("live stays healthy while ready reports an unavailable database", async () 
   };
   const context = { waitUntil() {}, passThroughOnException() {} };
 
-  const live = await worker.fetch(new Request("http://localhost/api/health/live"), env, context);
-  assert.equal(live.status, 200);
-  assert.equal((await live.json()).status, "ok");
+  for (const path of ["/api/health", "/api/health/live"]) {
+    const response = await worker.fetch(new Request(`http://localhost${path}`), env, context);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).status, "ok");
+  }
 
   const ready = await worker.fetch(new Request("http://localhost/api/health/ready"), env, context);
   assert.equal(ready.status, 503);

@@ -28,7 +28,7 @@ Changing `PORTAL_ADMIN_PASSWORD_HASH` does not overwrite the password hash of an
 
 Optional email delivery values are `RESEND_API_KEY`, `EMAIL_FROM`, and `EMAIL_REPLY_TO`. The persistent disk in the blueprint is required to prevent loss of the SQLite database and uploaded files during deploys or restarts.
 
-Render uses `/api/health/live` as its process liveness probe. Operational monitoring and release verification must call `/api/health/ready`; it returns HTTP `503` when the database or credential-auth configuration is unavailable. The legacy `/api/health` endpoint also reports readiness.
+Render should use `/api/health/live` as its process liveness probe. The legacy `/api/health` endpoint intentionally remains an equivalent liveness response so an existing Render service that has not yet synchronized the updated blueprint can still activate the new release. Operational monitoring and release verification must call `/api/health/ready`; it returns HTTP `503` when the database or credential-auth configuration is unavailable.
 
 ## Sites Lifecycle
 
