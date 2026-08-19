@@ -6,6 +6,14 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
+test("the Node libSQL entrypoint supports local SQLite", async () => {
+  const { createClient } = await import("@libsql/client/node");
+  const client = createClient({ url: "file::memory:" });
+  const result = await client.execute("SELECT 1 AS healthy");
+  assert.equal(Number(result.rows[0]?.healthy), 1);
+  client.close();
+});
+
 test("production startup and runtime require the existing persistent database", async () => {
   const [startup, database, render] = await Promise.all([
     source("scripts/render-start.mjs"),
@@ -23,6 +31,11 @@ test("production startup and runtime require the existing persistent database", 
   assert.match(startup, /copyFile/);
   assert.match(startup, /backups\.slice\(12\)/);
 
+  assert.match(database, /import type \{ Client \} from "@libsql\/client"/);
+  assert.doesNotMatch(database, /import \{[^}]*createClient[^}]*\} from "@libsql\/client"/);
+  assert.match(database, /createRequire\(import\.meta\.url\)/);
+  assert.match(database, /nodeRequire\("@libsql\/client\/node"\)/);
+  assert.match(database, /NODE_LIBSQL_CLIENT_UNAVAILABLE/);
   assert.match(database, /DATABASE_URL_UNSUPPORTED/);
   assert.match(database, /RENDER_DATABASE_PATH = "\/var\/data\/dali\.db"/);
   assert.match(database, /getBuiltinModule/);
