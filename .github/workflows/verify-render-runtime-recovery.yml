@@ -22,7 +22,7 @@ jobs:
     env:
       BASE_URL: https://dali-ql1q.onrender.com
     steps:
-      - name: Capture deployed health and login routes
+      - name: Capture deployed health and login routes after Node client deployment
         shell: bash
         run: |
           set +e
