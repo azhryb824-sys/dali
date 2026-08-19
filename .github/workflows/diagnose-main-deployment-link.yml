@@ -51,8 +51,9 @@ jobs:
               app = (item.get('app') or {}).get('slug') or (item.get('app') or {}).get('name') or ''
               print(
                   "check="
-                  f"{item.get('name', '')}|app={app}|status={item.get('status', '')}|"
-                  f"conclusion={item.get('conclusion', '')}|started={item.get('started_at', '')}|completed={item.get('completed_at', '')}"
+                  f"id={item.get('id', '')}|name={item.get('name', '')}|app={app}|status={item.get('status', '')}|"
+                  f"conclusion={item.get('conclusion', '')}|started={item.get('started_at', '')}|"
+                  f"completed={item.get('completed_at', '')}|details={item.get('details_url', '')}"
               )
 
           workflow_runs = runs.get('workflow_runs', [])
@@ -60,8 +61,9 @@ jobs:
           for item in workflow_runs:
               print(
                   "workflow="
-                  f"{item.get('name', '')}|event={item.get('event', '')}|status={item.get('status', '')}|"
-                  f"conclusion={item.get('conclusion', '')}|created={item.get('created_at', '')}"
+                  f"id={item.get('id', '')}|name={item.get('name', '')}|event={item.get('event', '')}|"
+                  f"status={item.get('status', '')}|conclusion={item.get('conclusion', '')}|"
+                  f"run_attempt={item.get('run_attempt', '')}|created={item.get('created_at', '')}|url={item.get('html_url', '')}"
               )
 
           print(f"combined_status={status.get('state', '')}")
