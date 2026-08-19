@@ -1,4 +1,4 @@
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/node";
 import { copyFile, mkdir, readFile, readdir, stat, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -19,8 +19,15 @@ function urlScheme(value) {
   return value.match(/^([a-z][a-z0-9+.-]*):/i)?.[1]?.toLowerCase();
 }
 
+function isRenderRuntime() {
+  return process.env.RENDER === "true"
+    || Boolean(process.env.RENDER_EXTERNAL_HOSTNAME)
+    || Boolean(process.env.RENDER_SERVICE_ID)
+    || Boolean(process.env.RENDER_INSTANCE_ID);
+}
+
 async function recoverRenderPersistentConfiguration() {
-  if (process.env.RENDER !== "true") return;
+  if (!isRenderRuntime()) return;
 
   const configuredScheme = databaseUrl ? urlScheme(databaseUrl) : undefined;
   const databaseConfigurationInvalid = !databaseUrl || !configuredScheme || !supportedSchemes.has(configuredScheme);
