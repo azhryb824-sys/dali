@@ -31,6 +31,11 @@ test("production startup and runtime require the existing persistent database", 
   assert.match(database, /RENDER_DATABASE_RECOVERY_FILE_MISSING/);
   assert.match(database, /RENDER_DATABASE_RECOVERY_FILE_INVALID/);
   assert.match(database, /RENDER_DATABASE_URL_RECOVERED/);
+  assert.match(database, /getNodeFileClientFactory/);
+  assert.match(database, /createRequire/);
+  assert.match(database, /\["@libsql\/client", "node"\]\.join\("\/"\)/);
+  assert.match(database, /scheme === "file"/);
+  assert.match(database, /createPortableClient/);
   assert.doesNotMatch(database, /file:\.data\/dali\.db/);
 
   assert.match(render, /DATABASE_URL\n\s+value: file:\/var\/data\/dali\.db/);
@@ -51,7 +56,9 @@ test("portal authorization uses trusted configuration instead of hardcoded ident
   assert.match(config, /PORTAL_ADMIN_EMAIL/);
   assert.match(config, /PORTAL_ADMIN_EMAILS/);
   assert.match(config, /PORTAL_ADMIN_IDENTIFIER/);
-  assert.match(config, /env\.RENDER === "true" \? "credentials" : "chatgpt"/);
+  assert.match(config, /isRenderEnvironment/);
+  assert.match(config, /RENDER_EXTERNAL_HOSTNAME/);
+  assert.match(config, /isRenderEnvironment\(env\) \? "credentials" : "chatgpt"/);
   assert.match(login, /normalizePortalIdentifier/);
   assert.match(login, /portalUsers/);
   assert.match(login, /PORTAL_ADMIN_BOOTSTRAP_CONFLICT/);
