@@ -1,0 +1,47 @@
+name: Diagnose current Render production
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/production-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      BASE_URL: https://dali-ql1q.onrender.com
+    steps:
+      - name: Probe production endpoints
+        shell: bash
+        run: |
+          set +e
+          for attempt in $(seq 1 6); do
+            echo "===== attempt ${attempt} ====="
+            all_new=1
+            for path in /api/health /api/health/live /api/health/ready /login; do
+              safe="$(printf '%s' "$path" | tr '/-' '__')"
+              code="$(curl --location --silent --show-error --max-time 45 \
+                --dump-header "/tmp/${safe}.headers" \
+                --output "/tmp/${safe}.body" \
+                --write-out '%{http_code}' \
+                "${BASE_URL}${path}")"
+              curl_status=$?
+              echo "--- path=${path} curl=${curl_status} http=${code:-000} ---"
+              grep -Ei '^(HTTP/|content-type:|location:|set-cookie:|x-request-id:)' "/tmp/${safe}.headers" || true
+              head -c 1800 "/tmp/${safe}.body" || true
+              echo
+              if [[ "$path" != "/login" && "$code" == "404" ]]; then
+                all_new=0
+              fi
+            done
+            if [[ "$all_new" == "1" ]]; then
+              echo "New health routes are present in production."
+              break
+            fi
+            sleep 15
+          done
+          exit 0
