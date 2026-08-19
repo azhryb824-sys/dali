@@ -1,16 +1,16 @@
 name: Verify production deployment
 
+# This workflow is intentionally manual. Render services configured to deploy
+# only after CI checks pass must not wait on a smoke test that itself requires
+# the new Render deployment to already be live.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: production-smoke-${{ github.ref }}
+  group: production-smoke
   cancel-in-progress: true
 
 jobs:
