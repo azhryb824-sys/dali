@@ -7,7 +7,13 @@ interface Env {
   ASSETS: Fetcher;
   BUCKET: R2Bucket;
   DB: D1Database;
+  AUTH_MODE?: string;
+  AUTH_SECRET?: string;
+  PORTAL_ADMIN_EMAIL?: string;
   PORTAL_ADMIN_EMAILS?: string;
+  PORTAL_ADMIN_IDENTIFIER?: string;
+  PORTAL_ADMIN_NAME?: string;
+  PORTAL_ADMIN_PASSWORD_HASH?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
   EMAIL_REPLY_TO?: string;
