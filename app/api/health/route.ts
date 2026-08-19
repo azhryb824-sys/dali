@@ -1,1 +1,1 @@
-export { GET } from "./ready/route";
+export { GET } from "./live/route";
