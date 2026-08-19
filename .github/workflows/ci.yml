@@ -1,0 +1,53 @@
+name: Verify Dali
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "agent/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTH_MODE: credentials
+      DATABASE_URL: file:/tmp/dali-ci.db
+      UPLOADS_DIR: /tmp/dali-ci-uploads
+      AUTH_SECRET: ci-auth-secret-for-dali-with-more-than-32-characters
+      PORTAL_ADMIN_IDENTIFIER: "1234567890"
+      PORTAL_ADMIN_EMAIL: admin@example.test
+      PORTAL_ADMIN_EMAILS: admin@example.test
+      PORTAL_ADMIN_NAME: CI Administrator
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate test administrator password hash
+        run: echo "PORTAL_ADMIN_PASSWORD_HASH=$(node scripts/hash-password.mjs 'ci-test-password-2026!')" >> "$GITHUB_ENV"
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Build and regression tests
+        run: npm test
