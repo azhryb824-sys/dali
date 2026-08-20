@@ -3,25 +3,21 @@ services:
     name: dali
     runtime: node
     region: frankfurt
-    plan: starter
+    plan: free
     branch: main
     buildCommand: npm ci && npm run build
     startCommand: npm run start:render
     healthCheckPath: /api/health/ready
     autoDeployTrigger: commit
-    disk:
-      name: dali-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: 22.13.0
       - key: AUTH_MODE
         value: credentials
       - key: DATABASE_URL
-        value: file:/var/data/dali.db
+        sync: false
       - key: UPLOADS_DIR
-        value: /var/data/uploads
+        value: /tmp/dali-uploads
       - key: AUTH_SECRET
         generateValue: true
       - key: PORTAL_ADMIN_IDENTIFIER
