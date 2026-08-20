@@ -1,7 +1,12 @@
+const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
+const renderSiteUrl = process.env.RENDER_EXTERNAL_HOSTNAME?.trim()
+  ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME.trim()}`
+  : "";
+
 export const SITE = {
   name: "شركة دالي للتشغيل والصيانة",
   shortName: "دالي للتشغيل والصيانة",
-  url: "https://dali-contracting.cust5467.chatgpt.site",
+  url: configuredSiteUrl || renderSiteUrl || "https://dali-contracting.cust5467.chatgpt.site",
   locale: "ar_SA",
   language: "ar",
   countryCode: "SA",
