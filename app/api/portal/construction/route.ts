@@ -5,6 +5,7 @@ import {
   constructionOpportunities,
   constructionProjects,
   constructionRecords,
+  constructionRecordAttachments,
   constructionRecordLines,
   costCenters,
   serviceCities,
@@ -44,7 +45,7 @@ export async function GET() {
   const { access, scopes } = authorization;
   const db = getDb();
   try {
-    const [lines, regions, cities, coverage, opportunities, projects, records, recordLines] = await Promise.all([
+    const [lines, regions, cities, coverage, opportunities, projects, records, recordLines, attachments] = await Promise.all([
       db.select().from(businessLines).orderBy(businessLines.id),
       db.select().from(serviceRegions).orderBy(serviceRegions.sortOrder),
       db.select().from(serviceCities).orderBy(serviceCities.nameAr).limit(1000),
@@ -53,6 +54,7 @@ export async function GET() {
       db.select().from(constructionProjects).orderBy(desc(constructionProjects.updatedAt)).limit(500),
       db.select().from(constructionRecords).orderBy(desc(constructionRecords.updatedAt)).limit(1000),
       db.select().from(constructionRecordLines).orderBy(desc(constructionRecordLines.id)).limit(5000),
+      db.select().from(constructionRecordAttachments).orderBy(desc(constructionRecordAttachments.id)).limit(5000),
     ]);
     const visibleCities = cities.filter((city) => access.role === "admin" || !scopes.length || scopes.some((scope) => (!scope.regionId || scope.regionId === city.regionId) && (!scope.cityId || scope.cityId === city.id)));
     const visibleProjects = projects.filter((project) => scopeAllowsProject(access, scopes, project.id, project.cityId));
@@ -62,7 +64,7 @@ export async function GET() {
     const visibleRecords = records.filter((record) => (!record.projectId || projectIds.has(record.projectId)) && (!record.opportunityId || opportunityIds.has(record.opportunityId)));
     const recordIds = new Set(visibleRecords.map((record) => record.id));
     const visibleCoverage = coverage.filter((item) => visibleCities.some((city) => city.id === item.cityId));
-    return jsonNoStore({ lines, regions, cities: visibleCities, coverage: visibleCoverage, opportunities: visibleOpportunities, projects: visibleProjects, records: visibleRecords, recordLines: recordLines.filter((line) => recordIds.has(line.recordId)), canWrite: await hasPortalPermission(access, "construction", "write") || scopes.length > 0, scopedAccess: scopes.length > 0 });
+    return jsonNoStore({ lines, regions, cities: visibleCities, coverage: visibleCoverage, opportunities: visibleOpportunities, projects: visibleProjects, records: visibleRecords, recordLines: recordLines.filter((line) => recordIds.has(line.recordId)), attachments: attachments.filter((item) => recordIds.has(item.recordId)), canWrite: await hasPortalPermission(access, "construction", "write") || scopes.length > 0, scopedAccess: scopes.length > 0 });
   } catch (error) {
     console.error("construction-workspace-load-failed", error);
     return jsonNoStore({ error: "تعذر تحميل مساحة المقاولات" }, { status: 500 });

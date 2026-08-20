@@ -1649,6 +1649,40 @@ export const constructionRecords = pgTable(
   ],
 );
 
+export const constructionRecordAttachments = pgTable(
+  "construction_record_attachments",
+  {
+    id: serial("id").primaryKey(),
+    recordId: integer("record_id").notNull().references(() => constructionRecords.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull().default(1),
+    transmittalCode: text("transmittal_code").notNull(),
+    title: text("title").notNull(),
+    fileName: text("file_name").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    status: text("status").notNull().default("submitted"),
+    reviewerEmail: text("reviewer_email"),
+    reviewNotes: text("review_notes"),
+    rejectionReason: text("rejection_reason"),
+    submittedAt: text("submitted_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    reviewedAt: text("reviewed_at"),
+    approvedAt: text("approved_at"),
+    isCurrent: boolean("is_current").notNull().default(true),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("construction_record_attachments_record_idx").on(table.recordId, table.revision),
+    uniqueIndex("construction_record_attachments_revision_unique").on(table.recordId, table.revision),
+    index("construction_record_attachments_transmittal_idx").on(table.transmittalCode),
+    check("construction_record_attachments_revision_check", sql`${table.revision} > 0`),
+    check("construction_record_attachments_size_check", sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 20971520`),
+    check("construction_record_attachments_status_check", sql`${table.status} in ('submitted','under_review','approved','approved_as_noted','revise_resubmit','rejected','superseded')`),
+  ],
+);
+
 export const constructionRecordLines = pgTable(
   "construction_record_lines",
   {
