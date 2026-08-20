@@ -7,8 +7,8 @@ async function source(path) {
 }
 
 test("production uses PostgreSQL with safe pooled-connection settings", async () => {
-  const [startup, database, render] = await Promise.all([
-    source("scripts/render-start.mjs"), source("db/index.ts"), source("render.yaml"),
+  const [startup, database, render, vite] = await Promise.all([
+    source("scripts/render-start.mjs"), source("db/index.ts"), source("render.yaml"), source("vite.config.ts"),
   ]);
   assert.match(startup, /from "postgres"/);
   assert.match(startup, /DATABASE_URL_MISSING/);
@@ -25,6 +25,7 @@ test("production uses PostgreSQL with safe pooled-connection settings", async ()
   assert.match(database, /prepare: false/);
   assert.match(database, /ssl: "require"/);
   assert.doesNotMatch(database, /libsql|file:\.data\/dali\.db/);
+  assert.match(vite, /node_modules\/postgres\/src\/index\.js/);
   assert.match(render, /autoDeployTrigger: commit/);
   assert.match(render, /DATABASE_URL\n\s+sync: false/);
   assert.doesNotMatch(render, /file:\/var\/data\/dali\.db|\n\s+disk:/);

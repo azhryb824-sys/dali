@@ -1,5 +1,6 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
+import { fileURLToPath } from "node:url";
 import hostingConfig from "./.openai/hosting.json" with { type: "json" };
 import { sites } from "./build/sites-vite-plugin.ts";
 
@@ -44,6 +45,16 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    resolve: {
+      // The Cloudflare build condition selects postgres.js' workerd transport,
+      // which imports cloudflare:sockets and cannot run in Render's Node server.
+      alias: [
+        {
+          find: /^postgres$/,
+          replacement: fileURLToPath(new URL("./node_modules/postgres/src/index.js", import.meta.url)),
+        },
+      ],
+    },
     server: {
       host: "0.0.0.0",
       allowedHosts: ["terminal.local"],
