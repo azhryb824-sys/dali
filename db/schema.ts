@@ -1552,3 +1552,61 @@ export const constructionProjects = pgTable(
     check("construction_projects_dates_check", sql`${table.plannedEndDate} >= ${table.startDate}`),
   ],
 );
+
+export const constructionRecords = pgTable(
+  "construction_records",
+  {
+    id: serial("id").primaryKey(),
+    recordCode: text("record_code").notNull().unique(),
+    recordType: text("record_type").notNull(),
+    opportunityId: integer("opportunity_id").references(() => constructionOpportunities.id, { onDelete: "restrict" }),
+    projectId: integer("project_id").references(() => constructionProjects.id, { onDelete: "restrict" }),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    status: text("status").notNull().default("draft"),
+    priority: text("priority").notNull().default("normal"),
+    responsibleEmail: text("responsible_email").notNull(),
+    dueDate: text("due_date"),
+    amountHalalas: integer("amount_halalas"),
+    retentionBps: integer("retention_bps").notNull().default(0),
+    progressBps: integer("progress_bps").notNull().default(0),
+    revision: integer("revision").notNull().default(1),
+    parentRecordId: integer("parent_record_id"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    index("construction_records_type_status_idx").on(table.recordType, table.status),
+    index("construction_records_project_type_idx").on(table.projectId, table.recordType),
+    index("construction_records_opportunity_idx").on(table.opportunityId),
+    index("construction_records_due_idx").on(table.dueDate),
+    check("construction_records_type_check", sql`${table.recordType} in ('survey','estimate','boq','contract','wbs','daily_log','document','rfi','submittal','inspection','ncr','safety','procurement','subcontract','change_order','payment_certificate','handover','risk')`),
+    check("construction_records_priority_check", sql`${table.priority} in ('low','normal','high','critical')`),
+    check("construction_records_amount_check", sql`${table.amountHalalas} is null or ${table.amountHalalas} >= 0`),
+    check("construction_records_percentage_check", sql`${table.retentionBps} between 0 and 10000 and ${table.progressBps} between 0 and 10000`),
+  ],
+);
+
+export const constructionRecordLines = pgTable(
+  "construction_record_lines",
+  {
+    id: serial("id").primaryKey(),
+    recordId: integer("record_id").notNull().references(() => constructionRecords.id, { onDelete: "cascade" }),
+    lineNumber: integer("line_number").notNull(),
+    itemCode: text("item_code"),
+    description: text("description").notNull(),
+    unit: text("unit"),
+    quantityMilli: integer("quantity_milli").notNull().default(0),
+    unitRateHalalas: integer("unit_rate_halalas").notNull().default(0),
+    totalHalalas: integer("total_halalas").notNull().default(0),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    uniqueIndex("construction_record_lines_record_number_unique").on(table.recordId, table.lineNumber),
+    index("construction_record_lines_record_idx").on(table.recordId),
+    check("construction_record_lines_values_check", sql`${table.quantityMilli} >= 0 and ${table.unitRateHalalas} >= 0 and ${table.totalHalalas} >= 0`),
+  ],
+);

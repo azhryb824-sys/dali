@@ -1,0 +1,5 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import ConstructionSubpage from "../ConstructionSubpage";
+export const metadata:Metadata={title:"مشروعات ودراسات حالة المقاولات | دالي",description:"مساحة مشروعات المقاولات المعتمدة للنشر ودراسات الحالة الموثقة.",alternates:{canonical:"/construction/projects"}};
+export default function Page(){return <ConstructionSubpage eyebrow="المشروعات ودراسات الحالة" title="لا ننشر مشروعاً أو نتيجة بلا اعتماد" intro="ستظهر هنا المشروعات التي أجاز مالكها نشر نطاقها ونتيجتها وصورها. لا نستخدم مشروعات افتراضية لبناء الثقة أو تحسين الظهور."><section className="inner-content construction-evidence"><div><span>سياسة النشر</span><h2>الدليل قبل الادعاء</h2><p>يُراجع اسم العميل وحق النشر ونطاق الأعمال والمدينة والنتيجة والمرفقات قبل تحويل سجل المشروع إلى دراسة حالة عامة.</p></div><ul><li>نطاق حقيقي قابل للتحقق</li><li>موافقة نشر موثقة</li><li>نتيجة أو درس مفيد لصاحب القرار</li><li>صور ووثائق خالية من البيانات الحساسة</li></ul><Link className="btn primary" href="/construction/request">ناقش مشروعك مع الفريق</Link></section></ConstructionSubpage>}

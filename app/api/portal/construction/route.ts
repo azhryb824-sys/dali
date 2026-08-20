@@ -4,6 +4,8 @@ import {
   businessLines,
   constructionOpportunities,
   constructionProjects,
+  constructionRecords,
+  constructionRecordLines,
   costCenters,
   serviceCities,
   serviceCoverage,
@@ -36,15 +38,17 @@ export async function GET() {
   if (!access) return jsonNoStore({ error: "غير مصرح بالوصول إلى قطاع المقاولات" }, { status: 403 });
   const db = getDb();
   try {
-    const [lines, regions, cities, coverage, opportunities, projects] = await Promise.all([
+    const [lines, regions, cities, coverage, opportunities, projects, records, recordLines] = await Promise.all([
       db.select().from(businessLines).orderBy(businessLines.id),
       db.select().from(serviceRegions).orderBy(serviceRegions.sortOrder),
       db.select().from(serviceCities).orderBy(serviceCities.nameAr).limit(1000),
       db.select().from(serviceCoverage).orderBy(desc(serviceCoverage.updatedAt)).limit(2000),
       db.select().from(constructionOpportunities).orderBy(desc(constructionOpportunities.updatedAt)).limit(500),
       db.select().from(constructionProjects).orderBy(desc(constructionProjects.updatedAt)).limit(500),
+      db.select().from(constructionRecords).orderBy(desc(constructionRecords.updatedAt)).limit(1000),
+      db.select().from(constructionRecordLines).orderBy(desc(constructionRecordLines.id)).limit(5000),
     ]);
-    return jsonNoStore({ lines, regions, cities, coverage, opportunities, projects, canWrite: await hasPortalPermission(access, "construction", "write") });
+    return jsonNoStore({ lines, regions, cities, coverage, opportunities, projects, records, recordLines, canWrite: await hasPortalPermission(access, "construction", "write") });
   } catch (error) {
     console.error("construction-workspace-load-failed", error);
     return jsonNoStore({ error: "تعذر تحميل مساحة المقاولات" }, { status: 500 });
@@ -150,6 +154,59 @@ export async function POST(request: Request) {
       await auditPortalAction({ actorEmail: actor, action, entityType: "service-coverage", entityId: coverage.id, after: coverage, correlationId });
       await emitPortalNotification({ eventType: "service-coverage-updated", title: "تحديث تغطية مدينة", message: `تم تحديث سجل التغطية التشغيلي رقم ${coverage.id}${publicApproved ? " واعتماده للنشر" : " ويحتاج اعتماد النشر"}.`, severity: publicApproved ? "success" : "info", module: "construction", entityType: "service-coverage", entityId: coverage.id, actionView: "construction", targetRole: "manager" }).catch(() => undefined);
       return jsonNoStore({ coverage });
+    }
+
+    if (action === "create-record") {
+      const recordType = clean(payload.recordType, 40);
+      const allowedTypes = ["survey","estimate","boq","contract","wbs","daily_log","document","rfi","submittal","inspection","ncr","safety","procurement","subcontract","change_order","payment_certificate","handover","risk"];
+      const title = clean(payload.title, 180);
+      const description = clean(payload.description, 6000);
+      const projectId = payload.projectId ? positiveInteger(payload.projectId) : null;
+      const opportunityId = payload.opportunityId ? positiveInteger(payload.opportunityId) : null;
+      const dueDate = isoDate(payload.dueDate, true);
+      const amountHalalas = payload.amountHalalas === "" || payload.amountHalalas == null ? null : positiveInteger(payload.amountHalalas, true);
+      const retentionBps = payload.retentionBps === "" || payload.retentionBps == null ? 0 : positiveInteger(payload.retentionBps, true);
+      if (!allowedTypes.includes(recordType) || title.length < 3 || description.length < 5 || dueDate === "" || amountHalalas === null && payload.amountHalalas !== "" && payload.amountHalalas != null || retentionBps == null || retentionBps > 10000) throw new Error("بيانات سجل المقاولات غير مكتملة");
+      if (projectId && !(await db.query.constructionProjects.findFirst({ where: eq(constructionProjects.id, projectId) }))) throw new Error("المشروع غير موجود");
+      if (opportunityId && !(await db.query.constructionOpportunities.findFirst({ where: eq(constructionOpportunities.id, opportunityId) }))) throw new Error("الفرصة غير موجودة");
+      if (["wbs","daily_log","document","rfi","submittal","inspection","ncr","safety","procurement","subcontract","change_order","payment_certificate","handover","risk"].includes(recordType) && !projectId) throw new Error("يجب ربط هذا السجل بمشروع");
+      const prefix:Record<string,string>={survey:"SRV",estimate:"EST",boq:"BOQ",contract:"CNT",wbs:"WBS",daily_log:"LOG",document:"DOC",rfi:"RFI",submittal:"SUB",inspection:"INS",ncr:"NCR",safety:"HSE",procurement:"PRC",subcontract:"SCT",change_order:"CO",payment_certificate:"IPC",handover:"HND",risk:"RSK"};
+      const [record] = await db.insert(constructionRecords).values({ recordCode: reference(prefix[recordType]), recordType, opportunityId, projectId, title, description, status: "draft", priority: clean(payload.priority, 20) || "normal", responsibleEmail: clean(payload.responsibleEmail, 160).toLowerCase() || actor, dueDate, amountHalalas, retentionBps, createdBy: actor }).returning();
+      await auditPortalAction({ actorEmail: actor, action, entityType: `construction-${recordType}`, entityId: record.id, after: record, correlationId });
+      await enqueueOutbox({ eventType: `construction.${recordType}.created`, aggregateType: `construction-${recordType}`, aggregateId: record.id, payload: { recordId: record.id, projectId, opportunityId } });
+      await emitPortalNotification({ eventType: `construction-${recordType}-created`, title: "سجل جديد في قطاع المقاولات", message: `${record.recordCode} — ${record.title}.`, severity: record.priority === "critical" ? "critical" : "info", module: "construction", entityType: `construction-${recordType}`, entityId: record.id, actionView: "construction", targetRole: "manager" }).catch(() => undefined);
+      return jsonNoStore({ record }, { status: 201 });
+    }
+
+    if (action === "update-record-status") {
+      const id = positiveInteger(payload.id);
+      const status = clean(payload.status, 40);
+      const allowedStatuses = ["draft","open","in_review","submitted","approved","approved_as_noted","revise_resubmit","rejected","answered","closed","void","contained","corrective_action","verified","requested","sourcing","ordered","partially_received","received","pricing","negotiated","certified","invoiced","partially_paid","paid","active","complete","cancelled"];
+      if (!id || !allowedStatuses.includes(status)) throw new Error("حالة السجل غير صحيحة");
+      const current = await db.query.constructionRecords.findFirst({ where: eq(constructionRecords.id, id) });
+      if (!current) throw new Error("السجل غير موجود");
+      const [record] = await db.update(constructionRecords).set({ status, updatedAt: new Date().toISOString(), version: current.version + 1 }).where(and(eq(constructionRecords.id, id), eq(constructionRecords.version, current.version))).returning();
+      if (!record) throw new Error("عُدل السجل من مستخدم آخر؛ حدّث الصفحة");
+      await auditPortalAction({ actorEmail: actor, action, entityType: `construction-${record.recordType}`, entityId: id, before: current, after: record, correlationId });
+      await recordStatusChange({ entityType: `construction-${record.recordType}`, entityId: id, fromStatus: current.status, toStatus: status, actorEmail: actor, correlationId });
+      await emitPortalNotification({ eventType: `construction-${record.recordType}-status`, title: "تحديث حالة سجل مقاولات", message: `${record.recordCode} — ${status}.`, severity: ["rejected","cancelled"].includes(status) ? "warning" : status === "approved" || status === "closed" ? "success" : "info", module: "construction", entityType: `construction-${record.recordType}`, entityId: id, actionView: "construction", targetRole: "manager" }).catch(() => undefined);
+      return jsonNoStore({ record });
+    }
+
+    if (action === "add-record-line") {
+      const recordId = positiveInteger(payload.recordId);
+      const description = clean(payload.description, 1000);
+      const unit = clean(payload.unit, 30) || null;
+      const quantityMilli = positiveInteger(payload.quantityMilli, true);
+      const unitRateHalalas = positiveInteger(payload.unitRateHalalas, true);
+      if (!recordId || description.length < 2 || quantityMilli == null || unitRateHalalas == null) throw new Error("بيانات البند غير صحيحة");
+      const parent = await db.query.constructionRecords.findFirst({ where: eq(constructionRecords.id, recordId) });
+      if (!parent || !["boq","estimate","wbs","payment_certificate","change_order"].includes(parent.recordType)) throw new Error("لا يقبل هذا السجل بنوداً تفصيلية");
+      const existingLines = await db.select({ id: constructionRecordLines.id }).from(constructionRecordLines).where(eq(constructionRecordLines.recordId, recordId));
+      const totalHalalas = Math.round(quantityMilli * unitRateHalalas / 1000);
+      const [line] = await db.insert(constructionRecordLines).values({ recordId, lineNumber: existingLines.length + 1, itemCode: clean(payload.itemCode, 50) || null, description, unit, quantityMilli, unitRateHalalas, totalHalalas }).returning();
+      await auditPortalAction({ actorEmail: actor, action, entityType: "construction-record-line", entityId: line.id, after: line, correlationId });
+      return jsonNoStore({ line }, { status: 201 });
     }
 
     return jsonNoStore({ error: "الإجراء غير معروف" }, { status: 400 });

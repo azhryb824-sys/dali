@@ -78,6 +78,14 @@ test("renders the public site and protects request workflows", async () => {
   assert.doesNotMatch(html, /href=["']\/portal["']/i);
   assert.match(response.headers.get("content-security-policy") ?? "", /default-src 'self'/);
   assert.match(response.headers.get("content-security-policy") ?? "", /frame-src 'none'/);
+
+  for (const path of ["/construction", "/construction/services", "/construction/methodology", "/construction/quality-safety", "/construction/projects", "/construction/regions", "/construction/request"]) {
+    const sectionPage = await worker.fetch(new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }), env, context);
+    assert.equal(sectionPage.status, 200, path);
+    const sectionHtml = await sectionPage.text();
+    assert.match(sectionHtml, /قسم المقاولات|المقاولات/, path);
+    assert.match(sectionHtml, new RegExp(`canonical[^>]+${path.replaceAll("/", "\\/")}`), path);
+  }
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.equal(response.headers.get("x-frame-options"), "DENY");
   assert.equal(response.headers.get("cross-origin-resource-policy"), "same-origin");
@@ -155,7 +163,13 @@ test("renders the public site and protects request workflows", async () => {
   assert.match(sitemapXml, /sectors\/hotels-hospitality/);
   assert.match(sitemapXml, /sectors\/seasonal-hajj/);
   assert.match(sitemapXml, /locations\/makkah/);
-  assert.doesNotMatch(sitemapXml, /\/projects<|\/credentials<|\/careers<|\/feedback</);
+  assert.match(sitemapXml, /construction\/services/);
+  assert.match(sitemapXml, /construction\/methodology/);
+  assert.match(sitemapXml, /construction\/quality-safety/);
+  assert.match(sitemapXml, /construction\/projects/);
+  assert.match(sitemapXml, /construction\/regions/);
+  assert.match(sitemapXml, /construction\/request/);
+  assert.doesNotMatch(sitemapXml, /<loc>https?:\/\/[^/]+\/(?:projects|credentials|careers|feedback)<\/loc>/);
   assert.match(sitemapXml, /<lastmod>2026-08-14<\/lastmod>/);
   assert.doesNotMatch(sitemapXml, /<priority>|<changefreq>/);
 

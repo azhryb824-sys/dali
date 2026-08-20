@@ -1,0 +1,5 @@
+import type { Metadata } from "next";
+import ConstructionSubpage from "../ConstructionSubpage";
+import { saudiRegions } from "@/lib/construction-content";
+export const metadata:Metadata={title:"خدمات المقاولات في مناطق المملكة | دالي",description:"استقبال ودراسة طلبات المقاولات في مناطق المملكة الثلاث عشرة مع تأكيد القدرة والموعد بعد المراجعة التشغيلية.",alternates:{canonical:"/construction/regions"}};
+export default function Page(){return <ConstructionSubpage eyebrow="التغطية الجغرافية" title="نستقبل طلبات المشروعات من جميع مناطق المملكة" intro="التغطية الوطنية تعني وجود مسار موحد لدراسة الطلب وتحديد نموذج التعبئة. لا تعني وجود فرع أو فريق دائم في كل مدينة، ويؤكد نطاق التنفيذ بعد مراجعة الموقع والبرنامج والموارد."><section className="inner-content regions-register">{saudiRegions.map((region,index)=><article key={region}><span>{String(index+1).padStart(2,'0')}</span><h2>{region}</h2><p>استقبال ودراسة الطلب، ثم تأكيد القدرة وزمن التعبئة وفق نوع المشروع وموقعه.</p></article>)}</section></ConstructionSubpage>}

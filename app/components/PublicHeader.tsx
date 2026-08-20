@@ -13,6 +13,10 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
     const base = [
       { title: "من نحن", text: content.site.description, href: "/about", keywords: `${content.site.companyName} ${content.site.city} ${content.site.district}` },
       { title: "المقاولات وإدارة المشروعات", text: "تنفيذ المباني والتشطيبات والترميم والأعمال المدنية والكهروميكانيكية في مدن المملكة", href: "/construction", keywords: "شركة مقاولات السعودية مقاول عام تشطيبات ترميم أعمال مدنية إدارة مشاريع" },
+      { title: "تخصصات المقاولات", text: "المباني والتشطيبات والترميم والأعمال المدنية والكهروميكانيكية", href: "/construction/services", keywords: "خدمات تخصصات مقاولات" },
+      { title: "منهج تنفيذ المشروعات", text: "التأهيل والمعاينة والتقدير والتعاقد والتنفيذ والتسليم", href: "/construction/methodology", keywords: "إدارة تنفيذ مشروع" },
+      { title: "الجودة والسلامة", text: "الفحوص واعتماد المواد وعدم المطابقة ومخاطر الموقع", href: "/construction/quality-safety", keywords: "جودة سلامة مقاولات" },
+      { title: "مناطق خدمة المقاولات", text: "دراسة طلبات المشروعات من جميع مناطق المملكة", href: "/construction/regions", keywords: "مقاولات مناطق السعودية" },
       ...(content.visibility.hajj ? [{ title: "حلول موسم الحج", text: "فرق تشغيل وقوى عاملة للاحتياج الموسمي في مكة", href: "/hajj", keywords: "الحج موسم مشاعر مقدسة جاهزية تشغيل" }] : []),
       { title: "طلب عرض سعر", text: "شاركنا احتياجك ليقترح فريق دالي الحل المناسب", href: "/contact", keywords: "تواصل استفسار سعر طلب شراكة" },
       ...(content.visibility.faq ? [{ title: "الأسئلة الشائعة", text: "إجابات عن الخدمات والتعاقد والعمالة", href: "/faq", keywords: "معلومات أسئلة" }] : []),
