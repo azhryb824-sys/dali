@@ -1,11 +1,12 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { chartOfAccounts, fiscalPeriods, journalEntries, journalLines } from "@/db/schema";
+import { chartOfAccounts, financialRecords, fiscalPeriods, journalEntries, journalLines } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 
 export type JournalLineInput = {
   accountId: number;
+  bankAccountId?: number | null;
   description?: string | null;
   debitHalalas?: number;
   creditHalalas?: number;
@@ -81,6 +82,7 @@ export async function createDraftJournal(input: {
       journalEntryId: entry.id,
       lineNumber: index + 1,
       accountId: line.accountId,
+      bankAccountId: line.bankAccountId || null,
       description: line.description?.trim().slice(0, 300) || null,
       debitHalalas: line.debitHalalas || 0,
       creditHalalas: line.creditHalalas || 0,
@@ -112,6 +114,10 @@ export async function postJournal(entryId: number, actorEmail: string) {
   const [posted] = await db.update(journalEntries).set({ status: "posted", postedBy: actorEmail, postedAt: now, updatedAt: now })
     .where(and(eq(journalEntries.id, entry.id), eq(journalEntries.status, "approved"))).returning();
   if (!posted) throw new Error("تغيرت حالة القيد قبل الترحيل");
+  if (posted.sourceType === "financial-record" && posted.sourceId && /^\d+$/.test(posted.sourceId)) {
+    await db.update(financialRecords).set({ postingStatus: "posted", postedAt: posted.postedAt, updatedAt: now })
+      .where(and(eq(financialRecords.id, Number(posted.sourceId)), eq(financialRecords.journalEntryId, posted.id)));
+  }
   await auditPortalAction({ actorEmail, action: "journal-entry-posted", entityType: "journal-entry", entityId: posted.id, before: entry, after: posted });
   await emitPortalNotification({ eventType: "journal-entry-posted", title: "تم ترحيل قيد محاسبي", message: `${posted.entryNumber} — ${posted.description}.`, severity: "success", module: "finance", entityType: "journal-entry", entityId: posted.id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
   return posted;
