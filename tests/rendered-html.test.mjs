@@ -140,18 +140,18 @@ test("renders the public site and protects request workflows", async () => {
   assert.ok((await optimizedImage.arrayBuffer()).byteLength > 10_000);
 
   for (const [path, expected] of [
-    ["/about", "عن شركة دالي"],
+    ["/about", "مقر سعودي وخدمة على مستوى المملكة"],
     ["/services", "حلول متكاملة لأعمالك في جميع مدن المملكة"],
     ["/services/manpower-supply-makkah", "توفير عمالة للمشروعات والمنشآت"],
     ["/services/construction-workforce", "قوى عاملة وفرق فنية للمشروعات الإنشائية"],
     ["/services/operations-maintenance", "فرق التشغيل والصيانة"],
     ["/services/technical-teams", "توفير فنيين وفرق متعددة المهن"],
     ["/hajj", "قوى عاملة مرنة"],
-    ["/insights", "معرفة تساعدك على التخطيط بثقة"],
+    ["/insights", "في مختلف مدن المملكة"],
     ["/insights/workforce-demand-planning", "كيف تخطط احتياج القوى العاملة"],
     ["/insights/hajj-season-workforce-readiness", "دليل جاهزية فرق العمل"],
     ["/insights/worker-document-checklist", "قائمة مراجعة وثائق العامل"],
-    ["/sectors", "خبرة مرنة تفهم طبيعة قطاعك"],
+    ["/sectors", "في مختلف مدن المملكة"],
     ["/sectors/hotels-hospitality", "حلول القوى العاملة للفنادق والضيافة في مكة"],
     ["/sectors/seasonal-hajj", "فرق تشغيل وخدمات مساندة لموسم الحج في مكة"],
     ["/locations", "نخدم أعمالك في جميع مدن المملكة"],
