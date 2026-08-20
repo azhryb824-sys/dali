@@ -1507,6 +1507,7 @@ export const constructionOpportunities = pgTable(
   (table) => [
     index("construction_opportunities_stage_due_idx").on(table.stage, table.bidDueDate),
     index("construction_opportunities_city_idx").on(table.cityId),
+    index("construction_opportunities_client_idx").on(table.clientId),
     check("construction_opportunities_stage_check", sql`${table.stage} in ('new','qualified','survey','estimating','review','submitted','negotiation','won','lost','declined')`),
     check("construction_opportunities_probability_check", sql`${table.probabilityBps} >= 0 and ${table.probabilityBps} <= 10000`),
     check("construction_opportunities_value_check", sql`${table.estimatedValueHalalas} is null or ${table.estimatedValueHalalas} >= 0`),
@@ -1542,6 +1543,8 @@ export const constructionProjects = pgTable(
   (table) => [
     index("construction_projects_status_end_idx").on(table.status, table.plannedEndDate),
     index("construction_projects_city_idx").on(table.cityId),
+    index("construction_projects_opportunity_idx").on(table.opportunityId),
+    index("construction_projects_client_idx").on(table.clientId),
     check("construction_projects_status_check", sql`${table.status} in ('mobilizing','active','on_hold','substantial_completion','defects_liability','closed','cancelled')`),
     check("construction_projects_risk_check", sql`${table.riskLevel} in ('low','medium','high','critical')`),
     check("construction_projects_progress_check", sql`${table.progressBps} >= 0 and ${table.progressBps} <= 10000`),

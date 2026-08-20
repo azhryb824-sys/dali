@@ -22,6 +22,13 @@
       "when": 1787222510923,
       "tag": "0002_steady_kronos",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787223797776,
+      "tag": "0003_blushing_violations",
+      "breakpoints": true
     }
   ]
 }
