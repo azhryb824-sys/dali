@@ -9,6 +9,7 @@ const renderRecoveryDatabasePath = "/var/data/dali.db";
 const renderRecoveryUploadsDir = "/var/data/uploads";
 let databaseUrl = process.env.DATABASE_URL?.trim();
 let uploadsDir = process.env.UPLOADS_DIR?.trim();
+const allowEmptyDatabaseInitialization = process.env.ALLOW_EMPTY_DATABASE_INIT === "true";
 
 function startupFailure(code) {
   process.stderr.write(`[startup] ${code}\n`);
@@ -64,6 +65,11 @@ async function requireExistingRenderDatabase(databasePath) {
     }
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      if (allowEmptyDatabaseInitialization) {
+        await mkdir(dirname(databasePath), { recursive: true, mode: 0o700 });
+        process.stderr.write("[startup] EMPTY_DATABASE_INITIALIZATION_AUTHORIZED\n");
+        return;
+      }
       startupFailure("RENDER_DATABASE_FILE_MISSING");
     }
     throw error;
