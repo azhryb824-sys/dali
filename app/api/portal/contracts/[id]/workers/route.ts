@@ -48,31 +48,39 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       return Response.json({ error: `اكتمل العدد المطلوب لمهنة ${profession.profession} ولا يمكن إضافة عامل آخر` }, { status: 409 });
     }
 
+    const reservedWorkers = await db.update(workers).set({
+      status: "assigned", beneficiaryName: contract.clientName, clientSite: contract.workSite,
+      assignmentStartDate: contract.startDate, updatedAt: new Date().toISOString(),
+    }).where(and(eq(workers.id, worker.id), eq(workers.status, "available"))).returning();
+    const updatedWorker = reservedWorkers[0];
+    if (!updatedWorker) return Response.json({ error: "العامل لم يعد متاحًا؛ حدّث الصفحة وحاول بعامل آخر" }, { status: 409 });
+
     const existingAssignment = await db.query.contractWorkerAssignments.findFirst({ where: and(
       eq(contractWorkerAssignments.contractId, contract.id),
       eq(contractWorkerAssignments.workerId, worker.id),
     ) });
-    const [assignment] = existingAssignment
-      ? await db.update(contractWorkerAssignments).set({
+    let assignment: typeof contractWorkerAssignments.$inferSelect;
+    try {
+      [assignment] = existingAssignment
+        ? await db.update(contractWorkerAssignments).set({
           contractProfessionId: profession.id,
           status: "active",
           assignedBy: access.user.email,
           assignedAt: new Date().toISOString(),
           releasedAt: null,
-        }).where(eq(contractWorkerAssignments.id, existingAssignment.id)).returning()
-      : await db.insert(contractWorkerAssignments).values({
+          }).where(eq(contractWorkerAssignments.id, existingAssignment.id)).returning()
+        : await db.insert(contractWorkerAssignments).values({
           contractId: contract.id,
           contractProfessionId: profession.id,
           workerId: worker.id,
           assignedBy: access.user.email,
-        }).returning();
-    const [updatedWorker] = await db.update(workers).set({
-      status: "assigned",
-      beneficiaryName: contract.clientName,
-      clientSite: contract.workSite,
-      assignmentStartDate: contract.startDate,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(workers.id, worker.id)).returning();
+          }).returning();
+      if (!assignment) throw new Error("ASSIGNMENT_WRITE_FAILED");
+    } catch (error) {
+      await db.update(workers).set({ status: "available", beneficiaryName: null, clientSite: "غير مسند", assignmentStartDate: null, updatedAt: new Date().toISOString() })
+        .where(and(eq(workers.id, worker.id), eq(workers.status, "assigned"), eq(workers.beneficiaryName, contract.clientName))).catch(() => undefined);
+      throw error;
+    }
 
     await db.insert(portalActivity).values({
       actorEmail: access.user.email,
@@ -110,7 +118,10 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     const [released] = await db.update(contractWorkerAssignments).set({
       status: "released",
       releasedAt: new Date().toISOString(),
-    }).where(eq(contractWorkerAssignments.id, assignment.id)).returning();
+    }).where(and(eq(contractWorkerAssignments.id, assignment.id), eq(contractWorkerAssignments.status, "active"))).returning();
+    if (!released) return Response.json({ error: "تغير الإسناد قبل تنفيذ العملية" }, { status: 409 });
+    const otherActive = await db.query.contractWorkerAssignments.findFirst({ where: and(eq(contractWorkerAssignments.workerId, assignment.workerId), eq(contractWorkerAssignments.status, "active")) });
+    if (otherActive) return Response.json({ assignment: released, worker: await db.query.workers.findFirst({ where: eq(workers.id, assignment.workerId) }) });
     const [updatedWorker] = await db.update(workers).set({
       status: "available",
       beneficiaryName: null,
