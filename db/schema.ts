@@ -163,10 +163,39 @@ export const portalAuthCredentials = pgTable(
     email: text("email").notNull().unique(),
     displayName: text("display_name").notNull(),
     passwordHash: text("password_hash").notNull(),
+    mfaSecretEncrypted: text("mfa_secret_encrypted"),
+    mfaEnabledAt: text("mfa_enabled_at"),
+    mfaRecoveryHashesJson: text("mfa_recovery_hashes_json"),
+    mfaRecoveryGeneratedAt: text("mfa_recovery_generated_at"),
+    mfaLastVerifiedAt: text("mfa_last_verified_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("portal_auth_credentials_email_idx").on(table.email)],
+);
+
+export const portalMfaChallenges = pgTable(
+  "portal_mfa_challenges",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    identifier: text("identifier").notNull().references(() => portalAuthCredentials.identifier, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(),
+    pendingSecretEncrypted: text("pending_secret_encrypted"),
+    pendingRecoveryHashesJson: text("pending_recovery_hashes_json"),
+    pendingRecoveryCodesEncrypted: text("pending_recovery_codes_encrypted"),
+    returnTo: text("return_to").notNull().default("/portal"),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("portal_mfa_challenges_identifier_idx").on(table.identifier),
+    index("portal_mfa_challenges_expires_idx").on(table.expiresAt),
+    check("portal_mfa_challenges_purpose_check", sql`${table.purpose} in ('verify', 'enroll')`),
+    check("portal_mfa_challenges_attempts_check", sql`${table.attempts} >= 0 and ${table.attempts} <= 8`),
+  ],
 );
 
 export const passwordResetTokens = pgTable(

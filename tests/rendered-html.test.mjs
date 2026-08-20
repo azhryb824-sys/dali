@@ -34,6 +34,31 @@ test("Render runtime preserves durable storage when Worker bindings are absent",
   assert.match(uploadRoute, /BUCKET\.delete\(previous\.storageKey\)/);
 });
 
+test("sensitive portal roles require replay-safe TOTP or one-time recovery verification", async () => {
+  const [mfa, login, verify, access, session, migration, page] = await Promise.all([
+    readFile(new URL("../lib/portal-mfa.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/mfa/verify/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/portal-access.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/portal/session/start/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle-pg/0007_portal_mfa.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/login/mfa/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(mfa, /HMAC.*SHA-1/s);
+  assert.match(mfa, /AES-GCM/);
+  assert.match(mfa, /\[-1, 0, 1\]/);
+  assert.match(mfa, /system_owner.*system_admin.*executive.*finance_director.*project_accountant/s);
+  assert.match(login, /userRequiresMfa/);
+  assert.match(login, /createMfaChallenge/);
+  assert.match(verify, /MFA_CHALLENGE_REPLAYED/);
+  assert.match(verify, /recoveryHashes\.splice/);
+  assert.match(access, /authStrength !== "mfa"/);
+  assert.match(session, /authStrength !== "mfa"/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /REVOKE ALL ON TABLE "portal_mfa_challenges" FROM PUBLIC, anon, authenticated/);
+  assert.match(page, /رموز الاسترداد — تُعرض مرة واحدة/);
+});
+
 test("construction access is scoped by functional role, geography, project and financial limit", async () => {
   const [policy, route, migration, pdfRoute] = await Promise.all([
     readFile(new URL("../lib/access-policy.ts", import.meta.url), "utf8"),

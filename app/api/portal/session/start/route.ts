@@ -2,6 +2,8 @@ import { getChatGPTUser, chatGPTSignInPath } from "@/app/chatgpt-auth";
 import { resolvePortalAccess } from "@/lib/portal-access";
 import { issuePortalSession, portalSessionCookie, portalSessionEndPath, verifyPortalSession } from "@/lib/portal-session";
 import { externalRequestUrl } from "@/lib/request-origin";
+import { getConfiguredAuthMode } from "@/lib/portal-auth-config";
+import { userRequiresMfa } from "@/lib/portal-mfa";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -11,6 +13,9 @@ export async function GET(request: Request) {
   if (!user) {
     const callbackPath = `/api/portal/session/start?returnTo=${encodeURIComponent(returnTo)}`;
     return Response.redirect(externalRequestUrl(request, chatGPTSignInPath(callbackPath)), 303);
+  }
+  if (getConfiguredAuthMode() === "credentials" && user.authStrength !== "mfa" && await userRequiresMfa(user.email)) {
+    return Response.redirect(externalRequestUrl(request, `/login?error=mfa-required&returnTo=${encodeURIComponent(returnTo)}`), 303);
   }
 
   const existing = await verifyPortalSession(user.email);

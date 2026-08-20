@@ -6,7 +6,8 @@ export const IDENTITY_COOKIE = "__Host-dali_identity";
 const DEV_IDENTITY_COOKIE = "dali_identity_dev";
 const SESSION_SECONDS = 8 * 60 * 60;
 
-type Identity = { email: string; displayName: string; exp: number };
+export type CredentialAuthStrength = "password" | "mfa";
+type Identity = { email: string; displayName: string; authStrength: CredentialAuthStrength; exp: number };
 
 function bytesToBase64Url(bytes: Uint8Array) {
   return Buffer.from(bytes).toString("base64url");
@@ -23,10 +24,11 @@ async function hmac(value: string) {
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value)));
 }
 
-export async function createIdentityToken(email: string, displayName: string) {
+export async function createIdentityToken(email: string, displayName: string, authStrength: CredentialAuthStrength = "password") {
   const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify({
     email: email.trim().toLowerCase(),
     displayName: displayName.trim() || email,
+    authStrength,
     exp: Math.floor(Date.now() / 1000) + SESSION_SECONDS,
   } satisfies Identity)));
   return `${payload}.${bytesToBase64Url(await hmac(payload))}`;
@@ -57,6 +59,7 @@ export async function readCredentialIdentity() {
   try {
     const identity = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as Identity;
     if (!identity.email || identity.exp <= Math.floor(Date.now() / 1000)) return null;
+    if (identity.authStrength !== "mfa") identity.authStrength = "password";
     return identity;
   } catch {
     return null;

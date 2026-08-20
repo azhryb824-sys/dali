@@ -7,6 +7,7 @@ export type ChatGPTUser = {
   displayName: string;
   email: string;
   fullName: string | null;
+  authStrength: "password" | "mfa" | "external";
 };
 
 const USER_EMAIL_HEADER = "oai-authenticated-user-email";
@@ -22,7 +23,7 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const email = requestHeaders.get(USER_EMAIL_HEADER);
   if (!email) {
     const identity = await readCredentialIdentity();
-    return identity ? { displayName: identity.displayName, email: identity.email, fullName: identity.displayName } : null;
+    return identity ? { displayName: identity.displayName, email: identity.email, fullName: identity.displayName, authStrength: identity.authStrength } : null;
   }
 
   const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
@@ -32,7 +33,7 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
       ? safeDecodeURIComponent(encodedFullName)
       : null;
 
-  return { displayName: fullName ?? email, email, fullName };
+  return { displayName: fullName ?? email, email, fullName, authStrength: "external" };
 }
 
 export async function requireChatGPTUser(returnTo: string): Promise<ChatGPTUser> {

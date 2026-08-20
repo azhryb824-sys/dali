@@ -4,8 +4,9 @@ import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { getDb } from "@/db";
 import { portalUserPermissions, portalUsers } from "@/db/schema";
 import { emitPortalNotification } from "@/lib/portal-notifications";
-import { getPortalAdminConfig, normalizePortalEmail } from "@/lib/portal-auth-config";
+import { getConfiguredAuthMode, getPortalAdminConfig, normalizePortalEmail } from "@/lib/portal-auth-config";
 import { verifyPortalSession } from "@/lib/portal-session";
+import { userRequiresMfa } from "@/lib/portal-mfa";
 
 export type PortalRole = "admin" | "manager" | "employee";
 export type PortalStatus = "active" | "pending" | "suspended";
@@ -112,6 +113,7 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
 export async function requirePortalApiRole(allowed: PortalRole[]) {
   const user = await getChatGPTUser();
   if (!user) return null;
+  if (getConfiguredAuthMode() === "credentials" && user.authStrength !== "mfa" && await userRequiresMfa(user.email)) return null;
   const session = await verifyPortalSession(user.email);
   if (session.status !== "valid") return null;
   const access = await resolvePortalAccess(user);
@@ -122,6 +124,7 @@ export async function requirePortalApiRole(allowed: PortalRole[]) {
 export async function requirePortalSessionIdentity() {
   const user = await getChatGPTUser();
   if (!user) return null;
+  if (getConfiguredAuthMode() === "credentials" && user.authStrength !== "mfa" && await userRequiresMfa(user.email)) return null;
   const session = await verifyPortalSession(user.email);
   if (session.status !== "valid") return null;
   return resolvePortalAccess(user);
