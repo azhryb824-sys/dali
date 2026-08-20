@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -26,24 +26,12 @@ const sql = postgres(databaseUrl, {
 });
 
 try {
-  await sql`create schema if not exists private`;
-  await sql`create table if not exists private.__dali_migrations (
-    name text primary key,
-    applied_at timestamptz not null default now()
-  )`;
   const appliedRows = await sql`select name from private.__dali_migrations`;
   const applied = new Set(appliedRows.map((row) => String(row.name)));
   const folder = resolve("drizzle-pg");
   const files = (await readdir(folder)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
-  for (const name of files) {
-    if (applied.has(name)) continue;
-    const migration = await readFile(resolve(folder, name), "utf8");
-    await sql.begin(async (transaction) => {
-      await transaction.unsafe(migration);
-      await transaction`insert into private.__dali_migrations (name) values (${name})`;
-    });
-    process.stdout.write(`[database] applied ${name}\n`);
-  }
+  const pending = files.filter((name) => !applied.has(name));
+  if (pending.length) startupFailure(`DATABASE_MIGRATIONS_PENDING:${pending.join(",")}`);
   await sql`select 1`;
 } finally {
   await sql.end({ timeout: 5 });
