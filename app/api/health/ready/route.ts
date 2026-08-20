@@ -8,7 +8,7 @@ async function checkDatabase() {
   const runtime = getRuntimeEnv();
   const healthy = runtime.DB
     ? await runtime.DB.prepare("SELECT 1 AS healthy").first<{ healthy: number }>()
-    : (await getSqlClient().execute("SELECT 1 AS healthy")).rows[0];
+    : (await getSqlClient().unsafe<{ healthy: number }[]>("SELECT 1 AS healthy"))[0];
   if (Number(healthy?.healthy) !== 1) throw new OperationalError("DATABASE_CHECK_FAILED");
 }
 
@@ -16,7 +16,7 @@ async function hasStoredCredential() {
   const runtime = getRuntimeEnv();
   const credential = runtime.DB
     ? await runtime.DB.prepare("SELECT identifier FROM portal_auth_credentials LIMIT 1").first<{ identifier: string }>()
-    : (await getSqlClient().execute("SELECT identifier FROM portal_auth_credentials LIMIT 1")).rows[0];
+    : (await getSqlClient().unsafe<{ identifier: string }[]>("SELECT identifier FROM portal_auth_credentials LIMIT 1"))[0];
   return Boolean(credential && "identifier" in credential && credential.identifier);
 }
 
