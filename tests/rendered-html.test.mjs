@@ -91,6 +91,7 @@ test("construction access is scoped by functional role, geography, project and f
   assert.match(costMigration, /REVOKE ALL ON TABLE "construction_cost_entries" FROM PUBLIC, anon, authenticated/);
   assert.match(workspace, /الإصدارات والإحالات الهندسية/);
   assert.match(workspace, /CBS \/ WIP \/ EAC/);
+  assert.match(workspace, /توثيق موقع اليومية GPS/);
 });
 
 test("renders the public site and protects request workflows", async () => {

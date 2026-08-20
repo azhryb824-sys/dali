@@ -1647,6 +1647,12 @@ export const constructionRecords = pgTable(
     amountHalalas: integer("amount_halalas"),
     retentionBps: integer("retention_bps").notNull().default(0),
     progressBps: integer("progress_bps").notNull().default(0),
+    siteLatitudeE6: integer("site_latitude_e6"),
+    siteLongitudeE6: integer("site_longitude_e6"),
+    siteAccuracyMeters: integer("site_accuracy_meters"),
+    weatherSummary: text("weather_summary"),
+    workforceCount: integer("workforce_count"),
+    equipmentNotes: text("equipment_notes"),
     revision: integer("revision").notNull().default(1),
     parentRecordId: integer("parent_record_id"),
     createdBy: text("created_by").notNull(),
@@ -1663,6 +1669,8 @@ export const constructionRecords = pgTable(
     check("construction_records_priority_check", sql`${table.priority} in ('low','normal','high','critical')`),
     check("construction_records_amount_check", sql`${table.amountHalalas} is null or ${table.amountHalalas} >= 0`),
     check("construction_records_percentage_check", sql`${table.retentionBps} between 0 and 10000 and ${table.progressBps} between 0 and 10000`),
+    check("construction_records_location_check", sql`(${table.siteLatitudeE6} is null or ${table.siteLatitudeE6} between -90000000 and 90000000) and (${table.siteLongitudeE6} is null or ${table.siteLongitudeE6} between -180000000 and 180000000)`),
+    check("construction_records_field_values_check", sql`(${table.siteAccuracyMeters} is null or ${table.siteAccuracyMeters} >= 0) and (${table.workforceCount} is null or ${table.workforceCount} >= 0)`),
   ],
 );
 

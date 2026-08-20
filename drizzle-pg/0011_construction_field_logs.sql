@@ -1,0 +1,11 @@
+ALTER TABLE "construction_records" ADD COLUMN IF NOT EXISTS "site_latitude_e6" integer;
+ALTER TABLE "construction_records" ADD COLUMN IF NOT EXISTS "site_longitude_e6" integer;
+ALTER TABLE "construction_records" ADD COLUMN IF NOT EXISTS "site_accuracy_meters" integer;
+ALTER TABLE "construction_records" ADD COLUMN IF NOT EXISTS "weather_summary" text;
+ALTER TABLE "construction_records" ADD COLUMN IF NOT EXISTS "workforce_count" integer;
+ALTER TABLE "construction_records" ADD COLUMN IF NOT EXISTS "equipment_notes" text;
+ALTER TABLE "construction_records" DROP CONSTRAINT IF EXISTS "construction_records_location_check";
+ALTER TABLE "construction_records" ADD CONSTRAINT "construction_records_location_check" CHECK (("site_latitude_e6" is null or "site_latitude_e6" between -90000000 and 90000000) and ("site_longitude_e6" is null or "site_longitude_e6" between -180000000 and 180000000));
+ALTER TABLE "construction_records" DROP CONSTRAINT IF EXISTS "construction_records_field_values_check";
+ALTER TABLE "construction_records" ADD CONSTRAINT "construction_records_field_values_check" CHECK (("site_accuracy_meters" is null or "site_accuracy_meters" >= 0) and ("workforce_count" is null or "workforce_count" >= 0));
+INSERT INTO private.__dali_migrations (name) VALUES ('0011_construction_field_logs.sql') ON CONFLICT (name) DO NOTHING;
