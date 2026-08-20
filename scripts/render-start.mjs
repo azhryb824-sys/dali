@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client/node";
-import { copyFile, mkdir, readFile, readdir, stat, unlink } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -70,18 +70,6 @@ async function requireExistingRenderDatabase(databasePath) {
   }
 }
 
-async function copyIfPresent(source, destination) {
-  try {
-    const information = await stat(source);
-    if (!information.isFile() || information.size < 1) return false;
-    await copyFile(source, destination);
-    return true;
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return false;
-    throw error;
-  }
-}
-
 async function backUpSqliteDatabase(databasePath) {
   let information;
   try {
@@ -96,9 +84,13 @@ async function backUpSqliteDatabase(databasePath) {
   await mkdir(backupDirectory, { recursive: true, mode: 0o700 });
   const backupName = `dali-predeploy-${Date.now()}.db`;
   const backupPath = join(backupDirectory, backupName);
-  await copyFile(databasePath, backupPath);
-  await copyIfPresent(`${databasePath}-wal`, `${backupPath}-wal`);
-  await copyIfPresent(`${databasePath}-shm`, `${backupPath}-shm`);
+  const source = createClient({ url: `file:${databasePath}` });
+  try { await source.execute({ sql: "VACUUM INTO ?", args: [backupPath] }); } finally { source.close(); }
+  const verification = createClient({ url: `file:${backupPath}` });
+  try {
+    const result = await verification.execute("PRAGMA quick_check");
+    if (String(result.rows[0]?.quick_check || "").toLowerCase() !== "ok") startupFailure("DATABASE_BACKUP_INTEGRITY_FAILED");
+  } finally { verification.close(); }
 
   const backups = (await readdir(backupDirectory))
     .filter((name) => /^dali-predeploy-\d{13}\.db$/.test(name))
@@ -109,11 +101,6 @@ async function backUpSqliteDatabase(databasePath) {
     await unlink(stalePath).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
-    for (const suffix of ["-wal", "-shm"]) {
-      await unlink(`${stalePath}${suffix}`).catch((error) => {
-        if (error.code !== "ENOENT") throw error;
-      });
-    }
   }
 
   process.stdout.write(`[database] backup-created ${backupPath}\n`);
