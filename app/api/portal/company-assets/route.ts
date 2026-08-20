@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyAssets, portalActivity } from "@/db/schema";
 import { cleanText, objectKey, safeFileName } from "@/lib/company-documents";
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     });
 
     const db = getDb();
+    const previous = await db.query.companyAssets.findFirst({ where: eq(companyAssets.slot, slot) });
     const now = new Date().toISOString();
     const [saved] = await db.insert(companyAssets).values({
       slot,
@@ -51,6 +53,9 @@ export async function POST(request: Request) {
     }).returning();
 
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: `company-${slot}-updated`, entityType: "company-asset", entityId: slot });
+    if (previous?.storageKey && previous.storageKey !== storageKey) {
+      await getRuntimeEnv().BUCKET.delete(previous.storageKey).catch(() => undefined);
+    }
     await emitPortalNotification({ eventType: `company-${slot}-updated`, title: slot === "stamp" ? "تم تحديث ختم الشركة" : "تم تحديث توقيع الشركة", message: `حدّث مدير النظام الأصل الرسمي المستخدم في ملفات PDF.`, severity: "warning", module: "documents", entityType: "company-asset", entityId: slot, actionView: "documents", targetRole: "admin" }).catch(() => undefined);
     return Response.json({ asset: { slot: saved.slot, fileName: saved.fileName, contentType: saved.contentType, sizeBytes: saved.sizeBytes, uploadedBy: saved.uploadedBy, updatedAt: saved.updatedAt } });
   } catch {
