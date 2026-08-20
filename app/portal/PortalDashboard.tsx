@@ -60,7 +60,7 @@ type EmployeeRecord = {
 type FinanceRecord = {
   id: number; referenceCode: string; category: string; description: string; amountHalalas: number;
   dueDate: string; workerId: number | null; contractId: number | null; documentId: number | null;
-  periodMonth: string | null; subCategory: string | null; paymentMethod: string | null; notes: string | null;
+  periodMonth: string | null; subCategory: string | null; paymentMethod: string | null; bankAccountId: number | null; notes: string | null;
   status: string; createdAt: string; updatedAt: string;
 };
 type LegalRecord = {
@@ -1109,6 +1109,15 @@ function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClo
 
 function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { busy: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [category, setCategory] = useState("worker_salary");
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [banks, setBanks] = useState<Array<{ id: number; bankName: string; accountName: string; accountCode: string }>>([]);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/portal/accounting", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject())
+      .then((payload: unknown) => { if (active) { const data = payload as { banks?: Array<{ id: number; bankName: string; accountName: string; accountCode: string; status?: string }> }; setBanks((data.banks || []).filter((bank) => bank.status === "active")); } })
+      .catch(() => { if (active) setBanks([]); });
+    return () => { active = false; };
+  }, []);
   const workerRelated = ["worker_salary", "worker_advance", "worker_deduction", "worker_expense"].includes(category);
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة الحركة المالية" onClick={onClose}/><section className="record-modal finance-modal" role="dialog" aria-modal="true" aria-label="إضافة حركة مالية للعمالة"><div className="drawer-head"><div><span>الإدارة المالية</span><h2>إضافة حركة مالية للعمالة</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}>
@@ -1117,7 +1126,8 @@ function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { b
     <label>العقد المرتبط<select name="contractId" defaultValue=""><option value="">دون عقد محدد</option>{contracts.map((contract) => <option value={contract.id} key={contract.id}>{contract.referenceCode} — {contract.clientName}</option>)}</select></label>
     {category === "worker_salary" && <label>شهر الراتب<input name="periodMonth" required type="month"/></label>}
     {category === "worker_expense" && <label>نوع المصروف<select name="subCategory" required defaultValue=""><option value="" disabled>اختر نوع المصروف</option>{Object.entries(workforceExpenseLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>}
-    <label>تاريخ الاستحقاق أو الصرف<input name="dueDate" required type="date" defaultValue={new Date().toISOString().slice(0, 10)}/></label><label>طريقة الدفع<select name="paymentMethod" defaultValue="bank_transfer"><option value="bank_transfer">تحويل بنكي</option><option value="cash">نقدي</option><option value="cheque">شيك</option><option value="payroll_file">ملف حماية الأجور</option><option value="other">أخرى</option></select></label>
+    <label>تاريخ الاستحقاق أو الصرف<input name="dueDate" required type="date" defaultValue={new Date().toISOString().slice(0, 10)}/></label><label>طريقة الدفع<select name="paymentMethod" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option value="bank_transfer">تحويل بنكي</option><option value="cash">نقدي</option><option value="cheque">شيك</option><option value="payroll_file">ملف حماية الأجور</option><option value="other">أخرى</option></select></label>
+    {paymentMethod === "bank_transfer" && <label className="span-two">الحساب البنكي<select name="bankAccountId" required defaultValue=""><option value="" disabled>{banks.length ? "اختر الحساب البنكي" : "لا توجد حسابات بنكية نشطة"}</option>{banks.map((bank) => <option value={bank.id} key={bank.id}>{bank.bankName} — {bank.accountName} — {bank.accountCode}</option>)}</select></label>}
     <label className="span-two">البيان<input name="description" required minLength={3} maxLength={240} placeholder="مثال: راتب شهر أغسطس للعامل أو مصروف تجديد إقامة"/></label><label className="span-two">ملاحظات<textarea name="notes" maxLength={1000} rows={4} placeholder="تفاصيل إضافية أو رقم مرجع خارجي..."/></label>
     <p className="form-hint span-two">يظهر السجل في كشف العامل والعقد، ويمكن إصدار الفواتير والسندات الرسمية من لوحة المالية.</p><div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ الحركة المالية"}</button></div>
   </form></section></div>;
