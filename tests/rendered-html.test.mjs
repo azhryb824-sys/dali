@@ -26,6 +26,24 @@ test("Render runtime preserves durable storage when Worker bindings are absent",
   assert.match(source, /ON CONFLICT \(storage_key\) DO UPDATE/);
 });
 
+test("construction access is scoped by functional role, geography, project and financial limit", async () => {
+  const [policy, route, migration, pdfRoute] = await Promise.all([
+    readFile(new URL("../lib/access-policy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/portal/construction/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle-pg/0005_portal_scoped_permissions.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/portal/construction/pdf/route.ts", import.meta.url), "utf8"),
+  ]);
+  for (const role of ["project_manager", "site_engineer", "cost_engineer", "contracts_manager", "quality_officer", "safety_officer", "regional_manager"]) assert.match(policy, new RegExp(role));
+  assert.match(policy, /approvalLimitHalalas/);
+  assert.match(route, /scopeAllowsProject/);
+  assert.match(route, /scopeAllowsCity/);
+  assert.match(route, /فصل الواجبات يمنع اعتماد السجل بواسطة منشئه/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /REVOKE ALL ON TABLE "portal_access_scopes" FROM anon, authenticated/);
+  assert.match(pdfRoute, /generateIssuedPdf/);
+  assert.match(pdfRoute, /construction-record-pdf-generated/);
+});
+
 test("renders the public site and protects request workflows", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
@@ -115,7 +133,7 @@ test("renders the public site and protects request workflows", async () => {
 
   for (const [path, expected] of [
     ["/about", "عن شركة دالي"],
-    ["/services", "حلول عملية تدعم استمرارية أعمالك"],
+    ["/services", "حلول متكاملة لأعمالك في جميع مدن المملكة"],
     ["/services/manpower-supply-makkah", "توفير عمالة للمشروعات والمنشآت"],
     ["/services/construction-workforce", "قوى عاملة وفرق فنية للمشروعات الإنشائية"],
     ["/services/operations-maintenance", "فرق التشغيل والصيانة"],
@@ -128,7 +146,7 @@ test("renders the public site and protects request workflows", async () => {
     ["/sectors", "خبرة مرنة تفهم طبيعة قطاعك"],
     ["/sectors/hotels-hospitality", "حلول القوى العاملة للفنادق والضيافة في مكة"],
     ["/sectors/seasonal-hajj", "فرق تشغيل وخدمات مساندة لموسم الحج في مكة"],
-    ["/locations", "من مكة، أقرب إلى احتياج أعمالك"],
+    ["/locations", "نخدم أعمالك في جميع مدن المملكة"],
     ["/locations/makkah", "توفير العمالة والتشغيل والصيانة في مكة المكرمة"],
     ["/projects", "خبرات نبني عليها شراكات أطول"],
     ["/credentials", "ثقة تستند إلى معلومات واضحة"],
@@ -265,7 +283,7 @@ test("renders the public site and protects request workflows", async () => {
     assert.equal(unauthorized.status, 401, path);
   }
 
-  for (const path of ["/api/portal/operations", "/api/portal/search?q=test", "/api/portal/integrations", "/api/portal/documents/share", "/api/portal/website", "/api/portal/accounting", "/api/portal/hr", "/api/portal/compliance", "/api/portal/finance/posting", "/api/portal/purchasing", "/api/portal/reports", "/api/portal/reports/pdf", "/api/portal/banking/reconciliations"]) {
+  for (const path of ["/api/portal/operations", "/api/portal/search?q=test", "/api/portal/integrations", "/api/portal/documents/share", "/api/portal/website", "/api/portal/accounting", "/api/portal/hr", "/api/portal/compliance", "/api/portal/finance/posting", "/api/portal/purchasing", "/api/portal/reports", "/api/portal/reports/pdf", "/api/portal/banking/reconciliations", "/api/portal/access-scopes", "/api/portal/construction", "/api/portal/construction/pdf?id=1"]) {
     const unauthorized = await worker.fetch(new Request(`http://localhost${path}`), env, context);
     assert.equal(unauthorized.status, 403, path);
   }

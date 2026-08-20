@@ -58,7 +58,7 @@ export function ManagedEntryDetail({ content, collectionKey, entry }: { content:
     author: { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: content.site.companyName }, publisher: { "@id": `${SITE.url}/#organization` }, mainEntityOfPage: absoluteUrl(canonical), inLanguage: SITE.language,
   } : primaryType === "Service" ? {
     "@type": "Service", name: entry.title, description: entry.seoDescription, url: absoluteUrl(canonical), serviceType: entry.shortTitle,
-    areaServed: { "@type": "City", name: content.site.city }, provider: { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: content.site.companyName, url: SITE.url },
+    areaServed: collectionKey === "locations" ? { "@type": "City", name: entry.shortTitle || entry.title } : { "@type": "Country", name: "المملكة العربية السعودية" }, provider: { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: content.site.companyName, url: SITE.url },
   } : { "@type": "WebPage", name: entry.title, description: entry.seoDescription, url: absoluteUrl(canonical), inLanguage: SITE.language };
   const data = { "@context": "https://schema.org", "@graph": [
     { "@type": "BreadcrumbList", itemListElement: [
@@ -73,7 +73,7 @@ export function ManagedEntryDetail({ content, collectionKey, entry }: { content:
     <StructuredData data={data}/>
     <section className="service-detail-hero managed-entry-hero" style={{ "--service-image": `url(${entry.image})` } as React.CSSProperties}>
       <nav className="page-breadcrumbs" aria-label="مسار الصفحة"><Link href="/">الرئيسية</Link><span aria-hidden="true">/</span><Link href={basePath}>{label.eyebrow}</Link><span aria-hidden="true">/</span><span>{entry.shortTitle || entry.title}</span></nav>
-      <p className="eyebrow light"><span/>{label.eyebrow} · {content.site.city}</p><h1>{entry.title}</h1><p>{entry.body || entry.summary}</p><div className="detail-actions"><Link className="btn primary" href="/contact#quote">اطلب عرض سعر <span aria-hidden="true">←</span></Link><a className="text-link" href="#details">عرض التفاصيل <span aria-hidden="true">↓</span></a></div>
+      <p className="eyebrow light"><span/>{label.eyebrow} · {collectionKey === "locations" ? (entry.shortTitle || entry.title) : "جميع مدن المملكة"}</p><h1>{entry.title}</h1><p>{entry.body || entry.summary}</p><div className="detail-actions"><Link className="btn primary" href="/contact#quote">اطلب عرض سعر <span aria-hidden="true">←</span></Link><a className="text-link" href="#details">عرض التفاصيل <span aria-hidden="true">↓</span></a></div>
     </section>
     <article className="service-detail inner-content" id="details">
       <section className="detail-overview"><div><p className="eyebrow"><span/>نطاق واضح</p><h2>{entry.shortTitle || label.singular}</h2><p>{entry.summary}</p></div><ul aria-label="المجالات المرتبطة">{entry.tags.map((tag) => <li key={tag}>{tag}</li>)}</ul></section>

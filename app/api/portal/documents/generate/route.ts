@@ -25,6 +25,7 @@ const prefixes: Record<IssuedDocumentType, string> = {
   invoice: "INV",
   receipt: "RCP",
   payment_voucher: "PAY",
+  construction_record: "CST",
 };
 
 type ProfessionInput = { profession: string; requiredCount: number; workerIds: number[] };
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
     const vatRate = vatEnabled ? Number(payload.vatRate || 15) : 0;
     const linkedContractId = parsePositiveId(payload.linkedContractId);
 
-    if (!isDocumentType(documentType) || clientName.length < 2 || title.length < 3 || !issueDate || expiryDate === "" || details.length < 5) {
+    if (!isDocumentType(documentType) || documentType === "construction_record" || clientName.length < 2 || title.length < 3 || !issueDate || expiryDate === "" || details.length < 5) {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
     }
     if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000) {

@@ -1553,6 +1553,37 @@ export const constructionProjects = pgTable(
   ],
 );
 
+export const portalAccessScopes = pgTable(
+  "portal_access_scopes",
+  {
+    id: serial("id").primaryKey(),
+    userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
+    functionalRole: text("functional_role").notNull(),
+    businessLineId: integer("business_line_id").references(() => businessLines.id, { onDelete: "restrict" }),
+    regionId: integer("region_id").references(() => serviceRegions.id, { onDelete: "restrict" }),
+    cityId: integer("city_id").references(() => serviceCities.id, { onDelete: "restrict" }),
+    projectId: integer("project_id").references(() => constructionProjects.id, { onDelete: "cascade" }),
+    financialLimitHalalas: integer("financial_limit_halalas"),
+    approvalLimitHalalas: integer("approval_limit_halalas"),
+    canApproveOwn: boolean("can_approve_own").notNull().default(false),
+    validFrom: text("valid_from"),
+    validUntil: text("valid_until"),
+    active: boolean("active").notNull().default(true),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("portal_access_scopes_user_active_idx").on(table.userEmail, table.active),
+    index("portal_access_scopes_project_idx").on(table.projectId),
+    index("portal_access_scopes_city_idx").on(table.cityId),
+    uniqueIndex("portal_access_scopes_assignment_unique").on(table.userEmail, table.functionalRole, table.businessLineId, table.regionId, table.cityId, table.projectId),
+    check("portal_access_scopes_financial_limit_check", sql`${table.financialLimitHalalas} is null or ${table.financialLimitHalalas} >= 0`),
+    check("portal_access_scopes_approval_limit_check", sql`${table.approvalLimitHalalas} is null or ${table.approvalLimitHalalas} >= 0`),
+    check("portal_access_scopes_dates_check", sql`${table.validUntil} is null or ${table.validFrom} is null or ${table.validUntil} >= ${table.validFrom}`),
+  ],
+);
+
 export const constructionRecords = pgTable(
   "construction_records",
   {

@@ -12,6 +12,7 @@ export const issuedDocumentLabels = {
   invoice: "فاتورة",
   receipt: "سند قبض",
   payment_voucher: "سند صرف",
+  construction_record: "سجل مشروع مقاولات",
 } as const;
 
 export type IssuedDocumentType = keyof typeof issuedDocumentLabels;

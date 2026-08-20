@@ -15,6 +15,7 @@ import { auditPortalAction, enqueueOutbox, recordStatusChange } from "@/lib/audi
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
+import { assertFinancialLimit, canApproveOwn, canCreateConstructionRecord, canReadConstruction, getActivePortalScopes, scopeAllowsCity, scopeAllowsProject } from "@/lib/access-policy";
 
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const positiveInteger = (value: unknown, allowZero = false) => {
@@ -29,13 +30,18 @@ const reference = (prefix: string) => `${prefix}-${new Date().getFullYear()}-${D
 
 async function requireConstructionAccess(action: "read" | "write") {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "construction", action))) return null;
-  return access;
+  if (!access) return null;
+  const scopes = await getActivePortalScopes(access);
+  const basePermission = await hasPortalPermission(access, "construction", action);
+  if (!basePermission && !(action === "write" && scopes.length > 0)) return null;
+  if (!canReadConstruction(access, scopes)) return null;
+  return { access, scopes };
 }
 
 export async function GET() {
-  const access = await requireConstructionAccess("read");
-  if (!access) return jsonNoStore({ error: "غير مصرح بالوصول إلى قطاع المقاولات" }, { status: 403 });
+  const authorization = await requireConstructionAccess("read");
+  if (!authorization) return jsonNoStore({ error: "غير مصرح بالوصول إلى قطاع المقاولات" }, { status: 403 });
+  const { access, scopes } = authorization;
   const db = getDb();
   try {
     const [lines, regions, cities, coverage, opportunities, projects, records, recordLines] = await Promise.all([
@@ -48,7 +54,15 @@ export async function GET() {
       db.select().from(constructionRecords).orderBy(desc(constructionRecords.updatedAt)).limit(1000),
       db.select().from(constructionRecordLines).orderBy(desc(constructionRecordLines.id)).limit(5000),
     ]);
-    return jsonNoStore({ lines, regions, cities, coverage, opportunities, projects, records, recordLines, canWrite: await hasPortalPermission(access, "construction", "write") });
+    const visibleCities = cities.filter((city) => access.role === "admin" || !scopes.length || scopes.some((scope) => (!scope.regionId || scope.regionId === city.regionId) && (!scope.cityId || scope.cityId === city.id)));
+    const visibleProjects = projects.filter((project) => scopeAllowsProject(access, scopes, project.id, project.cityId));
+    const projectIds = new Set(visibleProjects.map((project) => project.id));
+    const visibleOpportunities = opportunities.filter((opportunity) => access.role === "admin" || !scopes.length || scopes.some((scope) => !scope.cityId || scope.cityId === opportunity.cityId));
+    const opportunityIds = new Set(visibleOpportunities.map((opportunity) => opportunity.id));
+    const visibleRecords = records.filter((record) => (!record.projectId || projectIds.has(record.projectId)) && (!record.opportunityId || opportunityIds.has(record.opportunityId)));
+    const recordIds = new Set(visibleRecords.map((record) => record.id));
+    const visibleCoverage = coverage.filter((item) => visibleCities.some((city) => city.id === item.cityId));
+    return jsonNoStore({ lines, regions, cities: visibleCities, coverage: visibleCoverage, opportunities: visibleOpportunities, projects: visibleProjects, records: visibleRecords, recordLines: recordLines.filter((line) => recordIds.has(line.recordId)), canWrite: await hasPortalPermission(access, "construction", "write") || scopes.length > 0, scopedAccess: scopes.length > 0 });
   } catch (error) {
     console.error("construction-workspace-load-failed", error);
     return jsonNoStore({ error: "تعذر تحميل مساحة المقاولات" }, { status: 500 });
@@ -58,8 +72,9 @@ export async function GET() {
 export async function POST(request: Request) {
   const crossSite = rejectCrossSiteRequest(request);
   if (crossSite) return crossSite;
-  const access = await requireConstructionAccess("write");
-  if (!access) return jsonNoStore({ error: "غير مصرح بالتعديل في قطاع المقاولات" }, { status: 403 });
+  const authorization = await requireConstructionAccess("write");
+  if (!authorization) return jsonNoStore({ error: "غير مصرح بالتعديل في قطاع المقاولات" }, { status: 403 });
+  const { access, scopes } = authorization;
   const correlationId = requestCorrelationId(request);
   const parsed = await readLimitedJson(request, 32_000);
   if (!parsed.ok) return parsed.response;
@@ -81,6 +96,9 @@ export async function POST(request: Request) {
       if (title.length < 3 || clientName.length < 2 || !projectType || scopeSummary.length < 20 || !cityId || bidDueDate === "" || expectedStartDate === "") throw new Error("بيانات فرصة المقاولات غير مكتملة");
       const city = await db.query.serviceCities.findFirst({ where: eq(serviceCities.id, cityId) });
       if (!city || city.status !== "active") throw new Error("المدينة غير متاحة في سجل التغطية");
+      if (!(await scopeAllowsCity(access, scopes, cityId))) throw new Error("المدينة خارج نطاق صلاحية المستخدم");
+      if (!canCreateConstructionRecord(access, scopes, "estimate")) throw new Error("الدور الوظيفي لا يسمح بإنشاء فرص مقاولات");
+      assertFinancialLimit(access, scopes, estimatedValueHalalas);
       const [opportunity] = await db.insert(constructionOpportunities).values({
         opportunityCode: reference("COP"), clientName, title, cityId, projectType, scopeSummary,
         estimatedValueHalalas, expectedStartDate, bidDueDate, ownerEmail: clean(payload.ownerEmail, 160).toLowerCase() || actor,
@@ -117,6 +135,9 @@ export async function POST(request: Request) {
       if (!opportunityId || !startDate || !plannedEndDate || plannedEndDate < startDate || contractValueHalalas == null || budgetHalalas == null) throw new Error("بيانات إنشاء المشروع غير صحيحة");
       const opportunity = await db.query.constructionOpportunities.findFirst({ where: eq(constructionOpportunities.id, opportunityId) });
       if (!opportunity || opportunity.stage !== "won") throw new Error("يجب تحويل الفرصة إلى فوز قبل إنشاء المشروع");
+      if (!opportunity.cityId || !(await scopeAllowsCity(access, scopes, opportunity.cityId))) throw new Error("الفرصة خارج النطاق الجغرافي للمستخدم");
+      if (!canCreateConstructionRecord(access, scopes, "contract")) throw new Error("الدور الوظيفي لا يسمح بتحويل الفرصة إلى مشروع");
+      assertFinancialLimit(access, scopes, contractValueHalalas);
       const existing = await db.query.constructionProjects.findFirst({ where: eq(constructionProjects.opportunityId, opportunityId) });
       if (existing) throw new Error("أُنشئ مشروع لهذه الفرصة سابقًا");
       const projectCode = reference("PRJ");
@@ -148,6 +169,7 @@ export async function POST(request: Request) {
       const capacityLevel = clean(payload.capacityLevel, 30);
       const mobilizationDays = payload.mobilizationDays === "" || payload.mobilizationDays == null ? null : positiveInteger(payload.mobilizationDays, true);
       if (!cityId || !businessLineId || !["available","conditional","unavailable"].includes(availability) || !["high","medium","limited","review_required"].includes(capacityLevel) || (payload.mobilizationDays !== "" && payload.mobilizationDays != null && mobilizationDays == null)) throw new Error("بيانات التغطية غير صحيحة");
+      if (!(await scopeAllowsCity(access, scopes, cityId))) throw new Error("المدينة خارج نطاق صلاحية المستخدم");
       const publicApproved = payload.publicApproved === true && access.role === "admin";
       const now = new Date().toISOString();
       const [coverage] = await db.insert(serviceCoverage).values({ cityId, businessLineId, availability, capacityLevel, mobilizationDays, ownerEmail: clean(payload.ownerEmail, 160).toLowerCase() || actor, operatingNotes: clean(payload.operatingNotes, 2000) || null, publicApproved, reviewedBy: publicApproved ? actor : null, reviewedAt: publicApproved ? now : null }).onConflictDoUpdate({ target: [serviceCoverage.cityId, serviceCoverage.businessLineId], set: { availability, capacityLevel, mobilizationDays, ownerEmail: clean(payload.ownerEmail, 160).toLowerCase() || actor, operatingNotes: clean(payload.operatingNotes, 2000) || null, publicApproved, reviewedBy: publicApproved ? actor : null, reviewedAt: publicApproved ? now : null, updatedAt: now } }).returning();
@@ -170,6 +192,10 @@ export async function POST(request: Request) {
       if (projectId && !(await db.query.constructionProjects.findFirst({ where: eq(constructionProjects.id, projectId) }))) throw new Error("المشروع غير موجود");
       if (opportunityId && !(await db.query.constructionOpportunities.findFirst({ where: eq(constructionOpportunities.id, opportunityId) }))) throw new Error("الفرصة غير موجودة");
       if (["wbs","daily_log","document","rfi","submittal","inspection","ncr","safety","procurement","subcontract","change_order","payment_certificate","handover","risk"].includes(recordType) && !projectId) throw new Error("يجب ربط هذا السجل بمشروع");
+      if (!canCreateConstructionRecord(access, scopes, recordType)) throw new Error("الدور الوظيفي لا يسمح بإنشاء هذا النوع من السجلات");
+      const scopedProject = projectId ? await db.query.constructionProjects.findFirst({ where: eq(constructionProjects.id, projectId) }) : null;
+      if (projectId && (!scopedProject || !scopeAllowsProject(access, scopes, scopedProject.id, scopedProject.cityId))) throw new Error("المشروع خارج نطاق صلاحية المستخدم");
+      assertFinancialLimit(access, scopes, amountHalalas);
       const prefix:Record<string,string>={survey:"SRV",estimate:"EST",boq:"BOQ",contract:"CNT",wbs:"WBS",daily_log:"LOG",document:"DOC",rfi:"RFI",submittal:"SUB",inspection:"INS",ncr:"NCR",safety:"HSE",procurement:"PRC",subcontract:"SCT",change_order:"CO",payment_certificate:"IPC",handover:"HND",risk:"RSK"};
       const [record] = await db.insert(constructionRecords).values({ recordCode: reference(prefix[recordType]), recordType, opportunityId, projectId, title, description, status: "draft", priority: clean(payload.priority, 20) || "normal", responsibleEmail: clean(payload.responsibleEmail, 160).toLowerCase() || actor, dueDate, amountHalalas, retentionBps, createdBy: actor }).returning();
       await auditPortalAction({ actorEmail: actor, action, entityType: `construction-${recordType}`, entityId: record.id, after: record, correlationId });
@@ -185,6 +211,13 @@ export async function POST(request: Request) {
       if (!id || !allowedStatuses.includes(status)) throw new Error("حالة السجل غير صحيحة");
       const current = await db.query.constructionRecords.findFirst({ where: eq(constructionRecords.id, id) });
       if (!current) throw new Error("السجل غير موجود");
+      if (!canCreateConstructionRecord(access, scopes, current.recordType)) throw new Error("الدور الوظيفي لا يسمح بتغيير حالة هذا السجل");
+      const currentProject = current.projectId ? await db.query.constructionProjects.findFirst({ where: eq(constructionProjects.id, current.projectId) }) : null;
+      if (current.projectId && (!currentProject || !scopeAllowsProject(access, scopes, currentProject.id, currentProject.cityId))) throw new Error("المشروع خارج نطاق صلاحية المستخدم");
+      if (["approved","certified","closed"].includes(status)) {
+        if (current.createdBy === actor && access.role !== "admin" && !canApproveOwn(scopes)) throw new Error("فصل الواجبات يمنع اعتماد السجل بواسطة منشئه");
+        assertFinancialLimit(access, scopes, current.amountHalalas, true);
+      }
       const [record] = await db.update(constructionRecords).set({ status, updatedAt: new Date().toISOString(), version: current.version + 1 }).where(and(eq(constructionRecords.id, id), eq(constructionRecords.version, current.version))).returning();
       if (!record) throw new Error("عُدل السجل من مستخدم آخر؛ حدّث الصفحة");
       await auditPortalAction({ actorEmail: actor, action, entityType: `construction-${record.recordType}`, entityId: id, before: current, after: record, correlationId });
@@ -202,6 +235,9 @@ export async function POST(request: Request) {
       if (!recordId || description.length < 2 || quantityMilli == null || unitRateHalalas == null) throw new Error("بيانات البند غير صحيحة");
       const parent = await db.query.constructionRecords.findFirst({ where: eq(constructionRecords.id, recordId) });
       if (!parent || !["boq","estimate","wbs","payment_certificate","change_order"].includes(parent.recordType)) throw new Error("لا يقبل هذا السجل بنوداً تفصيلية");
+      if (!canCreateConstructionRecord(access, scopes, parent.recordType)) throw new Error("الدور الوظيفي لا يسمح بإضافة بنود لهذا السجل");
+      const parentProject = parent.projectId ? await db.query.constructionProjects.findFirst({ where: eq(constructionProjects.id, parent.projectId) }) : null;
+      if (parent.projectId && (!parentProject || !scopeAllowsProject(access, scopes, parentProject.id, parentProject.cityId))) throw new Error("المشروع خارج نطاق صلاحية المستخدم");
       const existingLines = await db.select({ id: constructionRecordLines.id }).from(constructionRecordLines).where(eq(constructionRecordLines.recordId, recordId));
       const totalHalalas = Math.round(quantityMilli * unitRateHalalas / 1000);
       const [line] = await db.insert(constructionRecordLines).values({ recordId, lineNumber: existingLines.length + 1, itemCode: clean(payload.itemCode, 50) || null, description, unit, quantityMilli, unitRateHalalas, totalHalalas }).returning();

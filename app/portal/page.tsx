@@ -14,6 +14,7 @@ import { getWebsiteContent } from "@/lib/website-content";
 import { portalSessionEndPath, portalSessionStartPath, verifyPortalSession } from "@/lib/portal-session";
 import PortalDashboard from "./PortalDashboard";
 import PortalAccessRequestForm from "./PortalAccessRequestForm";
+import { canReadConstruction, getActivePortalScopes } from "@/lib/access-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -76,11 +77,13 @@ async function ProtectedPortal() {
   const canSeeDocuments = canAccessPortalDocuments(access);
   const canSeeContracts = canAccessPortalDepartment(access, "workforce") || canAccessPortalDepartment(access, "finance");
   const canSeeConversations = canManagePortalConversations(access);
-  const [canReadWebsite, canManageWebsite, canAccessConstruction] = await Promise.all([
+  const [canReadWebsite, canManageWebsite, constructionPermission, constructionScopes] = await Promise.all([
     hasPortalPermission(access, "website", "read"),
     hasPortalPermission(access, "website", "write"),
     hasPortalPermission(access, "construction", "read"),
+    getActivePortalScopes(access),
   ]);
+  const canAccessConstruction = constructionPermission || canReadConstruction(access, constructionScopes);
   const [requests, replies, notifications, users, activity, employeeRecords, financeRecords, legalItems, workerRecords, workerFiles, documents, assets, contracts, professionItems, assignmentItems, conversations, conversationMessages, businessHours, chatAutomation, websiteContent] = await Promise.all([
     canAccessPortalDepartment(access, "workforce")
       ? db.select().from(workforceRequests).orderBy(desc(workforceRequests.createdAt)).limit(250)
