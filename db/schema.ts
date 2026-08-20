@@ -1704,3 +1704,33 @@ export const constructionRecordLines = pgTable(
     check("construction_record_lines_values_check", sql`${table.quantityMilli} >= 0 and ${table.unitRateHalalas} >= 0 and ${table.totalHalalas} >= 0`),
   ],
 );
+
+export const constructionCostEntries = pgTable(
+  "construction_cost_entries",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+    costCode: text("cost_code").notNull(),
+    costTitle: text("cost_title").notNull(),
+    costCategory: text("cost_category").notNull().default("other"),
+    entryType: text("entry_type").notNull(),
+    amountHalalas: integer("amount_halalas").notNull().default(0),
+    effectiveDate: text("effective_date").notNull(),
+    sourceRecordId: integer("source_record_id").references(() => constructionRecords.id, { onDelete: "restrict" }),
+    referenceCode: text("reference_code"),
+    notes: text("notes"),
+    status: text("status").notNull().default("approved"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("construction_cost_entries_project_code_idx").on(table.projectId, table.costCode),
+    index("construction_cost_entries_project_type_idx").on(table.projectId, table.entryType),
+    index("construction_cost_entries_effective_date_idx").on(table.effectiveDate),
+    check("construction_cost_entries_type_check", sql`${table.entryType} in ('baseline','commitment','actual','forecast_to_complete','approved_change','payment_certificate','retention')`),
+    check("construction_cost_entries_category_check", sql`${table.costCategory} in ('labor','materials','equipment','subcontract','overhead','other')`),
+    check("construction_cost_entries_status_check", sql`${table.status} in ('draft','approved','cancelled')`),
+    check("construction_cost_entries_amount_check", sql`${table.amountHalalas} >= 0`),
+  ],
+);

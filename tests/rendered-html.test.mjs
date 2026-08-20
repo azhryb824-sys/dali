@@ -60,13 +60,15 @@ test("sensitive portal roles require replay-safe TOTP or one-time recovery verif
 });
 
 test("construction access is scoped by functional role, geography, project and financial limit", async () => {
-  const [policy, route, migration, pdfRoute, attachmentRoute, attachmentMigration, workspace] = await Promise.all([
+  const [policy, route, migration, pdfRoute, attachmentRoute, attachmentMigration, costRoute, costMigration, workspace] = await Promise.all([
     readFile(new URL("../lib/access-policy.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/portal/construction/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle-pg/0005_portal_scoped_permissions.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/portal/construction/pdf/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/portal/construction/attachments/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle-pg/0008_construction_engineering_files.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/portal/construction/cost-control/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle-pg/0009_construction_cost_control.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/portal/ConstructionWorkspace.tsx", import.meta.url), "utf8"),
   ]);
   for (const role of ["project_manager", "site_engineer", "cost_engineer", "contracts_manager", "quality_officer", "safety_officer", "regional_manager"]) assert.match(policy, new RegExp(role));
@@ -83,7 +85,12 @@ test("construction access is scoped by functional role, geography, project and f
   assert.match(attachmentRoute, /rejectionReason\.length < 5/);
   assert.match(attachmentMigration, /construction_record_attachments_revision_unique/);
   assert.match(attachmentMigration, /REVOKE ALL ON TABLE "construction_record_attachments" FROM PUBLIC, anon, authenticated/);
+  assert.match(costRoute, /estimateAtCompletion/);
+  assert.match(costRoute, /varianceAtCompletion/);
+  assert.match(costRoute, /assertFinancialLimit/);
+  assert.match(costMigration, /REVOKE ALL ON TABLE "construction_cost_entries" FROM PUBLIC, anon, authenticated/);
   assert.match(workspace, /الإصدارات والإحالات الهندسية/);
+  assert.match(workspace, /CBS \/ WIP \/ EAC/);
 });
 
 test("renders the public site and protects request workflows", async () => {
