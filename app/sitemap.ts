@@ -11,6 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: "/", updatedAt: lastModified },
     { path: "/about", updatedAt: lastModified },
     { path: "/contact", updatedAt: lastModified },
+    { path: "/construction", updatedAt: lastModified },
     ...(content.visibility.faq ? [{ path: "/faq", updatedAt: lastModified }] : []),
     { path: "/privacy", updatedAt: lastModified },
     { path: "/terms", updatedAt: lastModified },

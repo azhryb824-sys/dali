@@ -9,7 +9,7 @@ import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelatio
 
 const allowedRoles = new Set(["admin", "manager", "employee"]);
 const allowedStatuses = new Set(["active", "pending", "suspended"]);
-const allowedDepartments = new Set(["general", "employees", "finance", "legal", "workforce"]);
+const allowedDepartments = new Set(["general", "employees", "finance", "legal", "workforce", "construction"]);
 
 export async function PATCH(request: Request) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });

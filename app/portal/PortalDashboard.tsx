@@ -18,12 +18,13 @@ import PurchasingWorkspace from "./PurchasingWorkspace";
 import ReportsWorkspace from "./ReportsWorkspace";
 import ReportPdfDownload from "./ReportPdfDownload";
 import BankReconciliationWorkspace from "./BankReconciliationWorkspace";
+import ConstructionWorkspace from "./ConstructionWorkspace";
 
 type PortalRole = "admin" | "manager" | "employee";
-type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "general";
+type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
 type RequestStatus = "new" | "reviewing" | "contacted" | "closed";
-type View = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "operations" | "conversations" | "documents" | "brand" | "website" | "users";
-type RecordEntity = Exclude<PortalDepartment, "general">;
+type View = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "operations" | "construction" | "conversations" | "documents" | "brand" | "website" | "users";
+type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 type WorkforceRequest = {
   id: number; trackingCode: string; fullName: string; mobile: string; email: string;
@@ -124,7 +125,7 @@ const recordStatus: Record<RecordEntity, Record<string, string>> = {
 const roleLabels: Record<PortalRole, string> = { admin: "مدير النظام", manager: "الإدارة", employee: "موظف" };
 const departmentLabels: Record<PortalDepartment, string> = {
   employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية",
-  workforce: "شؤون العمالة", general: "صلاحية عامة",
+  workforce: "شؤون العمالة", construction: "المقاولات والمشروعات", general: "صلاحية عامة",
 };
 const financeLabels: Record<string, string> = {
   worker_salary: "راتب عامل", worker_advance: "سلفة عامل", worker_deduction: "خصم عامل", worker_expense: "مصروف عمالة",
@@ -207,7 +208,7 @@ function Icon({ name }: { name: IconName }) {
   return <svg className="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-export default function PortalDashboard({ currentUser, initialRequests, initialRequestReplies, initialNotifications, initialUsers, initialActivity, initialEmployees, initialFinance, initialLegal, initialWorkers, initialWorkerAttachments, initialDocuments, initialAssets, initialContracts, initialContractProfessions, initialContractAssignments, initialConversations, initialConversationMessages, initialBusinessHours, initialChatAutomation, initialWebsiteContent, canAccessWebsite, canManageWebsite, canManageChatSettings, canManageDocuments, canManageAssets, emailConfigured, signOutPath }: {
+export default function PortalDashboard({ currentUser, initialRequests, initialRequestReplies, initialNotifications, initialUsers, initialActivity, initialEmployees, initialFinance, initialLegal, initialWorkers, initialWorkerAttachments, initialDocuments, initialAssets, initialContracts, initialContractProfessions, initialContractAssignments, initialConversations, initialConversationMessages, initialBusinessHours, initialChatAutomation, initialWebsiteContent, canAccessWebsite, canManageWebsite, canAccessConstruction, canManageChatSettings, canManageDocuments, canManageAssets, emailConfigured, signOutPath }: {
   currentUser: { email: string; displayName: string; role: PortalRole; department: PortalDepartment };
   initialRequests: WorkforceRequest[]; initialRequestReplies: WorkforceRequestReply[]; initialNotifications: PortalNotification[]; initialUsers: PortalUser[]; initialActivity: Activity[];
   initialEmployees: EmployeeRecord[]; initialFinance: FinanceRecord[]; initialLegal: LegalRecord[]; initialWorkers: WorkerRecord[]; initialWorkerAttachments: WorkerAttachment[];
@@ -216,7 +217,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   initialConversations: VisitorConversation[]; initialConversationMessages: VisitorMessage[]; initialBusinessHours: BusinessHours; canManageChatSettings: boolean;
   initialChatAutomation: ChatAutomationConfig;
   emailConfigured: boolean;
-  initialWebsiteContent: WebsiteContent; canAccessWebsite: boolean; canManageWebsite: boolean;
+  initialWebsiteContent: WebsiteContent; canAccessWebsite: boolean; canManageWebsite: boolean; canAccessConstruction: boolean;
   signOutPath: string;
 }) {
   const router = useRouter();
@@ -505,7 +506,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setNotificationsOpen(false);
     setOperationsQuery("");
     const actionView = item.actionView as View | null;
-    if (actionView && ["overview", "notifications", "employees", "finance", "legal", "workforce", "operations", "conversations", "documents", "website", "users"].includes(actionView)) changeView(actionView);
+    if (actionView && ["overview", "notifications", "employees", "finance", "legal", "workforce", "operations", "construction", "conversations", "documents", "website", "users"].includes(actionView)) changeView(actionView);
     if (item.entityType === "workforce-request" && item.entityId) setSelectedId(Number(item.entityId));
     if (item.entityType === "worker" && item.entityId) setSelectedWorkerId(Number(item.entityId));
     if (item.entityType === "workforce-contract" && item.entityId) setSelectedContractId(Number(item.entityId));
@@ -733,7 +734,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     finally { setBusy(null); }
   }
 
-  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", conversations: "المحادثات المباشرة", documents: "مركز المستندات", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
+  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", documents: "مركز المستندات", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
   const visibleRequests = requests.filter((item) => {
     const matchesStatus = requestFilter === "all" || safeRequestStatus(item.status) === requestFilter;
     const haystack = `${item.fullName} ${item.mobile} ${item.email} ${item.trackingCode} ${item.specialization}`.toLowerCase();
@@ -752,6 +753,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {canAccess("legal") && <button className={view === "legal" ? "active" : ""} onClick={() => changeView("legal")}><Icon name="legal" /><span>الشؤون القانونية</span>{legalAlerts > 0 && <b>{legalAlerts}</b>}</button>}
         {canAccess("workforce") && <button className={view === "workforce" ? "active" : ""} onClick={() => changeView("workforce")}><Icon name="workforce" /><span>شؤون العمالة</span>{(requestCounts.new + workerAlerts + incompleteWorkerFiles) > 0 && <b>{requestCounts.new + workerAlerts + incompleteWorkerFiles}</b>}</button>}
         {canAccess("workforce") && <button className={view === "operations" ? "active" : ""} onClick={() => changeView("operations")}><Icon name="finance" /><span>المبيعات والتشغيل</span></button>}
+        {canAccessConstruction && <button className={view === "construction" ? "active" : ""} onClick={() => changeView("construction")}><Icon name="legal" /><span>المقاولات والمشروعات</span></button>}
         {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مركز المستندات</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
         {canAccessDocuments && <button className={view === "brand" ? "active" : ""} onClick={() => changeView("brand")}><Icon name="brand" /><span>الهوية البصرية</span></button>}
         {canAccessWebsite && <button className={view === "website" ? "active" : ""} onClick={() => changeView("website")}><Icon name="website"/><span>إدارة الموقع</span></button>}
@@ -811,6 +813,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
               {canAccess("legal") && <DepartmentCard icon="legal" title="الشؤون القانونية" text="العقود والقضايا والتراخيص ومواعيد التجديد." count={`${legalAlerts} تنبيه`} onClick={() => changeView("legal")} />}
               {canAccess("workforce") && <DepartmentCard icon="workforce" title="شؤون العمالة" text="بيانات العمال والتوزيع على المواقع وطلبات العملاء." count={`${requestCounts.total} طلب`} onClick={() => changeView("workforce")} />}
               {canAccess("workforce") && <DepartmentCard icon="finance" title="المبيعات والتشغيل" text="العملاء والفرص والعروض وأوامر التشغيل والدوام والسعة." count="دورة مترابطة" onClick={() => changeView("operations")} />}
+              {canAccessConstruction && <DepartmentCard icon="legal" title="المقاولات والمشروعات" text="الفرص والمناقصات والمشروعات ومراكز التكلفة والتغطية التشغيلية." count="قطاع أعمال مستقل" onClick={() => changeView("construction")} />}
               {canAccess("workforce") && <DepartmentCard icon="conversations" title="المحادثات المباشرة" text="الرد الفوري على زوار الموقع ومتابعة الرسائل غير المقروءة." count={`${waitingConversations} تنتظر الرد`} onClick={() => changeView("conversations")} />}
               {canAccessDocuments && <DepartmentCard icon="documents" title="مركز المستندات" text="المرفقات والعقود والإصدارات الرسمية والتنبيهات." count={`${documents.length} مستند`} onClick={() => changeView("documents")} />}
               {canAccessWebsite && <DepartmentCard icon="website" title="إدارة الموقع الإلكتروني" text="الأقسام والمحتوى والنشر وإعدادات الظهور في محركات البحث." count={`الإصدار ${initialWebsiteContent.version}`} onClick={() => changeView("website")} />}
@@ -874,6 +877,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         </ModuleSection>}
 
         {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin"}/>}
+        {view === "construction" && canAccessConstruction && <ConstructionWorkspace/>}
 
         {view === "documents" && canAccessDocuments && <DocumentCenter
           documents={documents}
@@ -934,7 +938,7 @@ function UserAccessCard({ user, self, busy, onSave }: {
       {user.requestSubmittedAt && <div className="user-request-context"><div><span>المسمى</span><strong>{user.requestedJobTitle || "غير محدد"}</strong></div><div><span>القسم المطلوب</span><strong>{departmentLabels[(user.requestedDepartment || "general") as PortalDepartment] || user.requestedDepartment}</strong></div><p>{user.requestReason}</p><time>أُرسل {formatDate(user.requestSubmittedAt, true)}</time></div>}
       <div className="user-access-controls">
         <label>الدور<select value={role} disabled={self || busy} onChange={(event) => setRole(event.target.value as PortalRole)}><option value="admin">مدير النظام</option><option value="manager">الإدارة</option><option value="employee">موظف</option></select></label>
-        <label>القسم<select value={department} disabled={self || busy} onChange={(event) => setDepartment(event.target.value as PortalDepartment)}><option value="general">صلاحية عامة</option><option value="employees">إدارة الموظفين</option><option value="finance">الإدارة المالية</option><option value="legal">الشؤون القانونية</option><option value="workforce">شؤون العمالة</option></select></label>
+        <label>القسم<select value={department} disabled={self || busy} onChange={(event) => setDepartment(event.target.value as PortalDepartment)}><option value="general">صلاحية عامة</option><option value="employees">إدارة الموظفين</option><option value="finance">الإدارة المالية</option><option value="legal">الشؤون القانونية</option><option value="workforce">شؤون العمالة</option><option value="construction">المقاولات والمشروعات</option></select></label>
         <label>الحالة<select value={status} disabled={self || busy} onChange={(event) => setStatus(event.target.value as "active" | "pending" | "suspended")}><option value="active" disabled={!requestComplete && user.status !== "active"}>نشط</option><option value="pending">قيد الاعتماد</option><option value="suspended">موقوف</option></select></label>
       </div>
       {!self && <div className="user-access-decision"><label>سبب القرار أو التغيير<textarea value={reason} onChange={(event) => setReason(event.target.value)} required minLength={10} maxLength={1000} rows={2} placeholder="اكتب مبررًا واضحًا يظهر في سجل التدقيق."/></label><button className="admin-primary" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ القرار الأمني"}</button></div>}

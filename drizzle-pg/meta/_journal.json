@@ -8,6 +8,20 @@
       "when": 1787215901885,
       "tag": "0000_supabase_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787221847113,
+      "tag": "0001_perpetual_richard_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787222510923,
+      "tag": "0002_steady_kronos",
+      "breakpoints": true
     }
   ]
 }

@@ -3,10 +3,10 @@ import { getDb } from "@/db";
 import { bankAccounts, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification, type NotificationModule, type NotificationSeverity } from "@/lib/portal-notifications";
-import { canAccessPortalDepartment, requirePortalApiRole, type PortalDepartment } from "@/lib/portal-access";
+import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
 import { rejectCrossSiteRequest } from "@/lib/security";
 
-type RecordEntity = Exclude<PortalDepartment, "general">;
+type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 const entityStatuses: Record<RecordEntity, Set<string>> = {
   employees: new Set(["active", "leave", "suspended", "ended"]),
@@ -67,7 +67,7 @@ async function recordActivity(actorEmail: string, action: string, entity: string
     entityType: entity,
     entityId: id,
     actionView: meta.module,
-    targetDepartment: (["employees", "finance", "legal", "workforce"] as const).includes(meta.module as "employees" | "finance" | "legal" | "workforce") ? meta.module as Exclude<PortalDepartment, "general"> : null,
+    targetDepartment: (["employees", "finance", "legal", "workforce"] as const).includes(meta.module as RecordEntity) ? meta.module as RecordEntity : null,
   }).catch(() => undefined);
 }
 

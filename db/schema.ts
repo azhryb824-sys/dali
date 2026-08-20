@@ -1392,3 +1392,160 @@ export const accountingPostingRules = pgTable(
   },
   (table) => [index("accounting_posting_rules_active_idx").on(table.active)],
 );
+
+// Multi-business and nationwide operating model. These records are operational,
+// not marketing claims: publication remains an explicit reviewed decision.
+export const businessLines = pgTable(
+  "business_lines",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull().unique(),
+    nameAr: text("name_ar").notNull(),
+    description: text("description").notNull(),
+    status: text("status").notNull().default("active"),
+    publicStatus: text("public_status").notNull().default("draft"),
+    complianceApprovedBy: text("compliance_approved_by"),
+    complianceApprovedAt: text("compliance_approved_at"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("business_lines_status_idx").on(table.status, table.publicStatus),
+    check("business_lines_status_check", sql`${table.status} in ('active','inactive')`),
+    check("business_lines_public_status_check", sql`${table.publicStatus} in ('draft','review','published','blocked')`),
+  ],
+);
+
+export const serviceRegions = pgTable(
+  "service_regions",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull().unique(),
+    nameAr: text("name_ar").notNull().unique(),
+    nameEn: text("name_en").notNull(),
+    status: text("status").notNull().default("active"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [index("service_regions_status_sort_idx").on(table.status, table.sortOrder)],
+);
+
+export const serviceCities = pgTable(
+  "service_cities",
+  {
+    id: serial("id").primaryKey(),
+    regionId: integer("region_id").notNull().references(() => serviceRegions.id, { onDelete: "restrict" }),
+    code: text("code").notNull().unique(),
+    nameAr: text("name_ar").notNull(),
+    nameEn: text("name_en").notNull(),
+    latitudeE6: integer("latitude_e6"),
+    longitudeE6: integer("longitude_e6"),
+    status: text("status").notNull().default("active"),
+    seoStatus: text("seo_status").notNull().default("not_ready"),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    uniqueIndex("service_cities_region_name_unique").on(table.regionId, table.nameAr),
+    index("service_cities_region_status_idx").on(table.regionId, table.status),
+    check("service_cities_seo_status_check", sql`${table.seoStatus} in ('not_ready','draft','review','publishable')`),
+  ],
+);
+
+export const serviceCoverage = pgTable(
+  "service_coverage",
+  {
+    id: serial("id").primaryKey(),
+    cityId: integer("city_id").notNull().references(() => serviceCities.id, { onDelete: "restrict" }),
+    businessLineId: integer("business_line_id").notNull().references(() => businessLines.id, { onDelete: "restrict" }),
+    availability: text("availability").notNull().default("conditional"),
+    mobilizationDays: integer("mobilization_days"),
+    capacityLevel: text("capacity_level").notNull().default("review_required"),
+    ownerEmail: text("owner_email"),
+    operatingNotes: text("operating_notes"),
+    publicApproved: boolean("public_approved").notNull().default(false),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: text("reviewed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    uniqueIndex("service_coverage_city_line_unique").on(table.cityId, table.businessLineId),
+    index("service_coverage_availability_idx").on(table.availability, table.publicApproved),
+    check("service_coverage_availability_check", sql`${table.availability} in ('available','conditional','unavailable')`),
+    check("service_coverage_capacity_check", sql`${table.capacityLevel} in ('high','medium','limited','review_required')`),
+    check("service_coverage_mobilization_check", sql`${table.mobilizationDays} is null or ${table.mobilizationDays} >= 0`),
+  ],
+);
+
+export const constructionOpportunities = pgTable(
+  "construction_opportunities",
+  {
+    id: serial("id").primaryKey(),
+    opportunityCode: text("opportunity_code").notNull().unique(),
+    clientId: integer("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    clientName: text("client_name").notNull(),
+    contactName: text("contact_name"),
+    contactMobile: text("contact_mobile"),
+    contactEmail: text("contact_email"),
+    title: text("title").notNull(),
+    cityId: integer("city_id").references(() => serviceCities.id, { onDelete: "restrict" }),
+    projectType: text("project_type").notNull(),
+    scopeSummary: text("scope_summary").notNull(),
+    estimatedValueHalalas: integer("estimated_value_halalas"),
+    expectedStartDate: text("expected_start_date"),
+    bidDueDate: text("bid_due_date"),
+    stage: text("stage").notNull().default("new"),
+    probabilityBps: integer("probability_bps").notNull().default(1000),
+    ownerEmail: text("owner_email").notNull(),
+    source: text("source").notNull().default("portal"),
+    lossReason: text("loss_reason"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    index("construction_opportunities_stage_due_idx").on(table.stage, table.bidDueDate),
+    index("construction_opportunities_city_idx").on(table.cityId),
+    check("construction_opportunities_stage_check", sql`${table.stage} in ('new','qualified','survey','estimating','review','submitted','negotiation','won','lost','declined')`),
+    check("construction_opportunities_probability_check", sql`${table.probabilityBps} >= 0 and ${table.probabilityBps} <= 10000`),
+    check("construction_opportunities_value_check", sql`${table.estimatedValueHalalas} is null or ${table.estimatedValueHalalas} >= 0`),
+  ],
+);
+
+export const constructionProjects = pgTable(
+  "construction_projects",
+  {
+    id: serial("id").primaryKey(),
+    projectCode: text("project_code").notNull().unique(),
+    opportunityId: integer("opportunity_id").references(() => constructionOpportunities.id, { onDelete: "restrict" }),
+    clientId: integer("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    clientName: text("client_name").notNull(),
+    title: text("title").notNull(),
+    cityId: integer("city_id").references(() => serviceCities.id, { onDelete: "restrict" }),
+    projectType: text("project_type").notNull(),
+    contractValueHalalas: integer("contract_value_halalas").notNull().default(0),
+    budgetHalalas: integer("budget_halalas").notNull().default(0),
+    startDate: text("start_date").notNull(),
+    plannedEndDate: text("planned_end_date").notNull(),
+    actualEndDate: text("actual_end_date"),
+    progressBps: integer("progress_bps").notNull().default(0),
+    status: text("status").notNull().default("mobilizing"),
+    riskLevel: text("risk_level").notNull().default("low"),
+    managerEmail: text("manager_email").notNull(),
+    costCenterCode: text("cost_center_code").notNull().unique(),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    index("construction_projects_status_end_idx").on(table.status, table.plannedEndDate),
+    index("construction_projects_city_idx").on(table.cityId),
+    check("construction_projects_status_check", sql`${table.status} in ('mobilizing','active','on_hold','substantial_completion','defects_liability','closed','cancelled')`),
+    check("construction_projects_risk_check", sql`${table.riskLevel} in ('low','medium','high','critical')`),
+    check("construction_projects_progress_check", sql`${table.progressBps} >= 0 and ${table.progressBps} <= 10000`),
+    check("construction_projects_value_check", sql`${table.contractValueHalalas} >= 0 and ${table.budgetHalalas} >= 0`),
+    check("construction_projects_dates_check", sql`${table.plannedEndDate} >= ${table.startDate}`),
+  ],
+);

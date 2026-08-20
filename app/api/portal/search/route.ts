@@ -1,6 +1,6 @@
 import { desc, like, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clients, companyDocuments, employees, financialRecords, legalRecords, quoteVersions, salesOpportunities, timesheets, visitorConversations, workers, workforceContracts, workforceRequests, workOrders, capacityPlans, dataSubjectRequests, portalUsers } from "@/db/schema";
+import { clients, companyDocuments, constructionOpportunities, constructionProjects, employees, financialRecords, legalRecords, quoteVersions, salesOpportunities, timesheets, visitorConversations, workers, workforceContracts, workforceRequests, workOrders, capacityPlans, dataSubjectRequests, portalUsers } from "@/db/schema";
 import { canAccessPortalDepartment, canAccessPortalDocuments, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore } from "@/lib/security";
 import { getWebsiteContent } from "@/lib/website-content";
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const pattern = `%${query}%`;
   const db = getDb();
   try {
-    const [requestRows, workerRows, contractRows, conversationRows, employeeRows, financeRows, legalRows, documentRows, clientRows, opportunityRows, quoteRows, orderRows, sheetRows, planRows, privacyRows, userRows] = await Promise.all([
+    const [requestRows, workerRows, contractRows, conversationRows, employeeRows, financeRows, legalRows, documentRows, clientRows, opportunityRows, quoteRows, orderRows, sheetRows, planRows, privacyRows, userRows, constructionOpportunityRows, constructionProjectRows] = await Promise.all([
       canAccessPortalDepartment(access, "workforce") ? db.select().from(workforceRequests).where(or(like(workforceRequests.trackingCode, pattern), like(workforceRequests.fullName, pattern), like(workforceRequests.companyName, pattern), like(workforceRequests.mobile, pattern))).orderBy(desc(workforceRequests.updatedAt)).limit(6) : Promise.resolve([]),
       canAccessPortalDepartment(access, "workforce") ? db.select().from(workers).where(or(like(workers.fullName, pattern), like(workers.workerNumber, pattern), like(workers.iqamaNumber, pattern), like(workers.profession, pattern), like(workers.nationality, pattern))).orderBy(desc(workers.updatedAt)).limit(6) : Promise.resolve([]),
       canAccessPortalDepartment(access, "workforce") || canAccessPortalDepartment(access, "finance") ? db.select().from(workforceContracts).where(or(like(workforceContracts.referenceCode, pattern), like(workforceContracts.clientName, pattern), like(workforceContracts.title, pattern), like(workforceContracts.workSite, pattern))).orderBy(desc(workforceContracts.updatedAt)).limit(6) : Promise.resolve([]),
@@ -32,6 +32,8 @@ export async function GET(request: Request) {
       canAccessPortalDepartment(access, "workforce") ? db.select().from(capacityPlans).where(or(like(capacityPlans.planCode, pattern), like(capacityPlans.seasonName, pattern), like(capacityPlans.profession, pattern), like(capacityPlans.location, pattern))).orderBy(desc(capacityPlans.updatedAt)).limit(6) : Promise.resolve([]),
       access.role !== "employee" || access.department === "legal" ? db.select().from(dataSubjectRequests).where(or(like(dataSubjectRequests.trackingCode, pattern), like(dataSubjectRequests.fullName, pattern), like(dataSubjectRequests.email, pattern))).orderBy(desc(dataSubjectRequests.updatedAt)).limit(6) : Promise.resolve([]),
       access.role === "admin" ? db.select().from(portalUsers).where(or(like(portalUsers.displayName, pattern), like(portalUsers.email, pattern), like(portalUsers.requestedJobTitle, pattern), like(portalUsers.requestReason, pattern))).orderBy(desc(portalUsers.updatedAt)).limit(6) : Promise.resolve([]),
+      hasPortalPermission(access, "construction", "read").then((allowed) => allowed ? db.select().from(constructionOpportunities).where(or(like(constructionOpportunities.opportunityCode, pattern), like(constructionOpportunities.title, pattern), like(constructionOpportunities.clientName, pattern), like(constructionOpportunities.projectType, pattern))).orderBy(desc(constructionOpportunities.updatedAt)).limit(6) : []),
+      hasPortalPermission(access, "construction", "read").then((allowed) => allowed ? db.select().from(constructionProjects).where(or(like(constructionProjects.projectCode, pattern), like(constructionProjects.title, pattern), like(constructionProjects.clientName, pattern), like(constructionProjects.projectType, pattern), like(constructionProjects.costCenterCode, pattern))).orderBy(desc(constructionProjects.updatedAt)).limit(6) : []),
     ]);
     const websiteResults: Result[] = [];
     if (await hasPortalPermission(access, "website", "read")) {
@@ -63,6 +65,8 @@ export async function GET(request: Request) {
       ...planRows.map((item) => ({ key: `plan-${item.id}`, kind: "capacity-plan", id: item.id, view: "operations", title: item.seasonName, meta: `خطة سعة · ${item.planCode} · ${item.profession}`, searchValue: item.planCode })),
       ...privacyRows.map((item) => ({ key: `privacy-${item.id}`, kind: "privacy-request", id: item.id, view: "operations", title: item.trackingCode, meta: `طلب خصوصية · ${item.fullName}`, searchValue: item.trackingCode })),
       ...userRows.map((item, index) => ({ key: `user-${item.email}`, kind: "user", id: index + 1, view: "users", title: item.displayName, meta: `مستخدم · ${item.requestedJobTitle || item.role} · ${item.email}`, searchValue: item.email })),
+      ...constructionOpportunityRows.map((item) => ({ key: `construction-opportunity-${item.id}`, kind: "construction-opportunity", id: item.id, view: "construction", title: item.title, meta: `فرصة مقاولات · ${item.opportunityCode} · ${item.clientName}`, searchValue: item.opportunityCode })),
+      ...constructionProjectRows.map((item) => ({ key: `construction-project-${item.id}`, kind: "construction-project", id: item.id, view: "construction", title: item.title, meta: `مشروع مقاولات · ${item.projectCode} · ${item.costCenterCode}`, searchValue: item.projectCode })),
     ];
     return jsonNoStore({ results: results.slice(0, 24) });
   } catch (error) {

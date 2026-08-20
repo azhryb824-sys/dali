@@ -15,6 +15,7 @@ const departmentLabels: Record<string, string> = {
   finance: "الإدارة المالية",
   legal: "الشؤون القانونية",
   workforce: "شؤون العمالة والتشغيل",
+  construction: "المقاولات والمشروعات",
 };
 
 export default function PortalAccessRequestForm({ initialRequest }: { initialRequest: AccessRequest }) {

@@ -9,7 +9,7 @@ import { verifyPortalSession } from "@/lib/portal-session";
 
 export type PortalRole = "admin" | "manager" | "employee";
 export type PortalStatus = "active" | "pending" | "suspended";
-export type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "general";
+export type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
 
 export type PortalAccess = {
   authorized: boolean;
@@ -28,7 +28,7 @@ function isPortalStatus(value: string): value is PortalStatus {
 }
 
 function isPortalDepartment(value: string): value is PortalDepartment {
-  return value === "employees" || value === "finance" || value === "legal" || value === "workforce" || value === "general";
+  return value === "employees" || value === "finance" || value === "legal" || value === "workforce" || value === "construction" || value === "general";
 }
 
 export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogin?: boolean } = {}): Promise<PortalAccess> {

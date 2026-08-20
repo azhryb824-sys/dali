@@ -6,7 +6,7 @@ import { requirePortalSessionIdentity } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { enforcePublicRateLimit, jsonNoStore, rateLimitResponse, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId, requestSourceHash } from "@/lib/security";
 
-const allowedDepartments = new Set(["general", "employees", "finance", "legal", "workforce"]);
+const allowedDepartments = new Set(["general", "employees", "finance", "legal", "workforce", "construction"]);
 
 function cleanText(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, maxLength) : "";

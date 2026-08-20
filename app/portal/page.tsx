@@ -76,9 +76,10 @@ async function ProtectedPortal() {
   const canSeeDocuments = canAccessPortalDocuments(access);
   const canSeeContracts = canAccessPortalDepartment(access, "workforce") || canAccessPortalDepartment(access, "finance");
   const canSeeConversations = canManagePortalConversations(access);
-  const [canReadWebsite, canManageWebsite] = await Promise.all([
+  const [canReadWebsite, canManageWebsite, canAccessConstruction] = await Promise.all([
     hasPortalPermission(access, "website", "read"),
     hasPortalPermission(access, "website", "write"),
+    hasPortalPermission(access, "construction", "read"),
   ]);
   const [requests, replies, notifications, users, activity, employeeRecords, financeRecords, legalItems, workerRecords, workerFiles, documents, assets, contracts, professionItems, assignmentItems, conversations, conversationMessages, businessHours, chatAutomation, websiteContent] = await Promise.all([
     canAccessPortalDepartment(access, "workforce")
@@ -229,6 +230,7 @@ async function ProtectedPortal() {
       initialWebsiteContent={websiteContent}
       canAccessWebsite={canReadWebsite}
       canManageWebsite={canManageWebsite}
+      canAccessConstruction={canAccessConstruction}
       signOutPath={portalSessionEndPath("/portal")}
     />
   );

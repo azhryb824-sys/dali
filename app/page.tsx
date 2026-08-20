@@ -66,13 +66,13 @@ export default function Home() {
         image: absoluteUrl("/images/dali-hero.webp"),
         description: content.seo.organizationDescription,
         address: { "@type": "PostalAddress", addressLocality: content.site.city, streetAddress: content.site.district, addressCountry: SITE.countryCode },
-        areaServed: { "@type": "City", name: content.site.city },
+        areaServed: { "@type": "Country", name: "Saudi Arabia" },
         ...(content.site.phone ? { telephone: content.site.phone } : {}),
         ...(content.site.email ? { email: content.site.email } : {}),
         hasOfferCatalog: {
           "@type": "OfferCatalog",
-          name: "خدمات القوى العاملة",
-          itemListElement: services.slice(0, 5).map((service) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: service.title, url: absoluteUrl(service.href), areaServed: content.site.city } })),
+          name: "خدمات القوى العاملة والمقاولات",
+          itemListElement: services.slice(0, 5).map((service) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: service.title, url: absoluteUrl(service.href), areaServed: "المملكة العربية السعودية" } })),
         },
       },
       {
@@ -103,7 +103,7 @@ export default function Home() {
         <p>{content.home.heroDescription}</p>
         <div className="hero-actions"><a className="btn primary" href="#quote">اطلب عرض سعر <Arrow/></a><a className="text-link" href="#services">استكشف خدماتنا <Arrow/></a></div>
       </div>
-      <div className="hero-note"><span>01</span><p><strong>جاهزون عندما ترتفع وتيرة أعمالك</strong>فرق مرنة ودعم محلي يلائمان احتياجك في مكة وموسم الحج.</p></div>
+      <div className="hero-note"><span>01</span><p><strong>نستقبل احتياجك من جميع مناطق المملكة</strong>نراجع المدينة والنطاق والموعد قبل تأكيد خطة التعبئة أو التنفيذ.</p></div>
     </section>
 
     <section className="assurance-strip" aria-label="مزايا الخدمة"><article><b>استجابة سريعة</b><span>فريق محلي يفهم احتياجك</span></article><article><b>خبرات متنوعة</b><span>كوادر تشغيلية وفنية</span></article><article><b>مرونة في الحل</b><span>بحسب المدة وحجم العمل</span></article><article><b>دعم مستمر</b><span>من البداية وطوال الخدمة</span></article></section>

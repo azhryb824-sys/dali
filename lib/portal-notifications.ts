@@ -5,6 +5,8 @@ import {
   capacityPlans,
   contractProfessions,
   contractWorkerAssignments,
+  constructionOpportunities,
+  constructionProjects,
   financialRecords,
   dataSubjectRequests,
   integrationOutbox,
@@ -27,7 +29,7 @@ import type { PortalAccess, PortalDepartment, PortalRole } from "@/lib/portal-ac
 import { requirementsForProfession } from "@/lib/workforce-requirements";
 
 export type NotificationSeverity = "info" | "success" | "warning" | "critical";
-export type NotificationModule = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "conversations" | "documents" | "users" | "sales" | "operations" | "privacy" | "capacity" | "website";
+export type NotificationModule = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "construction" | "conversations" | "documents" | "users" | "sales" | "operations" | "privacy" | "capacity" | "website";
 
 export type PortalNotificationInput = {
   eventType: string;
@@ -149,7 +151,7 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   if (!options.force && marker && now.getTime() - new Date(marker.updatedAt).getTime() < 5 * 60 * 1000) return;
   await db.insert(portalSettings).values({ key: "operational-notifications-last-refresh", valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() }).onConflictDoUpdate({ target: portalSettings.key, set: { valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() } });
 
-  const [documents, legalItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans] = await Promise.all([
+  const [documents, legalItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems] = await Promise.all([
     db.select().from(companyDocuments).where(eq(companyDocuments.status, "active")).limit(1000),
     db.select().from(legalRecords).where(ne(legalRecords.status, "closed")).limit(1000),
     db.select().from(workers).limit(2000),
@@ -167,6 +169,8 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     db.select().from(workflowApprovals).where(eq(workflowApprovals.status, "pending")).limit(1000),
     db.select().from(integrationOutbox).where(ne(integrationOutbox.status, "processed")).limit(500),
     db.select().from(capacityPlans).where(ne(capacityPlans.status, "completed")).limit(1000),
+    db.select().from(constructionOpportunities).where(ne(constructionOpportunities.stage, "won")).limit(1000),
+    db.select().from(constructionProjects).where(ne(constructionProjects.status, "closed")).limit(1000),
   ]);
 
   const pendingChecks = new Map<string, PortalNotificationInput & { dedupeKey: string }>();
@@ -219,6 +223,18 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     const shortfall = plan.requiredCount - plan.availableCount - plan.reservedCount;
     if (shortfall <= 0 || !["planning", "approved", "active"].includes(plan.status)) continue;
     ensure({ dedupeKey: `capacity-shortfall:${plan.id}`, eventType: "capacity-plan-shortfall", title: "فجوة في خطة السعة الموسمية", message: `${plan.seasonName} — ${plan.profession} — نقص ${shortfall} عامل في ${plan.location}.`, severity: daysUntil(plan.startDate) <= 14 ? "critical" : "warning", module: "capacity", entityType: "capacity-plan", entityId: plan.id, actionView: "operations", targetDepartment: "workforce" });
+  }
+  for (const opportunity of constructionOpportunityItems) {
+    if (["lost", "declined"].includes(opportunity.stage)) continue;
+    const days = daysUntil(opportunity.bidDueDate);
+    if (!Number.isFinite(days) || days > 7) continue;
+    ensure({ dedupeKey: `construction-bid-due:${opportunity.id}:${opportunity.bidDueDate}`, eventType: days < 0 ? "construction-bid-overdue" : "construction-bid-due", title: days < 0 ? "تجاوز موعد عرض مقاولات" : "موعد عرض مقاولات قريب", message: `${opportunity.opportunityCode} — ${opportunity.title} — ${formatAlertDate(opportunity.bidDueDate)}.`, severity: days < 0 ? "critical" : "warning", module: "construction", entityType: "construction-opportunity", entityId: opportunity.id, actionView: "construction", targetRole: "manager" });
+  }
+  for (const project of constructionProjectItems) {
+    if (["cancelled", "closed", "defects_liability"].includes(project.status)) continue;
+    const days = daysUntil(project.plannedEndDate);
+    if (!Number.isFinite(days) || days >= 0) continue;
+    ensure({ dedupeKey: `construction-project-overdue:${project.id}:${project.plannedEndDate}`, eventType: "construction-project-overdue", title: "مشروع مقاولات تجاوز الخطة", message: `${project.projectCode} — ${project.title} — الإنجاز ${project.progressBps / 100}%، والنهاية المخططة ${formatAlertDate(project.plannedEndDate)}.`, severity: "critical", module: "construction", entityType: "construction-project", entityId: project.id, actionView: "construction", targetRole: "manager", targetEmail: project.managerEmail || null });
   }
 
   for (const document of documents) {

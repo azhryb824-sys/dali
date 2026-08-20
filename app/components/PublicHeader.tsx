@@ -12,6 +12,7 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
   const searchItems = useMemo(() => {
     const base = [
       { title: "من نحن", text: content.site.description, href: "/about", keywords: `${content.site.companyName} ${content.site.city} ${content.site.district}` },
+      { title: "المقاولات وإدارة المشروعات", text: "تنفيذ المباني والتشطيبات والترميم والأعمال المدنية والكهروميكانيكية في مدن المملكة", href: "/construction", keywords: "شركة مقاولات السعودية مقاول عام تشطيبات ترميم أعمال مدنية إدارة مشاريع" },
       ...(content.visibility.hajj ? [{ title: "حلول موسم الحج", text: "فرق تشغيل وقوى عاملة للاحتياج الموسمي في مكة", href: "/hajj", keywords: "الحج موسم مشاعر مقدسة جاهزية تشغيل" }] : []),
       { title: "طلب عرض سعر", text: "شاركنا احتياجك ليقترح فريق دالي الحل المناسب", href: "/contact", keywords: "تواصل استفسار سعر طلب شراكة" },
       ...(content.visibility.faq ? [{ title: "الأسئلة الشائعة", text: "إجابات عن الخدمات والتعاقد والعمالة", href: "/faq", keywords: "معلومات أسئلة" }] : []),
@@ -41,6 +42,7 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
       <nav className={menuOpen ? "open" : ""} onClick={() => setMenuOpen(false)} aria-label="التنقل الرئيسي">
         <Link href="/about">من نحن</Link>
         {content.visibility.services && <Link href="/services">خدماتنا</Link>}
+        <Link href="/construction">المقاولات</Link>
         {content.visibility.sectors && <Link href="/sectors">القطاعات</Link>}
         {content.visibility.locations && <Link href="/locations">مناطق الخدمة</Link>}
         {content.visibility.hajj && <Link href="/hajj">موسم الحج</Link>}
