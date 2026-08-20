@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyDocuments, documentShareLinks, portalActivity } from "@/db/schema";
 import { attachmentHeaders, hashShareToken } from "@/lib/company-documents";
@@ -21,8 +21,11 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   if (!object) return Response.json({ error: "ملف المستند غير متاح" }, { status: 404 });
 
   const accessedAt = new Date().toISOString();
-  await db.update(documentShareLinks).set({ downloadCount: sql`${documentShareLinks.downloadCount} + 1`, lastAccessedAt: accessedAt }).where(eq(documentShareLinks.id, share.id));
-  await db.insert(portalActivity).values({ actorEmail: "shared-link", action: "shared-document-downloaded", entityType: "company-document", entityId: String(document.id), afterJson: JSON.stringify({ shareId: share.id, accessNumber: share.downloadCount + 1 }), correlationId: crypto.randomUUID(), source: "shared-link" });
+  const [claimed] = await db.update(documentShareLinks).set({ downloadCount: sql`${documentShareLinks.downloadCount} + 1`, lastAccessedAt: accessedAt }).where(and(
+    eq(documentShareLinks.id, share.id), isNull(documentShareLinks.revokedAt), gt(documentShareLinks.expiresAt, accessedAt), lt(documentShareLinks.downloadCount, documentShareLinks.maxDownloads),
+  )).returning();
+  if (!claimed) return Response.json({ error: "انتهت صلاحية رابط المشاركة" }, { status: 410 });
+  await db.insert(portalActivity).values({ actorEmail: "shared-link", action: "shared-document-downloaded", entityType: "company-document", entityId: String(document.id), afterJson: JSON.stringify({ shareId: share.id, accessNumber: claimed.downloadCount }), correlationId: crypto.randomUUID(), source: "shared-link" });
   const headers = attachmentHeaders(document.fileName, document.contentType, object.httpEtag);
   headers.set("cache-control", "no-store, max-age=0");
   return new Response(object.body, { headers });

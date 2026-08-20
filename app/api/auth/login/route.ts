@@ -53,6 +53,19 @@ export async function POST(request: Request) {
     let credential = stored || null;
     let authenticated = stored ? await verifyPasswordHash(password, stored.passwordHash) : false;
 
+    if (stored && identifier === adminConfig.identifier && adminConfig.complete
+      && normalizePortalEmail(stored.email) === adminConfig.primaryEmail
+      && await verifyPasswordHash(password, adminConfig.passwordHash)) {
+      const [synchronized] = await db.update(portalAuthCredentials).set({
+        email: adminConfig.primaryEmail,
+        displayName: adminConfig.displayName,
+        passwordHash: adminConfig.passwordHash,
+        updatedAt: new Date().toISOString(),
+      }).where(eq(portalAuthCredentials.identifier, identifier)).returning();
+      credential = synchronized || stored;
+      authenticated = true;
+    }
+
     if (!stored && identifier === adminConfig.identifier) {
       if (!adminConfig.complete) throw new OperationalError("PORTAL_ADMIN_BOOTSTRAP_INCOMPLETE");
       if (await verifyPasswordHash(password, adminConfig.passwordHash)) {

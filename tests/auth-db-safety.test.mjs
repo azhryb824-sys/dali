@@ -39,7 +39,9 @@ test("production startup and runtime require the existing persistent database", 
   assert.match(startup, /if \(isRenderRuntime\(\)\) await requireExistingRenderDatabase\(databasePath\)/);
   assert.match(startup, /else await mkdir\(dirname\(databasePath\)/);
   assert.match(startup, /dali-predeploy-/);
-  assert.match(startup, /copyFile/);
+  assert.match(startup, /VACUUM INTO/);
+  assert.match(startup, /PRAGMA quick_check/);
+  assert.match(startup, /DATABASE_BACKUP_INTEGRITY_FAILED/);
   assert.match(startup, /backups\.slice\(12\)/);
 
   assert.match(database, /import type \{ Client \} from "@libsql\/client"/);
@@ -85,6 +87,7 @@ test("portal authorization uses trusted configuration instead of hardcoded ident
   assert.match(login, /normalizePortalIdentifier/);
   assert.match(login, /portalUsers/);
   assert.match(login, /PORTAL_ADMIN_BOOTSTRAP_CONFLICT/);
+  assert.match(login, /stored && identifier === adminConfig\.identifier/);
   assert.doesNotMatch(login, /JSON\.stringify\(\{\s*error/);
   assert.doesNotMatch(login, /error\.message/);
 });
@@ -97,7 +100,7 @@ test("liveness and readiness are separate deployment signals", async () => {
     source("render.yaml"),
   ]);
 
-  assert.match(render, /healthCheckPath: \/api\/health\/live/);
+  assert.match(render, /healthCheckPath: \/api\/health\/ready/);
   assert.match(legacy, /\.\/live\/route/);
   assert.doesNotMatch(live, /getSqlClient|getDb|SELECT 1/);
   assert.match(ready, /SELECT 1 AS healthy/);

@@ -7,7 +7,7 @@ services:
     branch: main
     buildCommand: npm ci && npm run build
     startCommand: npm run start:render
-    healthCheckPath: /api/health/live
+    healthCheckPath: /api/health/ready
     autoDeployTrigger: commit
     disk:
       name: dali-data

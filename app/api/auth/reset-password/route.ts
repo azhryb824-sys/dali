@@ -55,10 +55,18 @@ export async function POST(request: Request) {
     });
     if (!reset) return resetRedirect(request, token, "invalid", correlationId);
 
+    const passwordHash = await hashPassword(password);
     const now = new Date().toISOString();
-    await db.update(portalAuthCredentials).set({ passwordHash: await hashPassword(password), updatedAt: now })
-      .where(eq(portalAuthCredentials.identifier, reset.identifier));
-    await db.update(passwordResetTokens).set({ usedAt: now }).where(eq(passwordResetTokens.tokenHash, tokenHash));
+    const [claimed] = await db.update(passwordResetTokens).set({ usedAt: now }).where(and(
+      eq(passwordResetTokens.tokenHash, tokenHash), isNull(passwordResetTokens.usedAt), gt(passwordResetTokens.expiresAt, now),
+    )).returning();
+    if (!claimed) return resetRedirect(request, token, "invalid", correlationId);
+    const updatedCredentials = await db.update(portalAuthCredentials).set({ passwordHash, updatedAt: now })
+      .where(eq(portalAuthCredentials.identifier, reset.identifier)).returning({ identifier: portalAuthCredentials.identifier });
+    if (updatedCredentials.length !== 1) {
+      await db.update(passwordResetTokens).set({ usedAt: null }).where(and(eq(passwordResetTokens.tokenHash, tokenHash), eq(passwordResetTokens.usedAt, now))).catch(() => undefined);
+      throw new Error("PORTAL_CREDENTIAL_NOT_FOUND");
+    }
     await revokePortalSessionsForUser(reset.email, "password-reset");
     return new Response(null, {
       status: 303,

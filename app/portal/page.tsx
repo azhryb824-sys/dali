@@ -8,7 +8,7 @@ import { companyAssets, companyDocuments, contractProfessions, contractWorkerAss
 import { getBusinessHoursState } from "@/lib/business-hours";
 import { getChatAutomationConfig } from "@/lib/chat-automation";
 import { emailDeliveryConfigured } from "@/lib/email-delivery";
-import { listPortalNotifications, refreshOperationalNotifications } from "@/lib/portal-notifications";
+import { listPortalNotifications } from "@/lib/portal-notifications";
 import { canAccessPortalDepartment, canAccessPortalDocuments, canManageCompanyAssets, canManagePortalConversations, canManagePortalDocuments, hasPortalPermission, resolvePortalAccess } from "@/lib/portal-access";
 import { getWebsiteContent } from "@/lib/website-content";
 import { portalSessionEndPath, portalSessionStartPath, verifyPortalSession } from "@/lib/portal-session";
@@ -80,7 +80,6 @@ async function ProtectedPortal() {
     hasPortalPermission(access, "website", "read"),
     hasPortalPermission(access, "website", "write"),
   ]);
-  await refreshOperationalNotifications();
   const [requests, replies, notifications, users, activity, employeeRecords, financeRecords, legalItems, workerRecords, workerFiles, documents, assets, contracts, professionItems, assignmentItems, conversations, conversationMessages, businessHours, chatAutomation, websiteContent] = await Promise.all([
     canAccessPortalDepartment(access, "workforce")
       ? db.select().from(workforceRequests).orderBy(desc(workforceRequests.createdAt)).limit(250)
@@ -119,7 +118,7 @@ async function ProtectedPortal() {
           sizeBytes: workerAttachments.sizeBytes,
           createdBy: workerAttachments.createdBy,
           createdAt: workerAttachments.createdAt,
-        }).from(workerAttachments).orderBy(desc(workerAttachments.createdAt)).limit(3000)
+        }).from(workerAttachments).orderBy(desc(workerAttachments.createdAt)).limit(1000)
       : Promise.resolve([]),
     canSeeDocuments
       ? db.select({
@@ -156,10 +155,10 @@ async function ProtectedPortal() {
       ? db.select().from(workforceContracts).orderBy(desc(workforceContracts.createdAt)).limit(500)
       : Promise.resolve([]),
     canSeeContracts
-      ? db.select().from(contractProfessions).orderBy(desc(contractProfessions.createdAt)).limit(3000)
+      ? db.select().from(contractProfessions).orderBy(desc(contractProfessions.createdAt)).limit(1000)
       : Promise.resolve([]),
     canSeeContracts
-      ? db.select().from(contractWorkerAssignments).orderBy(desc(contractWorkerAssignments.assignedAt)).limit(10000)
+      ? db.select().from(contractWorkerAssignments).orderBy(desc(contractWorkerAssignments.assignedAt)).limit(2000)
       : Promise.resolve([]),
     canSeeConversations
       ? db.select({

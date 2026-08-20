@@ -35,5 +35,16 @@ test("accounting migrations preserve existing contracts and financial records", 
   assert.deepEqual({ ...contract.rows[0] }, { reference_code: "CON-SAFE", client_name: "عميل قائم", amount_halalas: 125000, status: "active" });
   assert.equal(financial.rows.length, 1);
   assert.deepEqual({ ...financial.rows[0] }, { reference_code: "FIN-SAFE", description: "فاتورة قائمة", amount_halalas: 125000, status: "pending", posting_status: "unposted" });
+  const columns = await client.execute("PRAGMA table_info(financial_records)");
+  assert.ok(columns.rows.some((column) => column.name === "bank_account_id"));
+
+  await client.execute({ sql: "INSERT INTO contract_professions(contract_id,profession,required_count) VALUES(?,?,?)", args: [1, "عامل", 1] });
+  await client.execute({ sql: "INSERT INTO workers(worker_number,full_name,nationality,profession,client_site,status) VALUES(?,?,?,?,?,?)", args: ["W-SAFE-1", "عامل أول", "سعودي", "عامل", "مكة", "available"] });
+  await client.execute({ sql: "INSERT INTO workers(worker_number,full_name,nationality,profession,client_site,status) VALUES(?,?,?,?,?,?)", args: ["W-SAFE-2", "عامل ثان", "سعودي", "عامل", "مكة", "available"] });
+  await client.execute("INSERT INTO contract_worker_assignments(contract_id,contract_profession_id,worker_id,status,assigned_by) VALUES(1,1,1,'active','owner@example.com')");
+  await assert.rejects(
+    client.execute("INSERT INTO contract_worker_assignments(contract_id,contract_profession_id,worker_id,status,assigned_by) VALUES(1,1,2,'active','owner@example.com')"),
+    /CONTRACT_PROFESSION_CAPACITY_REACHED/,
+  );
   await client.close();
 });

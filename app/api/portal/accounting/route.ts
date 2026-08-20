@@ -94,6 +94,8 @@ export async function POST(request: Request) {
       if (bankName.length < 2 || accountName.length < 2 || !accountCode || !/^SA\d{22}$/.test(iban) || !ledgerAccountId) return jsonNoStore({ error: "بيانات الحساب البنكي غير صحيحة" }, { status: 400 });
       const account = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, ledgerAccountId) });
       if (!account || account.accountType !== "asset" || !account.isPosting) return jsonNoStore({ error: "يجب ربط البنك بحساب أصول قابل للترحيل" }, { status: 400 });
+      const ledgerAlreadyUsed = await db.query.bankAccounts.findFirst({ where: eq(bankAccounts.ledgerAccountId, ledgerAccountId) });
+      if (ledgerAlreadyUsed) return jsonNoStore({ error: "هذا الحساب المحاسبي مرتبط ببنك آخر؛ أنشئ حساب أصول مستقل لكل بنك" }, { status: 409 });
       const [saved] = await db.insert(bankAccounts).values({ accountCode, bankName, accountName, iban, ledgerAccountId }).returning();
       await auditPortalAction({ actorEmail: access.user.email, action: "bank-account-created", entityType: "bank-account", entityId: saved.id, after: { ...saved, iban: `${iban.slice(0, 6)}••••${iban.slice(-4)}` } });
       return jsonNoStore({ bank: saved }, { status: 201 });
