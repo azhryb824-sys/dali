@@ -54,6 +54,22 @@ async function recoverRenderPersistentConfiguration() {
   }
 }
 
+async function requireExistingRenderDatabase(databasePath) {
+  if (!isRenderRuntime()) return;
+
+  try {
+    const information = await stat(databasePath);
+    if (!information.isFile() || information.size < 1) {
+      startupFailure("RENDER_DATABASE_FILE_INVALID");
+    }
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      startupFailure("RENDER_DATABASE_FILE_MISSING");
+    }
+    throw error;
+  }
+}
+
 async function copyIfPresent(source, destination) {
   try {
     const information = await stat(source);
@@ -116,7 +132,8 @@ if (scheme === "file") {
   if (!databasePath) startupFailure("DATABASE_FILE_PATH_MISSING");
   if (databasePath !== ":memory:" && !isAbsolute(databasePath)) startupFailure("DATABASE_FILE_PATH_MUST_BE_ABSOLUTE");
   if (databasePath !== ":memory:") {
-    await mkdir(dirname(databasePath), { recursive: true, mode: 0o700 });
+    if (isRenderRuntime()) await requireExistingRenderDatabase(databasePath);
+    else await mkdir(dirname(databasePath), { recursive: true, mode: 0o700 });
     await backUpSqliteDatabase(databasePath);
   }
 }
