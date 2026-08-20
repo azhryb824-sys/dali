@@ -37,6 +37,23 @@ export const workforceRequests = pgTable(
   ],
 );
 
+export const workforceRequestAttachments = pgTable(
+  "workforce_request_attachments",
+  {
+    id: serial("id").primaryKey(),
+    requestId: integer("request_id").notNull().references(() => workforceRequests.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("workforce_request_attachments_request_idx").on(table.requestId),
+    check("workforce_request_attachments_size_check", sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 10485760`),
+  ],
+);
+
 export const visitorConversations = pgTable(
   "visitor_conversations",
   {

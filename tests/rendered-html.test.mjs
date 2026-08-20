@@ -94,6 +94,16 @@ test("construction access is scoped by functional role, geography, project and f
 });
 
 test("renders the public site and protects request workflows", async () => {
+  const [quoteForm, quoteRoute, quoteMigration] = await Promise.all([
+    readFile(new URL("../app/components/QuoteRequestForm.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/quote-requests/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle-pg/0010_public_quote_attachments.sql", import.meta.url), "utf8"),
+  ]);
+  assert.match(quoteForm, /dali-quote-draft/);
+  assert.match(quoteForm, /تابع حالته/);
+  assert.match(quoteRoute, /validateUploadedFile/);
+  assert.match(quoteRoute, /quote-status/);
+  assert.match(quoteMigration, /REVOKE ALL ON TABLE "workforce_request_attachments" FROM PUBLIC, anon, authenticated/);
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
