@@ -13,6 +13,7 @@
     "start:render": "node scripts/render-start.mjs",
     "auth:hash": "node scripts/hash-password.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
+    "test:production": "node scripts/production-smoke.mjs",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit --pretty false",
