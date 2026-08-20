@@ -99,7 +99,8 @@ export async function sha256(value: string) {
 }
 
 export async function requestSourceHash(request: Request) {
-  const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = request.headers.get("cf-connecting-ip")?.trim() || forwarded || "unknown";
   const agent = request.headers.get("user-agent") || "unknown";
   return sha256(`${ip}|${agent}`);
 }
