@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { bankAccounts, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification, type NotificationModule, type NotificationSeverity } from "@/lib/portal-notifications";
 import { canAccessPortalDepartment, requirePortalApiRole, type PortalDepartment } from "@/lib/portal-access";
@@ -116,6 +116,7 @@ export async function POST(request: Request) {
       const periodMonth = cleanText(data.periodMonth, 7) || null;
       const subCategory = cleanText(data.subCategory, 80) || null;
       const paymentMethod = cleanText(data.paymentMethod, 30);
+      const bankAccountId = Number(data.bankAccountId || 0) || null;
       const notes = cleanText(data.notes, 1000) || null;
       if (!financeCategories.has(category) || description.length < 3 || !Number.isFinite(amount) || amount <= 0 || amount > 1000000000 || !dueDate || !paymentMethods.has(paymentMethod)) {
         return Response.json({ error: "بيانات السجل المالي غير مكتملة أو غير صحيحة" }, { status: 400 });
@@ -128,6 +129,11 @@ export async function POST(request: Request) {
       }
       if (category === "worker_expense" && !subCategory) {
         return Response.json({ error: "حدد نوع مصروف العمالة" }, { status: 400 });
+      }
+      if (paymentMethod === "bank_transfer") {
+        if (!bankAccountId || !Number.isInteger(bankAccountId)) return Response.json({ error: "يجب اختيار الحساب البنكي للتحويل" }, { status: 400 });
+        const bank = await db.query.bankAccounts.findFirst({ where: eq(bankAccounts.id, bankAccountId) });
+        if (!bank || bank.status !== "active") return Response.json({ error: "الحساب البنكي غير موجود أو غير نشط" }, { status: 400 });
       }
       if (workerId) {
         const worker = await db.query.workers.findFirst({ where: eq(workers.id, workerId) });
@@ -145,6 +151,7 @@ export async function POST(request: Request) {
         dueDate,
         workerId,
         contractId,
+        bankAccountId,
         periodMonth,
         subCategory,
         paymentMethod: paymentMethod || null,
