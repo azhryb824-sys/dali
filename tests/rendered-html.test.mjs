@@ -18,6 +18,14 @@ test("constructs portal redirects with complete mutable headers", async () => {
   }
 });
 
+test("Render runtime preserves durable storage when Worker bindings are absent", async () => {
+  const source = await readFile(new URL("../lib/runtime-env.ts", import.meta.url), "utf8");
+  assert.match(source, /BUCKET: injected\.BUCKET \?\? node\.BUCKET/);
+  assert.match(source, /createPostgresStorageBucket/);
+  assert.match(source, /private\.object_storage/);
+  assert.match(source, /ON CONFLICT \(storage_key\) DO UPDATE/);
+});
+
 test("renders the public site and protects request workflows", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
