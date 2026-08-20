@@ -17,6 +17,8 @@ test("production uses PostgreSQL with safe pooled-connection settings", async ()
   assert.match(startup, /ssl: "require"/);
   assert.match(startup, /private\.__dali_migrations/);
   assert.match(startup, /drizzle-pg/);
+  assert.match(startup, /DATABASE_MIGRATIONS_PENDING/);
+  assert.doesNotMatch(startup, /create schema|create table|transaction\.unsafe/);
   assert.doesNotMatch(startup, /libsql|VACUUM INTO|PRAGMA/);
   assert.match(database, /drizzle-orm\/postgres-js/);
   assert.match(database, /POSTGRES_SCHEMES/);
