@@ -33,6 +33,11 @@ test("production startup and runtime require the existing persistent database", 
   assert.match(startup, /if \(!isRenderRuntime\(\)\) return/);
   assert.match(startup, /RENDER_DATABASE_URL_RECOVERED/);
   assert.match(startup, /RENDER_DATABASE_RECOVERY_FILE_MISSING/);
+  assert.match(startup, /async function requireExistingRenderDatabase\(databasePath\)/);
+  assert.match(startup, /RENDER_DATABASE_FILE_MISSING/);
+  assert.match(startup, /RENDER_DATABASE_FILE_INVALID/);
+  assert.match(startup, /if \(isRenderRuntime\(\)\) await requireExistingRenderDatabase\(databasePath\)/);
+  assert.match(startup, /else await mkdir\(dirname\(databasePath\)/);
   assert.match(startup, /dali-predeploy-/);
   assert.match(startup, /copyFile/);
   assert.match(startup, /backups\.slice\(12\)/);
