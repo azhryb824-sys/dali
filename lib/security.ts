@@ -114,20 +114,20 @@ export async function enforcePublicRateLimit(request: Request, options: RateLimi
   const database = getRuntimeEnv().DB;
   const statement = `
     INSERT INTO public_rate_limits (key, window_started_at, request_count, blocked_until, updated_at)
-    VALUES (?, ?, 1, NULL, ?)
+    VALUES ($1, $2, 1, NULL, $3)
     ON CONFLICT(key) DO UPDATE SET
       request_count = CASE
-        WHEN public_rate_limits.window_started_at < ? THEN 1
+        WHEN public_rate_limits.window_started_at < $4 THEN 1
         ELSE public_rate_limits.request_count + 1
       END,
       window_started_at = CASE
-        WHEN public_rate_limits.window_started_at < ? THEN excluded.window_started_at
+        WHEN public_rate_limits.window_started_at < $5 THEN excluded.window_started_at
         ELSE public_rate_limits.window_started_at
       END,
       blocked_until = CASE
-        WHEN public_rate_limits.blocked_until IS NOT NULL AND public_rate_limits.blocked_until > ? THEN public_rate_limits.blocked_until
-        WHEN public_rate_limits.window_started_at < ? THEN NULL
-        WHEN public_rate_limits.request_count + 1 > ? THEN ?
+        WHEN public_rate_limits.blocked_until IS NOT NULL AND public_rate_limits.blocked_until > $6 THEN public_rate_limits.blocked_until
+        WHEN public_rate_limits.window_started_at < $7 THEN NULL
+        WHEN public_rate_limits.request_count + 1 > $8 THEN $9
         ELSE NULL
       END,
       updated_at = excluded.updated_at
@@ -136,7 +136,7 @@ export async function enforcePublicRateLimit(request: Request, options: RateLimi
   const args = [key, now.toISOString(), now.toISOString(), windowStart, windowStart, now.toISOString(), windowStart, options.limit, blockUntil];
   const row = database
     ? await database.prepare(statement).bind(...args).first<{ request_count: number; blocked_until: string | null }>()
-    : ((await getSqlClient().execute({ sql: statement, args })).rows[0] as unknown as { request_count: number; blocked_until: string | null } | undefined);
+    : (await getSqlClient().unsafe<{ request_count: number; blocked_until: string | null }[]>(statement, args))[0];
 
   const blocked = Boolean(row?.blocked_until && row.blocked_until > now.toISOString());
   return {
