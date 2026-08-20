@@ -13,5 +13,5 @@ REVOKE ALL ON TABLE private.object_storage FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE private.object_storage TO postgres;
 
 INSERT INTO private.__dali_migrations (name)
-VALUES ('0006_durable_company_assets')
+VALUES ('0006_durable_company_assets.sql')
 ON CONFLICT (name) DO NOTHING;
