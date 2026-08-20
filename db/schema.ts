@@ -1,10 +1,10 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { boolean, check, index, integer, pgTable, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const workforceRequests = sqliteTable(
+export const workforceRequests = pgTable(
   "workforce_requests",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     trackingCode: text("tracking_code").notNull().unique(),
     fullName: text("full_name").notNull(),
     mobile: text("mobile").notNull(),
@@ -26,8 +26,8 @@ export const workforceRequests = sqliteTable(
     idempotencyKey: text("idempotency_key").unique(),
     privacyNoticeVersion: text("privacy_notice_version"),
     privacyAcknowledgedAt: text("privacy_acknowledged_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
@@ -37,7 +37,7 @@ export const workforceRequests = sqliteTable(
   ],
 );
 
-export const visitorConversations = sqliteTable(
+export const visitorConversations = pgTable(
   "visitor_conversations",
   {
     id: text("id").primaryKey(),
@@ -60,8 +60,8 @@ export const visitorConversations = sqliteTable(
     closedAt: text("closed_at"),
     privacyNoticeVersion: text("privacy_notice_version"),
     privacyAcknowledgedAt: text("privacy_acknowledged_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("visitor_conversations_status_idx").on(table.status),
@@ -72,10 +72,10 @@ export const visitorConversations = sqliteTable(
   ],
 );
 
-export const visitorMessages = sqliteTable(
+export const visitorMessages = pgTable(
   "visitor_messages",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     conversationId: text("conversation_id").notNull(),
     senderType: text("sender_type").notNull(),
     senderName: text("sender_name").notNull(),
@@ -84,7 +84,7 @@ export const visitorMessages = sqliteTable(
     clientMessageId: text("client_message_id").unique(),
     readByVisitorAt: text("read_by_visitor_at"),
     readByStaffAt: text("read_by_staff_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("visitor_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
@@ -93,21 +93,21 @@ export const visitorMessages = sqliteTable(
   ],
 );
 
-export const portalSettings = sqliteTable(
+export const portalSettings = pgTable(
   "portal_settings",
   {
     key: text("key").primaryKey(),
     valueJson: text("value_json").notNull(),
     updatedBy: text("updated_by").notNull(),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("portal_settings_updated_at_idx").on(table.updatedAt)],
 );
 
-export const workforceRequestReplies = sqliteTable(
+export const workforceRequestReplies = pgTable(
   "workforce_request_replies",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     requestId: integer("request_id").notNull(),
     senderEmail: text("sender_email").notNull(),
     senderName: text("sender_name").notNull(),
@@ -118,8 +118,8 @@ export const workforceRequestReplies = sqliteTable(
     providerMessageId: text("provider_message_id"),
     failureReason: text("failure_reason"),
     sentAt: text("sent_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workforce_request_replies_request_id_idx").on(table.requestId),
@@ -128,7 +128,7 @@ export const workforceRequestReplies = sqliteTable(
   ],
 );
 
-export const portalUsers = sqliteTable(
+export const portalUsers = pgTable(
   "portal_users",
   {
     email: text("email").primaryKey(),
@@ -144,8 +144,8 @@ export const portalUsers = sqliteTable(
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
     suspendedAt: text("suspended_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     lastLoginAt: text("last_login_at"),
     lastActivityAt: text("last_activity_at"),
   },
@@ -156,20 +156,20 @@ export const portalUsers = sqliteTable(
   ],
 );
 
-export const portalAuthCredentials = sqliteTable(
+export const portalAuthCredentials = pgTable(
   "portal_auth_credentials",
   {
     identifier: text("identifier").primaryKey(),
     email: text("email").notNull().unique(),
     displayName: text("display_name").notNull(),
     passwordHash: text("password_hash").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("portal_auth_credentials_email_idx").on(table.email)],
 );
 
-export const passwordResetTokens = sqliteTable(
+export const passwordResetTokens = pgTable(
   "password_reset_tokens",
   {
     tokenHash: text("token_hash").primaryKey(),
@@ -177,12 +177,12 @@ export const passwordResetTokens = sqliteTable(
     email: text("email").notNull(),
     expiresAt: text("expires_at").notNull(),
     usedAt: text("used_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("password_reset_tokens_identifier_idx").on(table.identifier), index("password_reset_tokens_expires_idx").on(table.expiresAt)],
 );
 
-export const portalSessions = sqliteTable(
+export const portalSessions = pgTable(
   "portal_sessions",
   {
     id: text("id").primaryKey(),
@@ -191,7 +191,7 @@ export const portalSessions = sqliteTable(
     status: text("status").notNull().default("active"),
     userAgentHash: text("user_agent_hash").notNull(),
     sourceHash: text("source_hash"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     lastActivityAt: text("last_activity_at").notNull(),
     idleExpiresAt: text("idle_expires_at").notNull(),
     absoluteExpiresAt: text("absolute_expires_at").notNull(),
@@ -205,10 +205,10 @@ export const portalSessions = sqliteTable(
   ],
 );
 
-export const employees = sqliteTable(
+export const employees = pgTable(
   "employees",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     employeeNumber: text("employee_number").notNull().unique(),
     fullName: text("full_name").notNull(),
     jobTitle: text("job_title").notNull(),
@@ -231,8 +231,8 @@ export const employees = sqliteTable(
     terminationDate: text("termination_date"),
     terminationReason: text("termination_reason"),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("employees_status_idx").on(table.status),
@@ -240,10 +240,10 @@ export const employees = sqliteTable(
   ],
 );
 
-export const employeeMovements = sqliteTable(
+export const employeeMovements = pgTable(
   "employee_movements",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
     movementType: text("movement_type").notNull(),
     effectiveDate: text("effective_date").notNull(),
@@ -251,8 +251,8 @@ export const employeeMovements = sqliteTable(
     description: text("description").notNull(),
     status: text("status").notNull().default("approved"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("employee_movements_employee_date_idx").on(table.employeeId, table.effectiveDate),
@@ -263,10 +263,10 @@ export const employeeMovements = sqliteTable(
   ],
 );
 
-export const payrollRuns = sqliteTable(
+export const payrollRuns = pgTable(
   "payroll_runs",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     runNumber: text("run_number").notNull().unique(),
     periodMonth: text("period_month").notNull().unique(),
     paymentDate: text("payment_date").notNull(),
@@ -281,8 +281,8 @@ export const payrollRuns = sqliteTable(
     approvedAt: text("approved_at"),
     paidBy: text("paid_by"),
     paidAt: text("paid_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("payroll_runs_status_payment_idx").on(table.status, table.paymentDate),
@@ -291,10 +291,10 @@ export const payrollRuns = sqliteTable(
   ],
 );
 
-export const payrollItems = sqliteTable(
+export const payrollItems = pgTable(
   "payroll_items",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     payrollRunId: integer("payroll_run_id").notNull().references(() => payrollRuns.id, { onDelete: "cascade" }),
     employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
     baseSalaryHalalas: integer("base_salary_halalas").notNull(),
@@ -303,7 +303,7 @@ export const payrollItems = sqliteTable(
     deductionsHalalas: integer("deductions_halalas").notNull().default(0),
     netPayHalalas: integer("net_pay_halalas").notNull(),
     notes: text("notes"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     uniqueIndex("payroll_items_run_employee_idx").on(table.payrollRunId, table.employeeId),
@@ -312,10 +312,10 @@ export const payrollItems = sqliteTable(
   ],
 );
 
-export const financialRecords = sqliteTable(
+export const financialRecords = pgTable(
   "financial_records",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     referenceCode: text("reference_code").notNull().unique(),
     category: text("category").notNull(),
     description: text("description").notNull(),
@@ -336,8 +336,8 @@ export const financialRecords = sqliteTable(
     paymentMethod: text("payment_method"),
     notes: text("notes"),
     status: text("status").notNull().default("pending"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("financial_records_status_idx").on(table.status),
@@ -353,18 +353,18 @@ export const financialRecords = sqliteTable(
   ],
 );
 
-export const legalRecords = sqliteTable(
+export const legalRecords = pgTable(
   "legal_records",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     referenceCode: text("reference_code").notNull().unique(),
     category: text("category").notNull(),
     title: text("title").notNull(),
     counterparty: text("counterparty").notNull(),
     expiryDate: text("expiry_date"),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("legal_records_status_idx").on(table.status),
@@ -372,10 +372,10 @@ export const legalRecords = sqliteTable(
   ],
 );
 
-export const complianceObligations = sqliteTable(
+export const complianceObligations = pgTable(
   "compliance_obligations",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     obligationCode: text("obligation_code").notNull().unique(),
     title: text("title").notNull(),
     category: text("category").notNull(),
@@ -392,8 +392,8 @@ export const complianceObligations = sqliteTable(
     createdBy: text("created_by").notNull(),
     reviewedBy: text("reviewed_by"),
     reviewedAt: text("reviewed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("compliance_obligations_expiry_status_idx").on(table.expiryDate, table.status),
@@ -405,17 +405,17 @@ export const complianceObligations = sqliteTable(
   ],
 );
 
-export const complianceReviews = sqliteTable(
+export const complianceReviews = pgTable(
   "compliance_reviews",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     obligationId: integer("obligation_id").notNull().references(() => complianceObligations.id, { onDelete: "cascade" }),
     reviewDate: text("review_date").notNull(),
     outcome: text("outcome").notNull(),
     notes: text("notes").notNull(),
     nextReviewDate: text("next_review_date"),
     reviewedBy: text("reviewed_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("compliance_reviews_obligation_date_idx").on(table.obligationId, table.reviewDate),
@@ -423,10 +423,10 @@ export const complianceReviews = sqliteTable(
   ],
 );
 
-export const workers = sqliteTable(
+export const workers = pgTable(
   "workers",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     workerNumber: text("worker_number").notNull().unique(),
     iqamaNumber: text("iqama_number").unique(),
     fullName: text("full_name").notNull(),
@@ -440,8 +440,8 @@ export const workers = sqliteTable(
     status: text("status").notNull().default("available"),
     clientId: integer("client_id"),
     workOrderId: integer("work_order_id"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workers_status_idx").on(table.status),
@@ -451,10 +451,10 @@ export const workers = sqliteTable(
   ],
 );
 
-export const workerAttachments = sqliteTable(
+export const workerAttachments = pgTable(
   "worker_attachments",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     workerId: integer("worker_id").notNull(),
     documentType: text("document_type").notNull(),
     requirementCode: text("requirement_code"),
@@ -466,7 +466,7 @@ export const workerAttachments = sqliteTable(
     validationStatus: text("validation_status").notNull().default("legacy"),
     validationDetails: text("validation_details"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("worker_attachments_worker_id_idx").on(table.workerId),
@@ -474,10 +474,10 @@ export const workerAttachments = sqliteTable(
   ],
 );
 
-export const portalActivity = sqliteTable(
+export const portalActivity = pgTable(
   "portal_activity",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     actorEmail: text("actor_email").notNull(),
     action: text("action").notNull(),
     entityType: text("entity_type").notNull(),
@@ -488,15 +488,15 @@ export const portalActivity = sqliteTable(
     correlationId: text("correlation_id"),
     source: text("source").notNull().default("portal"),
     ipHash: text("ip_hash"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("portal_activity_created_at_idx").on(table.createdAt)],
 );
 
-export const portalNotifications = sqliteTable(
+export const portalNotifications = pgTable(
   "portal_notifications",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     eventType: text("event_type").notNull(),
     title: text("title").notNull(),
     message: text("message").notNull(),
@@ -511,8 +511,8 @@ export const portalNotifications = sqliteTable(
     dedupeKey: text("dedupe_key").unique(),
     source: text("source").notNull().default("event"),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("portal_notifications_status_created_idx").on(table.status, table.createdAt),
@@ -522,13 +522,13 @@ export const portalNotifications = sqliteTable(
   ],
 );
 
-export const portalNotificationReads = sqliteTable(
+export const portalNotificationReads = pgTable(
   "portal_notification_reads",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     notificationId: integer("notification_id").notNull(),
     userEmail: text("user_email").notNull(),
-    readAt: text("read_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    readAt: text("read_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     dismissedAt: text("dismissed_at"),
   },
   (table) => [
@@ -537,10 +537,10 @@ export const portalNotificationReads = sqliteTable(
   ],
 );
 
-export const companyDocuments = sqliteTable(
+export const companyDocuments = pgTable(
   "company_documents",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     referenceCode: text("reference_code").notNull().unique(),
     title: text("title").notNull(),
     category: text("category").notNull(),
@@ -559,8 +559,8 @@ export const companyDocuments = sqliteTable(
     retentionUntil: text("retention_until"),
     lockedUntil: text("locked_until"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("company_documents_category_idx").on(table.category),
@@ -569,7 +569,7 @@ export const companyDocuments = sqliteTable(
   ],
 );
 
-export const documentShareLinks = sqliteTable(
+export const documentShareLinks = pgTable(
   "document_share_links",
   {
     id: text("id").primaryKey(),
@@ -581,7 +581,7 @@ export const documentShareLinks = sqliteTable(
     downloadCount: integer("download_count").notNull().default(0),
     lastAccessedAt: text("last_accessed_at"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("document_share_links_document_id_idx").on(table.documentId),
@@ -589,7 +589,7 @@ export const documentShareLinks = sqliteTable(
   ],
 );
 
-export const companyAssets = sqliteTable(
+export const companyAssets = pgTable(
   "company_assets",
   {
     slot: text("slot").primaryKey(),
@@ -600,15 +600,15 @@ export const companyAssets = sqliteTable(
     validationStatus: text("validation_status").notNull().default("legacy"),
     validationDetails: text("validation_details"),
     uploadedBy: text("uploaded_by").notNull(),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("company_assets_updated_at_idx").on(table.updatedAt)],
 );
 
-export const workforceContracts = sqliteTable(
+export const workforceContracts = pgTable(
   "workforce_contracts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     referenceCode: text("reference_code").notNull().unique(),
     documentId: integer("document_id").notNull().unique(),
     clientName: text("client_name").notNull(),
@@ -636,8 +636,8 @@ export const workforceContracts = sqliteTable(
     opportunityId: integer("opportunity_id"),
     quoteVersionId: integer("quote_version_id"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workforce_contracts_client_name_idx").on(table.clientName),
@@ -648,18 +648,18 @@ export const workforceContracts = sqliteTable(
   ],
 );
 
-export const contractClauses = sqliteTable(
+export const contractClauses = pgTable(
   "contract_clauses",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     contractId: integer("contract_id").notNull().references(() => workforceContracts.id, { onDelete: "cascade" }),
     clauseNumber: integer("clause_number").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull(),
-    isOptional: integer("is_optional", { mode: "boolean" }).notNull().default(false),
-    isIncluded: integer("is_included", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    isOptional: boolean("is_optional").notNull().default(false),
+    isIncluded: boolean("is_included").notNull().default(true),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     uniqueIndex("contract_clauses_number_unique").on(table.contractId, table.clauseNumber),
@@ -667,14 +667,14 @@ export const contractClauses = sqliteTable(
   ],
 );
 
-export const contractProfessions = sqliteTable(
+export const contractProfessions = pgTable(
   "contract_professions",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     contractId: integer("contract_id").notNull(),
     profession: text("profession").notNull(),
     requiredCount: integer("required_count").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     uniqueIndex("contract_professions_contract_profession_unique").on(table.contractId, table.profession),
@@ -683,16 +683,16 @@ export const contractProfessions = sqliteTable(
   ],
 );
 
-export const contractWorkerAssignments = sqliteTable(
+export const contractWorkerAssignments = pgTable(
   "contract_worker_assignments",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     contractId: integer("contract_id").notNull(),
     contractProfessionId: integer("contract_profession_id").notNull(),
     workerId: integer("worker_id").notNull(),
     status: text("status").notNull().default("active"),
     assignedBy: text("assigned_by").notNull(),
-    assignedAt: text("assigned_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    assignedAt: text("assigned_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     releasedAt: text("released_at"),
   },
   (table) => [
@@ -704,10 +704,10 @@ export const contractWorkerAssignments = sqliteTable(
   ],
 );
 
-export const clients = sqliteTable(
+export const clients = pgTable(
   "clients",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     clientCode: text("client_code").notNull().unique(),
     legalName: text("legal_name").notNull(),
     tradeName: text("trade_name"),
@@ -719,8 +719,8 @@ export const clients = sqliteTable(
     status: text("status").notNull().default("prospect"),
     ownerEmail: text("owner_email"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
@@ -731,10 +731,10 @@ export const clients = sqliteTable(
   ],
 );
 
-export const suppliers = sqliteTable(
+export const suppliers = pgTable(
   "suppliers",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     supplierCode: text("supplier_code").notNull().unique(),
     legalName: text("legal_name").notNull(),
     commercialRegistration: text("commercial_registration"),
@@ -745,8 +745,8 @@ export const suppliers = sqliteTable(
     address: text("address"),
     status: text("status").notNull().default("active"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("suppliers_name_idx").on(table.legalName),
@@ -755,10 +755,10 @@ export const suppliers = sqliteTable(
   ],
 );
 
-export const purchaseInvoices = sqliteTable(
+export const purchaseInvoices = pgTable(
   "purchase_invoices",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     referenceCode: text("reference_code").notNull().unique(),
     supplierInvoiceNumber: text("supplier_invoice_number").notNull(),
     expenseType: text("expense_type").notNull().default("supplier_invoice"),
@@ -781,8 +781,8 @@ export const purchaseInvoices = sqliteTable(
     approvedAt: text("approved_at"),
     paidBy: text("paid_by"),
     paidAt: text("paid_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     uniqueIndex("purchase_invoice_supplier_number_unique").on(table.supplierId, table.supplierInvoiceNumber),
@@ -796,19 +796,19 @@ export const purchaseInvoices = sqliteTable(
   ],
 );
 
-export const clientContacts = sqliteTable(
+export const clientContacts = pgTable(
   "client_contacts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
     fullName: text("full_name").notNull(),
     jobTitle: text("job_title"),
     mobile: text("mobile"),
     email: text("email"),
     preferredChannel: text("preferred_channel").notNull().default("either"),
-    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("client_contacts_client_idx").on(table.clientId),
@@ -817,10 +817,10 @@ export const clientContacts = sqliteTable(
   ],
 );
 
-export const salesOpportunities = sqliteTable(
+export const salesOpportunities = pgTable(
   "sales_opportunities",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     opportunityCode: text("opportunity_code").notNull().unique(),
     clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
     contactId: integer("contact_id").references(() => clientContacts.id, { onDelete: "set null" }),
@@ -834,8 +834,8 @@ export const salesOpportunities = sqliteTable(
     lossReason: text("loss_reason"),
     notes: text("notes"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
@@ -848,10 +848,10 @@ export const salesOpportunities = sqliteTable(
   ],
 );
 
-export const quoteVersions = sqliteTable(
+export const quoteVersions = pgTable(
   "quote_versions",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     quoteCode: text("quote_code").notNull(),
     opportunityId: integer("opportunity_id").notNull().references(() => salesOpportunities.id, { onDelete: "cascade" }),
     versionNumber: integer("version_number").notNull().default(1),
@@ -872,8 +872,8 @@ export const quoteVersions = sqliteTable(
     clientDecisionAt: text("client_decision_at"),
     documentId: integer("document_id").references(() => companyDocuments.id, { onDelete: "set null" }),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     recordVersion: integer("record_version").notNull().default(1),
   },
   (table) => [
@@ -885,10 +885,10 @@ export const quoteVersions = sqliteTable(
   ],
 );
 
-export const quoteItems = sqliteTable(
+export const quoteItems = pgTable(
   "quote_items",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     quoteVersionId: integer("quote_version_id").notNull().references(() => quoteVersions.id, { onDelete: "cascade" }),
     profession: text("profession").notNull(),
     quantity: integer("quantity").notNull(),
@@ -905,10 +905,10 @@ export const quoteItems = sqliteTable(
   ],
 );
 
-export const workOrders = sqliteTable(
+export const workOrders = pgTable(
   "work_orders",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     workOrderCode: text("work_order_code").notNull().unique(),
     clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "restrict" }),
     contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "set null" }),
@@ -921,8 +921,8 @@ export const workOrders = sqliteTable(
     status: text("status").notNull().default("planned"),
     notes: text("notes"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
@@ -934,10 +934,10 @@ export const workOrders = sqliteTable(
   ],
 );
 
-export const workOrderRequirements = sqliteTable(
+export const workOrderRequirements = pgTable(
   "work_order_requirements",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     workOrderId: integer("work_order_id").notNull().references(() => workOrders.id, { onDelete: "cascade" }),
     profession: text("profession").notNull(),
     requiredCount: integer("required_count").notNull(),
@@ -953,10 +953,10 @@ export const workOrderRequirements = sqliteTable(
   ],
 );
 
-export const timesheets = sqliteTable(
+export const timesheets = pgTable(
   "timesheets",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     timesheetCode: text("timesheet_code").notNull().unique(),
     workOrderId: integer("work_order_id").notNull().references(() => workOrders.id, { onDelete: "restrict" }),
     clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "restrict" }),
@@ -969,8 +969,8 @@ export const timesheets = sqliteTable(
     approvedAt: text("approved_at"),
     rejectionReason: text("rejection_reason"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
@@ -981,10 +981,10 @@ export const timesheets = sqliteTable(
   ],
 );
 
-export const timeEntries = sqliteTable(
+export const timeEntries = pgTable(
   "time_entries",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     timesheetId: integer("timesheet_id").notNull().references(() => timesheets.id, { onDelete: "cascade" }),
     workerId: integer("worker_id").notNull().references(() => workers.id, { onDelete: "restrict" }),
     workDate: text("work_date").notNull(),
@@ -1001,10 +1001,10 @@ export const timeEntries = sqliteTable(
   ],
 );
 
-export const workflowApprovals = sqliteTable(
+export const workflowApprovals = pgTable(
   "workflow_approvals",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     entityType: text("entity_type").notNull(),
     entityId: text("entity_id").notNull(),
     step: text("step").notNull(),
@@ -1015,7 +1015,7 @@ export const workflowApprovals = sqliteTable(
     decisionBy: text("decision_by"),
     decisionReason: text("decision_reason"),
     decidedAt: text("decided_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workflow_approvals_entity_idx").on(table.entityType, table.entityId),
@@ -1024,10 +1024,10 @@ export const workflowApprovals = sqliteTable(
   ],
 );
 
-export const workflowStatusHistory = sqliteTable(
+export const workflowStatusHistory = pgTable(
   "workflow_status_history",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     entityType: text("entity_type").notNull(),
     entityId: text("entity_id").notNull(),
     fromStatus: text("from_status"),
@@ -1035,7 +1035,7 @@ export const workflowStatusHistory = sqliteTable(
     reason: text("reason"),
     actorEmail: text("actor_email").notNull(),
     correlationId: text("correlation_id").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workflow_status_history_entity_idx").on(table.entityType, table.entityId, table.createdAt),
@@ -1043,7 +1043,7 @@ export const workflowStatusHistory = sqliteTable(
   ],
 );
 
-export const integrationOutbox = sqliteTable(
+export const integrationOutbox = pgTable(
   "integration_outbox",
   {
     id: text("id").primaryKey(),
@@ -1053,10 +1053,10 @@ export const integrationOutbox = sqliteTable(
     payloadJson: text("payload_json").notNull(),
     status: text("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
-    availableAt: text("available_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    availableAt: text("available_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     processedAt: text("processed_at"),
     lastError: text("last_error"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("integration_outbox_status_available_idx").on(table.status, table.availableAt),
@@ -1065,19 +1065,19 @@ export const integrationOutbox = sqliteTable(
   ],
 );
 
-export const publicRateLimits = sqliteTable(
+export const publicRateLimits = pgTable(
   "public_rate_limits",
   {
     key: text("key").primaryKey(),
     windowStartedAt: text("window_started_at").notNull(),
     requestCount: integer("request_count").notNull().default(0),
     blockedUntil: text("blocked_until"),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("public_rate_limits_updated_idx").on(table.updatedAt)],
 );
 
-export const operationRequests = sqliteTable(
+export const operationRequests = pgTable(
   "operation_requests",
   {
     key: text("key").primaryKey(),
@@ -1087,8 +1087,8 @@ export const operationRequests = sqliteTable(
     responseJson: text("response_json"),
     errorMessage: text("error_message"),
     expiresAt: text("expires_at").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("operation_requests_actor_idx").on(table.actorEmail, table.createdAt),
@@ -1097,18 +1097,18 @@ export const operationRequests = sqliteTable(
   ],
 );
 
-export const clientPortalUsers = sqliteTable(
+export const clientPortalUsers = pgTable(
   "client_portal_users",
   {
     email: text("email").primaryKey(),
     clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
     status: text("status").notNull().default("pending"),
-    canApproveQuotes: integer("can_approve_quotes", { mode: "boolean" }).notNull().default(false),
-    canApproveTimesheets: integer("can_approve_timesheets", { mode: "boolean" }).notNull().default(false),
+    canApproveQuotes: boolean("can_approve_quotes").notNull().default(false),
+    canApproveTimesheets: boolean("can_approve_timesheets").notNull().default(false),
     invitedBy: text("invited_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     lastLoginAt: text("last_login_at"),
   },
   (table) => [
@@ -1118,7 +1118,7 @@ export const clientPortalUsers = sqliteTable(
   ],
 );
 
-export const workerPortalUsers = sqliteTable(
+export const workerPortalUsers = pgTable(
   "worker_portal_users",
   {
     email: text("email").primaryKey(),
@@ -1126,8 +1126,8 @@ export const workerPortalUsers = sqliteTable(
     displayName: text("display_name").notNull(),
     status: text("status").notNull().default("pending"),
     invitedBy: text("invited_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     lastLoginAt: text("last_login_at"),
   },
   (table) => [
@@ -1137,17 +1137,17 @@ export const workerPortalUsers = sqliteTable(
   ],
 );
 
-export const portalUserPermissions = sqliteTable(
+export const portalUserPermissions = pgTable(
   "portal_user_permissions",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
     resource: text("resource").notNull(),
     action: text("action").notNull(),
     scope: text("scope").notNull().default("department"),
-    allowed: integer("allowed", { mode: "boolean" }).notNull().default(true),
+    allowed: boolean("allowed").notNull().default(true),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     uniqueIndex("portal_user_permissions_unique").on(table.userEmail, table.resource, table.action, table.scope),
@@ -1156,10 +1156,10 @@ export const portalUserPermissions = sqliteTable(
   ],
 );
 
-export const dataSubjectRequests = sqliteTable(
+export const dataSubjectRequests = pgTable(
   "data_subject_requests",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     trackingCode: text("tracking_code").notNull().unique(),
     requestType: text("request_type").notNull(),
     fullName: text("full_name").notNull(),
@@ -1170,8 +1170,8 @@ export const dataSubjectRequests = sqliteTable(
     assignedTo: text("assigned_to"),
     dueAt: text("due_at").notNull(),
     completedAt: text("completed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("data_subject_requests_status_due_idx").on(table.status, table.dueAt),
@@ -1180,10 +1180,10 @@ export const dataSubjectRequests = sqliteTable(
   ],
 );
 
-export const capacityPlans = sqliteTable(
+export const capacityPlans = pgTable(
   "capacity_plans",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     planCode: text("plan_code").notNull().unique(),
     seasonName: text("season_name").notNull(),
     location: text("location").notNull(),
@@ -1196,8 +1196,8 @@ export const capacityPlans = sqliteTable(
     status: text("status").notNull().default("planning"),
     ownerEmail: text("owner_email").notNull(),
     notes: text("notes"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("capacity_plans_season_idx").on(table.seasonName),
@@ -1209,20 +1209,20 @@ export const capacityPlans = sqliteTable(
 
 // Enterprise accounting foundation. Source documents remain operational records;
 // only posted journal lines are allowed to change ledger balances.
-export const chartOfAccounts = sqliteTable(
+export const chartOfAccounts = pgTable(
   "chart_of_accounts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     code: text("code").notNull().unique(),
     nameAr: text("name_ar").notNull(),
     accountType: text("account_type").notNull(),
     normalBalance: text("normal_balance").notNull(),
     parentId: integer("parent_id"),
-    isPosting: integer("is_posting", { mode: "boolean" }).notNull().default(true),
-    isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
+    isPosting: boolean("is_posting").notNull().default(true),
+    isSystem: boolean("is_system").notNull().default(false),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("chart_of_accounts_parent_idx").on(table.parentId),
@@ -1233,10 +1233,10 @@ export const chartOfAccounts = sqliteTable(
   ],
 );
 
-export const fiscalPeriods = sqliteTable(
+export const fiscalPeriods = pgTable(
   "fiscal_periods",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     periodCode: text("period_code").notNull().unique(),
     nameAr: text("name_ar").notNull(),
     startDate: text("start_date").notNull(),
@@ -1244,7 +1244,7 @@ export const fiscalPeriods = sqliteTable(
     status: text("status").notNull().default("open"),
     closedBy: text("closed_by"),
     closedAt: text("closed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("fiscal_periods_dates_idx").on(table.startDate, table.endDate),
@@ -1253,18 +1253,18 @@ export const fiscalPeriods = sqliteTable(
   ],
 );
 
-export const costCenters = sqliteTable(
+export const costCenters = pgTable(
   "cost_centers",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     code: text("code").notNull().unique(),
     nameAr: text("name_ar").notNull(),
     centerType: text("center_type").notNull().default("contract"),
     contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
     status: text("status").notNull().default("active"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("cost_centers_type_status_idx").on(table.centerType, table.status),
@@ -1274,10 +1274,10 @@ export const costCenters = sqliteTable(
   ],
 );
 
-export const journalEntries = sqliteTable(
+export const journalEntries = pgTable(
   "journal_entries",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     entryNumber: text("entry_number").notNull().unique(),
     entryDate: text("entry_date").notNull(),
     fiscalPeriodId: integer("fiscal_period_id").notNull().references(() => fiscalPeriods.id, { onDelete: "restrict" }),
@@ -1292,8 +1292,8 @@ export const journalEntries = sqliteTable(
     postedBy: text("posted_by"),
     postedAt: text("posted_at"),
     voidReason: text("void_reason"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("journal_entries_period_status_idx").on(table.fiscalPeriodId, table.status),
@@ -1303,10 +1303,10 @@ export const journalEntries = sqliteTable(
   ],
 );
 
-export const journalLines = sqliteTable(
+export const journalLines = pgTable(
   "journal_lines",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     journalEntryId: integer("journal_entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
     lineNumber: integer("line_number").notNull(),
     accountId: integer("account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
@@ -1319,7 +1319,7 @@ export const journalLines = sqliteTable(
     workerId: integer("worker_id").references(() => workers.id, { onDelete: "restrict" }),
     employeeId: integer("employee_id").references(() => employees.id, { onDelete: "restrict" }),
     costCenterCode: text("cost_center_code"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     uniqueIndex("journal_lines_entry_line_unique").on(table.journalEntryId, table.lineNumber),
@@ -1330,10 +1330,10 @@ export const journalLines = sqliteTable(
   ],
 );
 
-export const bankAccounts = sqliteTable(
+export const bankAccounts = pgTable(
   "bank_accounts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     accountCode: text("account_code").notNull().unique(),
     bankName: text("bank_name").notNull(),
     accountName: text("account_name").notNull(),
@@ -1341,8 +1341,8 @@ export const bankAccounts = sqliteTable(
     currency: text("currency").notNull().default("SAR"),
     ledgerAccountId: integer("ledger_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("bank_accounts_status_idx").on(table.status),
@@ -1350,10 +1350,10 @@ export const bankAccounts = sqliteTable(
   ],
 );
 
-export const bankReconciliations = sqliteTable(
+export const bankReconciliations = pgTable(
   "bank_reconciliations",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     reconciliationNumber: text("reconciliation_number").notNull().unique(),
     bankAccountId: integer("bank_account_id").notNull().references(() => bankAccounts.id, { onDelete: "restrict" }),
     statementDate: text("statement_date").notNull(),
@@ -1367,8 +1367,8 @@ export const bankReconciliations = sqliteTable(
     createdBy: text("created_by").notNull(),
     reviewedBy: text("reviewed_by"),
     reviewedAt: text("reviewed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     uniqueIndex("bank_reconciliations_bank_date_unique").on(table.bankAccountId, table.statementDate),
@@ -1378,17 +1378,17 @@ export const bankReconciliations = sqliteTable(
   ],
 );
 
-export const accountingPostingRules = sqliteTable(
+export const accountingPostingRules = pgTable(
   "accounting_posting_rules",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     eventType: text("event_type").notNull().unique(),
     debitAccountId: integer("debit_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
     creditAccountId: integer("credit_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
     taxAccountId: integer("tax_account_id").references(() => chartOfAccounts.id, { onDelete: "restrict" }),
-    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    active: boolean("active").notNull().default(true),
     updatedBy: text("updated_by").notNull(),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("accounting_posting_rules_active_idx").on(table.active)],
 );
