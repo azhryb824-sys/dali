@@ -124,6 +124,14 @@ const recordStatus: Record<RecordEntity, Record<string, string>> = {
   workforce: { available: "متاح", assigned: "على رأس مشروع", leave: "في إجازة", suspended: "موقوف" },
 };
 const roleLabels: Record<PortalRole, string> = { admin: "مدير النظام", manager: "الإدارة", employee: "موظف" };
+const functionalRoleLabels: Record<string, string> = {
+  system_owner: "مالك النظام", system_admin: "مسؤول النظام", executive: "الإدارة التنفيذية",
+  construction_director: "مدير قطاع المقاولات", workforce_operations_manager: "مدير تشغيل العمالة", finance_director: "المدير المالي",
+  project_manager: "مدير مشروع", site_engineer: "مهندس موقع", planning_engineer: "مهندس تخطيط", cost_engineer: "مهندس تكاليف",
+  contracts_manager: "مدير العقود", procurement_officer: "مسؤول المشتريات", project_accountant: "محاسب مشروع", document_controller: "مراقب وثائق",
+  quality_officer: "مسؤول الجودة", safety_officer: "مسؤول السلامة", hr_officer: "مسؤول الموارد البشرية", regional_manager: "مدير منطقة",
+  client_consultant: "ممثل العميل أو الاستشاري", subcontractor: "مقاول باطن",
+};
 const departmentLabels: Record<PortalDepartment, string> = {
   employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية",
   workforce: "شؤون العمالة", construction: "المقاولات والمشروعات", general: "صلاحية عامة",
@@ -210,7 +218,7 @@ function Icon({ name }: { name: IconName }) {
 }
 
 export default function PortalDashboard({ currentUser, initialRequests, initialRequestReplies, initialNotifications, initialUsers, initialActivity, initialEmployees, initialFinance, initialLegal, initialWorkers, initialWorkerAttachments, initialDocuments, initialAssets, initialContracts, initialContractProfessions, initialContractAssignments, initialConversations, initialConversationMessages, initialBusinessHours, initialChatAutomation, initialWebsiteContent, canAccessWebsite, canManageWebsite, canAccessConstruction, canManageChatSettings, canManageDocuments, canManageAssets, emailConfigured, signOutPath }: {
-  currentUser: { email: string; displayName: string; role: PortalRole; department: PortalDepartment };
+  currentUser: { email: string; displayName: string; role: PortalRole; department: PortalDepartment; functionalRoles: string[] };
   initialRequests: WorkforceRequest[]; initialRequestReplies: WorkforceRequestReply[]; initialNotifications: PortalNotification[]; initialUsers: PortalUser[]; initialActivity: Activity[];
   initialEmployees: EmployeeRecord[]; initialFinance: FinanceRecord[]; initialLegal: LegalRecord[]; initialWorkers: WorkerRecord[]; initialWorkerAttachments: WorkerAttachment[];
   initialDocuments: CompanyDocument[]; initialAssets: CompanyAsset[]; canManageDocuments: boolean; canManageAssets: boolean;
@@ -261,9 +269,17 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
-  const canWrite = currentUser.role === "admin" || currentUser.role === "manager";
-  const canAccess = (department: RecordEntity) => currentUser.role !== "employee" || currentUser.department === department;
-  const canAccessDocuments = currentUser.role !== "employee" || currentUser.department === "legal" || currentUser.department === "finance";
+  const functionalAccess: Record<string, { read: RecordEntity[]; write: RecordEntity[] }> = {
+    system_owner:{read:["employees","finance","legal","workforce"],write:["employees","finance","legal","workforce"]}, system_admin:{read:["employees","finance","legal","workforce"],write:["employees","finance","legal","workforce"]}, executive:{read:["employees","finance","legal","workforce"],write:[]},
+    construction_director:{read:["finance","legal","workforce"],write:[]}, workforce_operations_manager:{read:["employees","finance","workforce"],write:["workforce"]}, finance_director:{read:["finance","legal","workforce"],write:["finance"]}, project_manager:{read:["finance","workforce"],write:[]}, cost_engineer:{read:["finance"],write:[]}, contracts_manager:{read:["finance","legal"],write:["legal"]}, procurement_officer:{read:["finance"],write:["finance"]}, project_accountant:{read:["finance"],write:["finance"]}, document_controller:{read:["legal"],write:["legal"]}, hr_officer:{read:["employees","workforce"],write:["employees"]}, regional_manager:{read:["workforce"],write:["workforce"]},
+  };
+  const functionalAdmin = currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
+  const canAccess = (department: RecordEntity) => currentUser.role !== "employee" || currentUser.department === department || currentUser.functionalRoles.some((role) => functionalAccess[role]?.read.includes(department));
+  const canWriteDepartment = (department: RecordEntity) => currentUser.role === "admin" || currentUser.role === "manager" || currentUser.functionalRoles.some((role) => functionalAccess[role]?.write.includes(department));
+  const viewDepartment: Partial<Record<View, RecordEntity>> = { employees:"employees", finance:"finance", legal:"legal", workforce:"workforce", operations:"workforce", conversations:"workforce" };
+  const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!) : currentUser.role === "admin" || currentUser.role === "manager" || functionalAdmin;
+  const canAccessDocuments = currentUser.role !== "employee" || currentUser.department === "legal" || currentUser.department === "finance" || currentUser.functionalRoles.some((role) => ["system_owner","system_admin","finance_director","contracts_manager","document_controller"].includes(role));
+  const activeRoleLabel = currentUser.functionalRoles.map((role) => functionalRoleLabels[role] || role).join("، ") || roleLabels[currentUser.role];
 
   useEffect(() => {
     let idleTimer = 0;
@@ -758,7 +774,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مركز المستندات</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
         {canAccessDocuments && <button className={view === "brand" ? "active" : ""} onClick={() => changeView("brand")}><Icon name="brand" /><span>الهوية البصرية</span></button>}
         {canAccessWebsite && <button className={view === "website" ? "active" : ""} onClick={() => changeView("website")}><Icon name="website"/><span>إدارة الموقع</span></button>}
-        {currentUser.role === "admin" && <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}><Icon name="users" /><span>المستخدمون والصلاحيات</span>{users.some((item) => item.status === "pending") && <i />}</button>}
+        {(currentUser.role === "admin" || functionalAdmin) && <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}><Icon name="users" /><span>المستخدمون والصلاحيات</span>{users.some((item) => item.status === "pending") && <i />}</button>}
       </nav>
       <div className="sidebar-foot"><div className="security-note"><span>✓</span><p><strong>اتصال محمي</strong>تُطبّق الصلاحيات من جهة الخادم.</p></div><a href={signOutPath}>تسجيل الخروج</a></div>
     </aside>
@@ -790,14 +806,14 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
               <NotificationPopover notifications={notifications} onOpen={openNotification} onReadAll={() => void updateNotificationState("read-all")} onViewAll={() => { setNotificationsOpen(false); changeView("notifications"); }}/>
             )}
           </div>
-          <div className="user-menu"><span>{initials(currentUser.displayName)}</span><p><strong>{currentUser.displayName}</strong><small>{roleLabels[currentUser.role]} · {departmentLabels[currentUser.department]}</small></p></div>
+          <div className="user-menu"><span>{initials(currentUser.displayName)}</span><p><strong>{currentUser.displayName}</strong><small>{activeRoleLabel} · {departmentLabels[currentUser.department]}</small></p></div>
         </div>
       </header>
       {notice && <div className="portal-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="إغلاق"><Icon name="close" /></button></div>}
 
       <div className="admin-content">
         {view === "overview" && <>
-          <div className="content-heading"><div><p className="admin-eyebrow">مركز العمليات</p><h1>مرحباً، {currentUser.displayName.split(" ")[0]}</h1><span>{currentUser.role === "employee" ? `مساحة عملك في قسم ${departmentLabels[currentUser.department]}.` : "متابعة موحّدة لأعمال الشركة من لوحة واحدة."}</span></div><time>{new Intl.DateTimeFormat("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}</time></div>
+          <div className="content-heading"><div><p className="admin-eyebrow">مركز العمليات</p><h1>مرحباً، {currentUser.displayName.split(" ")[0]}</h1><span>{currentUser.functionalRoles.length ? `مساحة عمل مهيأة لصلاحيات: ${activeRoleLabel}.` : currentUser.role === "employee" ? `مساحة عملك في قسم ${departmentLabels[currentUser.department]}.` : "متابعة موحّدة لأعمال الشركة من لوحة واحدة."}</span></div><time>{new Intl.DateTimeFormat("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}</time></div>
           <section className="metric-grid module-metrics">
             {canAccess("employees") && <button onClick={() => changeView("employees")}><span className="metric-icon red"><Icon name="employees" /></span><p>الموظفون<strong>{employees.length}</strong></p><small>{employees.filter((item) => item.status === "active").length} على رأس العمل</small></button>}
             {canAccess("finance") && <button onClick={() => changeView("finance")}><span className="metric-icon navy"><Icon name="finance" /></span><p>السجلات المالية<strong>{finance.length}</strong></p><small>{formatMoney(financialTotal)} إجمالي مسجّل</small></button>}
@@ -806,7 +822,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
             {canAccess("workforce") && <button onClick={() => changeView("conversations")}><span className="metric-icon red"><Icon name="conversations"/></span><p>المحادثات<strong>{conversations.length}</strong></p><small>{waitingConversations} تنتظر الرد · {unreadConversationMessages} رسالة غير مقروءة</small></button>}
             {canAccessDocuments && <button onClick={() => changeView("documents")}><span className="metric-icon navy"><Icon name="documents" /></span><p>مستندات الشركة<strong>{documents.length}</strong></p><small>{documentAlerts} تنبيه انتهاء خلال 30 يوماً أو مستند منتهٍ</small></button>}
           </section>
-          {currentUser.role === "employee" && currentUser.department === "general" ? <section className="employee-home"><p className="admin-eyebrow">الحساب مفعّل</p><h1>لم يُحدَّد قسمك بعد</h1><p>يرجى التواصل مع مدير النظام لإسناد حسابك إلى أحد الأقسام التشغيلية الأربعة.</p><div className="employee-account"><span>البريد الوظيفي</span><strong>{currentUser.email}</strong><span>الصلاحية الحالية</span><strong>{roleLabels[currentUser.role]}</strong></div></section> :
+          {currentUser.role === "employee" && currentUser.department === "general" && currentUser.functionalRoles.length === 0 ? <section className="employee-home"><p className="admin-eyebrow">الحساب مفعّل</p><h1>لم يُحدَّد قسمك بعد</h1><p>يرجى التواصل مع مدير النظام لإسناد حسابك إلى أحد الأقسام التشغيلية الأربعة.</p><div className="employee-account"><span>البريد الوظيفي</span><strong>{currentUser.email}</strong><span>الصلاحية الحالية</span><strong>{roleLabels[currentUser.role]}</strong></div></section> :
           <section className="overview-grid">
             <article className="panel operations-panel"><div className="panel-head"><div><h2>الأقسام التشغيلية</h2><p>الوحدات المتاحة وفقاً لصلاحية حسابك</p></div></div><div className="department-grid">
               {canAccess("employees") && <DepartmentCard icon="employees" title="إدارة الموظفين" text="ملفات الموظفين وحالتهم الوظيفية وبيانات التعيين." count={`${employees.length} موظف`} onClick={() => changeView("employees")} />}
@@ -848,14 +864,14 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "employees" && canAccess("employees") && <ModuleSection eyebrow="الموارد البشرية" title="إدارة الموظفين" description="ملفات الموظفين وحالتهم الوظيفية وبيانات الالتحاق." actionLabel="إضافة موظف" canWrite={canWrite} onAdd={() => setModal("employees")}>
           <section className="metric-grid compact-metrics"><Metric label="إجمالي الموظفين" value={employees.length} note="جميع الملفات المسجّلة"/><Metric label="على رأس العمل" value={employees.filter((item) => item.status === "active").length} note="حسابات نشطة"/><Metric label="في إجازة" value={employees.filter((item) => item.status === "leave").length} note="إجازات حالية"/><Metric label="ملفات موقوفة" value={employees.filter((item) => ["suspended", "ended"].includes(item.status)).length} note="تحتاج إلى متابعة"/></section>
           <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث باسم الموظف أو الرقم أو المسمى"><EmployeeTable records={employees} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} /></ManagementPanel>
-          <HrWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin"}/>
+          <HrWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin}/>
         </ModuleSection>}
 
         {view === "finance" && canAccess("finance") && <ModuleSection eyebrow="مالية القوى العاملة" title="الإدارة المالية" description="رواتب العمالة والسلف والخصميات والمصروفات والفواتير والسندات المرتبطة بالعامل والعقد." actionLabel="إضافة حركة مالية" canWrite={canWrite} onAdd={() => setModal("finance")}>
           <section className="metric-grid compact-metrics finance-metrics"><Metric label="رواتب العمالة" value={formatMoney(payrollTotal)} note="إجمالي الرواتب المسجّلة"/><Metric label="السلف" value={formatMoney(advancesTotal)} note="سلف العمالة"/><Metric label="الخصميات" value={formatMoney(deductionsTotal)} note="خصميات مسجّلة"/><Metric label="مصروفات العمالة" value={formatMoney(workforceExpensesTotal)} note="سكن ونقل وإقامات وغيرها"/><Metric label="فواتير ومستخلصات" value={formatMoney(workforceInvoicesTotal)} note="مرتبطة بعقود العمالة"/><Metric label="إجمالي الحركات" value={formatMoney(financialTotal)} note={`${finance.length} حركة مالية`}/></section>
           {canWrite && <FinanceDocumentActions onIssue={openIssueDocument}/>} 
           <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالمرجع أو العامل أو العقد أو البيان"><FinanceTable records={finance} workers={workers} contracts={contracts} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("finance", id, status)} /></ManagementPanel>
-          <AccountingWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin"}/>
+          <AccountingWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin}/>
           <FinancialPostingWorkspace canWrite={canWrite}/>
           <PurchasingWorkspace canWrite={canWrite}/>
           <ReportsWorkspace canWrite={canWrite} contracts={contracts}/>
@@ -877,7 +893,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
           <section className="panel request-panel workforce-requests"><div className="panel-head"><div><h2>طلبات القوى العاملة من الموقع</h2><p>الطلبات الواردة مباشرة من العملاء</p></div><span className="panel-count">{requestCounts.new} جديد</span></div><div className="table-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بالاسم أو رقم الطلب" /></label><div className="filter-tabs" role="group" aria-label="تصفية الطلبات">{(["all", "new", "reviewing", "contacted", "closed"] as const).map((value) => <button key={value} className={requestFilter === value ? "active" : ""} onClick={() => setRequestFilter(value)}>{value === "all" ? "الكل" : requestStatuses[value].label}</button>)}</div></div><RequestTable requests={visibleRequests} onSelect={setSelectedId}/></section>
         </ModuleSection>}
 
-        {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin"}/>}
+        {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin}/>}
         {view === "construction" && canAccessConstruction && <ConstructionWorkspace/>}
 
         {view === "documents" && canAccessDocuments && <DocumentCenter
@@ -899,7 +915,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "brand" && canAccessDocuments && <BrandIdentityManager/>}
         {view === "website" && canAccessWebsite && <WebsiteManager initialContent={initialWebsiteContent} canManage={canManageWebsite}/>} 
 
-        {view === "users" && currentUser.role === "admin" && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني.">
+        {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني.">
           <section className="panel users-panel"><div className="panel-head"><div><h2>حسابات النظام</h2><p>{users.filter((item) => item.status === "pending").length} حساب بانتظار الاعتماد · لا توجد كلمات مرور محفوظة في النظام</p></div></div><div className="user-list">{users.map((item) => <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}`} onSave={updateUser}/>)}</div></section>
           <AccessScopeManager currentEmail={currentUser.email}/>
         </ModuleSection>}
@@ -915,7 +931,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus}/>}
     {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply}/>}
     {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment}/>} 
-    {selectedContract && <ContractDrawer contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} isAdmin={currentUser.role === "admin"} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus}/>}
+    {selectedContract && <ContractDrawer contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus}/>}
   </main>;
 }
 

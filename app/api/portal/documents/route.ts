@@ -1,7 +1,7 @@
 import { getDb } from "@/db";
 import { companyDocuments, portalActivity } from "@/db/schema";
 import { cleanDate, cleanText, documentCategories, makeReference, objectKey, safeFileName, uploadContentTypes } from "@/lib/company-documents";
-import { requirePortalApiRole } from "@/lib/portal-access";
+import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
@@ -10,8 +10,8 @@ const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin", "manager"]);
-  if (!access) return Response.json({ error: "غير مصرح برفع المستندات" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !canManagePortalDocuments(access)) return Response.json({ error: "غير مصرح برفع المستندات" }, { status: 403 });
 
   let storageKey = "";
   try {

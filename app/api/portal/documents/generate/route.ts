@@ -12,7 +12,7 @@ import {
 } from "@/db/schema";
 import { cleanDate, cleanText, makeReference, objectKey } from "@/lib/company-documents";
 import { generateIssuedPdf, issuedDocumentLabels, type IssuedDocumentType } from "@/lib/pdf-generator";
-import { requirePortalApiRole } from "@/lib/portal-access";
+import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { workforceProfessions } from "@/lib/workforce-requirements";
@@ -64,8 +64,8 @@ function parseProfessions(value: unknown, legacyProfession: string, legacyCount:
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin", "manager"]);
-  if (!access) return Response.json({ error: "غير مصرح بإصدار المستندات" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !canManagePortalDocuments(access)) return Response.json({ error: "غير مصرح بإصدار المستندات" }, { status: 403 });
 
   let storageKey = "";
   let savedDocumentId: number | null = null;

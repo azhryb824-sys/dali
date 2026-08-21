@@ -50,7 +50,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin", "manager"]);
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access || !(await hasPortalPermission(access, "finance", "write"))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   try {
     const payload = await request.json() as Record<string, unknown>;
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin", "manager"]);
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   try {
     const payload = await request.json() as Record<string, unknown>;

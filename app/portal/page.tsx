@@ -76,7 +76,8 @@ async function ProtectedPortal() {
   }
 
   const db = getDb();
-  const canManageRequests = access.role === "admin" || access.role === "manager";
+  const canManageRequests = access.role === "admin" || access.role === "manager" || canAccessPortalDepartment(access, "workforce", true);
+  const canAdministerUsers = access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
   const canSeeDocuments = canAccessPortalDocuments(access);
   const canSeeContracts = canAccessPortalDepartment(access, "workforce") || canAccessPortalDepartment(access, "finance");
   const canSeeConversations = canManagePortalConversations(access);
@@ -95,7 +96,7 @@ async function ProtectedPortal() {
       ? db.select().from(workforceRequestReplies).orderBy(desc(workforceRequestReplies.createdAt)).limit(1500)
       : Promise.resolve([]),
     listPortalNotifications(access),
-    access.role === "admin"
+    canAdministerUsers
       ? db.select().from(portalUsers).orderBy(desc(portalUsers.createdAt)).limit(150)
       : Promise.resolve([]),
     canManageRequests
@@ -209,6 +210,7 @@ async function ProtectedPortal() {
         displayName: access.user.displayName,
         role: access.role,
         department: access.department,
+        functionalRoles: access.functionalRoles,
       }}
       initialRequests={requests}
       initialRequestReplies={replies}
@@ -229,7 +231,7 @@ async function ProtectedPortal() {
       initialConversationMessages={[...conversationMessages].reverse()}
       initialBusinessHours={businessHours}
       initialChatAutomation={chatAutomation}
-      canManageChatSettings={access.role === "admin"}
+      canManageChatSettings={canAdministerUsers}
       canManageDocuments={canManagePortalDocuments(access)}
       canManageAssets={canManageCompanyAssets(access)}
       emailConfigured={emailDeliveryConfigured()}

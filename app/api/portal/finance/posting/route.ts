@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function POST(request:Request){
   if(rejectCrossSiteRequest(request))return jsonNoStore({error:"مصدر الطلب غير مسموح"},{status:403});
-  const access=await requirePortalApiRole(["admin","manager"]);
+  const access=await requirePortalApiRole(["admin","manager","employee"]);
   if(!access||!(await hasPortalPermission(access,"finance","write")))return jsonNoStore({error:"غير مصرح"},{status:403});
   try{
     const payload=await request.json() as Record<string,unknown>;const recordId=positiveId(payload.recordId);const db=getDb();
@@ -50,6 +50,6 @@ export async function POST(request:Request){
 
 export async function PATCH(request:Request){
   if(rejectCrossSiteRequest(request))return jsonNoStore({error:"مصدر الطلب غير مسموح"},{status:403});
-  const access=await requirePortalApiRole(["admin","manager"]);if(!access||!(await hasPortalPermission(access,"finance","write")))return jsonNoStore({error:"غير مصرح"},{status:403});
+  const access=await requirePortalApiRole(["admin","manager","employee"]);if(!access||!(await hasPortalPermission(access,"finance","write")))return jsonNoStore({error:"غير مصرح"},{status:403});
   try{const payload=await request.json() as Record<string,unknown>;const recordId=positiveId(payload.recordId);const db=getDb();const record=await db.query.financialRecords.findFirst({where:eq(financialRecords.id,recordId)});if(!record?.journalEntryId)return jsonNoStore({error:"لا يوجد قيد مرتبط"},{status:404});const journal=await db.query.journalEntries.findFirst({where:eq(journalEntries.id,record.journalEntryId)});if(!journal)return jsonNoStore({error:"القيد المرتبط غير موجود"},{status:404});const postingStatus=journal.status==="posted"?"posted":journal.status==="reversed"?"reversed":"draft";const [updated]=await db.update(financialRecords).set({postingStatus,postedAt:postingStatus==="posted"?journal.postedAt:null,updatedAt:new Date().toISOString()}).where(eq(financialRecords.id,record.id)).returning();await auditPortalAction({actorEmail:access.user.email,action:"financial-posting-synchronized",entityType:"financial-record",entityId:record.id,before:record,after:updated});return jsonNoStore({record:updated});}catch(error){return jsonNoStore({error:error instanceof Error?error.message:"تعذّر مزامنة الترحيل"},{status:400});}
 }

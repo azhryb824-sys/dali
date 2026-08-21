@@ -33,7 +33,7 @@ export type PortalScope = typeof portalAccessScopes.$inferSelect;
 export const functionalRoles = Object.keys(functionalRoleLabels) as FunctionalRole[];
 
 const constructionReadRoles = new Set<FunctionalRole>([
-  "system_owner", "executive", "construction_director", "finance_director", "project_manager", "site_engineer",
+  "system_owner", "system_admin", "executive", "construction_director", "finance_director", "project_manager", "site_engineer",
   "planning_engineer", "cost_engineer", "contracts_manager", "procurement_officer", "project_accountant",
   "document_controller", "quality_officer", "safety_officer", "regional_manager", "client_consultant", "subcontractor",
 ]);
@@ -79,6 +79,7 @@ export function canReadConstruction(access: Pick<PortalAccess, "role">, scopes: 
 export function canCreateConstructionRecord(access: Pick<PortalAccess, "role">, scopes: PortalScope[], recordType: string) {
   if (access.role === "admin") return true;
   if (!scopes.length) return access.role === "manager";
+  if (scopes.some((scope) => scope.functionalRole === "system_owner" || scope.functionalRole === "system_admin")) return true;
   const roles = recordWriteRoles[recordType];
   return Boolean(roles && scopes.some((scope) => roles.has(scope.functionalRole as FunctionalRole)));
 }
@@ -99,6 +100,7 @@ export async function scopeAllowsCity(access: Pick<PortalAccess, "role">, scopes
 
 export function assertFinancialLimit(access: Pick<PortalAccess, "role">, scopes: PortalScope[], amountHalalas: number | null, approval = false) {
   if (access.role === "admin" || amountHalalas == null || !scopes.length) return;
+  if (scopes.some((scope) => scope.functionalRole === "system_owner" || scope.functionalRole === "system_admin")) return;
   const limits = scopes.map((scope) => approval ? scope.approvalLimitHalalas : scope.financialLimitHalalas).filter((value): value is number => value != null);
   if (!limits.length || amountHalalas > Math.max(...limits)) throw new Error(approval ? "تتجاوز القيمة حد الاعتماد المالي للمستخدم" : "تتجاوز القيمة الحد المالي للمستخدم");
 }

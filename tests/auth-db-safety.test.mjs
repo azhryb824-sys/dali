@@ -43,6 +43,21 @@ test("portal authorization uses trusted configuration", async () => {
   assert.match(config, /PORTAL_ADMIN_EMAIL/);
 });
 
+test("functional roles actively control departments and privileged actions", async () => {
+  const [access, policy, portal] = await Promise.all([
+    source("lib/portal-access.ts"), source("lib/access-policy.ts"), source("app/portal/PortalDashboard.tsx"),
+  ]);
+  for (const role of ["system_owner", "system_admin", "executive", "construction_director", "workforce_operations_manager", "finance_director", "project_manager", "site_engineer", "planning_engineer", "cost_engineer", "contracts_manager", "procurement_officer", "project_accountant", "document_controller", "quality_officer", "safety_officer", "hr_officer", "regional_manager", "client_consultant", "subcontractor"]) {
+    assert.match(policy, new RegExp(role));
+  }
+  assert.match(access, /activeFunctionalRoles/);
+  assert.match(access, /functionalDepartmentAccess/);
+  assert.match(access, /functionalApprovals/);
+  assert.match(access, /action === "post"/);
+  assert.match(portal, /canWriteDepartment/);
+  assert.match(portal, /functionalAdmin/);
+});
+
 test("liveness and readiness are separate deployment signals", async () => {
   const [legacy, live, ready, render] = await Promise.all([
     source("app/api/health/route.ts"), source("app/api/health/live/route.ts"),
