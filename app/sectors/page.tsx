@@ -11,5 +11,5 @@ export default async function SectorsPage() {
   const content = await getWebsiteContent();
   if (!content.visibility.sectors) notFound();
   const entries = publishedEntries(content, "sectors");
-  return <PublicPageShell><ManagedCollectionIndex content={content} collectionKey="sectors" title="خبرة مرنة تفهم طبيعة قطاعك" description="نخدم قطاعات متنوعة في مختلف مدن المملكة بحلول قوى عاملة وتشغيل وصيانة ومقاولات تراعي طبيعة الموقع وإيقاع العمل وأولويات كل منشأة." entries={entries} emptyTitle="قطاعك محل اهتمامنا" emptyText="شاركنا طبيعة نشاطك وموقع المشروع، وسيدرس فريق دالي الحل المناسب لاحتياجك."/></PublicPageShell>;
+  return <PublicPageShell><ManagedCollectionIndex content={content} collectionKey="sectors" title="خبرة مرنة تفهم طبيعة قطاعك" description="نخدم قطاعات متنوعة في مختلف مدن المملكة بحلول قوى عاملة وتشغيل وصيانة ومقاولات تراعي طبيعة الموقع ومتطلبات العمل وأولويات كل منشأة." entries={entries} emptyTitle="قطاعك محل اهتمامنا" emptyText="شاركنا طبيعة نشاطك وموقع المشروع، وسيدرس فريق دالي الحل المناسب لاحتياجك."/></PublicPageShell>;
 }
