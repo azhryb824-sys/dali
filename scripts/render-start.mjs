@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import { mkdir, readdir } from "node:fs/promises";
+import { mkdir, readFile, readdir } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -42,7 +42,17 @@ void (async () => {
     const folder = resolve("drizzle-pg");
     const files = (await readdir(folder)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
     const pending = files.filter((name) => !applied.has(name));
-    if (pending.length) process.stderr.write(`[startup] DATABASE_MIGRATIONS_PENDING:${pending.join(",")}\n`);
+    const additivePending = pending.filter((name) => Number(name.slice(0, 4)) >= 5);
+    const baselinePending = pending.filter((name) => Number(name.slice(0, 4)) < 5);
+    if (baselinePending.length) process.stderr.write(`[startup] DATABASE_BASELINE_LEDGER_PENDING:${baselinePending.join(",")}\n`);
+    for (const name of additivePending) {
+      const migration = await readFile(resolve(folder, name), "utf8");
+      await sql.begin(async (tx) => {
+        await tx.unsafe(migration.replaceAll("--> statement-breakpoint", "\n"));
+      });
+      process.stdout.write(`[startup] DATABASE_MIGRATION_APPLIED:${name}\n`);
+    }
+    if (pending.length && !additivePending.length) process.stderr.write(`[startup] DATABASE_MIGRATIONS_PENDING:${pending.join(",")}\n`);
     await sql`select 1`;
     process.stdout.write("[startup] DATABASE_READY\n");
   } catch (error) {
