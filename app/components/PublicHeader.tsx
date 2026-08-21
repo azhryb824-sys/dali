@@ -17,7 +17,11 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
       { title: "منهج تنفيذ المشروعات", text: "التأهيل والمعاينة والتقدير والتعاقد والتنفيذ والتسليم", href: "/construction/methodology", keywords: "إدارة تنفيذ مشروع" },
       { title: "الجودة والسلامة", text: "الفحوص واعتماد المواد وعدم المطابقة ومخاطر الموقع", href: "/construction/quality-safety", keywords: "جودة سلامة مقاولات" },
       { title: "مناطق خدمة المقاولات", text: "دراسة طلبات المشروعات من جميع مناطق المملكة", href: "/construction/regions", keywords: "مقاولات مناطق السعودية" },
-      ...(content.visibility.hajj ? [{ title: "حلول موسم الحج", text: "فرق تشغيل وقوى عاملة للاحتياج الموسمي في مكة", href: "/hajj", keywords: "الحج موسم مشاعر مقدسة جاهزية تشغيل" }] : []),
+      ...(content.visibility.hajj ? [
+        { title: "حلول موسمي رمضان والحج", text: "تخطيط القوى العاملة والفرق التشغيلية لمواسم الذروة في مكة ومدن المملكة", href: "/seasons", keywords: "رمضان الحج عمرة موسم موسمي جاهزية تشغيل" },
+        { title: "حلول موسم رمضان", text: "فرق مرنة للضيافة والتشغيل والصيانة والخدمات المساندة خلال رمضان", href: "/ramadan", keywords: "رمضان عمرة العشر الأواخر ضيافة تشغيل عمالة موسمية" },
+        { title: "حلول موسم الحج", text: "فرق تشغيل وقوى عاملة للاحتياج الموسمي في مكة", href: "/hajj", keywords: "الحج موسم مشاعر مقدسة جاهزية تشغيل" },
+      ] : []),
       { title: "طلب عرض سعر", text: "شاركنا احتياجك ليقترح فريق دالي الحل المناسب", href: "/contact", keywords: "تواصل استفسار سعر طلب شراكة" },
       ...(content.visibility.faq ? [{ title: "الأسئلة الشائعة", text: "إجابات عن الخدمات والتعاقد والعمالة", href: "/faq", keywords: "معلومات أسئلة" }] : []),
     ];
@@ -49,7 +53,7 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
         <Link href="/construction">المقاولات</Link>
         {content.visibility.sectors && <Link href="/sectors">القطاعات</Link>}
         {content.visibility.locations && <Link href="/locations">مناطق الخدمة</Link>}
-        {content.visibility.hajj && <Link href="/hajj">موسم الحج</Link>}
+        {content.visibility.hajj && <Link href="/seasons">رمضان والحج</Link>}
         {content.visibility.articles && <Link href="/insights">المعرفة</Link>}
       </nav>
       <div className="site-search">

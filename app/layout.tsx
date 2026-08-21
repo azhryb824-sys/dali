@@ -34,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: content.site.companyName,
       title: content.seo.homeTitle,
       description: content.seo.homeDescription,
-      images: [{ url: "/images/hajj-readiness.webp", width: 1672, height: 941, alt: `جاهزية ${content.site.companyName} لتوفير العمالة خلال موسم الحج في مكة المكرمة` }],
+      images: [{ url: "/images/hajj-readiness.webp", width: 1672, height: 941, alt: `جاهزية ${content.site.companyName} لتوفير العمالة خلال موسمي رمضان والحج` }],
     },
     twitter: { card: "summary_large_image", title: content.seo.homeTitle, description: content.seo.homeDescription, images: ["/images/hajj-readiness.webp"] },
     robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },

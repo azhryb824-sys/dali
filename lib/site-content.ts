@@ -5,7 +5,11 @@ export async function getPublicSearchIndex() {
   const staticItems = [
     { title: "الرئيسية", excerpt: content.home.heroDescription, href: "/", keywords: content.seo.focusKeywords },
     { title: "عن الشركة", excerpt: content.site.description, href: "/about", keywords: `${content.site.companyName} ${content.site.city} ${content.site.district}` },
-    ...(content.visibility.hajj ? [{ title: "جاهزية موسم الحج", excerpt: "تخطيط السعة والفرق متعددة المهن لمواقع الخدمة في مكة.", href: "/hajj", keywords: "الحج موسم مشاعر مقدسة جاهزية تشغيل مكة عمالة موسمية" }] : []),
+    ...(content.visibility.hajj ? [
+      { title: "حلول موسمي رمضان والحج", excerpt: "تخطيط السعة والفرق متعددة المهن لفترات الذروة الموسمية.", href: "/seasons", keywords: "رمضان الحج عمرة مواسم جاهزية تشغيل عمالة موسمية" },
+      { title: "جاهزية موسم رمضان", excerpt: "فرق مرنة للضيافة والمرافق والخدمات المساندة خلال رمضان والعشر الأواخر.", href: "/ramadan", keywords: "رمضان عمرة العشر الأواخر عمالة موسمية تشغيل" },
+      { title: "جاهزية موسم الحج", excerpt: "تخطيط السعة والفرق متعددة المهن لمواقع الخدمة في مكة.", href: "/hajj", keywords: "الحج موسم مشاعر مقدسة جاهزية تشغيل مكة عمالة موسمية" },
+    ] : []),
     { title: "طلب عرض سعر", excerpt: "أرسل المهن والأعداد والمدة وموقع العمل للحصول على عرض.", href: "/contact", keywords: "تواصل استفسار سعر عرض طلب خدمة" },
     { title: "المحادثة المباشرة", excerpt: "تواصل مع فريق دالي، مع رد آلي خارج ساعات الدوام.", href: "/contact#live-chat", keywords: "محادثة دعم رسائل دوام" },
     ...(content.visibility.faq ? [{ title: "الأسئلة الشائعة", excerpt: "إجابات عن العمالة والتشغيل والصيانة والعقود والتكلفة.", href: "/faq", keywords: "أسئلة عمالة تشغيل صيانة مكة" }] : []),

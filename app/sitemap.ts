@@ -21,7 +21,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...(content.visibility.faq ? [{ path: "/faq", updatedAt: lastModified }] : []),
     { path: "/privacy", updatedAt: lastModified },
     { path: "/terms", updatedAt: lastModified },
-    ...(content.visibility.hajj ? [{ path: "/hajj", updatedAt: lastModified }] : []),
+    ...(content.visibility.hajj ? [{ path: "/seasons", updatedAt: lastModified }, { path: "/ramadan", updatedAt: lastModified }, { path: "/hajj", updatedAt: lastModified }] : []),
     ...(content.visibility.partners ? [{ path: "/partners", updatedAt: lastModified }] : []),
   ];
   const keys: WebsiteCollectionKey[] = ["services", "sectors", "locations", "projects", "credentials", "articles", "jobs"];

@@ -166,7 +166,7 @@ export default function LiveChatWidget() {
         <label>الاسم الكامل<input name="visitorName" required minLength={2} maxLength={100} autoComplete="name" placeholder="اكتب اسمك"/></label>
         <label>رقم الجوال<input name="visitorMobile" required type="tel" inputMode="tel" maxLength={20} autoComplete="tel" placeholder="05xxxxxxxx"/></label>
         <label>البريد الإلكتروني <small>اختياري</small><input name="visitorEmail" type="email" maxLength={160} autoComplete="email" placeholder="name@example.com"/></label>
-        <label>موضوع المحادثة<select name="subject" defaultValue="طلب قوى عاملة"><option>طلب قوى عاملة</option><option>طلب عرض سعر</option><option>تشغيل وصيانة</option><option>جاهزية موسم الحج</option><option>وظائف</option><option>شراكة أو توريد</option><option>شكوى أو اقتراح</option><option>متابعة طلب سابق</option><option>استفسار عام</option></select></label>
+        <label>موضوع المحادثة<select name="subject" defaultValue="طلب قوى عاملة"><option>طلب قوى عاملة</option><option>طلب عرض سعر</option><option>تشغيل وصيانة</option><option>جاهزية موسم رمضان</option><option>جاهزية موسم الحج</option><option>جاهزية موسمي رمضان والحج</option><option>وظائف</option><option>شراكة أو توريد</option><option>شكوى أو اقتراح</option><option>متابعة طلب سابق</option><option>استفسار عام</option></select></label>
         <label>رسالتك<textarea name="message" required minLength={2} maxLength={2000} rows={4} placeholder="اكتب تفاصيل احتياجك أو استفسارك..."/></label>
         <label className="chat-website-field" aria-hidden="true">الموقع<input name="website" tabIndex={-1} autoComplete="off"/></label>
         <p className="chat-privacy-note">بالبدء تقر باطلاعك على <a href="/privacy">سياسة الخصوصية</a> وحفظ المحادثة لخدمتك ومتابعتها.</p>

@@ -22,7 +22,7 @@ export default function QuoteRequestForm() {
       const response = await fetch("/api/workforce-requests", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...Object.fromEntries(new FormData(form).entries()), requestType: "quotation", specialization: "طلب عرض سعر", idempotencyKey: idempotencyKey.current }),
+        body: JSON.stringify({ ...Object.fromEntries(new FormData(form).entries()), requestType: "quotation", idempotencyKey: idempotencyKey.current }),
       });
       const result = await response.json() as { error?: string; trackingCode?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر إرسال الطلب");
@@ -46,6 +46,7 @@ export default function QuoteRequestForm() {
     <label>رقم الجوال<input name="mobile" required type="tel" maxLength={20} autoComplete="tel"/></label>
     <label>البريد الإلكتروني<input name="email" required type="email" maxLength={160} autoComplete="email"/></label>
     <label>موقع العمل<input name="workSite" required minLength={2} maxLength={180} placeholder="المدينة، الحي أو موقع المشروع"/></label>
+    <label>نوع الاحتياج<select name="specialization" required defaultValue="طلب عرض سعر"><option value="طلب عرض سعر">احتياج عام</option><option>جاهزية موسم رمضان</option><option>جاهزية موسم الحج</option><option>جاهزية موسمي رمضان والحج</option><option>عمالة إنشائية</option><option>فنيون متخصصون</option><option>تشغيل وصيانة</option><option>فريق متكامل</option></select></label>
     <label>تاريخ البداية المتوقع<input name="requiredStartDate" type="date"/></label>
     <label>عدد العمالة<input name="requestedCount" required type="number" min={1} max={100000}/></label>
     <label>المدة<select name="duration" required defaultValue=""><option value="" disabled>اختر المدة</option><option>أقل من شهر</option><option>من شهر إلى 3 أشهر</option><option>من 3 إلى 6 أشهر</option><option>من 6 إلى 12 شهراً</option><option>أكثر من سنة</option><option>غير محدد</option></select></label>

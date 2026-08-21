@@ -192,10 +192,19 @@ const sectors: ManagedEntry[] = [
     focusKeywords: "توفير عمالة مشاريع مكة، عمالة إنشائية مكة، فنيين مشاريع مكة", tags: ["المشروعات", "الإنشاءات", "الفنيون"], checklist: ["المرحلة والبرنامج", "المهن والأعداد", "الورديات", "اشتراطات الموقع"], blocks: [], faqs: [], publishedAt: TODAY, updatedAt: TODAY,
   },
   {
+    id: "sector-seasonal-ramadan", slug: "seasonal-ramadan", title: "فرق تشغيل وخدمات مساندة لموسم رمضان في السعودية", shortTitle: "التشغيل في موسم رمضان",
+    summary: "تخطيط فرق مرنة لساعات التشغيل المتغيرة وذروة المساء والعشر الأواخر حسب المدينة والموقع والوردية.",
+    body: "نساعد منشآت الضيافة والمرافق والخدمات اللوجستية على تحويل توقعات رمضان إلى خطة واضحة للمهن والأعداد والورديات، مع مراجعة مستقلة للعشر الأواخر وخيارات بديلة عند تغير الطلب.",
+    image: "/images/dali-mecca.webp", imageAlt: "مرافق حضرية مضاءة وخالية تمثل جاهزية التشغيل الموسمي في رمضان", status: "published", featured: true, sortOrder: 5,
+    seoTitle: "توفير عمالة موسم رمضان في السعودية", seoDescription: "حلول قوى عاملة وتشغيل وصيانة وضيافة وخدمات مساندة لموسم رمضان والعشر الأواخر في مكة ومدن المملكة.",
+    focusKeywords: "توفير عمالة موسم رمضان، عمالة رمضان مكة، فرق تشغيل رمضان، عمالة موسمية السعودية", tags: ["موسم رمضان", "العشر الأواخر", "العمالة الموسمية"], checklist: ["المدينة والمواقع", "فترات الذروة", "المهن والأعداد", "خطة العشر الأواخر"],
+    blocks: [{ title: "خطة تختلف خلال الشهر", text: "نقسم الاحتياج إلى بداية الشهر ووسطه والعشر الأواخر حتى لا تكون الأعداد والورديات مبنية على متوسط لا يعكس الذروة.", checklist: [] }], faqs: [{ question: "ما البيانات اللازمة لخطة عمالة رمضان؟", answer: "المدينة والمواقع وساعات التشغيل والمهن والأعداد وتوقعات الذروة واحتياج العشر الأواخر وموعد بدء التعبئة." }], publishedAt: TODAY, updatedAt: TODAY,
+  },
+  {
     id: "sector-seasonal-hajj", slug: "seasonal-hajj", title: "فرق تشغيل وخدمات مساندة لموسم الحج في مكة", shortTitle: "التشغيل الموسمي والحج",
     summary: "تخطيط احتياج الفرق الموسمية حسب المواقع والفترات والمهن والورديات والبدائل قبل بدء التشغيل.",
     body: "نساعدك على الاستعداد المبكر لموسم الحج والذروة بفرق موزعة حسب المواقع والفترات والمهن، مع خيارات بديلة تقلل أثر الغياب أو الارتفاع المفاجئ في الطلب.",
-    image: "/images/hajj-readiness.webp", imageAlt: "بنية تشغيل موسمية خالية في مكة المكرمة", status: "published", featured: true, sortOrder: 5,
+    image: "/images/hajj-readiness.webp", imageAlt: "بنية تشغيل موسمية خالية في مكة المكرمة", status: "published", featured: true, sortOrder: 6,
     seoTitle: "توفير عمالة موسم الحج في مكة", seoDescription: "تخطيط وتوفير فرق تشغيل وخدمات مساندة لموسم الحج في مكة وفق المواقع والمهن والورديات والبدائل.",
     focusKeywords: "توفير عمالة موسم الحج مكة، عمالة موسمية مكة، فرق تشغيل الحج", tags: ["موسم الحج", "العمالة الموسمية", "التشغيل"], checklist: ["المواقع والفترات", "المهن والأعداد", "الورديات", "خطة البدائل"], blocks: [], faqs: [], publishedAt: TODAY, updatedAt: TODAY,
   },
@@ -277,6 +286,7 @@ export const DEFAULT_WEBSITE_CONTENT: WebsiteContent = {
     { question: "ما الفرق بين شركة دالي وشركة المقاولات؟", answer: "شركة دالي للتشغيل والصيانة وليست شركة مقاولات. تقدم حلول توفير القوى العاملة والفرق الفنية والتشغيلية للمشروعات والمنشآت وفق نطاق التعاقد." },
     { question: "هل يمكن طلب أكثر من مهنة في العقد نفسه؟", answer: "نعم، يمكن جمع عدة مهن في طلب أو عقد واحد، ويتابع فريق دالي جاهزية كل تخصص والتغطية المتفق عليها مع منشأتك." },
     { question: "هل توفرون فرق تشغيل وصيانة في مكة؟", answer: "تُراجع احتياجات فرق التشغيل والصيانة بحسب نوع المنشأة والمهام والورديات والمدة والوثائق المطلوبة للموقع." },
+    { question: "هل يمكن طلب عمالة لموسم رمضان؟", answer: "يمكن تقديم طلب لرمضان في مكة أو أي مدينة بالمملكة مع تحديد المواقع وساعات التشغيل والمهن والأعداد، ويفضل فصل احتياج العشر الأواخر عن بقية الشهر." },
     { question: "هل يمكن طلب عمالة لموسم الحج؟", answer: "يمكن تقديم طلب للاحتياج الموسمي في مكة مع تحديد المواقع والفترات والمهن والأعداد والورديات، ثم تُراجع الجاهزية والبدائل قبل إعداد العرض." },
     { question: "كيف تُحدد تكلفة توفير العمالة؟", answer: "تتأثر التكلفة بالمهنة والعدد والمدة والورديات وموقع العمل ومتطلبات الدخول أو التدريب ونطاق المسؤوليات، لذلك تُحدد بعد مراجعة تفاصيل الطلب." },
   ],
@@ -452,6 +462,13 @@ export function sanitizeWebsiteContent(value: unknown, fallback = DEFAULT_WEBSIT
 }
 
 function upgradeLegacyMarketingCopy(content: WebsiteContent) {
+  const ramadanSector = DEFAULT_WEBSITE_CONTENT.collections.sectors.find((entry) => entry.slug === "seasonal-ramadan");
+  if (ramadanSector && !content.collections.sectors.some((entry) => entry.slug === ramadanSector.slug)) {
+    content.collections.sectors.push(structuredClone(ramadanSector));
+    content.collections.sectors.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const ramadanFaq = DEFAULT_WEBSITE_CONTENT.faq.find((faq) => faq.question.includes("موسم رمضان"));
+  if (ramadanFaq && !content.faq.some((faq) => faq.question.includes("موسم رمضان"))) content.faq.splice(Math.max(0, content.faq.length - 2), 0, { ...ramadanFaq });
   const replacements: Array<[keyof WebsiteContent["home"], string, string]> = [
     ["heroKicker", "جاهزية تشغيلية في مكة المكرمة وموسم الحج", DEFAULT_WEBSITE_CONTENT.home.heroKicker],
     ["heroTitle", "قوى عاملة مؤهلة،", DEFAULT_WEBSITE_CONTENT.home.heroTitle],

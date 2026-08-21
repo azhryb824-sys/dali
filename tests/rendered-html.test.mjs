@@ -198,6 +198,8 @@ test("renders the public site and protects request workflows", async () => {
     ["/services/construction-workforce", "قوى عاملة وفرق فنية للمشروعات الإنشائية"],
     ["/services/operations-maintenance", "فرق التشغيل والصيانة"],
     ["/services/technical-teams", "توفير فنيين وفرق متعددة المهن"],
+    ["/seasons", "استعداد مبكر"],
+    ["/ramadan", "فرق جاهزة"],
     ["/hajj", "قوى عاملة مرنة"],
     ["/insights", "في مختلف مدن المملكة"],
     ["/insights/workforce-demand-planning", "كيف تخطط احتياج القوى العاملة"],
@@ -205,6 +207,7 @@ test("renders the public site and protects request workflows", async () => {
     ["/insights/worker-document-checklist", "قائمة مراجعة وثائق العامل"],
     ["/sectors", "في مختلف مدن المملكة"],
     ["/sectors/hotels-hospitality", "حلول القوى العاملة للفنادق والضيافة في مكة"],
+    ["/sectors/seasonal-ramadan", "فرق تشغيل وخدمات مساندة لموسم رمضان في السعودية"],
     ["/sectors/seasonal-hajj", "فرق تشغيل وخدمات مساندة لموسم الحج في مكة"],
     ["/locations", "نخدم أعمالك في جميع مدن المملكة"],
     ["/locations/makkah", "توفير العمالة والتشغيل والصيانة في مكة المكرمة"],
@@ -248,6 +251,9 @@ test("renders the public site and protects request workflows", async () => {
   assert.match(sitemapXml, /insights\/hajj-season-workforce-readiness/);
   assert.match(sitemapXml, /sectors\/hotels-hospitality/);
   assert.match(sitemapXml, /sectors\/seasonal-hajj/);
+  assert.match(sitemapXml, /sectors\/seasonal-ramadan/);
+  assert.match(sitemapXml, /\/ramadan/);
+  assert.match(sitemapXml, /\/seasons/);
   assert.match(sitemapXml, /locations\/makkah/);
   assert.match(sitemapXml, /construction\/services/);
   assert.match(sitemapXml, /construction\/methodology/);
