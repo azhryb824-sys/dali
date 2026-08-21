@@ -18,12 +18,12 @@ export default async function ServicesPage() {
   if (!content.visibility.services) notFound();
   const entries = publishedEntries(content, "services");
   return <PublicPageShell>
-    <ManagedCollectionIndex content={content} collectionKey="services" title="حلول متكاملة لأعمالك في جميع مدن المملكة" description="نجمع بين توفير القوى العاملة، والتشغيل والصيانة، والمقاولات وإدارة المشروعات ضمن نطاق واضح يناسب المدينة والموقع والمدة ومتطلبات التنفيذ." entries={entries} emptyTitle="نراجع احتياجك ونبني الحل المناسب" emptyText="شاركنا نوع النشاط والمدينة ونطاق العمل، وسيتولى المختص مراجعة الطلب واقتراح المسار الأنسب."/>
+    <ManagedCollectionIndex content={content} collectionKey="services" title="الخدمة التي يحتاجها عملك، أينما كان في المملكة" description="قوى عاملة، وتشغيل وصيانة، ومقاولات تحت سقف واحد. اختر الخدمة، وأخبرنا بالمدينة والموعد وحجم العمل." entries={entries} emptyTitle="لم تجد الخدمة التي تبحث عنها؟" emptyText="صف لنا طبيعة العمل وموقعه، وسيوجهك فريقنا إلى القسم المناسب."/>
     <section className="inner-content" aria-labelledby="service-paths-title">
-      <div className="inner-heading"><p className="eyebrow"><span/>مسارات الخدمة</p><h2 id="service-paths-title">اختر المسار الأقرب إلى احتياج مشروعك</h2><p>لكل نشاط فريق عمل وإجراءات متابعة مستقلة، مع نقطة اتصال واحدة تسهّل التنسيق من الطلب الأول حتى التسليم.</p></div>
+      <div className="inner-heading"><p className="eyebrow"><span/>مجالات عملنا</p><h2 id="service-paths-title">ثلاث خدمات، ولكل خدمة فريقها</h2><p>لن تضطر إلى شرح طلبك لأكثر من جهة. نستلم التفاصيل مرة واحدة، ثم يتولى القسم المختص متابعتها معك.</p></div>
       <div className="managed-card-grid">
-        <article><span>01</span><p className="managed-card-tags">كوادر تشغيلية · فنية · إشرافية</p><h2>توفير القوى العاملة</h2><p>تحديد المهن والأعداد والورديات ومدة الإسناد، ثم متابعة الجاهزية والأداء بحسب احتياج المنشأة.</p><Link href="/contact#quote">اطلب فريق عمل ←</Link></article>
-        <article><span>02</span><p className="managed-card-tags">تشغيل · صيانة · خدمات مساندة</p><h2>التشغيل والصيانة</h2><p>فرق متعددة التخصصات لخدمة المواقع والمنشآت وفق مؤشرات أداء ونطاق مسؤوليات وجدول متابعة واضح.</p><Link href="/contact#quote">اطلب خطة تشغيل ←</Link></article>
+        <article><span>01</span><p className="managed-card-tags">كوادر تشغيلية · فنية · إشرافية</p><h2>توفير القوى العاملة</h2><p>حدد المهن والأعداد ومكان العمل؛ وننسق لك فريقًا يناسب الورديات والمدة المطلوبة.</p><Link href="/contact#quote">اطلب فريق عمل ←</Link></article>
+        <article><span>02</span><p className="managed-card-tags">تشغيل · صيانة · خدمات مساندة</p><h2>التشغيل والصيانة</h2><p>فرق تهتم بالأعمال اليومية والصيانة الدورية والاستجابة للأعطال حتى تبقى منشأتك في الخدمة.</p><Link href="/contact#quote">اطلب خطة تشغيل ←</Link></article>
         <article><span>03</span><p className="managed-card-tags">دراسة · تنفيذ · جودة · تسليم</p><h2>المقاولات وإدارة المشروعات</h2><p>قسم مستقل يغطي الأعمال الإنشائية والمدنية والكهروميكانيكية والتشطيبات وإدارة التكلفة والبرنامج.</p><Link href="/construction">انتقل إلى قسم المقاولات ←</Link></article>
       </div>
     </section>

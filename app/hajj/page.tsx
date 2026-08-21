@@ -26,10 +26,10 @@ export default async function HajjPage() {
       <nav className="page-breadcrumbs" aria-label="مسار الصفحة"><Link href="/">الرئيسية</Link><span aria-hidden="true">/</span><Link href="/seasons">رمضان والحج</Link><span aria-hidden="true">/</span><span>موسم الحج</span></nav>
       <p className="eyebrow light"><span/>موسم الحج</p>
       <h1>قوى عاملة مرنة،<br/><em>لأداء ثابت طوال الموسم.</em></h1>
-      <p>ندعم المنشآت ومواقع الخدمة في مكة بفرق تشغيلية وفنية تناسب مراحل التعبئة والذروة وتعدد المواقع والورديات خلال الحج.</p>
+      <p>عندما تتعدد المواقع وتطول ساعات العمل، تحتاج إلى أشخاص يعرفون مهامهم منذ البداية. نوفر فرقًا تشغيلية وفنية لمراحل التجهيز والذروة حتى نهاية الموسم.</p>
     </section>
     <section className="inner-content">
-      <div className="inner-heading"><p className="eyebrow"><span/>مزايا الخدمة الموسمية</p><h2>شريك قريب عندما تتسارع الأعمال</h2><p>نساعد منشأتك على الاستعداد مبكراً والحفاظ على مستوى الخدمة، مع حلول مرنة تتكيف مع طبيعة الموقع وتوقيت الموسم.</p></div>
+      <div className="inner-heading"><p className="eyebrow"><span/>خلال موسم الحج</p><h2>لا تترك توزيع الفرق لآخر لحظة</h2><p>نحدد معك من يعمل، وأين، وفي أي وردية، ومن يغطي الغياب. بهذه الصورة يبدأ كل موقع وهو يعرف احتياجه الفعلي.</p></div>
       <div className="inner-card-grid">
         <article><span>01</span><h3>استجابة أسرع</h3><p>تواصل مباشر لفهم أولويات المواقع والفترات الأكثر ازدحاماً.</p></article>
         <article><span>02</span><h3>تخصصات متنوعة</h3><p>عمالة تشغيلية وفنيون ومشرفون ضمن حل يناسب نطاق عملك.</p></article>

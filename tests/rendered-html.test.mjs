@@ -193,12 +193,12 @@ test("renders the public site and protects request workflows", async () => {
 
   for (const [path, expected] of [
     ["/about", "مقر سعودي وخدمة على مستوى المملكة"],
-    ["/services", "حلول متكاملة لأعمالك في جميع مدن المملكة"],
+    ["/services", "الخدمة التي يحتاجها عملك"],
     ["/services/manpower-supply-makkah", "توفير عمالة للمشروعات والمنشآت"],
     ["/services/construction-workforce", "قوى عاملة وفرق فنية للمشروعات الإنشائية"],
     ["/services/operations-maintenance", "فرق التشغيل والصيانة"],
     ["/services/technical-teams", "توفير فنيين وفرق متعددة المهن"],
-    ["/seasons", "استعداد مبكر"],
+    ["/seasons", "استعد مبكرًا"],
     ["/ramadan", "فرق جاهزة"],
     ["/hajj", "قوى عاملة مرنة"],
     ["/insights", "في مختلف مدن المملكة"],
@@ -209,7 +209,7 @@ test("renders the public site and protects request workflows", async () => {
     ["/sectors/hotels-hospitality", "حلول القوى العاملة للفنادق والضيافة في مكة"],
     ["/sectors/seasonal-ramadan", "فرق تشغيل وخدمات مساندة لموسم رمضان في السعودية"],
     ["/sectors/seasonal-hajj", "فرق تشغيل وخدمات مساندة لموسم الحج في مكة"],
-    ["/locations", "نخدم أعمالك في جميع مدن المملكة"],
+    ["/locations", "نصل بخدماتنا إلى جميع مدن المملكة"],
     ["/locations/makkah", "توفير العمالة والتشغيل والصيانة في مكة المكرمة"],
     ["/projects", "خبرات نبني عليها شراكات أطول"],
     ["/credentials", "ثقة تستند إلى معلومات واضحة"],

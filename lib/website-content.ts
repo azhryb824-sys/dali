@@ -230,7 +230,7 @@ export const DEFAULT_WEBSITE_CONTENT: WebsiteContent = {
     companyName: "شركة دالي للتشغيل والصيانة",
     shortName: "دالي للتشغيل والصيانة",
     tagline: "قوى عاملة ومقاولات وحلول تشغيل في مدن المملكة",
-    description: "شركة سعودية تقدم للمنشآت والمشروعات في مدن المملكة حلول القوى العاملة والتشغيل والصيانة والمقاولات، مع مراجعة القدرة الفعلية للموقع والنطاق قبل تأكيد البرنامج.",
+    description: "شركة سعودية توفر القوى العاملة وتنفذ أعمال التشغيل والصيانة والمقاولات للمنشآت والمشروعات في جميع مدن المملكة.",
     city: "مكة المكرمة",
     district: "حي الرصيفة",
     address: "مكة المكرمة — حي الرصيفة",
@@ -251,17 +251,17 @@ export const DEFAULT_WEBSITE_CONTENT: WebsiteContent = {
     heroKicker: "حلول موثوقة لأعمالك في مدن المملكة",
     heroTitle: "الكوادر المناسبة،",
     heroAccent: "في الوقت الذي تحتاجها.",
-    heroDescription: "نساعد منشأتك على مواصلة أعمالها عبر قوى عاملة وفرق فنية وخدمات تشغيل وصيانة ومقاولات مصممة للنطاق؛ مع استقبال الطلبات من جميع مناطق المملكة وتأكيد الجاهزية بعد مراجعة المدينة والبرنامج.",
+    heroDescription: "نوفر لمنشأتك العمالة والفنيين الذين تحتاجهم، ونتولى أعمال التشغيل والصيانة والمقاولات في جميع مدن المملكة. أخبرنا بالموقع والموعد، وسنوضح لك الفريق والترتيبات المناسبة.",
     aboutTitle: "شريك محلي يضع نجاح أعمالك أولاً.",
-    aboutDescription: "من فهم الاحتياج إلى انطلاق الفريق أو المشروع، نقدم مساراً واضحاً يقوده مختصون يراجعون طبيعة الموقع ومتطلبات القطاع والقدرة التشغيلية في المدينة.",
+    aboutDescription: "نتحدث معك مباشرة، نفهم طبيعة العمل، ثم نرتب الفريق أو المشروع من دون أن تضطر إلى التنسيق مع جهات متعددة.",
     servicesTitle: "حلول تدعم استمرارية أعمالك وتنمو معها.",
-    servicesDescription: "سواء كنت تحتاج إلى متخصص واحد أو فريق متكامل، نهيئ لك الحل الأنسب بحسب طبيعة العمل والمدة والموقع.",
+    servicesDescription: "سواء كنت تحتاج إلى فني واحد أو فريق كامل، نرتب الخدمة بما يناسب طبيعة العمل وموقعه ومدته.",
     sectorsTitle: "خبرة مرنة تناسب طبيعة قطاعك.",
-    sectorsDescription: "نستمع إلى أولويات منشأتك ونقترح قوى عاملة وخدمات تشغيل وصيانة تلائم بيئة العمل ومتطلبات الأداء.",
+    sectorsDescription: "الفندق ليس كالمستودع، والمشروع الإنشائي ليس كالمجمع التجاري. لذلك نختار الفريق وطريقة العمل بما يناسب قطاعك.",
     localTitle: "من مكة إلى جميع مدن المملكة.",
-    localDescription: "يقع مقرنا في حي الرصيفة بمكة المكرمة، بينما تمتد خدمات القوى العاملة والتشغيل والصيانة والمقاولات إلى مدن المملكة وفق خطة تعبئة أو تنفيذ مرتبطة بكل موقع.",
+    localDescription: "مقرنا في حي الرصيفة بمكة المكرمة، ونخدم المشروعات والمنشآت في جميع مدن المملكة. ترتيبات الفريق وموعد البدء تحددهما مدينة العمل وطبيعة المهمة.",
     quoteTitle: "دعنا نبني لك الحل المناسب.",
-    quoteDescription: "شاركنا نوع الخدمة والمهن والعدد والموقع وموعد البداية، وسيتواصل معك فريق دالي لفهم احتياجك وإعداد عرض ملائم.",
+    quoteDescription: "أرسل الخدمة المطلوبة والموقع والعدد وموعد البداية، وسيتواصل معك فريق دالي لإكمال التفاصيل وإعداد العرض.",
     professions: ["عمال تشغيل", "كهربائيون", "سباكون", "نجارون", "حدادون ولحامون", "فنيو تكييف", "فنيو صيانة", "مشغلو معدات", "سائقو معدات", "مشرفو مواقع"],
     process: [
       { title: "شاركنا هدفك", text: "أخبرنا بطبيعة العمل والموقع والمدة والكوادر التي تبحث عنها." },
@@ -470,6 +470,12 @@ function upgradeLegacyMarketingCopy(content: WebsiteContent) {
   const ramadanFaq = DEFAULT_WEBSITE_CONTENT.faq.find((faq) => faq.question.includes("موسم رمضان"));
   if (ramadanFaq && !content.faq.some((faq) => faq.question.includes("موسم رمضان"))) content.faq.splice(Math.max(0, content.faq.length - 2), 0, { ...ramadanFaq });
   const replacements: Array<[keyof WebsiteContent["home"], string, string]> = [
+    ["heroDescription", "نساعد منشأتك على مواصلة أعمالها عبر قوى عاملة وفرق فنية وخدمات تشغيل وصيانة ومقاولات مصممة للنطاق؛ مع استقبال الطلبات من جميع مناطق المملكة وتأكيد الجاهزية بعد مراجعة المدينة والبرنامج.", DEFAULT_WEBSITE_CONTENT.home.heroDescription],
+    ["aboutDescription", "من فهم الاحتياج إلى انطلاق الفريق أو المشروع، نقدم مساراً واضحاً يقوده مختصون يراجعون طبيعة الموقع ومتطلبات القطاع والقدرة التشغيلية في المدينة.", DEFAULT_WEBSITE_CONTENT.home.aboutDescription],
+    ["servicesDescription", "سواء كنت تحتاج إلى متخصص واحد أو فريق متكامل، نهيئ لك الحل الأنسب بحسب طبيعة العمل والمدة والموقع.", DEFAULT_WEBSITE_CONTENT.home.servicesDescription],
+    ["sectorsDescription", "نستمع إلى أولويات منشأتك ونقترح قوى عاملة وخدمات تشغيل وصيانة تلائم بيئة العمل ومتطلبات الأداء.", DEFAULT_WEBSITE_CONTENT.home.sectorsDescription],
+    ["localDescription", "يقع مقرنا في حي الرصيفة بمكة المكرمة، بينما تمتد خدمات القوى العاملة والتشغيل والصيانة والمقاولات إلى مدن المملكة وفق خطة تعبئة أو تنفيذ مرتبطة بكل موقع.", DEFAULT_WEBSITE_CONTENT.home.localDescription],
+    ["quoteDescription", "شاركنا نوع الخدمة والمهن والعدد والموقع وموعد البداية، وسيتواصل معك فريق دالي لفهم احتياجك وإعداد عرض ملائم.", DEFAULT_WEBSITE_CONTENT.home.quoteDescription],
     ["heroKicker", "جاهزية تشغيلية في مكة المكرمة وموسم الحج", DEFAULT_WEBSITE_CONTENT.home.heroKicker],
     ["heroTitle", "قوى عاملة مؤهلة،", DEFAULT_WEBSITE_CONTENT.home.heroTitle],
     ["heroAccent", "جاهزة للموسم والمشروع.", DEFAULT_WEBSITE_CONTENT.home.heroAccent],
@@ -491,6 +497,7 @@ function upgradeLegacyMarketingCopy(content: WebsiteContent) {
     if (typeof content.home[key] === "string" && content.home[key] === legacy) (content.home[key] as string) = next;
   }
   if (content.site.tagline === "حلول قوى عاملة وتشغيل وصيانة في مكة المكرمة") content.site.tagline = DEFAULT_WEBSITE_CONTENT.site.tagline;
+  if (content.site.description === "شركة سعودية تقدم للمنشآت والمشروعات في مدن المملكة حلول القوى العاملة والتشغيل والصيانة والمقاولات، مع مراجعة القدرة الفعلية للموقع والنطاق قبل تأكيد البرنامج.") content.site.description = DEFAULT_WEBSITE_CONTENT.site.description;
   if (content.site.description === "شركة سعودية متخصصة في توفير العمالة والكوادر الفنية وفرق التشغيل والصيانة للمشروعات والمنشآت في مكة المكرمة.") content.site.description = DEFAULT_WEBSITE_CONTENT.site.description;
   const legacySteps = new Map([
     ["تحليل الاحتياج|نحدد المهن والأعداد وموقع العمل والمدة والورديات.", DEFAULT_WEBSITE_CONTENT.home.process[0]],

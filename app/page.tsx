@@ -10,10 +10,10 @@ import { useWebsiteContent } from "./components/WebsiteContentProvider";
 import { absoluteUrl, SITE } from "@/lib/site";
 
 const hajjCapabilities = [
-  { n: "01", title: "خطة مستقلة لكل موسم", text: "توزيع يناسب ساعات رمضان المتغيرة ومراحل التعبئة والذروة في الحج." },
-  { n: "02", title: "تخصصات في فريق واحد", text: "كوادر تشغيلية وفنية وإشرافية تلائم احتياج كل موقع." },
-  { n: "03", title: "جاهزية قبل الانطلاق", text: "مراجعة المهن والأعداد والورديات والبدائل قبل بدء الخدمة." },
-  { n: "04", title: "متابعة فجوة السعة", text: "قراءة مستمرة للمطلوب والمتاح والمحجوز طوال فترة الموسم." },
+  { n: "01", title: "لكل موسم خطته", text: "رمضان له ساعات ذروة مختلفة، والحج له مواقع ومراحل تعبئة متعددة." },
+  { n: "02", title: "فريق يجمع أكثر من تخصص", text: "عمالة تشغيلية وفنيون ومشرفون بحسب ما يحتاجه كل موقع." },
+  { n: "03", title: "الاستعداد قبل الازدحام", text: "نحسم الأعداد والورديات والبدائل قبل أن يبدأ ضغط الموسم." },
+  { n: "04", title: "النقص يظهر مبكرًا", text: "نتابع المطلوب والمتاح والمحجوز حتى لا تفاجأ المنشأة بفجوة في التغطية." },
 ];
 
 function Arrow() { return <span aria-hidden="true">←</span>; }
@@ -103,7 +103,7 @@ export default function Home() {
         <p>{content.home.heroDescription}</p>
         <div className="hero-actions"><a className="btn primary" href="#quote">اطلب عرض سعر <Arrow/></a><a className="text-link" href="#services">استكشف خدماتنا <Arrow/></a></div>
       </div>
-      <div className="hero-note"><span>01</span><p><strong>نستقبل احتياجك من جميع مناطق المملكة</strong>نراجع المدينة والنطاق والموعد قبل تأكيد خطة التعبئة أو التنفيذ.</p></div>
+      <div className="hero-note"><span>01</span><p><strong>نخدم المنشآت في جميع مدن المملكة</strong>أخبرنا أين يقع العمل ومتى تريد البدء، وسنوضح لك ما يمكن تنفيذه.</p></div>
     </section>
 
     <section className="assurance-strip" aria-label="مزايا الخدمة"><article><b>استجابة سريعة</b><span>فريق محلي يفهم احتياجك</span></article><article><b>خبرات متنوعة</b><span>كوادر تشغيلية وفنية</span></article><article><b>مرونة في الحل</b><span>بحسب المدة وحجم العمل</span></article><article><b>دعم مستمر</b><span>من البداية وطوال الخدمة</span></article></section>
@@ -111,11 +111,11 @@ export default function Home() {
     {content.visibility.hajj && <section className="hajj-readiness" id="hajj">
       <Image src="/images/hajj-readiness.webp" alt="بنية تحتية موسمية منظمة وخيام وممرات خدمة فارغة في تضاريس مكة المكرمة دون أي كائنات حية" width={1672} height={941} sizes="(max-width: 900px) 100vw, 55vw"/>
       <div className="hajj-shade"/>
-      <div className="hajj-copy"><p className="eyebrow light"><span/> حلول موسمي رمضان والحج</p><h2>أداء ثابت،<br/><em>عندما تبلغ الأعمال ذروتها.</em></h2><p>نخطط لرمضان والحج كاحتياجين مختلفين: ورديات وساعات ممتدة خلال رمضان، وتعبئة متعددة المواقع والمراحل خلال الحج، مع فرق تناسب طبيعة كل منشأة ومدينة.</p><div className="hajj-actions"><a href="#quote" className="btn primary">اطلب حلاً للموسم <Arrow/></a><Link href="/seasons" className="text-link">استكشف حلول المواسم <Arrow/></Link></div></div>
+      <div className="hajj-copy"><p className="eyebrow light"><span/> حلول موسمي رمضان والحج</p><h2>استمر في خدمة عملائك،<br/><em>حتى في أشد أيام الموسم.</em></h2><p>في رمضان يتركز العمل مساءً ويزداد في العشر الأواخر. وفي الحج تتوزع الفرق على مواقع وفترات متعددة. لهذا نجهز لكل موسم فريقًا وخطة عمل تخصه.</p><div className="hajj-actions"><a href="#quote" className="btn primary">اطلب حلاً للموسم <Arrow/></a><Link href="/seasons" className="text-link">استكشف حلول المواسم <Arrow/></Link></div></div>
       <div className="hajj-proof"><strong>رمضان والحج</strong><span>تخطيط مبكر · تخصصات متعددة · مرونة موسمية · متابعة للسعة</span></div>
     </section>}
 
-    {content.visibility.hajj && <section className="hajj-operations section" id="hajj-operations"><div className="hajj-operations-copy"><p className="eyebrow"><span/> شريكك في مواسم الذروة</p><h2>مرونة أكبر،<br/><em>وضغط أقل على فريقك.</em></h2><p>نساعدك على الاستعداد مبكرًا لرمضان والحج عبر خطة تربط المدينة والموقع والوردية بالمهنة والعدد والموعد، ثم تتابع الفجوات عند تغير الطلب.</p><div className="hajj-capability-grid">{hajjCapabilities.map((item) => <article key={item.n}><span>{item.n}</span><div><h3>{item.title}</h3><p>{item.text}</p></div></article>)}</div></div><div className="hajj-operations-image"><Image src="/images/hajj-operations.webp" alt="منطقة تجهيز وتشغيل موسمية منظمة وخالية من الكائنات الحية" width={1536} height={1024} sizes="(max-width: 900px) 100vw, 45vw"/><div><b>جاهزية تليق بكل موسم</b><span>قوى عاملة مرنة وخطة منفصلة لرمضان والحج</span></div></div></section>}
+    {content.visibility.hajj && <section className="hajj-operations section" id="hajj-operations"><div className="hajj-operations-copy"><p className="eyebrow"><span/> شريكك في مواسم الذروة</p><h2>فريقك يركز على الخدمة،<br/><em>ونحن نهتم بتغطية الاحتياج.</em></h2><p>نبدأ من مواقع العمل وساعات الازدحام، ثم نحدد المهن والأعداد المطلوبة لكل وردية. وإذا تغير الطلب أثناء الموسم، تكون الأولويات والبدائل معروفة مسبقًا.</p><div className="hajj-capability-grid">{hajjCapabilities.map((item) => <article key={item.n}><span>{item.n}</span><div><h3>{item.title}</h3><p>{item.text}</p></div></article>)}</div></div><div className="hajj-operations-image"><Image src="/images/hajj-operations.webp" alt="منطقة تجهيز وتشغيل موسمية منظمة وخالية من الكائنات الحية" width={1536} height={1024} sizes="(max-width: 900px) 100vw, 45vw"/><div><b>جاهزية تليق بكل موسم</b><span>قوى عاملة مرنة وخطة منفصلة لرمضان والحج</span></div></div></section>}
 
     <section className="about section" id="about">
       <div className="section-title"><p className="eyebrow"><span/> من نحن</p><h2>{content.home.aboutTitle}</h2></div>
