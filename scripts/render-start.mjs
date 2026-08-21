@@ -25,21 +25,33 @@ const sql = postgres(databaseUrl, {
   ssl: "require",
 });
 
-try {
-  const appliedRows = await sql`select name from private.__dali_migrations`;
-  const applied = new Set(appliedRows.map((row) => String(row.name)));
-  const folder = resolve("drizzle-pg");
-  const files = (await readdir(folder)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
-  const pending = files.filter((name) => !applied.has(name));
-  if (pending.length) startupFailure(`DATABASE_MIGRATIONS_PENDING:${pending.join(",")}`);
-  await sql`select 1`;
-} finally {
-  await sql.end({ timeout: 5 });
-}
-
 const child = spawn(process.execPath, ["dist/standalone/server.js"], {
   stdio: "inherit",
   env: { ...process.env, HOSTNAME: "0.0.0.0", DATABASE_URL: databaseUrl, UPLOADS_DIR: uploadsDir },
 });
+
+// Do not keep Render's HTTP port closed while Supabase is waking up or while
+// an operator is applying a migration. The application exposes readiness
+// separately and protects database-backed routes on their own; starting the
+// HTTP server first keeps the public site and login screen reachable instead
+// of turning a transient database condition into a persistent 502 gateway.
+void (async () => {
+  try {
+    const appliedRows = await sql`select name from private.__dali_migrations`;
+    const applied = new Set(appliedRows.map((row) => String(row.name)));
+    const folder = resolve("drizzle-pg");
+    const files = (await readdir(folder)).filter((name) => /^\d+_.+\.sql$/.test(name)).sort();
+    const pending = files.filter((name) => !applied.has(name));
+    if (pending.length) process.stderr.write(`[startup] DATABASE_MIGRATIONS_PENDING:${pending.join(",")}\n`);
+    await sql`select 1`;
+    process.stdout.write("[startup] DATABASE_READY\n");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`[startup] DATABASE_PREFLIGHT_DEGRADED:${message}\n`);
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => undefined);
+  }
+})();
+
 child.on("exit", (code, signal) => process.exit(signal ? 1 : (code ?? 1)));
 for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => child.kill(signal));
