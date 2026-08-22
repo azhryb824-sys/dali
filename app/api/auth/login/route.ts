@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { getDb } from "@/db";
+import { getDb, getSqlClient } from "@/db";
 import { passwordResetTokens, portalAuthCredentials, portalUsers } from "@/db/schema";
 import { createIdentityToken, identityCookie, sha256, verifyPasswordHash } from "@/lib/credential-auth";
 import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-error";
@@ -9,6 +9,18 @@ import { enforcePublicRateLimit, rejectCrossSiteRequest, requestCorrelationId } 
 
 function safePortalReturnPath(value: string) {
   return value.startsWith("/portal") && !value.startsWith("//") ? value : "/portal";
+}
+
+type LoginCredential = { identifier: string; email: string; displayName: string; passwordHash: string; mustChangePassword: boolean };
+async function readLoginCredential(identifier: string): Promise<LoginCredential | null> {
+  try {
+    const [stored] = await getDb().select({ identifier: portalAuthCredentials.identifier, email: portalAuthCredentials.email, displayName: portalAuthCredentials.displayName, passwordHash: portalAuthCredentials.passwordHash, mustChangePassword: portalAuthCredentials.mustChangePassword }).from(portalAuthCredentials).where(eq(portalAuthCredentials.identifier, identifier)).limit(1);
+    return stored || null;
+  } catch (error) {
+    console.warn("credential-schema-fallback", error instanceof Error ? error.message : String(error));
+    const [legacy] = await getSqlClient()<Array<{ identifier:string;email:string;display_name:string;password_hash:string }>>`select identifier,email,display_name,password_hash from portal_auth_credentials where identifier=${identifier} limit 1`;
+    return legacy ? { identifier:legacy.identifier,email:legacy.email,displayName:legacy.display_name,passwordHash:legacy.password_hash,mustChangePassword:false } : null;
+  }
 }
 
 function loginRedirect(
@@ -52,13 +64,7 @@ export async function POST(request: Request) {
     stage = "credential-read";
     const db = getDb();
     const adminConfig = getPortalAdminConfig();
-    const [stored] = await db.select({
-      identifier: portalAuthCredentials.identifier,
-      email: portalAuthCredentials.email,
-      displayName: portalAuthCredentials.displayName,
-      passwordHash: portalAuthCredentials.passwordHash,
-      mustChangePassword: portalAuthCredentials.mustChangePassword,
-    }).from(portalAuthCredentials).where(eq(portalAuthCredentials.identifier, identifier)).limit(1);
+    const stored = await readLoginCredential(identifier);
     let credential = stored || null;
     let authenticated = stored ? await verifyPasswordHash(password, stored.passwordHash) : false;
 
@@ -71,13 +77,7 @@ export async function POST(request: Request) {
           displayName: adminConfig.displayName,
           passwordHash: adminConfig.passwordHash,
         }).onConflictDoNothing();
-        [credential] = await db.select({
-          identifier: portalAuthCredentials.identifier,
-          email: portalAuthCredentials.email,
-          displayName: portalAuthCredentials.displayName,
-          passwordHash: portalAuthCredentials.passwordHash,
-          mustChangePassword: portalAuthCredentials.mustChangePassword,
-        }).from(portalAuthCredentials).where(eq(portalAuthCredentials.identifier, identifier)).limit(1);
+        credential = await readLoginCredential(identifier);
         authenticated = Boolean(
           credential
           && normalizePortalEmail(credential.email) === adminConfig.primaryEmail
