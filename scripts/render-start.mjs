@@ -49,6 +49,7 @@ void (async () => {
       const migration = await readFile(resolve(folder, name), "utf8");
       await sql.begin(async (tx) => {
         await tx.unsafe(migration.replaceAll("--> statement-breakpoint", "\n"));
+        await tx`insert into private.__dali_migrations (name) values (${name}) on conflict (name) do nothing`;
       });
       process.stdout.write(`[startup] DATABASE_MIGRATION_APPLIED:${name}\n`);
     }

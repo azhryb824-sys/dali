@@ -1,6 +1,7 @@
 ALTER TABLE "sales_representatives" ADD COLUMN IF NOT EXISTS "representative_type" text DEFAULT 'sales' NOT NULL;
 ALTER TABLE "client_contacts" DROP CONSTRAINT IF EXISTS "client_contacts_channel_check";
 ALTER TABLE "client_contacts" ADD CONSTRAINT "client_contacts_channel_check" CHECK ("preferred_channel" in ('phone', 'email', 'either', 'whatsapp'));
+ALTER TABLE "sales_representatives" DROP CONSTRAINT IF EXISTS "sales_representatives_type_check";
 ALTER TABLE "sales_representatives" ADD CONSTRAINT "sales_representatives_type_check" CHECK ("representative_type" in ('sales','purchasing'));
 CREATE TABLE IF NOT EXISTS "representative_requests" ("id" serial PRIMARY KEY NOT NULL,"request_code" text NOT NULL UNIQUE,"representative_id" integer NOT NULL REFERENCES "sales_representatives"("id") ON DELETE RESTRICT,"request_type" text NOT NULL,"client_name" text,"client_mobile" text,"work_site" text,"title" text NOT NULL,"details" text NOT NULL,"items_json" text,"estimated_amount_halalas" integer DEFAULT 0 NOT NULL,"status" text DEFAULT 'submitted' NOT NULL,"decision_reason" text,"decided_by" text,"decided_at" text,"quote_version_id" integer REFERENCES "quote_versions"("id") ON DELETE SET NULL,"created_by" text NOT NULL,"created_at" text DEFAULT CURRENT_TIMESTAMP::text NOT NULL,"updated_at" text DEFAULT CURRENT_TIMESTAMP::text NOT NULL,CONSTRAINT "representative_requests_type_check" CHECK ("request_type" in ('sales','purchase')),CONSTRAINT "representative_requests_status_check" CHECK ("status" in ('submitted','changes_requested','approved','rejected','converted')));
 CREATE INDEX IF NOT EXISTS "representative_requests_rep_idx" ON "representative_requests" USING btree ("representative_id");
@@ -8,3 +9,4 @@ CREATE INDEX IF NOT EXISTS "representative_requests_status_idx" ON "representati
 CREATE INDEX IF NOT EXISTS "representative_requests_type_idx" ON "representative_requests" USING btree ("request_type");
 ALTER TABLE "representative_requests" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE "representative_requests" FROM PUBLIC, anon, authenticated;
+INSERT INTO private.__dali_migrations (name) VALUES ('0026_representative_workflows.sql') ON CONFLICT (name) DO NOTHING;
