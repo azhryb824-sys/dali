@@ -8,6 +8,7 @@ import {
   dataSubjectRequests,
   quoteItems,
   quoteVersions,
+  salesRepresentatives,
   salesOpportunities,
   timeEntries,
   timesheets,
@@ -49,10 +50,11 @@ export async function GET(request: Request) {
     const limit = Math.min(100, Math.max(10, Number(params.get("limit")) || 50));
     const offset = Math.max(0, Number(params.get("offset")) || 0);
     const canSeePrivacy = access.role !== "employee" || access.department === "legal";
-    const [clientRows, contactRows, opportunityRows, quoteRows, quoteItemRows, orderRows, requirementRows, sheetRows, entryRows, workerRows, planRows, approvalRows, privacyRows, clientUserRows, workerUserRows] = await Promise.all([
+    const [clientRows, contactRows, opportunityRows, representativeRows, quoteRows, quoteItemRows, orderRows, requirementRows, sheetRows, entryRows, workerRows, planRows, approvalRows, privacyRows, clientUserRows, workerUserRows] = await Promise.all([
       getDb().select().from(clients).orderBy(desc(clients.updatedAt)).limit(limit).offset(offset),
       getDb().select().from(clientContacts).orderBy(desc(clientContacts.updatedAt)).limit(limit * 3).offset(offset),
       getDb().select().from(salesOpportunities).orderBy(desc(salesOpportunities.updatedAt)).limit(limit).offset(offset),
+      getDb().select().from(salesRepresentatives).orderBy(salesRepresentatives.fullName),
       getDb().select().from(quoteVersions).orderBy(desc(quoteVersions.updatedAt)).limit(limit).offset(offset),
       getDb().select().from(quoteItems).orderBy(quoteItems.sortOrder).limit(limit * 10).offset(offset),
       getDb().select().from(workOrders).orderBy(desc(workOrders.updatedAt)).limit(limit).offset(offset),
@@ -70,6 +72,7 @@ export async function GET(request: Request) {
       clients: clientRows,
       contacts: contactRows,
       opportunities: opportunityRows,
+      representatives: representativeRows,
       quotes: quoteRows,
       quoteItems: quoteItemRows,
       workOrders: orderRows,
@@ -117,7 +120,9 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
   if (action === "create-client") {
     const legalName = text(payload.legalName, 180);
     if (legalName.length < 2) throw new Error("اسم العميل غير مكتمل");
-    const [client] = await db.insert(clients).values({ clientCode: code("CLI"), legalName, tradeName: text(payload.tradeName, 180) || null, commercialRegistration: text(payload.commercialRegistration, 30) || null, vatNumber: text(payload.vatNumber, 30) || null, sector: text(payload.sector, 100) || null, city: text(payload.city, 100) || "مكة المكرمة", address: text(payload.address, 500) || null, status: "prospect", ownerEmail: text(payload.ownerEmail, 160).toLowerCase() || actor, createdBy: actor }).returning();
+    const salesRepresentativeId = integer(payload.salesRepresentativeId, 1);
+    if (salesRepresentativeId && !(await db.query.salesRepresentatives.findFirst({ where: and(eq(salesRepresentatives.id, salesRepresentativeId), eq(salesRepresentatives.status, "active")) }))) throw new Error("المندوب المحدد غير موجود أو غير نشط");
+    const [client] = await db.insert(clients).values({ clientCode: code("CLI"), legalName, tradeName: text(payload.tradeName, 180) || null, commercialRegistration: text(payload.commercialRegistration, 30) || null, vatNumber: text(payload.vatNumber, 30) || null, sector: text(payload.sector, 100) || null, city: text(payload.city, 100) || "مكة المكرمة", address: text(payload.address, 500) || null, status: "prospect", ownerEmail: text(payload.ownerEmail, 160).toLowerCase() || actor, salesRepresentativeId, createdBy: actor }).returning();
     const contactName = text(payload.contactName, 120);
     if (contactName) await db.insert(clientContacts).values({ clientId: client.id, fullName: contactName, jobTitle: text(payload.contactJobTitle, 100) || null, mobile: text(payload.contactMobile, 20) || null, email: text(payload.contactEmail, 160).toLowerCase() || null, preferredChannel: "either", isPrimary: true });
     await auditPortalAction({ actorEmail: actor, action, entityType: "client", entityId: client.id, after: client, correlationId });
@@ -133,7 +138,9 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     if (!clientId || title.length < 3) throw new Error("بيانات الفرصة غير مكتملة");
     const client = await db.query.clients.findFirst({ where: eq(clients.id, clientId) });
     if (!client) throw new Error("العميل غير موجود");
-    const [opportunity] = await db.insert(salesOpportunities).values({ opportunityCode: code("OPP"), clientId, contactId: integer(payload.contactId, 1), title, stage: "new", expectedValueHalalas: Math.round((Number(payload.expectedValue) || 0) * 100), expectedCloseDate: date(payload.expectedCloseDate, true), probability: integer(payload.probability, 0, 100) ?? 10, ownerEmail: text(payload.ownerEmail, 160).toLowerCase() || actor, notes: text(payload.notes, 2000) || null, createdBy: actor }).returning();
+    const salesRepresentativeId = integer(payload.salesRepresentativeId, 1) ?? client.salesRepresentativeId;
+    if (salesRepresentativeId && !(await db.query.salesRepresentatives.findFirst({ where: and(eq(salesRepresentatives.id, salesRepresentativeId), eq(salesRepresentatives.status, "active")) }))) throw new Error("المندوب المحدد غير موجود أو غير نشط");
+    const [opportunity] = await db.insert(salesOpportunities).values({ opportunityCode: code("OPP"), clientId, contactId: integer(payload.contactId, 1), salesRepresentativeId, title, stage: "new", expectedValueHalalas: Math.round((Number(payload.expectedValue) || 0) * 100), expectedCloseDate: date(payload.expectedCloseDate, true), probability: integer(payload.probability, 0, 100) ?? 10, ownerEmail: text(payload.ownerEmail, 160).toLowerCase() || actor, notes: text(payload.notes, 2000) || null, createdBy: actor }).returning();
     await auditPortalAction({ actorEmail: actor, action, entityType: "sales-opportunity", entityId: opportunity.id, after: opportunity, correlationId });
     await recordStatusChange({ entityType: "sales-opportunity", entityId: opportunity.id, toStatus: "new", actorEmail: actor, correlationId });
     await enqueueOutbox({ eventType: "sales.opportunity.created", aggregateType: "sales-opportunity", aggregateId: opportunity.id, payload: { opportunityId: opportunity.id, clientId } });

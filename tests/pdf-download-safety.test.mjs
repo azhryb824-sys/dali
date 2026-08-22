@@ -34,8 +34,10 @@ test("activity-aware quotations include itemized branded PDF output", async () =
   assert.match(generator, /جدول الخدمات والأسعار/);
   assert.match(route, /generateIssuedPdf/);
   assert.match(route, /discountHalalas/);
-  assert.match(ui, /إنشاء عرض سعر احترافي/);
-  assert.match(ui, /توريد وتشغيل القوى العاملة/);
+  assert.match(ui, /إنشاء عرض سعر حسب نوع الطلب/);
+  assert.match(ui, /توريد العمالة/);
+  assert.match(ui, /راتب العامل/);
+  assert.match(generator, /workforcePricing/);
   assert.match(ui, /تنزيل PDF/);
   assert.match(operations, /vatHalalas/);
   assert.match(operations, /activityLabel/);

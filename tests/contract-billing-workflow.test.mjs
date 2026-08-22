@@ -20,7 +20,7 @@ test("site-origin contracts, representatives, bulk workers and activity-aware qu
   assert.match(schema,/salesRepresentatives/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/REVOKE ALL.*PUBLIC, anon, authenticated/);
   assert.match(repsApi,/contractValueHalalas/);assert.match(portal,/إدارة المناديب/);
   assert.match(workers,/صورة الإقامة إلزامية/);assert.match(portal,/workerCount/);assert.match(portal,/iqamaDocument/);
-  assert.match(operations,/quote-line-builder/);assert.match(operations,/يتغير قالب البنود/);assert.doesNotMatch(operations,/name="itemLines"/);
+  assert.match(operations,/quote-line-builder/);assert.match(operations,/quote-activity-tabs/);assert.match(operations,/workforceNationalities/);assert.match(operations,/المقاولات/);assert.doesNotMatch(operations,/name="itemLines"/);
   assert.match(dates,/Asia\/Riyadh/);assert.match(dates,/input\[type="date"\]/);
 });
 

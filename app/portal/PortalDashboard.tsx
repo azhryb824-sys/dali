@@ -577,9 +577,9 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
 
   async function createWorker(form: HTMLFormElement) {
     setBusy("create-workforce");
+    const createdWorkers: WorkerRecord[]=[]; const createdAttachments: WorkerAttachment[]=[];
     try {
       const source = new FormData(form); const count = Math.max(1, Number(source.get("workerCount") || 1));
-      const createdWorkers: WorkerRecord[]=[]; const createdAttachments: WorkerAttachment[]=[];
       for(let index=0;index<count;index++){
         const payload=new FormData();
         for(const name of ["workerNumber","iqamaNumber","fullName","mobile","iqamaExpiry","photo","iqamaDocument"])payload.set(name,source.get(`${name}:${index}`) as FormDataEntryValue);
@@ -590,11 +590,10 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         const result = await response.json() as { worker?: WorkerRecord; attachments?: WorkerAttachment[]; error?: string };
         if (!response.ok || !result.worker || !result.attachments) throw new Error(`العامل ${index+1}: ${result.error || "تعذّر إنشاء الملف"}`);
         createdWorkers.push(result.worker);createdAttachments.push(...result.attachments);
+        setWorkers((items)=>[result.worker as WorkerRecord,...items]);setWorkerAttachments((items)=>[...(result.attachments as WorkerAttachment[]),...items]);
       }
-      setWorkers((items) => [...createdWorkers.reverse(), ...items]);
-      setWorkerAttachments((items) => [...createdAttachments, ...items]);
       setModal(null); notify(`تم إنشاء ${createdWorkers.length} ملف عامل وإرفاق صور الإقامة والمتطلبات.`);
-    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إنشاء ملف العامل."); }
+    } catch (error) { notify(`${createdWorkers.length?`تم حفظ ${createdWorkers.length} عامل بنجاح. `:""}${error instanceof Error ? error.message : "تعذّر إنشاء ملف العامل."}`); }
     finally { setBusy(null); }
   }
 
@@ -1212,6 +1211,16 @@ function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts
   type DraftProfession = { key: string; profession: string; requiredCount: number };
   type DraftPayment = { key: string; title: string; dueDate: string; percentage: number };
   const [documentType, setDocumentType] = useState(initialType);
+  const [selectedSourceRequestId,setSelectedSourceRequestId]=useState("");
+  const selectedSourceRequest=requests.find(item=>String(item.id)===selectedSourceRequestId);
+  useEffect(()=>{
+    if(!selectedSourceRequest)return;
+    const form=document.querySelector<HTMLFormElement>('.issue-modal form');if(!form)return;
+    const set=(name:string,value:string)=>{const field=form.elements.namedItem(name);if(field instanceof HTMLInputElement||field instanceof HTMLTextAreaElement)field.value=value;};
+    set("clientName",selectedSourceRequest.companyName||selectedSourceRequest.fullName);
+    set("title",`عقد توفير عمالة — ${selectedSourceRequest.companyName||selectedSourceRequest.fullName}`);
+    set("workSite",selectedSourceRequest.workSite||"");set("details",selectedSourceRequest.details||"");
+  },[selectedSourceRequest]);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [professions, setProfessions] = useState<DraftProfession[]>([{ key: "profession-1", profession: workforceProfessions[0].label, requiredCount: 1 }]);
   const [selectedWorkers, setSelectedWorkers] = useState<Record<string, number[]>>({});
@@ -1263,7 +1272,7 @@ function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts
       <input type="hidden" name="paymentSchedule" value={serializedPayments}/>
       <div className={`issue-form-step span-two ${!isContract || step === 1 ? "visible" : ""}`}>
         <label>نوع المستند<select name="documentType" value={documentType} onChange={(event) => { setDocumentType(event.target.value); setStep(1); }}><option value="workforce_contract">عقد مقاولات لتوفير العمالة</option><option value="quotation">عرض سعر</option><option value="progress_claim">مستخلص أعمال</option><option value="invoice">فاتورة</option><option value="receipt">سند قبض</option><option value="payment_voucher">سند صرف</option></select></label>
-        {isContract&&<><label>مصدر العميل<select name="sourceRequestId" defaultValue=""><option value="">عميل مباشر — غير قادم من الموقع</option>{requests.map(request=><option key={request.id} value={request.id}>{request.trackingCode} — {request.companyName||request.fullName}</option>)}</select></label><label>المندوب المسؤول<select name="salesRepresentativeId" defaultValue=""><option value="">دون مندوب</option>{representatives.map(item=><option key={item.id} value={item.id}>{item.representativeCode} — {item.fullName}</option>)}</select></label></>}
+        {isContract&&<><label>مصدر العميل<select name="sourceRequestId" value={selectedSourceRequestId} onChange={event=>setSelectedSourceRequestId(event.target.value)}><option value="">عميل مباشر — غير قادم من الموقع</option>{requests.map(request=><option key={request.id} value={request.id}>{request.trackingCode} — {request.companyName||request.fullName}</option>)}</select><small>تُعبأ بيانات الطلب تلقائياً ويمكن تعديلها.</small></label><label>المندوب المسؤول<select name="salesRepresentativeId" defaultValue=""><option value="">دون مندوب</option>{representatives.map(item=><option key={item.id} value={item.id}>{item.representativeCode} — {item.fullName}</option>)}</select></label></>}
         <label>تاريخ الإصدار<input name="issueDate" required type="date" defaultValue={new Date().toISOString().slice(0, 10)}/></label><label>اسم العميل أو الجهة<input name="clientName" required maxLength={160}/></label><label>عنوان المستند<input name="title" required maxLength={180} placeholder="موضوع المستند"/></label><label>السجل التجاري للعميل<input name="clientCr" required={isContract} maxLength={30} dir="ltr" placeholder={isContract ? "إلزامي للعقد" : "اختياري"}/></label><label>الرقم الضريبي للعميل<input name="clientVat" required={isContract} maxLength={30} dir="ltr" placeholder={isContract ? "إلزامي للعقد" : "مطلوب عند تفعيل الضريبة"}/></label>{isContract&&<label className="span-two">العنوان الوطني للعميل<input name="clientAddress" required maxLength={240} placeholder="العنوان الوطني المسجل للعميل"/></label>}<label>قيمة الخدمة قبل الضريبة<input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr"/></label>{!isContract && <><label>تطبيق ضريبة القيمة المضافة<select name="vatEnabled" defaultValue="false"><option value="false">بدون ضريبة</option><option value="true">تطبيق الضريبة</option></select></label><label>نسبة الضريبة %<input name="vatRate" type="number" min="0" max="100" step="0.01" defaultValue="15" dir="ltr"/></label></>}
         {isContract ? <><label>موقع العمل<input name="workSite" required maxLength={180}/></label><label>بداية العقد<input name="startDate" required type="date"/></label><label>نهاية العقد<input name="endDate" required type="date"/></label></> : <><label>{documentType === "quotation" ? "صلاحية العرض حتى" : "تاريخ الاستحقاق / الانتهاء"}<input name="expiryDate" type="date"/></label>{["invoice", "receipt", "payment_voucher", "progress_claim"].includes(documentType) && <label className="span-two">العقد المرتبط<select name="linkedContractId" defaultValue=""><option value="">دون عقد محدد</option>{contracts.map((contract) => <option value={contract.id} key={contract.id}>{contract.referenceCode} — {contract.clientName}</option>)}</select></label>}</>}
         <label className="span-two">التفاصيل والشروط<textarea name="details" required minLength={5} maxLength={4000} rows={6} placeholder={isContract ? "اكتب نطاق العمل، ساعات العمل، الالتزامات، وآلية الدفع..." : "اكتب بنود المستند وتفاصيل المبلغ والخدمة..."}/></label>

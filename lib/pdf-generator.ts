@@ -310,7 +310,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     y -= height + 8;
   }
 
-  function quotationTable(items: NonNullable<IssuedDocumentInput["quotationItems"]>) {
+  function quotationTable(items: NonNullable<IssuedDocumentInput["quotationItems"]>, workforcePricing = false) {
     const columns = { description: PAGE.width - PAGE.margin - 10, quantity: 302, duration: 242, unit: 173, total: 93 };
     const header = () => {
       ensure(34);
@@ -318,8 +318,8 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
       drawRight(page, "الخدمة / البند", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.description);
       drawRight(page, "الكمية", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.quantity);
       drawRight(page, "المدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.duration);
-      drawRight(page, "سعر الوحدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.unit);
-      drawRight(page, "الإجمالي", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.total);
+      drawRight(page, workforcePricing ? "راتب العامل" : "سعر الوحدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.unit);
+      if (!workforcePricing) drawRight(page, "الإجمالي", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.total);
       y -= 31;
     };
     header();
@@ -334,7 +334,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
       drawRight(page, arabicDigits(item.quantity), y - 9, resources.regular, 8, COLORS.text, columns.quantity);
       drawRight(page, `${arabicDigits(item.durationMonths)} شهر`, y - 9, resources.regular, 8, COLORS.text, columns.duration);
       drawRight(page, moneyLabel(item.unitPriceHalalas), y - 9, resources.regular, 7.5, COLORS.text, columns.unit);
-      drawRight(page, moneyLabel(item.lineTotalHalalas), y - 9, resources.bold, 7.5, COLORS.navy, columns.total);
+      if (!workforcePricing) drawRight(page, moneyLabel(item.lineTotalHalalas), y - 9, resources.bold, 7.5, COLORS.navy, columns.total);
       page.drawLine({ start: { x: PAGE.margin, y: y - height + 5 }, end: { x: PAGE.width - PAGE.margin, y: y - height + 5 }, thickness: 0.45, color: COLORS.line });
       y -= height;
     });
@@ -420,16 +420,19 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     clauses.forEach(([title, body]) => composer.paragraph(title, body));
     composer.paragraph("الاعتماد", "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.");
   } else if (input.documentType === "quotation" && input.quotationItems?.length) {
+    const workforcePricing = input.activityLabel === "توريد العمالة";
     if (input.activityLabel) composer.field("نشاط العرض", input.activityLabel);
     if (input.workSite) composer.field("موقع تقديم الخدمة", input.workSite);
     composer.paragraph("نطاق العرض", input.details);
-    composer.heading("جدول الخدمات والأسعار");
-    composer.quotationTable(input.quotationItems);
-    composer.field("الإجمالي قبل الخصم والضريبة", moneyLabel(input.subtotalHalalas));
-    if (input.discountHalalas) composer.field("الخصم", moneyLabel(input.discountHalalas));
-    if (input.vatHalalas) composer.pair("القيمة بعد الخصم", moneyLabel((input.subtotalHalalas || 0) - (input.discountHalalas || 0)), `ضريبة القيمة المضافة (${arabicDigits((input.vatRateBps || 0) / 100)}٪)`, moneyLabel(input.vatHalalas));
-    composer.field("الإجمالي النهائي", moneyLabel(input.amountHalalas));
-    composer.field("الإجمالي كتابة", halalasToArabicWords(input.amountHalalas || 0));
+    composer.heading(workforcePricing ? "بيان العمالة والمهن والرواتب" : "جدول الخدمات والأسعار");
+    composer.quotationTable(input.quotationItems, workforcePricing);
+    if (!workforcePricing) {
+      composer.field("الإجمالي قبل الخصم والضريبة", moneyLabel(input.subtotalHalalas));
+      if (input.discountHalalas) composer.field("الخصم", moneyLabel(input.discountHalalas));
+      if (input.vatHalalas) composer.pair("القيمة بعد الخصم", moneyLabel((input.subtotalHalalas || 0) - (input.discountHalalas || 0)), `ضريبة القيمة المضافة (${arabicDigits((input.vatRateBps || 0) / 100)}٪)`, moneyLabel(input.vatHalalas));
+      composer.field("الإجمالي النهائي", moneyLabel(input.amountHalalas));
+      composer.field("الإجمالي كتابة", halalasToArabicWords(input.amountHalalas || 0));
+    }
     if (input.expiryDate) composer.field("صلاحية العرض", dateLabel(input.expiryDate));
     if (input.paymentTerms) composer.paragraph("شروط الدفع", input.paymentTerms);
     if (input.assumptions) composer.paragraph("الافتراضات والاستثناءات", input.assumptions);
