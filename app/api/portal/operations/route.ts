@@ -426,7 +426,7 @@ async function transitionRecord(action: string, payload: Record<string, unknown>
   if (action === "transition-quote") {
     const item = await db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, id) });
     if (!item) throw new Error("عرض السعر غير موجود");
-    const canApprove = access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
+    const canApprove = access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
     const allowed: Record<string, string[]> = { draft: canApprove ? ["pending_approval", "approved", "cancelled"] : ["pending_approval"], pending_approval: canApprove ? ["approved", "rejected", "cancelled"] : ["approved", "rejected"], approved: canApprove ? ["sent", "cancelled"] : ["sent"], sent: canApprove ? ["accepted", "rejected", "expired", "cancelled"] : ["accepted", "rejected", "expired"], accepted: [], rejected: canApprove ? ["cancelled"] : [], expired: [], superseded: [], cancelled: [] };
     if (!allowed[item.status]?.includes(nextStatus)) throw new Error("انتقال حالة العرض غير مسموح");
     if (nextStatus === "approved" && !canApprove) throw new Error("اعتماد عرض السعر متاح للمالك أو مشرف النظام فقط");
