@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyAssets, portalActivity } from "@/db/schema";
 import { cleanText, objectKey, safeFileName } from "@/lib/company-documents";
-import { requirePortalApiRole } from "@/lib/portal-access";
+import { canManageCompanyAssets, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
@@ -12,8 +12,8 @@ const MAX_ASSET_BYTES = 5 * 1024 * 1024;
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin"]);
-  if (!access) return Response.json({ error: "هذه العملية متاحة لمدير النظام فقط" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !canManageCompanyAssets(access)) return Response.json({ error: "رفع الختم والتوقيع متاح للمالك ومشرف النظام فقط" }, { status: 403 });
 
   let storageKey = "";
   try {
@@ -65,6 +65,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("company-asset-upload-failed", error instanceof Error ? error.message : String(error));
     if (storageKey) await getRuntimeEnv().BUCKET.delete(storageKey).catch(() => undefined);
-    return Response.json({ error: "تعذّر حفظ الختم أو التوقيع" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "";
+    return Response.json({ error: message === "COMPANY_ASSET_STORAGE_VERIFICATION_FAILED" ? "لم يكتمل حفظ الملف في التخزين الدائم. أعد المحاولة بعد تحديث الصفحة." : "تعذّر حفظ الختم أو التوقيع. تأكد أن الصورة PNG أو JPG وأقل من 5 ميجابايت." }, { status: 500 });
   }
 }

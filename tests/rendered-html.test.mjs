@@ -34,8 +34,24 @@ test("Render runtime preserves durable storage when Worker bindings are absent",
   assert.match(migration, /REVOKE ALL ON TABLE private\.object_storage FROM PUBLIC, anon, authenticated/);
   assert.match(accessMigration, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE private\.object_storage TO dali_app/);
   assert.match(uploadRoute, /COMPANY_ASSET_STORAGE_VERIFICATION_FAILED/);
+  assert.match(uploadRoute, /canManageCompanyAssets/);
   assert.match(uploadRoute, /previous\.storageKey !== storageKey/);
   assert.match(uploadRoute, /BUCKET\.delete\(previous\.storageKey\)/);
+});
+
+test("owner and system administrator can create users without exposing credential hashes", async () => {
+  const [dashboard, route, access] = await Promise.all([
+    readFile(new URL("../app/portal/PortalDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/portal/users/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/portal-access.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(dashboard, /actionLabel="إضافة مستخدم"/);
+  assert.match(dashboard, /CreateUserModal/);
+  assert.match(route, /export async function POST/);
+  assert.match(route, /hashPassword\(password\)/);
+  assert.match(route, /canAdministerPortalUsers/);
+  assert.match(route, /after: \{ \.\.\.user, identifier: "\*\*\*\*\*\*\*\*\*\*" \}/);
+  assert.match(access, /users\.administer/);
 });
 
 test("two-step verification is disabled across active login and authorization paths", async () => {

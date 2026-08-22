@@ -229,6 +229,10 @@ export function canManageCompanyAssets(access: Pick<PortalAccess, "role" | "func
   return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("assets.administer");
 }
 
+export function canAdministerPortalUsers(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
+  return access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin") || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("users.administer");
+}
+
 export function canManagePortalConversations(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
   return access.role === "admin" || access.role === "manager" || access.department === "workforce" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("workforce.write") || access.functionalPermissions.includes("conversations.write");
 }

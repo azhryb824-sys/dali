@@ -263,6 +263,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState<RecordEntity | null>(null);
   const [documentModal, setDocumentModal] = useState<"upload" | "issue" | null>(null);
+  const [userModal, setUserModal] = useState(false);
   const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
   const [operationsTab, setOperationsTab] = useState<OperationsTab>("crm");
   const [operationsQuery, setOperationsQuery] = useState("");
@@ -331,7 +332,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
       dialog.removeEventListener("keydown", handleKeyDown);
       previousFocus?.focus();
     };
-  }, [selectedId, selectedConversationId, selectedWorkerId, selectedContractId, modal, documentModal, chatSettingsOpen]);
+  }, [selectedId, selectedConversationId, selectedWorkerId, selectedContractId, modal, documentModal, userModal, chatSettingsOpen]);
 
   const requestCounts = useMemo(() => ({
     total: requests.length, new: requests.filter((item) => safeRequestStatus(item.status) === "new").length,
@@ -636,6 +637,20 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تحديث صلاحيات المستخدم."); } finally { setBusy(null); }
   }
 
+  async function createUser(form: HTMLFormElement) {
+    setBusy("create-user");
+    try {
+      const payload = Object.fromEntries(new FormData(form).entries());
+      const response = await fetch("/api/portal/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await response.json() as { user?: PortalUser; error?: string };
+      if (!response.ok || !data.user) throw new Error(data.error || "تعذّرت إضافة المستخدم.");
+      setUsers((items) => [data.user as PortalUser, ...items]);
+      setUserModal(false);
+      notify("تم إنشاء المستخدم وتفعيل حسابه وفق الصلاحية المحددة.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّرت إضافة المستخدم."); }
+    finally { setBusy(null); }
+  }
+
   async function uploadDocument(form: HTMLFormElement) {
     setBusy("upload-document");
     try {
@@ -728,6 +743,10 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   }
 
   async function uploadAsset(slot: "stamp" | "signature", form: HTMLFormElement) {
+    const input = form.elements.namedItem("file");
+    const file = input instanceof HTMLInputElement ? input.files?.[0] : undefined;
+    if (!file) { notify("اختر صورة الختم أو التوقيع أولاً."); return; }
+    if (!(["image/png", "image/jpeg"].includes(file.type)) || file.size > 5 * 1024 * 1024) { notify("استخدم صورة PNG أو JPG لا تتجاوز 5 ميجابايت."); return; }
     setBusy(`asset-${slot}`);
     const data = new FormData(form); data.set("slot", slot);
     try {
@@ -916,7 +935,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "brand" && canAccessDocuments && <BrandIdentityManager/>}
         {view === "website" && canAccessWebsite && <WebsiteManager initialContent={initialWebsiteContent} canManage={canManageWebsite}/>} 
 
-        {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني.">
+        {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني." actionLabel="إضافة مستخدم" canWrite onAdd={() => setUserModal(true)}>
           <section className="panel users-panel"><div className="panel-head"><div><h2>حسابات النظام</h2><p>{users.filter((item) => item.status === "pending").length} حساب بانتظار الاعتماد · لا توجد كلمات مرور محفوظة في النظام</p></div></div><div className="user-list">{users.map((item) => <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}`} onSave={updateUser}/>)}</div></section>
           <RoleDefinitionManager/>
           <AccessScopeManager currentEmail={currentUser.email}/>
@@ -929,6 +948,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     {modal === "workforce" && <WorkerModal busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker}/>}
     {documentModal === "upload" && <UploadDocumentModal busy={busy === "upload-document"} onClose={() => setDocumentModal(null)} onSubmit={uploadDocument}/>}
     {documentModal === "issue" && <IssueDocumentModal initialType={issuePreset} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} onClose={() => setDocumentModal(null)} onSubmit={issueDocument}/>} 
+    {userModal && <CreateUserModal busy={busy === "create-user"} onClose={() => setUserModal(false)} onSubmit={createUser}/>}
     {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours}/>}
     {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus}/>}
     {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply}/>}
@@ -965,6 +985,20 @@ function UserAccessCard({ user, self, busy, onSave }: {
       {self && <p className="self-access-note">لا يمكن تعديل صلاحية حسابك من جلستك الحالية؛ يمنع ذلك الرفع الذاتي للصلاحيات أو تعطيل حساب مدير النظام بالخطأ.</p>}
     </form>
   </article>;
+}
+
+function CreateUserModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+  return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إضافة مستخدم" onClick={onClose}/><section className="record-modal create-user-modal" role="dialog" aria-modal="true" aria-label="إضافة مستخدم"><div className="drawer-head"><div><span>إدارة المستخدمين</span><h2>إضافة مستخدم جديد</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}>
+    <label>الاسم الكامل<input name="displayName" required minLength={3} maxLength={160} autoComplete="name"/></label>
+    <label>رقم الهوية<input name="identifier" required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} dir="ltr" placeholder="10 أرقام"/></label>
+    <label>البريد الإلكتروني<input name="email" type="email" required maxLength={254} dir="ltr" autoComplete="email"/></label>
+    <label>كلمة المرور المؤقتة<input name="password" type="password" required minLength={12} maxLength={128} dir="ltr" autoComplete="new-password"/></label>
+    <label>الدور<select name="role" defaultValue="employee"><option value="employee">موظف</option><option value="manager">الإدارة</option><option value="admin">مدير النظام</option></select></label>
+    <label>القسم<select name="department" defaultValue="general"><option value="general">صلاحية عامة</option><option value="employees">إدارة الموظفين</option><option value="finance">الإدارة المالية</option><option value="legal">الشؤون القانونية</option><option value="workforce">شؤون العمالة</option><option value="construction">المقاولات والمشروعات</option></select></label>
+    <p className="form-hint span-two">هذه العملية متاحة للمالك ومشرف النظام فقط، وتُسجل في سجل التدقيق. يجب أن تتكون كلمة المرور من 12 خانة على الأقل وتضم حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا.</p>
+    <div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ الإنشاء..." : "إنشاء وتفعيل المستخدم"}</button></div>
+  </form></section></div>;
 }
 
 function DepartmentCard({ icon, title, text, count, onClick }: { icon: IconName; title: string; text: string; count: string; onClick: () => void }) {
@@ -1123,7 +1157,7 @@ function DocumentTable({ documents, canShare, busy, onShare }: { documents: Comp
 }
 
 function CompanyAssetsPanel({ assets, canManage, busy, onUpload }: { assets: CompanyAsset[]; canManage: boolean; busy: string | null; onUpload: (slot: "stamp" | "signature", form: HTMLFormElement) => Promise<void> }) {
-  return <aside className="panel company-assets"><div className="panel-head"><div><h2>الختم والتوقيع</h2><p>أصول محمية تُدرج آلياً في كل PDF صادر</p></div><Icon name="stamp"/></div><div className="asset-list">{(["stamp", "signature"] as const).map((slot) => { const asset = assets.find((item) => item.slot === slot); const label = slot === "stamp" ? "ختم الشركة" : "التوقيع المفوض"; return <form key={slot} onSubmit={(event) => { event.preventDefault(); void onUpload(slot, event.currentTarget); }}><div className={`asset-status ${asset ? "ready" : "missing"}`}><span>{asset ? "✓" : "!"}</span><p><strong>{label}</strong><small>{asset ? `${asset.fileName} · ${formatDate(asset.updatedAt, true)}` : "لم يُرفع بعد"}</small></p></div>{canManage && <><label className="asset-file"><input type="file" name="file" accept="image/png,image/jpeg" required/><span><Icon name="upload"/>{asset ? "استبدال الملف" : "رفع الملف"}</span></label><button className="asset-submit" type="submit" disabled={busy === `asset-${slot}`}>{busy === `asset-${slot}` ? "جارٍ الحفظ..." : "اعتماد"}</button></>}</form>; })}</div><div className="asset-security"><strong>حماية الأصول الرسمية</strong><p>لا تظهر الصور في الواجهة ولا تدخل روابط المشاركة. استخدامها محصور بإصدار ملفات PDF وسجل العمليات.</p></div></aside>;
+  return <aside className="panel company-assets"><div className="panel-head"><div><h2>الختم والتوقيع</h2><p>أصول محمية تُدرج آلياً في كل PDF صادر</p></div><Icon name="stamp"/></div><div className="asset-list">{(["stamp", "signature"] as const).map((slot) => { const asset = assets.find((item) => item.slot === slot); const label = slot === "stamp" ? "ختم الشركة" : "التوقيع المفوض"; return <form key={slot} onSubmit={(event) => { event.preventDefault(); void onUpload(slot, event.currentTarget); }}><div className={`asset-status ${asset ? "ready" : "missing"}`}><span>{asset ? "✓" : "!"}</span><p><strong>{label}</strong><small>{asset ? `${asset.fileName} · ${formatDate(asset.updatedAt, true)}` : "لم يُرفع بعد"}</small></p></div>{canManage && <><label className="asset-file"><input type="file" name="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" required/><span><Icon name="upload"/>{asset ? "استبدال الملف" : "رفع الملف"}</span></label><button className="asset-submit" type="submit" disabled={busy === `asset-${slot}`}>{busy === `asset-${slot}` ? "جارٍ الحفظ..." : "اعتماد"}</button></>}</form>; })}</div><div className="asset-security"><strong>حماية الأصول الرسمية</strong><p>الصيغ المقبولة PNG وJPG حتى 5 ميجابايت. لا تظهر الصور في الواجهة ولا تدخل روابط المشاركة.</p></div></aside>;
 }
 
 function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
