@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { portalActivity, workerAttachments, workers } from "@/db/schema";
-import { cleanText, objectKey, safeFileName } from "@/lib/company-documents";
+import { cleanDate, cleanText, objectKey, safeFileName } from "@/lib/company-documents";
 import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
@@ -21,8 +21,9 @@ export async function POST(request: Request) {
     const workerId = Number(form.get("workerId"));
     const requirementCode = cleanText(form.get("requirementCode"), 60) || null;
     const customTitle = cleanText(form.get("title"), 160);
+    const expiryDate = cleanDate(form.get("expiryDate"), true);
     const file = form.get("file");
-    if (!Number.isInteger(workerId) || workerId < 1 || !(file instanceof File)) {
+    if (!Number.isInteger(workerId) || workerId < 1 || !(file instanceof File) || expiryDate === "") {
       return Response.json({ error: "المرفق غير صحيح أو يتجاوز 12 ميجابايت" }, { status: 400 });
     }
     const validation = await validateUploadedFile(file, { contentTypes: TYPES, maxBytes: 12 * 1024 * 1024 });
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     storageKey = objectKey("worker-files", fileName);
     await getRuntimeEnv().BUCKET.put(storageKey, validation.bytes, { httpMetadata: { contentType: file.type }, customMetadata: { uploadedBy: access.user.email, workerId: String(workerId), validation: validation.validationDetails } });
 
-    const [attachment] = await db.insert(workerAttachments).values({ workerId, documentType: "certificate", requirementCode, title, fileName, storageKey, contentType: file.type, sizeBytes: file.size, validationStatus: "signature-validated", validationDetails: validation.validationDetails, createdBy: access.user.email }).returning();
+    const [attachment] = await db.insert(workerAttachments).values({ workerId, documentType: "certificate", requirementCode, expiryDate, title, fileName, storageKey, contentType: file.type, sizeBytes: file.size, validationStatus: "signature-validated", validationDetails: validation.validationDetails, createdBy: access.user.email }).returning();
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-certificate-uploaded", entityType: "worker", entityId: String(workerId) });
     await emitPortalNotification({ eventType: "worker-certificate-uploaded", title: "أُضيف مستند إلى ملف عامل", message: `${worker.fullName} — ${title}.`, severity: "success", module: "workforce", entityType: "worker", entityId: workerId, actionView: "workforce", targetDepartment: "workforce" }).catch(() => undefined);
     return Response.json({ attachment }, { status: 201 });

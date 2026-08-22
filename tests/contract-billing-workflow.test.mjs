@@ -34,6 +34,14 @@ test("site-origin contracts, representatives, bulk workers and activity-aware qu
   assert.match(dates,/Asia\/Riyadh/);assert.match(dates,/input\[type="date"\]/);
 });
 
+test("worker files enforce Saudi IBAN essentials and support expiring unlimited attachments",async()=>{
+  const[route,attachments,portal,banks,schema,migration]=await Promise.all([source("app/api/portal/workers/route.ts"),source("app/api/portal/workers/attachments/route.ts"),source("app/portal/PortalDashboard.tsx"),source("lib/saudi-banks.ts"),source("db/schema.ts"),source("drizzle-pg/0021_worker_iban_insurance_and_attachment_expiry.sql")]);
+  assert.match(route,/\^SA\\d\{22\}\$/);assert.match(route,/ibanCertificate/);assert.match(route,/medicalInsuranceExpiry/);assert.match(route,/isSaudiBank/);
+  assert.match(portal,/شهادة الآيبان — إلزامية/);assert.match(portal,/صورة العامل — إلزامية/);assert.match(portal,/صورة الإقامة — إلزامية/);assert.match(portal,/مرفقات إضافية اختيارية/);
+  assert.match(portal,/تاريخ انتهاء المرفق/);assert.match(attachments,/expiryDate/);assert.match(schema,/medicalInsuranceExpiry/);assert.match(migration,/workers_iban_unique/);
+  for(const bank of ["البنك الأهلي السعودي","مصرف الراجحي","بنك الرياض","مصرف الإنماء","بنك البلاد","بنك الجزيرة"])assert.match(banks,new RegExp(bank));
+});
+
 test("owner referral, accounting invoice, payment recording and legal escalation are separated",async()=>{
   const[route,ui]=await Promise.all([source("app/api/portal/contract-payments/route.ts"),source("app/portal/ContractBillingWorkspace.tsx")]);
   assert.match(route,/إحالة الدفعة للمحاسبة من صلاحيات المالك فقط/);

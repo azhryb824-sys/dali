@@ -6,6 +6,7 @@ import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-ac
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { requirementsForProfession, workforceNationalities, workforceProfessions } from "@/lib/workforce-requirements";
+import { isSaudiBank } from "@/lib/saudi-banks";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
 
 const PHOTO_TYPES = new Set(["image/png", "image/jpeg"]);
@@ -14,7 +15,7 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const MAX_CERTIFICATE_BYTES = 12 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 
-type PendingAttachment = { documentType: "photo" | "certificate"; requirementCode: string | null; title: string; file: File };
+type PendingAttachment = { documentType: "photo" | "certificate"; requirementCode: string | null; title: string; expiryDate: string | null; file: File };
 
 function validMobile(value: string) {
   return /^\+?[0-9\s()-]{8,20}$/.test(value);
@@ -42,26 +43,30 @@ export async function POST(request: Request) {
     const nationality = cleanText(form.get("nationality"), 80);
     const profession = cleanText(form.get("profession"), 120);
     const mobile = cleanText(form.get("mobile"), 20);
+    const iban = cleanText(form.get("iban"), 40).replace(/\s+/g, "").toUpperCase();
+    const bankName = cleanText(form.get("bankName"), 120);
     const iqamaExpiry = cleanDate(form.get("iqamaExpiry"));
+    const medicalInsuranceExpiry = cleanDate(form.get("medicalInsuranceExpiry"));
     const photo = form.get("photo");
     const iqamaDocument = form.get("iqamaDocument");
+    const ibanCertificate = form.get("ibanCertificate");
 
-    if (!workerNumber || !/^\d{10}$/.test(iqamaNumber) || fullName.length < 2 || !workforceNationalities.includes(nationality as (typeof workforceNationalities)[number]) || !workforceProfessions.some((item) => item.label === profession) || !validMobile(mobile) || !iqamaExpiry) {
-      return Response.json({ error: "بيانات العامل غير مكتملة أو غير صحيحة، ورقم الإقامة يجب أن يتكون من 10 أرقام" }, { status: 400 });
+    if (!workerNumber || !/^\d{10}$/.test(iqamaNumber) || !/^SA\d{22}$/.test(iban) || !isSaudiBank(bankName) || fullName.length < 2 || !workforceNationalities.includes(nationality as (typeof workforceNationalities)[number]) || !workforceProfessions.some((item) => item.label === profession) || !validMobile(mobile) || !iqamaExpiry || !medicalInsuranceExpiry) {
+      return Response.json({ error: "بيانات العامل غير مكتملة؛ رقم الإقامة 10 أرقام والآيبان السعودي يبدأ SA ويتبعه 22 رقماً" }, { status: 400 });
     }
     if (!(photo instanceof File)) {
       return Response.json({ error: "صورة العامل مطلوبة بصيغة PNG أو JPG وبحجم لا يتجاوز 5 ميجابايت" }, { status: 400 });
     }
     if (!(iqamaDocument instanceof File) || iqamaDocument.size < 1) return Response.json({ error: "صورة الإقامة إلزامية لكل عامل" }, { status: 400 });
+    if (!(ibanCertificate instanceof File) || ibanCertificate.size < 1) return Response.json({ error: "شهادة الآيبان إلزامية لكل عامل" }, { status: 400 });
 
-    const pending: PendingAttachment[] = [{ documentType: "photo", requirementCode: null, title: "صورة العامل", file: photo }, { documentType: "certificate", requirementCode: "iqama-copy", title: "صورة الإقامة", file: iqamaDocument }];
+    const pending: PendingAttachment[] = [{ documentType: "photo", requirementCode: "worker-photo", title: "صورة العامل", expiryDate: null, file: photo }, { documentType: "certificate", requirementCode: "iqama-copy", title: "صورة الإقامة", expiryDate: iqamaExpiry, file: iqamaDocument }, { documentType: "certificate", requirementCode: "iban-certificate", title: "شهادة الآيبان", expiryDate: null, file: ibanCertificate }];
     for (const requirement of requirementsForProfession(profession)) {
       const file = form.get(`requirement:${requirement.code}`);
-      if (!(file instanceof File) || file.size < 1) return Response.json({ error: `المستند المطلوب غير مرفق: ${requirement.label}` }, { status: 400 });
-      pending.push({ documentType: "certificate", requirementCode: requirement.code, title: requirement.label, file });
+      if (file instanceof File && file.size > 0) pending.push({ documentType: "certificate", requirementCode: requirement.code, title: requirement.label, expiryDate: null, file });
     }
     for (const entry of form.getAll("extraCertificates")) {
-      if (entry instanceof File && entry.size > 0) pending.push({ documentType: "certificate", requirementCode: null, title: `شهادة إضافية: ${safeFileName(entry.name)}`, file: entry });
+      if (entry instanceof File && entry.size > 0) pending.push({ documentType: "certificate", requirementCode: null, title: `مرفق إضافي: ${safeFileName(entry.name)}`, expiryDate: null, file: entry });
     }
 
     const certificateFiles = pending.filter((item) => item.documentType === "certificate");
@@ -93,10 +98,13 @@ export async function POST(request: Request) {
       nationality,
       profession,
       mobile,
+      iban,
+      bankName,
       beneficiaryName: null,
       clientSite: "غير مسند",
       assignmentStartDate: null,
       iqamaExpiry,
+      medicalInsuranceExpiry,
       status: "available",
       updatedAt: now,
     }).returning();
@@ -106,6 +114,7 @@ export async function POST(request: Request) {
       workerId: worker.id,
       documentType: item.documentType,
       requirementCode: item.requirementCode,
+      expiryDate: item.expiryDate,
       title: item.title,
       fileName: item.fileName,
       storageKey: item.storageKey,

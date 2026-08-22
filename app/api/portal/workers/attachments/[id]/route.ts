@@ -17,6 +17,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const object = await getRuntimeEnv().BUCKET.get(attachment.storageKey);
   if (!object) return Response.json({ error: "ملف المرفق غير متاح" }, { status: 404 });
 
-  const inlineRequested = new URL(request.url).searchParams.get("inline") === "1" && attachment.contentType.startsWith("image/");
+  const inlineRequested = new URL(request.url).searchParams.get("inline") === "1" && (attachment.contentType.startsWith("image/") || attachment.contentType === "application/pdf");
   return new Response(object.body, { headers: attachmentHeaders(attachment.fileName, attachment.contentType, object.httpEtag, inlineRequested ? "inline" : "attachment") });
 }

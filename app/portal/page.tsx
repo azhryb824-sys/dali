@@ -117,6 +117,7 @@ async function ProtectedPortal() {
           workerId: workerAttachments.workerId,
           documentType: workerAttachments.documentType,
           requirementCode: workerAttachments.requirementCode,
+          expiryDate: workerAttachments.expiryDate,
           title: workerAttachments.title,
           fileName: workerAttachments.fileName,
           contentType: workerAttachments.contentType,
