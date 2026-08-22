@@ -341,7 +341,7 @@ export async function POST(request: Request) {
       sizeBytes: pdfBytes.byteLength,
       expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
       source: "generated",
-      metadataJson: JSON.stringify({ clientId: client?.id || null, sourceRequestId, salesRepresentativeId, quoteVersionId, quantityMode, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
+      metadataJson: JSON.stringify({ clientId: client?.id || null, sourceRequestId, salesRepresentativeId, quoteVersionId, quantityMode, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: "letterhead-v3-unified-quotation" }),
       createdBy: access.user.email,
     }).returning();
     savedDocumentId = saved.id;

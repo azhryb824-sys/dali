@@ -81,6 +81,20 @@ test("quotation approval is a visible owner and system-admin action", async () =
   assert.match(operations, /اعتماد عرض السعر متاح للمالك أو مشرف النظام فقط/);
 });
 
+test("legacy generated PDFs are rebuilt with the current template when accessed", async () => {
+  const [download, regeneration, generation] = await Promise.all([
+    source("app/api/portal/documents/[id]/route.ts"),
+    source("lib/issued-document-regeneration.ts"),
+    source("app/api/portal/documents/generate/route.ts"),
+  ]);
+  assert.match(download, /regenerateIssuedDocumentPdf/);
+  assert.match(download, /issued-pdf-regenerated-and-downloaded/);
+  assert.match(regeneration, /CURRENT_ISSUED_PDF_TEMPLATE/);
+  assert.match(regeneration, /document\.source !== "generated"/);
+  assert.match(regeneration, /BUCKET\.put\(document\.storageKey/);
+  assert.match(generation, /templateVersion: "letterhead-v3-unified-quotation"/);
+});
+
 test("all supported issued document types remain connected to the PDF generator", async () => {
   const [generator, route, identity] = await Promise.all([
     source("lib/pdf-generator.ts"), source("app/api/portal/documents/generate/route.ts"), source("lib/brand-identity-pdf.ts"),

@@ -4,7 +4,7 @@ import { companyDocuments, portalActivity, workforceContracts } from "@/db/schem
 import { attachmentHeaders } from "@/lib/company-documents";
 import { canAccessPortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
 import { getRuntimeEnv } from "@/lib/runtime-env";
-import { regenerateWorkforceContractPdf } from "@/lib/workforce-contract-pdf";
+import { regenerateIssuedDocumentPdf } from "@/lib/issued-document-regeneration";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
@@ -23,9 +23,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (!contract?.approvedBy || !["approved", "sent", "signed", "active", "suspended", "expired", "terminated", "superseded"].includes(contract.status)) {
       return Response.json({ error: "لا يمكن تنزيل العقد قبل اعتماده من المالك" }, { status: 409 });
     }
-    const regenerated = await regenerateWorkforceContractPdf(id);
+    const regenerated = await regenerateIssuedDocumentPdf(id);
     if (!regenerated) return Response.json({ error: "تعذّر إعادة إنشاء العقد" }, { status: 404 });
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "contract-regenerated-and-downloaded", entityType: "company-document", entityId: String(id) });
+    return new Response(new Uint8Array(regenerated.bytes).buffer, { headers: attachmentHeaders(document.fileName, "application/pdf", undefined, inline ? "inline" : "attachment") });
+  }
+  if (document.source === "generated" && document.contentType === "application/pdf") {
+    const regenerated = await regenerateIssuedDocumentPdf(id);
+    if (!regenerated) return Response.json({ error: "تعذّر تحديث ملف PDF وفق القالب الحالي" }, { status: 409 });
+    await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "issued-pdf-regenerated-and-downloaded", entityType: "company-document", entityId: String(id) });
     return new Response(new Uint8Array(regenerated.bytes).buffer, { headers: attachmentHeaders(document.fileName, "application/pdf", undefined, inline ? "inline" : "attachment") });
   }
   const object = await getRuntimeEnv().BUCKET.get(document.storageKey);
