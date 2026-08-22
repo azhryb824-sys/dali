@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { bankAccounts, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { bankAccounts, contractWorkerAssignments, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification, type NotificationModule, type NotificationSeverity } from "@/lib/portal-notifications";
 import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
@@ -135,13 +135,20 @@ export async function POST(request: Request) {
         const bank = await db.query.bankAccounts.findFirst({ where: eq(bankAccounts.id, bankAccountId) });
         if (!bank || bank.status !== "active") return Response.json({ error: "الحساب البنكي غير موجود أو غير نشط" }, { status: 400 });
       }
+      let selectedWorker: typeof workers.$inferSelect | null = null;
       if (workerId) {
-        const worker = await db.query.workers.findFirst({ where: eq(workers.id, workerId) });
-        if (!worker) return Response.json({ error: "العامل المحدد غير موجود" }, { status: 404 });
+        selectedWorker = await db.query.workers.findFirst({ where: eq(workers.id, workerId) }) || null;
+        if (!selectedWorker || selectedWorker.archivedAt) return Response.json({ error: "العامل المحدد غير موجود أو مؤرشف" }, { status: 404 });
       }
       if (contractId) {
         const contract = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.id, contractId) });
         if (!contract) return Response.json({ error: "العقد المحدد غير موجود" }, { status: 404 });
+      }
+      if (category === "worker_salary") {
+        if (!contractId) return Response.json({ error: "يجب ربط راتب العامل بالعقد المستفيد" }, { status: 400 });
+        const assignment = await db.query.contractWorkerAssignments.findFirst({ where: and(eq(contractWorkerAssignments.workerId, workerId!), eq(contractWorkerAssignments.contractId, contractId), eq(contractWorkerAssignments.status, "active")) });
+        if (!assignment) return Response.json({ error: "العامل غير مسند فعليًا إلى العقد المحدد" }, { status: 409 });
+        if (!selectedWorker?.monthlySalaryHalalas || Math.round(amount * 100) !== selectedWorker.monthlySalaryHalalas) return Response.json({ error: "قيمة الراتب يجب أن تطابق الراتب الشهري المعتمد في ملف العامل" }, { status: 409 });
       }
       const [saved] = await db.insert(financialRecords).values({
         referenceCode: code("FIN"),

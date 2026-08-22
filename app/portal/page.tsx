@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, isNull } from "drizzle-orm";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { requireChatGPTUser } from "@/app/chatgpt-auth";
@@ -109,7 +109,7 @@ async function ProtectedPortal() {
       ? db.select().from(legalRecords).orderBy(desc(legalRecords.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "workforce")
-      ? db.select().from(workers).orderBy(desc(workers.createdAt)).limit(500)
+      ? db.select().from(workers).where(isNull(workers.archivedAt)).orderBy(desc(workers.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "workforce")
       ? db.select({

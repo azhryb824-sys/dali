@@ -42,6 +42,15 @@ test("worker files enforce Saudi IBAN essentials and support expiring unlimited 
   for(const bank of ["البنك الأهلي السعودي","مصرف الراجحي","بنك الرياض","مصرف الإنماء","بنك البلاد","بنك الجزيرة"])assert.match(banks,new RegExp(bank));
 });
 
+test("worker sponsorship, work contracts, salary accounting and safe deletion stay integrated",async()=>{
+  const[workersRoute,financeRoute,portal,schema,migration]=await Promise.all([source("app/api/portal/workers/route.ts"),source("app/api/portal/records/route.ts"),source("app/portal/PortalDashboard.tsx"),source("db/schema.ts"),source("drizzle-pg/0022_worker_sponsorship_salary_and_archiving.sql")]);
+  assert.match(workersRoute,/isCompanySponsored/);assert.match(workersRoute,/workContract/);assert.match(workersRoute,/عقد العمل إلزامي/);
+  assert.match(workersRoute,/export async function DELETE/);assert.match(workersRoute,/activeAssignment/);assert.match(workersRoute,/preservedFinancialRecords/);assert.doesNotMatch(workersRoute,/db\.delete\(workerAttachments\)/);
+  assert.match(financeRoute,/العامل غير مسند فعليًا إلى العقد/);assert.match(financeRoute,/monthlySalaryHalalas/);assert.match(financeRoute,/يجب ربط راتب العامل بالعقد المستفيد/);
+  assert.match(portal,/هل العامل على كفالة الشركة/);assert.match(portal,/عقد العمل — إلزامي/);assert.match(portal,/حذف العامل من النظام/);
+  assert.match(schema,/archivedAt/);assert.match(migration,/financial_records_worker_salary_period_unique/);
+});
+
 test("owner referral, accounting invoice, payment recording and legal escalation are separated",async()=>{
   const[route,ui]=await Promise.all([source("app/api/portal/contract-payments/route.ts"),source("app/portal/ContractBillingWorkspace.tsx")]);
   assert.match(route,/إحالة الدفعة للمحاسبة من صلاحيات المالك فقط/);

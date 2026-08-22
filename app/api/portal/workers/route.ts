@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { portalActivity, workerAttachments, workers } from "@/db/schema";
+import { contractWorkerAssignments, financialRecords, portalActivity, workerAttachments, workers } from "@/db/schema";
 import { cleanDate, cleanText, objectKey, safeFileName } from "@/lib/company-documents";
 import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
@@ -45,13 +45,16 @@ export async function POST(request: Request) {
     const mobile = cleanText(form.get("mobile"), 20);
     const iban = cleanText(form.get("iban"), 40).replace(/\s+/g, "").toUpperCase();
     const bankName = cleanText(form.get("bankName"), 120);
+    const monthlySalary = Number(form.get("monthlySalary") || 0);
+    const isCompanySponsored = form.get("isCompanySponsored") === "true";
     const iqamaExpiry = cleanDate(form.get("iqamaExpiry"));
     const medicalInsuranceExpiry = cleanDate(form.get("medicalInsuranceExpiry"));
     const photo = form.get("photo");
     const iqamaDocument = form.get("iqamaDocument");
     const ibanCertificate = form.get("ibanCertificate");
+    const workContract = form.get("workContract");
 
-    if (!workerNumber || !/^\d{10}$/.test(iqamaNumber) || !/^SA\d{22}$/.test(iban) || !isSaudiBank(bankName) || fullName.length < 2 || !workforceNationalities.includes(nationality as (typeof workforceNationalities)[number]) || !workforceProfessions.some((item) => item.label === profession) || !validMobile(mobile) || !iqamaExpiry || !medicalInsuranceExpiry) {
+    if (!workerNumber || !/^\d{10}$/.test(iqamaNumber) || !/^SA\d{22}$/.test(iban) || !isSaudiBank(bankName) || !Number.isFinite(monthlySalary) || monthlySalary <= 0 || monthlySalary > 1000000 || fullName.length < 2 || !workforceNationalities.includes(nationality as (typeof workforceNationalities)[number]) || !workforceProfessions.some((item) => item.label === profession) || !validMobile(mobile) || !iqamaExpiry || !medicalInsuranceExpiry) {
       return Response.json({ error: "بيانات العامل غير مكتملة؛ رقم الإقامة 10 أرقام والآيبان السعودي يبدأ SA ويتبعه 22 رقماً" }, { status: 400 });
     }
     if (!(photo instanceof File)) {
@@ -59,8 +62,10 @@ export async function POST(request: Request) {
     }
     if (!(iqamaDocument instanceof File) || iqamaDocument.size < 1) return Response.json({ error: "صورة الإقامة إلزامية لكل عامل" }, { status: 400 });
     if (!(ibanCertificate instanceof File) || ibanCertificate.size < 1) return Response.json({ error: "شهادة الآيبان إلزامية لكل عامل" }, { status: 400 });
+    if (isCompanySponsored && (!(workContract instanceof File) || workContract.size < 1)) return Response.json({ error: "عقد العمل إلزامي للعامل الذي على كفالة الشركة" }, { status: 400 });
 
     const pending: PendingAttachment[] = [{ documentType: "photo", requirementCode: "worker-photo", title: "صورة العامل", expiryDate: null, file: photo }, { documentType: "certificate", requirementCode: "iqama-copy", title: "صورة الإقامة", expiryDate: iqamaExpiry, file: iqamaDocument }, { documentType: "certificate", requirementCode: "iban-certificate", title: "شهادة الآيبان", expiryDate: null, file: ibanCertificate }];
+    if (isCompanySponsored && workContract instanceof File) pending.push({ documentType: "certificate", requirementCode: "work-contract", title: "عقد العمل", expiryDate: null, file: workContract });
     for (const requirement of requirementsForProfession(profession)) {
       const file = form.get(`requirement:${requirement.code}`);
       if (file instanceof File && file.size > 0) pending.push({ documentType: "certificate", requirementCode: requirement.code, title: requirement.label, expiryDate: null, file });
@@ -100,6 +105,8 @@ export async function POST(request: Request) {
       mobile,
       iban,
       bankName,
+      monthlySalaryHalalas: Math.round(monthlySalary * 100),
+      isCompanySponsored,
       beneficiaryName: null,
       clientSite: "غير مسند",
       assignmentStartDate: null,
@@ -170,5 +177,31 @@ export async function PATCH(request: Request) {
     return Response.json({ worker: updated });
   } catch {
     return Response.json({ error: "تعذّر تحديث إسناد العامل" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager"]);
+  if (!access || !(access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin"))) return Response.json({ error: "حذف العامل متاح للمالك ومدير النظام فقط" }, { status: 403 });
+  try {
+    const payload = await request.json() as Record<string, unknown>;
+    const id = Number(payload.id);
+    const reason = cleanText(payload.reason, 1000);
+    if (!Number.isInteger(id) || id < 1 || reason.length < 10) return Response.json({ error: "حدد العامل واكتب سبب حذف لا يقل عن 10 أحرف" }, { status: 400 });
+    const db = getDb();
+    const worker = await db.query.workers.findFirst({ where: eq(workers.id, id) });
+    if (!worker) return Response.json({ error: "العامل غير موجود" }, { status: 404 });
+    if (worker.archivedAt) return Response.json({ error: "ملف العامل مؤرشف مسبقًا" }, { status: 409 });
+    const activeAssignment = await db.query.contractWorkerAssignments.findFirst({ where: and(eq(contractWorkerAssignments.workerId, id), eq(contractWorkerAssignments.status, "active")) });
+    if (activeAssignment) return Response.json({ error: "لا يمكن حذف عامل مرتبط بعقد نشط؛ أنهِ إسناده من العقد أولاً" }, { status: 409 });
+    const linkedFinancial = await db.select({ id: financialRecords.id }).from(financialRecords).where(eq(financialRecords.workerId, id));
+    const now = new Date().toISOString();
+    const [archived] = await db.update(workers).set({ status: "suspended", archivedAt: now, archivedBy: access.user.email, archiveReason: reason, beneficiaryName: null, clientSite: "مؤرشف", assignmentStartDate: null, updatedAt: now }).where(eq(workers.id, id)).returning();
+    await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-profile-archived", entityType: "worker", entityId: String(id) });
+    await emitPortalNotification({ eventType: "worker-profile-archived", title: "أُرشف ملف عامل", message: `${worker.fullName} — حُفظت ${linkedFinancial.length} حركة مالية مرتبطة دون حذف.`, severity: "warning", module: "workforce", entityType: "worker", entityId: id, actionView: "workforce", targetRole: "admin" }).catch(() => undefined);
+    return Response.json({ worker: archived, preservedFinancialRecords: linkedFinancial.length });
+  } catch {
+    return Response.json({ error: "تعذّر أرشفة ملف العامل" }, { status: 500 });
   }
 }
