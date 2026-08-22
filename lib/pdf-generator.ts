@@ -1,9 +1,7 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
-import tajawalRegularDataUrl from "@fontsource/tajawal/files/tajawal-arabic-400-normal.woff?inline";
-import tajawalBoldDataUrl from "@fontsource/tajawal/files/tajawal-arabic-700-normal.woff?inline";
-import tajawalLatinRegularDataUrl from "@fontsource/tajawal/files/tajawal-latin-400-normal.woff?inline";
-import tajawalLatinBoldDataUrl from "@fontsource/tajawal/files/tajawal-latin-700-normal.woff?inline";
+import cairoArabicBoldDataUrl from "@fontsource/cairo/files/cairo-arabic-700-normal.woff?inline";
+import cairoLatinBoldDataUrl from "@fontsource/cairo/files/cairo-latin-700-normal.woff?inline";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { halalasToArabicWords } from "@/lib/arabic-money";
 
@@ -110,10 +108,10 @@ async function embedImage(pdf: PDFDocument, bytes: Uint8Array, contentType: stri
 async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<PdfResources> {
   pdf.registerFontkit(fontkit);
   const [regular, bold, latinRegular, latinBold] = await Promise.all([
-    pdf.embedFont(dataUrlBytes(tajawalRegularDataUrl), { subset: true }),
-    pdf.embedFont(dataUrlBytes(tajawalBoldDataUrl), { subset: true }),
-    pdf.embedFont(dataUrlBytes(tajawalLatinRegularDataUrl), { subset: true }),
-    pdf.embedFont(dataUrlBytes(tajawalLatinBoldDataUrl), { subset: true }),
+    pdf.embedFont(dataUrlBytes(cairoArabicBoldDataUrl), { subset: true }),
+    pdf.embedFont(dataUrlBytes(cairoArabicBoldDataUrl), { subset: true }),
+    pdf.embedFont(dataUrlBytes(cairoLatinBoldDataUrl), { subset: true }),
+    pdf.embedFont(dataUrlBytes(cairoLatinBoldDataUrl), { subset: true }),
   ]);
 
   const runtime = getRuntimeEnv();
@@ -151,16 +149,36 @@ function arabicDigits(value: string | number) {
   return String(value).replace(/\d/g, (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
 }
 
+function printableText(font: PDFFont, value: string) {
+  const supported = new Set(font.getCharacterSet());
+  const normalized = String(value || "-")
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/\u00a0/g, " ");
+  return Array.from(normalized).map((character) => {
+    const code = character.codePointAt(0)!;
+    if (supported.has(code)) return character;
+    if (/\d/.test(character)) {
+      const alternative = "٠١٢٣٤٥٦٧٨٩"[Number(character)];
+      if (supported.has(alternative.codePointAt(0)!)) return alternative;
+    }
+    const alternatives: Record<string, string> = { ".": "٫", ",": "،", ";": "؛", "?": "؟", "%": "٪", ":": " ", "-": " " };
+    const alternative = alternatives[character];
+    return alternative && supported.has(alternative.codePointAt(0)!) ? alternative : " ";
+  }).join("").replace(/\s{2,}/g, " ").trim() || "-";
+}
+
 function textWidth(font: PDFFont, value: string, size: number) {
-  return font.widthOfTextAtSize(value || " ", size);
+  return font.widthOfTextAtSize(printableText(font, value), size);
 }
 
 function drawRight(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, right = PAGE.width - PAGE.margin) {
-  page.drawText(value || "—", { x: right - textWidth(font, value || "—", size), y, font, size, color });
+  const text = printableText(font, value);
+  page.drawText(text, { x: right - textWidth(font, text, size), y, font, size, color });
 }
 
 function drawLeft(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, left = PAGE.margin) {
-  page.drawText(value || "—", { x: left, y, font, size, color });
+  page.drawText(printableText(font, value), { x: left, y, font, size, color });
 }
 
 function wrapWords(font: PDFFont, value: string, size: number, maxWidth: number) {
@@ -210,16 +228,14 @@ function drawHeader(page: PDFPage, resources: PdfResources, input: IssuedDocumen
     const ratio = resources.logo.width / resources.logo.height;
     const height = 42;
     page.drawImage(resources.logo, { x: PAGE.width - PAGE.margin - height * ratio, y: top - height, width: height * ratio, height });
-  } else {
-    drawRight(page, "شركة دالي للتشغيل والصيانة", top - 26, resources.bold, 16, COLORS.navy);
+    drawLeft(page, input.referenceCode, top - 10, resources.latinBold, 9, COLORS.navy);
+    drawLeft(page, `صفحة ${arabicDigits(pageNumber)}`, top - 28, resources.regular, 8, COLORS.muted);
+    page.drawLine({ start: { x: PAGE.margin, y: top - 58 }, end: { x: PAGE.width - PAGE.margin, y: top - 58 }, thickness: 1, color: COLORS.line });
   }
-  drawLeft(page, input.referenceCode, top - 10, resources.latinBold, 9, COLORS.navy);
-  drawLeft(page, `صفحة ${arabicDigits(pageNumber)}`, top - 28, resources.regular, 8, COLORS.muted);
-  page.drawLine({ start: { x: PAGE.margin, y: top - 58 }, end: { x: PAGE.width - PAGE.margin, y: top - 58 }, thickness: 1, color: COLORS.line });
 }
 
 function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: string) {
-  const y = 53;
+  const y = 92;
   page.drawLine({ start: { x: PAGE.margin, y: PAGE.footerTop }, end: { x: PAGE.width - PAGE.margin, y: PAGE.footerTop }, thickness: 1, color: COLORS.line });
   drawRight(page, "الختم والتوقيع المعتمدان", PAGE.footerTop - 22, resources.bold, 10, COLORS.navy);
 
@@ -227,18 +243,20 @@ function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: 
   const signatureScale = Math.min(138 / resources.signature.width, 68 / resources.signature.height);
   page.drawImage(resources.stamp, { x: PAGE.width - PAGE.margin - 100, y, width: resources.stamp.width * stampScale, height: resources.stamp.height * stampScale });
   page.drawImage(resources.signature, { x: PAGE.margin + 40, y: y + 4, width: resources.signature.width * signatureScale, height: resources.signature.height * signatureScale });
-  drawRight(page, "ختم الشركة", 39, resources.regular, 8, COLORS.muted, PAGE.width - PAGE.margin - 12);
-  drawLeft(page, "التوقيع المفوض", 39, resources.regular, 8, COLORS.muted, PAGE.margin + 45);
-  drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
-  drawRight(page, "أُصدر إلكترونياً من نظام شركة دالي للتشغيل والصيانة", 21, resources.regular, 7, COLORS.muted);
+  drawRight(page, "ختم الشركة", 78, resources.regular, 8, COLORS.muted, PAGE.width - PAGE.margin - 12);
+  drawLeft(page, "التوقيع المفوض", 78, resources.regular, 8, COLORS.muted, PAGE.margin + 45);
+  if (!resources.letterhead) {
+    drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
+    drawRight(page, "أُصدر إلكترونياً من نظام شركة دالي للتشغيل والصيانة", 21, resources.regular, 7, COLORS.muted);
+  }
 }
 
 function drawContractSignatures(page: PDFPage, resources: PdfResources, referenceCode: string) {
-  const y = 48;
+  const y = 94;
   page.drawLine({ start: { x: PAGE.margin, y: PAGE.footerTop }, end: { x: PAGE.width - PAGE.margin, y: PAGE.footerTop }, thickness: 1, color: COLORS.line });
   drawRight(page, "توقيعات طرفي العقد", PAGE.footerTop - 22, resources.bold, 10, COLORS.navy);
-  drawRight(page, "الطرف الأول — شركة دالي للتشغيل والصيانة", PAGE.footerTop - 42, resources.bold, 8, COLORS.text);
-  drawLeft(page, "الطرف الثاني — التوقيع والاسم", PAGE.footerTop - 42, resources.bold, 8, COLORS.text);
+  drawRight(page, "الطرف الأول - شركة دالي للتشغيل والصيانة", PAGE.footerTop - 42, resources.bold, 8, COLORS.text);
+  drawLeft(page, "الطرف الثاني - التوقيع والاسم", PAGE.footerTop - 42, resources.bold, 8, COLORS.text);
   const stampScale = Math.min(82 / resources.stamp.width, 64 / resources.stamp.height);
   const signatureScale = Math.min(105 / resources.signature.width, 55 / resources.signature.height);
   page.drawImage(resources.stamp, { x: PAGE.width - PAGE.margin - 85, y, width: resources.stamp.width * stampScale, height: resources.stamp.height * stampScale });
@@ -246,7 +264,7 @@ function drawContractSignatures(page: PDFPage, resources: PdfResources, referenc
   page.drawLine({ start: { x: PAGE.margin, y: y + 18 }, end: { x: PAGE.margin + 180, y: y + 18 }, thickness: .7, color: COLORS.muted });
   drawLeft(page, "الاسم: ____________________", y + 31, resources.regular, 8, COLORS.muted);
   drawLeft(page, "الصفة: ____________________", y + 5, resources.regular, 8, COLORS.muted);
-  drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
+  if (!resources.letterhead) drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
 }
 
 function createComposer(pdf: PDFDocument, resources: PdfResources, input: IssuedDocumentInput) {
@@ -258,7 +276,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     page = pdf.addPage([PAGE.width, PAGE.height]);
     pageNumber += 1;
     drawHeader(page, resources, input, pageNumber);
-    y = PAGE.height - 128;
+    y = PAGE.height - (resources.letterhead ? 148 : 128);
   }
 
   function ensure(height: number) {
@@ -309,11 +327,13 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     y -= 10;
   }
 
-  function pair(rightLabel: string, rightValue: string, leftLabel: string, leftValue: string) {
+  function pair(rightLabel: string, rightValue: string, leftLabel: string, leftValue: string, rightLatin = false, leftLatin = false) {
     const gap = 10;
     const width = (PAGE.width - PAGE.margin * 2 - gap) / 2;
-    const rightLines = wrapWords(resources.regular, rightValue || "غير محدد", 9, width - 22);
-    const leftLines = wrapWords(resources.regular, leftValue || "غير محدد", 9, width - 22);
+    const rightFont = rightLatin ? resources.latinBold : resources.regular;
+    const leftFont = leftLatin ? resources.latinBold : resources.regular;
+    const rightLines = wrapWords(rightFont, rightValue || "غير محدد", 9, width - 22);
+    const leftLines = wrapWords(leftFont, leftValue || "غير محدد", 9, width - 22);
     const height = 28 + Math.max(1, rightLines.length, leftLines.length) * 14;
     ensure(height + 8);
     const rightX = PAGE.margin + width + gap;
@@ -321,8 +341,8 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     page.drawRectangle({ x: PAGE.margin, y: y - height + 9, width, height, color: COLORS.pale, borderColor: COLORS.line, borderWidth: 0.6 });
     drawRight(page, rightLabel, y - 4, resources.bold, 8, COLORS.red, rightX + width - 11);
     drawRight(page, leftLabel, y - 4, resources.bold, 8, COLORS.red, PAGE.margin + width - 11);
-    rightLines.forEach((line, index) => drawRight(page, line || " ", y - 22 - index * 14, resources.regular, 9, COLORS.text, rightX + width - 11));
-    leftLines.forEach((line, index) => drawRight(page, line || " ", y - 22 - index * 14, resources.regular, 9, COLORS.text, PAGE.margin + width - 11));
+    rightLines.forEach((line, index) => drawRight(page, line || " ", y - 22 - index * 14, rightFont, 9, COLORS.text, rightX + width - 11));
+    leftLines.forEach((line, index) => drawRight(page, line || " ", y - 22 - index * 14, leftFont, 9, COLORS.text, PAGE.margin + width - 11));
     y -= height + 8;
   }
 
@@ -383,11 +403,9 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
   const resources = await loadResources(pdf, assets);
   const composer = createComposer(pdf, resources, input);
   composer.heading(issuedDocumentLabels[input.documentType]);
-  composer.latinField("الرقم المرجعي", input.referenceCode);
-  composer.field("تاريخ الإصدار", dateLabel(input.issueDate));
-  composer.field("العميل / الجهة", input.clientName);
-  if (input.clientCr) composer.field("السجل التجاري للعميل", arabicDigits(input.clientCr));
-  if (input.clientVat) composer.field("الرقم الضريبي للعميل", arabicDigits(input.clientVat));
+  composer.pair("الرقم المرجعي", input.referenceCode, "تاريخ الإصدار", dateLabel(input.issueDate), true);
+  composer.pair("العميل / الجهة", input.clientName, input.clientCr ? "السجل التجاري للعميل" : "نوع المستند", input.clientCr ? arabicDigits(input.clientCr) : issuedDocumentLabels[input.documentType]);
+  if (input.clientVat) composer.pair("الرقم الضريبي للعميل", arabicDigits(input.clientVat), "عنوان المستند", input.title);
   if (input.documentType === "workforce_contract") {
     const professions = input.professions?.length
       ? input.professions

@@ -1,7 +1,6 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
-import tajawalRegularDataUrl from "@fontsource/tajawal/files/tajawal-arabic-400-normal.woff?inline";
-import tajawalBoldDataUrl from "@fontsource/tajawal/files/tajawal-arabic-700-normal.woff?inline";
+import cairoBoldDataUrl from "@fontsource/cairo/files/cairo-arabic-700-normal.woff?inline";
 import { brandIdentityAssets, type BrandIdentityAssetId } from "@/lib/brand-identity";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 
@@ -76,8 +75,8 @@ export async function generateBrandIdentityPdf(id: BrandIdentityAssetId) {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const [regular, bold] = await Promise.all([
-    pdf.embedFont(dataBytes(tajawalRegularDataUrl), { subset: true }),
-    pdf.embedFont(dataBytes(tajawalBoldDataUrl), { subset: true }),
+    pdf.embedFont(dataBytes(cairoBoldDataUrl), { subset: true }),
+    pdf.embedFont(dataBytes(cairoBoldDataUrl), { subset: true }),
   ]);
   const logoResponse = await getRuntimeEnv().ASSETS.fetch(new Request("https://assets.local/dally-logo.jpg"));
   const logo = logoResponse.ok ? await pdf.embedJpg(new Uint8Array(await logoResponse.arrayBuffer())) : null;
@@ -112,4 +111,3 @@ export async function generateBrandIdentityPdf(id: BrandIdentityAssetId) {
   pdf.setCreationDate(new Date());
   return pdf.save();
 }
-
