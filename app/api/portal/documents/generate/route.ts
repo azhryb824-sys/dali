@@ -22,7 +22,6 @@ import { generateIssuedPdf, issuedDocumentLabels, type IssuedDocumentType } from
 import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
-import { workforceProfessions } from "@/lib/workforce-requirements";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
 
 const prefixes: Record<IssuedDocumentType, string> = {
@@ -146,13 +145,12 @@ export async function POST(request: Request) {
       ? parseProfessions(payload.professions, legacyProfession, legacyWorkerCount)
       : [];
     if (documentType === "workforce_contract") {
-      const validLabels = new Set(workforceProfessions.map((item) => item.label));
       const uniqueLabels = new Set(professionInputs.map((item) => item.profession));
       if (!workSite || !startDate || !endDate || endDate < startDate || !professionInputs.length || uniqueLabels.size !== professionInputs.length) {
         return Response.json({ error: "أكمل موقع العمل ومدة العقد وأضف كل مهنة مرة واحدة" }, { status: 400 });
       }
-      if (professionInputs.some((item) => !validLabels.has(item.profession) || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
-        return Response.json({ error: "بيانات المهن أو الأعداد غير صحيحة، أو تم اختيار عمالة أكثر من العدد المطلوب" }, { status: 400 });
+      if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
+        return Response.json({ error: "اختر المهنة أو اكتب اسم المهنة الفعلي عند اختيار «أخرى»، وتحقق من الأعداد والعمالة المختارة" }, { status: 400 });
       }
       if (quantityMode === "fixed" && (!paymentSchedule.length || paymentSchedule.some((item) => item.title.length < 2 || !item.dueDate || item.percentageBps <= 0 || item.amountHalalas <= 0) || paymentSchedule.reduce((sum, item) => sum + item.percentageBps, 0) !== 10000)) {
         return Response.json({ error: "يجب إضافة جدول دفعات صحيح مجموع نسبه 100% قبل إنشاء العقد" }, { status: 400 });

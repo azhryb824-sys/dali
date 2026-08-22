@@ -14,6 +14,13 @@ test("contracts require a balanced payment schedule and preserve mandatory clien
   assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/contract_payment_schedules_invoice_unique/);
 });
 
+test("contract professions include hospitality and trades with enforced custom profession",async()=>{
+  const[requirements,route,ui]=await Promise.all([source("lib/workforce-requirements.ts"),source("app/api/portal/documents/generate/route.ts"),source("app/portal/PortalDashboard.tsx")]);
+  for(const profession of ["سباك","كهربائي","ويتر","لحام","عامل تنظيف فندقي","أخرى"])assert.match(requirements,new RegExp(profession));
+  assert.match(route,/item\.profession === "أخرى"/);assert.match(route,/اسم المهنة الفعلي/);
+  assert.match(ui,/commercialRegistrationFile/);assert.match(ui,/vatCertificateFile/);assert.match(ui,/nationalAddressFile/);
+});
+
 test("site-origin contracts, representatives, bulk workers and activity-aware quotes stay connected",async()=>{
   const[contractRoute,schema,migration,repsApi,portal,workers,operations,dates]=await Promise.all([source("app/api/portal/documents/generate/route.ts"),source("db/schema.ts"),source("drizzle-pg/0016_sales_representatives_and_origin_links.sql"),source("app/api/portal/sales-representatives/route.ts"),source("app/portal/PortalDashboard.tsx"),source("app/api/portal/workers/route.ts"),source("app/portal/OperationsWorkspace.tsx"),source("app/components/TodayDateDefaults.tsx")]);
   assert.match(contractRoute,/sourceRequestId/);assert.match(contractRoute,/salesRepresentativeId/);assert.match(contractRoute,/workforceRequests/);
