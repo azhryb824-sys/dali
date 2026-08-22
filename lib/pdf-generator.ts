@@ -83,7 +83,7 @@ type PdfResources = {
   letterhead: PDFImage | null;
 };
 
-const PAGE = { width: 595.28, height: 841.89, margin: 48, footerTop: 184 };
+const PAGE = { width: 595.28, height: 841.89, margin: 48, footerTop: 220 };
 const COLORS = {
   navy: rgb(0, 0.114, 0.176),
   red: rgb(0.886, 0.11, 0.145),
@@ -258,18 +258,29 @@ function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: 
 }
 
 function drawContractSignatures(page: PDFPage, resources: PdfResources, referenceCode: string) {
-  const y = 94;
+  const gap = 12;
+  const cardWidth = (PAGE.width - PAGE.margin * 2 - gap) / 2;
+  const cardBottom = 86;
+  const cardHeight = 108;
+  const rightCardX = PAGE.margin + cardWidth + gap;
+  const leftCardX = PAGE.margin;
   page.drawLine({ start: { x: PAGE.margin, y: PAGE.footerTop }, end: { x: PAGE.width - PAGE.margin, y: PAGE.footerTop }, thickness: 1, color: COLORS.line });
-  drawRight(page, "توقيعات طرفي العقد", PAGE.footerTop - 22, resources.bold, 10, COLORS.navy);
-  drawRight(page, "الطرف الأول - شركة دالي للتشغيل والصيانة", PAGE.footerTop - 42, resources.bold, 8, COLORS.text);
-  drawLeft(page, "الطرف الثاني - التوقيع والاسم", PAGE.footerTop - 42, resources.bold, 8, COLORS.text);
-  const stampScale = Math.min(82 / resources.stamp.width, 64 / resources.stamp.height);
-  const signatureScale = Math.min(105 / resources.signature.width, 55 / resources.signature.height);
-  page.drawImage(resources.stamp, { x: PAGE.width - PAGE.margin - 85, y, width: resources.stamp.width * stampScale, height: resources.stamp.height * stampScale });
-  page.drawImage(resources.signature, { x: PAGE.width - PAGE.margin - 205, y: y + 5, width: resources.signature.width * signatureScale, height: resources.signature.height * signatureScale });
-  page.drawLine({ start: { x: PAGE.margin, y: y + 18 }, end: { x: PAGE.margin + 180, y: y + 18 }, thickness: .7, color: COLORS.muted });
-  drawLeft(page, "الاسم: ____________________", y + 31, resources.regular, 8, COLORS.muted);
-  drawLeft(page, "الصفة: ____________________", y + 5, resources.regular, 8, COLORS.muted);
+  drawRight(page, "توقيعات طرفي العقد", PAGE.footerTop - 20, resources.bold, 11, COLORS.navy);
+  page.drawRectangle({ x: rightCardX, y: cardBottom, width: cardWidth, height: cardHeight, color: COLORS.pale, borderColor: COLORS.line, borderWidth: 0.8 });
+  page.drawRectangle({ x: leftCardX, y: cardBottom, width: cardWidth, height: cardHeight, color: COLORS.pale, borderColor: COLORS.line, borderWidth: 0.8 });
+  drawRight(page, "الطرف الأول - شركة دالي للتشغيل والصيانة", cardBottom + cardHeight - 22, resources.bold, 8, COLORS.navy, rightCardX + cardWidth - 12);
+  drawRight(page, "الختم والتوقيع المعتمدان", cardBottom + cardHeight - 39, resources.regular, 7, COLORS.muted, rightCardX + cardWidth - 12);
+  const stampScale = Math.min(74 / resources.stamp.width, 52 / resources.stamp.height);
+  const signatureScale = Math.min(112 / resources.signature.width, 48 / resources.signature.height);
+  page.drawImage(resources.stamp, { x: rightCardX + cardWidth - 86, y: cardBottom + 15, width: resources.stamp.width * stampScale, height: resources.stamp.height * stampScale });
+  page.drawImage(resources.signature, { x: rightCardX + 16, y: cardBottom + 18, width: resources.signature.width * signatureScale, height: resources.signature.height * signatureScale });
+  drawRight(page, "الطرف الثاني", cardBottom + cardHeight - 22, resources.bold, 8, COLORS.navy, leftCardX + cardWidth - 12);
+  drawRight(page, "الاسم:", cardBottom + 68, resources.regular, 8, COLORS.muted, leftCardX + cardWidth - 12);
+  page.drawLine({ start: { x: leftCardX + 12, y: cardBottom + 62 }, end: { x: leftCardX + cardWidth - 52, y: cardBottom + 62 }, thickness: 0.7, color: COLORS.muted });
+  drawRight(page, "الصفة:", cardBottom + 42, resources.regular, 8, COLORS.muted, leftCardX + cardWidth - 12);
+  page.drawLine({ start: { x: leftCardX + 12, y: cardBottom + 36 }, end: { x: leftCardX + cardWidth - 52, y: cardBottom + 36 }, thickness: 0.7, color: COLORS.muted });
+  drawRight(page, "التوقيع:", cardBottom + 17, resources.regular, 8, COLORS.muted, leftCardX + cardWidth - 12);
+  page.drawLine({ start: { x: leftCardX + 12, y: cardBottom + 11 }, end: { x: leftCardX + cardWidth - 59, y: cardBottom + 11 }, thickness: 0.7, color: COLORS.muted });
   if (!resources.letterhead) drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
 }
 
