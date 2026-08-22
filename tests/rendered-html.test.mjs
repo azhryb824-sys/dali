@@ -48,6 +48,8 @@ test("sensitive portal roles require replay-safe TOTP or one-time recovery verif
   assert.match(mfa, /AES-GCM/);
   assert.match(mfa, /\[-1, 0, 1\]/);
   assert.match(mfa, /system_owner.*system_admin.*executive.*finance_director.*project_accountant/s);
+  assert.match(mfa, /Path=\/; HttpOnly; SameSite=Strict/);
+  assert.doesNotMatch(mfa, /Path=\/login\/mfa; HttpOnly/);
   assert.match(login, /userRequiresMfa/);
   assert.match(login, /createMfaChallenge/);
   assert.match(verify, /MFA_CHALLENGE_REPLAYED/);
