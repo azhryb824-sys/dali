@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { portalAuthCredentials, portalUsers } from "@/db/schema";
+import { portalAccessScopes, portalAuthCredentials, portalUsers } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { hashPassword } from "@/lib/credential-auth";
 import { canAdministerPortalUsers, requirePortalApiRole } from "@/lib/portal-access";
@@ -29,8 +29,10 @@ export async function POST(request: Request) {
     const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
     const displayName = typeof payload.displayName === "string" ? payload.displayName.trim().slice(0, 160) : "";
     const password = typeof payload.password === "string" ? payload.password : "";
-    const role = typeof payload.role === "string" ? payload.role : "employee";
-    const department = typeof payload.department === "string" ? payload.department : "general";
+    const functionalRole = payload.functionalRole === "system_owner" ? "system_owner" : null;
+    if (functionalRole && !(access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin"))) return jsonNoStore({ error: "إنشاء مالك النظام متاح لمشرف النظام أو مالك قائم فقط" }, { status: 403 });
+    const role = functionalRole ? "admin" : typeof payload.role === "string" ? payload.role : "employee";
+    const department = functionalRole ? "general" : typeof payload.department === "string" ? payload.department : "general";
     if (!/^\d{10}$/.test(identifier) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || displayName.length < 3 || !allowedRoles.has(role) || !allowedDepartments.has(department) || password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
       return jsonNoStore({ error: "أكمل البيانات: هوية من 10 أرقام، بريد صحيح، وكلمة مرور من 12 خانة تشمل حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا" }, { status: 400 });
     }
@@ -45,9 +47,10 @@ export async function POST(request: Request) {
     const user = await db.transaction(async (tx) => {
       await tx.insert(portalAuthCredentials).values({ identifier, email, displayName, passwordHash, createdAt: now, updatedAt: now });
       const [created] = await tx.insert(portalUsers).values({ email, displayName, role, department, status: "active", requestedDepartment: department, requestedJobTitle: "أُضيف بواسطة الإدارة", requestReason: "إنشاء مباشر بواسطة المالك أو مشرف النظام", requestSubmittedAt: now, termsAcceptedAt: now, approvedBy: access.user.email, approvedAt: now, createdAt: now, updatedAt: now }).returning();
+      if (functionalRole) await tx.insert(portalAccessScopes).values({ userEmail: email, functionalRole, active: true, canApproveOwn: false, createdBy: access.user.email, createdAt: now, updatedAt: now });
       return created;
     });
-    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********" }, reason: "إنشاء حساب مباشر من إدارة المستخدمين", source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
+    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRole }, reason: functionalRole ? "إنشاء مالك نظام بصلاحيات كاملة" : "إنشاء حساب مباشر من إدارة المستخدمين", source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
     await emitPortalNotification({ eventType: "portal-user-created", title: "أُضيف مستخدم جديد", message: `${displayName} — ${role} — ${department}.`, severity: "warning", module: "users", entityType: "portal-user", entityId: email, actionView: "users", targetRole: "admin" }).catch(() => undefined);
     return jsonNoStore({ user }, { status: 201 });
   } catch (error) {

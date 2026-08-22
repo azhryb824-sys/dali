@@ -712,6 +712,8 @@ export const workforceContracts = pgTable(
     clientId: integer("client_id"),
     opportunityId: integer("opportunity_id"),
     quoteVersionId: integer("quote_version_id"),
+    sourceRequestId: integer("source_request_id").references(() => workforceRequests.id, { onDelete: "set null" }),
+    salesRepresentativeId: integer("sales_representative_id"),
     createdBy: text("created_by").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
@@ -721,6 +723,8 @@ export const workforceContracts = pgTable(
     index("workforce_contracts_status_idx").on(table.status),
     index("workforce_contracts_end_date_idx").on(table.endDate),
     index("workforce_contracts_parent_idx").on(table.parentContractId),
+    index("workforce_contracts_source_request_idx").on(table.sourceRequestId),
+    index("workforce_contracts_sales_representative_idx").on(table.salesRepresentativeId),
     check("workforce_contracts_status_check", sql`${table.status} in ('draft','internal_review','legal_review','approved','sent','signed','active','suspended','expired','terminated','cancelled','superseded')`),
   ],
 );
@@ -795,6 +799,8 @@ export const clients = pgTable(
     address: text("address"),
     status: text("status").notNull().default("prospect"),
     ownerEmail: text("owner_email"),
+    sourceRequestId: integer("source_request_id").references(() => workforceRequests.id, { onDelete: "set null" }),
+    salesRepresentativeId: integer("sales_representative_id"),
     createdBy: text("created_by").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
@@ -804,7 +810,33 @@ export const clients = pgTable(
     index("clients_legal_name_idx").on(table.legalName),
     index("clients_status_idx").on(table.status),
     index("clients_owner_idx").on(table.ownerEmail),
+    index("clients_source_request_idx").on(table.sourceRequestId),
+    index("clients_sales_representative_idx").on(table.salesRepresentativeId),
     check("clients_status_check", sql`${table.status} in ('prospect', 'active', 'inactive', 'blocked')`),
+  ],
+);
+
+export const salesRepresentatives = pgTable(
+  "sales_representatives",
+  {
+    id: serial("id").primaryKey(),
+    representativeCode: text("representative_code").notNull().unique(),
+    fullName: text("full_name").notNull(),
+    mobile: text("mobile").notNull(),
+    email: text("email"),
+    nationalId: text("national_id").unique(),
+    region: text("region").notNull().default("مكة المكرمة"),
+    commissionBps: integer("commission_bps").notNull().default(0),
+    status: text("status").notNull().default("active"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("sales_representatives_status_idx").on(table.status),
+    index("sales_representatives_name_idx").on(table.fullName),
+    check("sales_representatives_commission_check", sql`${table.commissionBps} between 0 and 10000`),
+    check("sales_representatives_status_check", sql`${table.status} in ('active','inactive','suspended')`),
   ],
 );
 

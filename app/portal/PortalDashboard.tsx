@@ -21,11 +21,12 @@ import BankReconciliationWorkspace from "./BankReconciliationWorkspace";
 import ConstructionWorkspace from "./ConstructionWorkspace";
 import AccessScopeManager from "./AccessScopeManager";
 import RoleDefinitionManager from "./RoleDefinitionManager";
+import SalesRepresentativesWorkspace from "./SalesRepresentativesWorkspace";
 
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
 type RequestStatus = "new" | "reviewing" | "contacted" | "closed";
-type View = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "operations" | "construction" | "conversations" | "documents" | "brand" | "website" | "users";
+type View = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "documents" | "brand" | "website" | "users";
 type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 type WorkforceRequest = {
@@ -186,8 +187,9 @@ function workerRequirementStatus(worker: WorkerRecord, attachments: WorkerAttach
   const uploadedCodes = new Set(workerFiles.map((item) => item.requirementCode).filter(Boolean));
   const missing = requirements.filter((item) => !uploadedCodes.has(item.code));
   const hasPhoto = workerFiles.some((item) => item.documentType === "photo");
-  const total = requirements.length + 2;
-  const complete = requirements.length - missing.length + (hasPhoto ? 1 : 0) + (worker.iqamaNumber ? 1 : 0);
+  const hasIqamaCopy = workerFiles.some((item) => item.requirementCode === "iqama-copy");
+  const total = requirements.length + 3;
+  const complete = requirements.length - missing.length + (hasPhoto ? 1 : 0) + (hasIqamaCopy ? 1 : 0) + (worker.iqamaNumber ? 1 : 0);
   return { requirements, missing, hasPhoto, complete, total, percent: Math.round((complete / total) * 100), files: workerFiles };
 }
 
@@ -576,12 +578,22 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   async function createWorker(form: HTMLFormElement) {
     setBusy("create-workforce");
     try {
-      const response = await fetch("/api/portal/workers", { method: "POST", body: new FormData(form) });
-      const result = await response.json() as { worker?: WorkerRecord; attachments?: WorkerAttachment[]; error?: string };
-      if (!response.ok || !result.worker || !result.attachments) throw new Error(result.error || "تعذّر إنشاء ملف العامل");
-      setWorkers((items) => [result.worker as WorkerRecord, ...items]);
-      setWorkerAttachments((items) => [...result.attachments as WorkerAttachment[], ...items]);
-      setModal(null); notify("تم إنشاء ملف العامل وإرفاق متطلبات المهنة.");
+      const source = new FormData(form); const count = Math.max(1, Number(source.get("workerCount") || 1));
+      const createdWorkers: WorkerRecord[]=[]; const createdAttachments: WorkerAttachment[]=[];
+      for(let index=0;index<count;index++){
+        const payload=new FormData();
+        for(const name of ["workerNumber","iqamaNumber","fullName","mobile","iqamaExpiry","photo","iqamaDocument"])payload.set(name,source.get(`${name}:${index}`) as FormDataEntryValue);
+        payload.set("nationality",source.get("nationality") as FormDataEntryValue);payload.set("profession",source.get("profession") as FormDataEntryValue);
+        for(const requirement of requirementsForProfession(String(source.get("profession")||"")))payload.set(`requirement:${requirement.code}`,source.get(`requirement:${requirement.code}:${index}`) as FormDataEntryValue);
+        for(const file of source.getAll(`extraCertificates:${index}`))payload.append("extraCertificates",file);
+        const response = await fetch("/api/portal/workers", { method: "POST", body: payload });
+        const result = await response.json() as { worker?: WorkerRecord; attachments?: WorkerAttachment[]; error?: string };
+        if (!response.ok || !result.worker || !result.attachments) throw new Error(`العامل ${index+1}: ${result.error || "تعذّر إنشاء الملف"}`);
+        createdWorkers.push(result.worker);createdAttachments.push(...result.attachments);
+      }
+      setWorkers((items) => [...createdWorkers.reverse(), ...items]);
+      setWorkerAttachments((items) => [...createdAttachments, ...items]);
+      setModal(null); notify(`تم إنشاء ${createdWorkers.length} ملف عامل وإرفاق صور الإقامة والمتطلبات.`);
     } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إنشاء ملف العامل."); }
     finally { setBusy(null); }
   }
@@ -771,7 +783,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     finally { setBusy(null); }
   }
 
-  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", documents: "مركز المستندات", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
+  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", representatives: "إدارة المناديب", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", documents: "مركز المستندات", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
   const visibleRequests = requests.filter((item) => {
     const matchesStatus = requestFilter === "all" || safeRequestStatus(item.status) === requestFilter;
     const haystack = `${item.fullName} ${item.mobile} ${item.email} ${item.trackingCode} ${item.specialization}`.toLowerCase();
@@ -790,6 +802,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {canAccess("legal") && <button className={view === "legal" ? "active" : ""} onClick={() => changeView("legal")}><Icon name="legal" /><span>الشؤون القانونية</span>{legalAlerts > 0 && <b>{legalAlerts}</b>}</button>}
         {canAccess("workforce") && <button className={view === "workforce" ? "active" : ""} onClick={() => changeView("workforce")}><Icon name="workforce" /><span>شؤون العمالة</span>{(requestCounts.new + workerAlerts + incompleteWorkerFiles) > 0 && <b>{requestCounts.new + workerAlerts + incompleteWorkerFiles}</b>}</button>}
         {canAccess("workforce") && <button className={view === "operations" ? "active" : ""} onClick={() => changeView("operations")}><Icon name="finance" /><span>المبيعات والتشغيل</span></button>}
+        {canAccess("workforce") && <button className={view === "representatives" ? "active" : ""} onClick={() => changeView("representatives")}><Icon name="users"/><span>إدارة المناديب</span></button>}
         {canAccessConstruction && <button className={view === "construction" ? "active" : ""} onClick={() => changeView("construction")}><Icon name="legal" /><span>المقاولات والمشروعات</span></button>}
         {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مركز المستندات</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
         {canAccessDocuments && <button className={view === "brand" ? "active" : ""} onClick={() => changeView("brand")}><Icon name="brand" /><span>الهوية البصرية</span></button>}
@@ -914,6 +927,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         </ModuleSection>}
 
         {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} onCreateContract={() => openIssueDocument("workforce_contract")}/>}
+        {view === "representatives" && canAccess("workforce") && <SalesRepresentativesWorkspace canWrite={canWrite}/>}
         {view === "construction" && canAccessConstruction && <ConstructionWorkspace/>}
 
         {view === "documents" && canAccessDocuments && <DocumentCenter
@@ -947,7 +961,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     {modal === "finance" && <FinanceRecordModal busy={busy === "create-finance"} workers={workers} contracts={contracts} onClose={() => setModal(null)} onSubmit={(form) => createRecord("finance", form)}/>} 
     {modal === "workforce" && <WorkerModal busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker}/>}
     {documentModal === "upload" && <UploadDocumentModal busy={busy === "upload-document"} onClose={() => setDocumentModal(null)} onSubmit={uploadDocument}/>}
-    {documentModal === "issue" && <IssueDocumentModal initialType={issuePreset} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} onClose={() => setDocumentModal(null)} onSubmit={issueDocument}/>} 
+    {documentModal === "issue" && <IssueDocumentModal initialType={issuePreset} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} requests={requests} onClose={() => setDocumentModal(null)} onSubmit={issueDocument}/>}
     {userModal && <CreateUserModal busy={busy === "create-user"} onClose={() => setUserModal(false)} onSubmit={createUser}/>}
     {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours}/>}
     {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus}/>}
@@ -995,6 +1009,7 @@ function CreateUserModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: 
     <label>البريد الإلكتروني<input name="email" type="email" required maxLength={254} dir="ltr" autoComplete="email"/></label>
     <label>كلمة المرور المؤقتة<input name="password" type="password" required minLength={12} maxLength={128} dir="ltr" autoComplete="new-password"/></label>
     <label>الدور<select name="role" defaultValue="employee"><option value="employee">موظف</option><option value="manager">الإدارة</option><option value="admin">مدير النظام</option></select></label>
+    <label>الصلاحية العليا<select name="functionalRole" defaultValue=""><option value="">دون صلاحية عليا إضافية</option><option value="system_owner">مالك النظام — جميع الصلاحيات</option></select></label>
     <label>القسم<select name="department" defaultValue="general"><option value="general">صلاحية عامة</option><option value="employees">إدارة الموظفين</option><option value="finance">الإدارة المالية</option><option value="legal">الشؤون القانونية</option><option value="workforce">شؤون العمالة</option><option value="construction">المقاولات والمشروعات</option></select></label>
     <p className="form-hint span-two">هذه العملية متاحة للمالك ومشرف النظام فقط، وتُسجل في سجل التدقيق. يجب أن تتكون كلمة المرور من 12 خانة على الأقل وتضم حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا.</p>
     <div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ الإنشاء..." : "إنشاء وتفعيل المستخدم"}</button></div>
@@ -1191,7 +1206,9 @@ function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { b
   </form></section></div>;
 }
 
-function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts, onClose, onSubmit }: { initialType: string; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { initialType: string; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  const [representatives,setRepresentatives]=useState<Array<{id:number;representativeCode:string;fullName:string;status:string}>>([]);
+  useEffect(()=>{if(initialType!=="workforce_contract")return;void fetch("/api/portal/sales-representatives",{cache:"no-store"}).then(response=>response.ok?response.json():Promise.reject()).then((data:unknown)=>setRepresentatives(((data as {representatives?:Array<{id:number;representativeCode:string;fullName:string;status:string}>}).representatives||[]).filter(item=>item.status==="active"))).catch(()=>setRepresentatives([]));},[initialType]);
   type DraftProfession = { key: string; profession: string; requiredCount: number };
   type DraftPayment = { key: string; title: string; dueDate: string; percentage: number };
   const [documentType, setDocumentType] = useState(initialType);
@@ -1246,6 +1263,7 @@ function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts
       <input type="hidden" name="paymentSchedule" value={serializedPayments}/>
       <div className={`issue-form-step span-two ${!isContract || step === 1 ? "visible" : ""}`}>
         <label>نوع المستند<select name="documentType" value={documentType} onChange={(event) => { setDocumentType(event.target.value); setStep(1); }}><option value="workforce_contract">عقد مقاولات لتوفير العمالة</option><option value="quotation">عرض سعر</option><option value="progress_claim">مستخلص أعمال</option><option value="invoice">فاتورة</option><option value="receipt">سند قبض</option><option value="payment_voucher">سند صرف</option></select></label>
+        {isContract&&<><label>مصدر العميل<select name="sourceRequestId" defaultValue=""><option value="">عميل مباشر — غير قادم من الموقع</option>{requests.map(request=><option key={request.id} value={request.id}>{request.trackingCode} — {request.companyName||request.fullName}</option>)}</select></label><label>المندوب المسؤول<select name="salesRepresentativeId" defaultValue=""><option value="">دون مندوب</option>{representatives.map(item=><option key={item.id} value={item.id}>{item.representativeCode} — {item.fullName}</option>)}</select></label></>}
         <label>تاريخ الإصدار<input name="issueDate" required type="date" defaultValue={new Date().toISOString().slice(0, 10)}/></label><label>اسم العميل أو الجهة<input name="clientName" required maxLength={160}/></label><label>عنوان المستند<input name="title" required maxLength={180} placeholder="موضوع المستند"/></label><label>السجل التجاري للعميل<input name="clientCr" required={isContract} maxLength={30} dir="ltr" placeholder={isContract ? "إلزامي للعقد" : "اختياري"}/></label><label>الرقم الضريبي للعميل<input name="clientVat" required={isContract} maxLength={30} dir="ltr" placeholder={isContract ? "إلزامي للعقد" : "مطلوب عند تفعيل الضريبة"}/></label>{isContract&&<label className="span-two">العنوان الوطني للعميل<input name="clientAddress" required maxLength={240} placeholder="العنوان الوطني المسجل للعميل"/></label>}<label>قيمة الخدمة قبل الضريبة<input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr"/></label>{!isContract && <><label>تطبيق ضريبة القيمة المضافة<select name="vatEnabled" defaultValue="false"><option value="false">بدون ضريبة</option><option value="true">تطبيق الضريبة</option></select></label><label>نسبة الضريبة %<input name="vatRate" type="number" min="0" max="100" step="0.01" defaultValue="15" dir="ltr"/></label></>}
         {isContract ? <><label>موقع العمل<input name="workSite" required maxLength={180}/></label><label>بداية العقد<input name="startDate" required type="date"/></label><label>نهاية العقد<input name="endDate" required type="date"/></label></> : <><label>{documentType === "quotation" ? "صلاحية العرض حتى" : "تاريخ الاستحقاق / الانتهاء"}<input name="expiryDate" type="date"/></label>{["invoice", "receipt", "payment_voucher", "progress_claim"].includes(documentType) && <label className="span-two">العقد المرتبط<select name="linkedContractId" defaultValue=""><option value="">دون عقد محدد</option>{contracts.map((contract) => <option value={contract.id} key={contract.id}>{contract.referenceCode} — {contract.clientName}</option>)}</select></label>}</>}
         <label className="span-two">التفاصيل والشروط<textarea name="details" required minLength={5} maxLength={4000} rows={6} placeholder={isContract ? "اكتب نطاق العمل، ساعات العمل، الالتزامات، وآلية الدفع..." : "اكتب بنود المستند وتفاصيل المبلغ والخدمة..."}/></label>
@@ -1352,11 +1370,12 @@ function SearchableCombobox({ name, value, options, onChange, placeholder, requi
 function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [profession, setProfession] = useState(workforceProfessions[0].label);
   const [nationality, setNationality] = useState("");
+  const [workerCount,setWorkerCount]=useState(1);
   const requirements = requirementsForProfession(profession);
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إضافة عامل" onClick={onClose}/><section className="record-modal worker-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف عامل"><div className="drawer-head"><div><span>شؤون العمالة</span><h2>إنشاء ملف عامل متكامل</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><div className="worker-modal-steps"><span className="active">1 البيانات</span><span className="active">2 متطلبات المهنة</span><span className="active">3 الجاهزية للعقود</span></div><form onSubmit={submit}>
-    <p className="form-section-title span-two">البيانات الأساسية</p><label>رقم العامل<input name="workerNumber" required maxLength={30} placeholder="WRK-001" dir="ltr"/></label><label>رقم الإقامة<input name="iqamaNumber" required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} placeholder="10 أرقام" dir="ltr"/></label><label>الاسم الكامل<input name="fullName" required maxLength={120}/></label><label>الجنسية<SearchableCombobox name="nationality" value={nationality} options={workforceNationalities} onChange={setNationality} placeholder="اكتب للبحث عن الجنسية" required/></label><label>رقم الجوال<input name="mobile" required type="tel" maxLength={20} dir="ltr"/></label><label>تاريخ انتهاء الإقامة<input name="iqamaExpiry" required type="date"/></label><label className="span-two">المهنة<SearchableCombobox name="profession" value={profession} options={workforceProfessions.map((item) => item.label)} onChange={setProfession} placeholder="اكتب للبحث عن المهنة" required/></label>
-    <p className="form-section-title span-two">الصورة ومتطلبات المهنة</p><label className="span-two file-drop">صورة العامل<input name="photo" type="file" required accept="image/png,image/jpeg"/><small>PNG أو JPG — بحد أقصى 5 ميجابايت</small></label>{requirements.map((requirement) => <label className="span-two file-drop requirement-file" key={requirement.code}>{requirement.label}<input name={`requirement:${requirement.code}`} type="file" required accept="application/pdf,image/png,image/jpeg"/><small>مطلوب لمهنة {profession}</small></label>)}<label className="span-two file-drop">شهادات إضافية<input name="extraCertificates" type="file" multiple accept="application/pdf,image/png,image/jpeg"/><small>يمكن تحديد عدة ملفات إضافية مرتبطة بخبرة العامل</small></label>
+    <input type="hidden" name="workerCount" value={workerCount}/><p className="form-section-title span-two">الإعداد المشترك للدفعة</p><label>عدد العمال المراد إضافتهم<input type="number" min="1" max="20" value={workerCount} onChange={event=>setWorkerCount(Math.max(1,Math.min(20,Number(event.target.value)||1)))}/></label><label>الجنسية<SearchableCombobox name="nationality" value={nationality} options={workforceNationalities} onChange={setNationality} placeholder="اكتب للبحث عن الجنسية" required/></label><label className="span-two">المهنة<SearchableCombobox name="profession" value={profession} options={workforceProfessions.map((item) => item.label)} onChange={setProfession} placeholder="اكتب للبحث عن المهنة" required/></label>
+    {Array.from({length:workerCount},(_,index)=><div className="bulk-worker-entry span-two" key={index}><h3>بيانات العامل {index+1}</h3><div><label>رقم العامل<input name={`workerNumber:${index}`} required maxLength={30} placeholder={`WRK-${String(index+1).padStart(3,"0")}`} dir="ltr"/></label><label>رقم الإقامة<input name={`iqamaNumber:${index}`} required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} placeholder="10 أرقام" dir="ltr"/></label><label>الاسم الكامل<input name={`fullName:${index}`} required maxLength={120}/></label><label>رقم الجوال<input name={`mobile:${index}`} required type="tel" maxLength={20} dir="ltr"/></label><label>تاريخ انتهاء الإقامة<input name={`iqamaExpiry:${index}`} required type="date"/></label><label className="file-drop requirement-file">صورة الإقامة — إلزامية<input name={`iqamaDocument:${index}`} type="file" required accept="application/pdf,image/png,image/jpeg"/></label><label className="file-drop">صورة العامل<input name={`photo:${index}`} type="file" required accept="image/png,image/jpeg"/></label>{requirements.map(requirement=><label className="file-drop requirement-file" key={requirement.code}>{requirement.label}<input name={`requirement:${requirement.code}:${index}`} type="file" required accept="application/pdf,image/png,image/jpeg"/></label>)}<label className="file-drop">شهادات إضافية<input name={`extraCertificates:${index}`} type="file" multiple accept="application/pdf,image/png,image/jpeg"/></label></div></div>)}
     <p className="form-hint span-two">لن يُنشأ الملف قبل إرفاق الصورة وجميع المستندات المطلوبة للمهنة. يُسجّل العامل متاحاً، ثم تُحدّد الجهة المستفيدة تلقائياً عند اختياره في عقد نشط.</p><div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ إنشاء الملف..." : "إنشاء ملف العامل"}</button></div>
   </form></section></div>;
 }

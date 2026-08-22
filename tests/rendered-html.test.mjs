@@ -50,7 +50,9 @@ test("owner and system administrator can create users without exposing credentia
   assert.match(route, /export async function POST/);
   assert.match(route, /hashPassword\(password\)/);
   assert.match(route, /canAdministerPortalUsers/);
-  assert.match(route, /after: \{ \.\.\.user, identifier: "\*\*\*\*\*\*\*\*\*\*" \}/);
+  assert.match(route, /functionalRole === "system_owner"/);
+  assert.match(route, /portalAccessScopes/);
+  assert.match(route, /after: \{ \.\.\.user, identifier: "\*\*\*\*\*\*\*\*\*\*", functionalRole \}/);
   assert.match(access, /users\.administer/);
 });
 

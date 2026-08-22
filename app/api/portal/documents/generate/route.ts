@@ -9,8 +9,10 @@ import {
   contractWorkerAssignments,
   financialRecords,
   portalActivity,
+  salesRepresentatives,
   workers,
   workforceContracts,
+  workforceRequests,
 } from "@/db/schema";
 import { cleanDate, cleanText, makeReference, objectKey, safeFileName } from "@/lib/company-documents";
 import { generateIssuedPdf, issuedDocumentLabels, type IssuedDocumentType } from "@/lib/pdf-generator";
@@ -119,6 +121,8 @@ export async function POST(request: Request) {
     const vatEnabled = payload.vatEnabled === true || payload.vatEnabled === "on" || payload.vatEnabled === "true";
     const vatRate = vatEnabled ? Number(payload.vatRate || 15) : 0;
     const linkedContractId = parsePositiveId(payload.linkedContractId);
+    const sourceRequestId = parsePositiveId(payload.sourceRequestId);
+    const salesRepresentativeId = parsePositiveId(payload.salesRepresentativeId);
     const contractAmountHalalas = Math.round(amount * 100);
     const paymentSchedule = documentType === "workforce_contract" ? parsePayments(payload.paymentSchedule, contractAmountHalalas) : [];
     const validatedClientFiles: Array<{ file: File; kind: string; label: string; bytes: Uint8Array; validationDetails: string }> = [];
@@ -164,6 +168,12 @@ export async function POST(request: Request) {
     }
 
     const db = getDb();
+    const [sourceRequest, salesRepresentative] = await Promise.all([
+      sourceRequestId ? db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) }) : Promise.resolve(null),
+      salesRepresentativeId ? db.query.salesRepresentatives.findFirst({ where: eq(salesRepresentatives.id, salesRepresentativeId) }) : Promise.resolve(null),
+    ]);
+    if (sourceRequestId && !sourceRequest) return Response.json({ error: "طلب الموقع المحدد غير موجود" }, { status: 404 });
+    if (salesRepresentativeId && (!salesRepresentative || salesRepresentative.status !== "active")) return Response.json({ error: "المندوب المحدد غير موجود أو غير نشط" }, { status: 409 });
     const assets = await db.select().from(companyAssets);
     if (!assets.some((asset) => asset.slot === "stamp") || !assets.some((asset) => asset.slot === "signature")) {
       return Response.json({ error: "ارفع الختم والتوقيع المعتمدين أولاً" }, { status: 409 });
@@ -246,9 +256,9 @@ export async function POST(request: Request) {
     if (documentType === "workforce_contract") {
       const existingClient = await db.query.clients.findFirst({ where: eq(clients.commercialRegistration, clientCr) });
       if (existingClient) {
-        [client] = await db.update(clients).set({ legalName: clientName, vatNumber: clientVat, address: clientAddress, status: "active", updatedAt: new Date().toISOString(), version: existingClient.version + 1 }).where(eq(clients.id, existingClient.id)).returning();
+        [client] = await db.update(clients).set({ legalName: clientName, vatNumber: clientVat, address: clientAddress, status: "active", sourceRequestId, salesRepresentativeId, updatedAt: new Date().toISOString(), version: existingClient.version + 1 }).where(eq(clients.id, existingClient.id)).returning();
       } else {
-        [client] = await db.insert(clients).values({ clientCode: makeReference("CLI"), legalName: clientName, commercialRegistration: clientCr, vatNumber: clientVat, address: clientAddress, status: "active", createdBy: access.user.email }).returning();
+        [client] = await db.insert(clients).values({ clientCode: makeReference("CLI"), legalName: clientName, commercialRegistration: clientCr, vatNumber: clientVat, address: clientAddress, status: "active", sourceRequestId, salesRepresentativeId, createdBy: access.user.email }).returning();
         createdClientId = client.id;
       }
     }
@@ -275,7 +285,7 @@ export async function POST(request: Request) {
       sizeBytes: pdfBytes.byteLength,
       expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
       source: "generated",
-      metadataJson: JSON.stringify({ clientId: client?.id || null, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
+      metadataJson: JSON.stringify({ clientId: client?.id || null, sourceRequestId, salesRepresentativeId, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
       createdBy: access.user.email,
     }).returning();
     savedDocumentId = saved.id;
@@ -293,6 +303,8 @@ export async function POST(request: Request) {
         clientCr: clientCr || null,
         clientVat: clientVat || null,
         clientId: client!.id,
+        sourceRequestId,
+        salesRepresentativeId,
         title,
         workSite,
         issueDate,

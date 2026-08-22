@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     const mobile = cleanText(form.get("mobile"), 20);
     const iqamaExpiry = cleanDate(form.get("iqamaExpiry"));
     const photo = form.get("photo");
+    const iqamaDocument = form.get("iqamaDocument");
 
     if (!workerNumber || !/^\d{10}$/.test(iqamaNumber) || fullName.length < 2 || !workforceNationalities.includes(nationality as (typeof workforceNationalities)[number]) || !workforceProfessions.some((item) => item.label === profession) || !validMobile(mobile) || !iqamaExpiry) {
       return Response.json({ error: "بيانات العامل غير مكتملة أو غير صحيحة، ورقم الإقامة يجب أن يتكون من 10 أرقام" }, { status: 400 });
@@ -51,8 +52,9 @@ export async function POST(request: Request) {
     if (!(photo instanceof File)) {
       return Response.json({ error: "صورة العامل مطلوبة بصيغة PNG أو JPG وبحجم لا يتجاوز 5 ميجابايت" }, { status: 400 });
     }
+    if (!(iqamaDocument instanceof File) || iqamaDocument.size < 1) return Response.json({ error: "صورة الإقامة إلزامية لكل عامل" }, { status: 400 });
 
-    const pending: PendingAttachment[] = [{ documentType: "photo", requirementCode: null, title: "صورة العامل", file: photo }];
+    const pending: PendingAttachment[] = [{ documentType: "photo", requirementCode: null, title: "صورة العامل", file: photo }, { documentType: "certificate", requirementCode: "iqama-copy", title: "صورة الإقامة", file: iqamaDocument }];
     for (const requirement of requirementsForProfession(profession)) {
       const file = form.get(`requirement:${requirement.code}`);
       if (!(file instanceof File) || file.size < 1) return Response.json({ error: `المستند المطلوب غير مرفق: ${requirement.label}` }, { status: 400 });

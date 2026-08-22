@@ -7,6 +7,7 @@ import "./enhancements.css";
 import { WebsiteContentProvider } from "@/app/components/WebsiteContentProvider";
 import { SITE } from "@/lib/site";
 import { getWebsiteContent, toPublicWebsiteContent } from "@/lib/website-content";
+import { TodayDateDefaults } from "@/app/components/TodayDateDefaults";
 
 export const dynamic = "force-dynamic";
 
@@ -44,5 +45,5 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const content = await getWebsiteContent();
-  return <html lang="ar" dir="rtl"><body><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></body></html>;
+  return <html lang="ar" dir="rtl"><body><TodayDateDefaults/><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></body></html>;
 }

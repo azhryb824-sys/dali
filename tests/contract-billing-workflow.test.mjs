@@ -14,6 +14,16 @@ test("contracts require a balanced payment schedule and preserve mandatory clien
   assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/contract_payment_schedules_invoice_unique/);
 });
 
+test("site-origin contracts, representatives, bulk workers and activity-aware quotes stay connected",async()=>{
+  const[contractRoute,schema,migration,repsApi,portal,workers,operations,dates]=await Promise.all([source("app/api/portal/documents/generate/route.ts"),source("db/schema.ts"),source("drizzle-pg/0016_sales_representatives_and_origin_links.sql"),source("app/api/portal/sales-representatives/route.ts"),source("app/portal/PortalDashboard.tsx"),source("app/api/portal/workers/route.ts"),source("app/portal/OperationsWorkspace.tsx"),source("app/components/TodayDateDefaults.tsx")]);
+  assert.match(contractRoute,/sourceRequestId/);assert.match(contractRoute,/salesRepresentativeId/);assert.match(contractRoute,/workforceRequests/);
+  assert.match(schema,/salesRepresentatives/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/REVOKE ALL.*PUBLIC, anon, authenticated/);
+  assert.match(repsApi,/contractValueHalalas/);assert.match(portal,/إدارة المناديب/);
+  assert.match(workers,/صورة الإقامة إلزامية/);assert.match(portal,/workerCount/);assert.match(portal,/iqamaDocument/);
+  assert.match(operations,/quote-line-builder/);assert.match(operations,/يتغير قالب البنود/);assert.doesNotMatch(operations,/name="itemLines"/);
+  assert.match(dates,/Asia\/Riyadh/);assert.match(dates,/input\[type="date"\]/);
+});
+
 test("owner referral, accounting invoice, payment recording and legal escalation are separated",async()=>{
   const[route,ui]=await Promise.all([source("app/api/portal/contract-payments/route.ts"),source("app/portal/ContractBillingWorkspace.tsx")]);
   assert.match(route,/إحالة الدفعة للمحاسبة من صلاحيات المالك فقط/);
