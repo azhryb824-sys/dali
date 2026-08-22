@@ -15,8 +15,6 @@ import { portalSessionEndPath, portalSessionStartPath, verifyPortalSession } fro
 import PortalDashboard from "./PortalDashboard";
 import PortalAccessRequestForm from "./PortalAccessRequestForm";
 import { canReadConstruction, getActivePortalScopes } from "@/lib/access-policy";
-import { getConfiguredAuthMode } from "@/lib/portal-auth-config";
-import { userRequiresMfa } from "@/lib/portal-mfa";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +31,6 @@ function PortalLoading() {
 
 async function ProtectedPortal() {
   const user = await requireChatGPTUser("/portal");
-  if (getConfiguredAuthMode() === "credentials" && user.authStrength !== "mfa" && await userRequiresMfa(user.email)) redirect("/login?error=mfa-required&returnTo=%2Fportal");
   const session = await verifyPortalSession(user.email);
   if (session.status === "missing") redirect(portalSessionStartPath("/portal"));
   if (session.status !== "valid") redirect(portalSessionEndPath("/portal", "session-expired"));

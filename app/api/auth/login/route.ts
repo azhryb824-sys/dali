@@ -6,7 +6,6 @@ import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-er
 import { getPortalAdminConfig, normalizePortalEmail, normalizePortalIdentifier } from "@/lib/portal-auth-config";
 import { externalRequestUrl } from "@/lib/request-origin";
 import { enforcePublicRateLimit, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
-import { createMfaChallenge, mfaChallengeCookie, userRequiresMfa } from "@/lib/portal-mfa";
 
 function safePortalReturnPath(value: string) {
   return value.startsWith("/portal") && !value.startsWith("//") ? value : "/portal";
@@ -104,21 +103,6 @@ export async function POST(request: Request) {
           lastLoginAt: now,
           lastActivityAt: now,
           updatedAt: now,
-        },
-      });
-    }
-
-    stage = "mfa-policy";
-    if (await userRequiresMfa(email)) {
-      stage = "mfa-challenge";
-      const challenge = await createMfaChallenge(credential, request, returnTo);
-      return new Response(null, {
-        status: 303,
-        headers: {
-          location: externalRequestUrl(request, `/login/mfa?returnTo=${encodeURIComponent(returnTo)}&mode=${challenge.purpose}`).toString(),
-          "set-cookie": mfaChallengeCookie(request, challenge.token),
-          "cache-control": "no-store",
-          "x-request-id": correlationId,
         },
       });
     }

@@ -34,7 +34,7 @@ test("Render runtime preserves durable storage when Worker bindings are absent",
   assert.match(uploadRoute, /BUCKET\.delete\(previous\.storageKey\)/);
 });
 
-test("sensitive portal roles require replay-safe TOTP or one-time recovery verification", async () => {
+test("two-step verification is disabled across active login and authorization paths", async () => {
   const [mfa, login, verify, access, session, migration, page] = await Promise.all([
     readFile(new URL("../lib/portal-mfa.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
@@ -50,12 +50,11 @@ test("sensitive portal roles require replay-safe TOTP or one-time recovery verif
   assert.match(mfa, /system_owner.*system_admin.*executive.*finance_director.*project_accountant/s);
   assert.match(mfa, /Path=\/; HttpOnly; SameSite=Strict/);
   assert.doesNotMatch(mfa, /Path=\/login\/mfa; HttpOnly/);
-  assert.match(login, /userRequiresMfa/);
-  assert.match(login, /createMfaChallenge/);
+  assert.doesNotMatch(login, /userRequiresMfa|createMfaChallenge|mfaChallengeCookie/);
   assert.match(verify, /MFA_CHALLENGE_REPLAYED/);
   assert.match(verify, /recoveryHashes\.splice/);
-  assert.match(access, /authStrength !== "mfa"/);
-  assert.match(session, /authStrength !== "mfa"/);
+  assert.doesNotMatch(access, /userRequiresMfa|authStrength !== "mfa"/);
+  assert.doesNotMatch(session, /userRequiresMfa|authStrength !== "mfa"/);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /REVOKE ALL ON TABLE "portal_mfa_challenges" FROM PUBLIC, anon, authenticated/);
   assert.match(page, /رموز الاسترداد — تُعرض مرة واحدة/);

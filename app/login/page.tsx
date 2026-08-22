@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
-import { userRequiresMfa } from "@/lib/portal-mfa";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +16,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const query = await searchParams;
   const returnTo = query.returnTo?.startsWith("/portal") && !query.returnTo.startsWith("//") ? query.returnTo : "/portal";
   const currentUser = await getChatGPTUser();
-  if (currentUser && (currentUser.authStrength !== "password" || !(await userRequiresMfa(currentUser.email)))) redirect(returnTo);
+  if (currentUser) redirect(returnTo);
 
   const retrySeconds = Number(query.retryAfter || 0);
   const retryMinutes = Number.isFinite(retrySeconds) && retrySeconds > 0 ? Math.max(1, Math.ceil(retrySeconds / 60)) : null;
-  const errorMessage = query.error === "mfa-expired" || query.error === "mfa-required"
-    ? "يلزم إكمال التحقق بخطوتين لهذا الحساب الحساس. أعد إدخال بيانات الدخول لبدء تحقق جديد."
-    : query.error === "rate-limit"
+  const errorMessage = query.error === "rate-limit"
     ? `تم تجاوز عدد المحاولات المسموح. حاول مجددًا${retryMinutes ? ` بعد نحو ${retryMinutes} دقيقة` : " لاحقًا"}.`
     : query.error === "service"
       ? "تعذر الاتصال بخدمة تسجيل الدخول حاليًا. لم يتم تغيير بيانات حسابك."
