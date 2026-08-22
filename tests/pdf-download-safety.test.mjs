@@ -68,6 +68,19 @@ test("every quotation uses the single documents-page quotation template", async 
   assert.match(documentsUi, /required=\{documentType === "quotation"\}/);
 });
 
+test("quotation approval is a visible owner and system-admin action", async () => {
+  const [workspace, dashboard, operations] = await Promise.all([
+    source("app/portal/OperationsWorkspace.tsx"),
+    source("app/portal/PortalDashboard.tsx"),
+    source("app/api/portal/operations/route.ts"),
+  ]);
+  assert.match(workspace, /اعتماد عرض السعر/);
+  assert.match(workspace, /quote\.status === "pending_approval"/);
+  assert.match(workspace, /transition\("transition-quote", quote, "approved"\)/);
+  assert.match(dashboard, /role === "system_owner" \|\| role === "system_admin"/);
+  assert.match(operations, /اعتماد عرض السعر متاح للمالك أو مشرف النظام فقط/);
+});
+
 test("all supported issued document types remain connected to the PDF generator", async () => {
   const [generator, route, identity] = await Promise.all([
     source("lib/pdf-generator.ts"), source("app/api/portal/documents/generate/route.ts"), source("lib/brand-identity-pdf.ts"),
