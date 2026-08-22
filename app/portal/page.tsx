@@ -85,7 +85,7 @@ async function ProtectedPortal() {
     getActivePortalScopes(access),
   ]);
   const canAccessConstruction = constructionPermission || canReadConstruction(access, constructionScopes);
-  const [requests, replies, notifications, users, activity, employeeRecords, financeRecords, legalItems, workerRecords, workerFiles, documents, assets, contracts, professionItems, assignmentItems, conversations, conversationMessages, businessHours, chatAutomation, websiteContent] = await Promise.all([
+  const portalDataPromises = [
     canAccessPortalDepartment(access, "workforce")
       ? db.select().from(workforceRequests).orderBy(desc(workforceRequests.createdAt)).limit(250)
       : Promise.resolve([]),
@@ -196,6 +196,14 @@ async function ProtectedPortal() {
           createdAt: visitorMessages.createdAt,
         }).from(visitorMessages).orderBy(desc(visitorMessages.id)).limit(1200)
       : Promise.resolve([]),
+  ] as const;
+  type PortalDataValues<T extends readonly unknown[]> = { -readonly [K in keyof T]: Awaited<T[K]> };
+  const settledPortalData = await Promise.allSettled(portalDataPromises);
+  settledPortalData.forEach((result, index) => {
+    if (result.status === "rejected") console.error("portal-data-load-failed", index, result.reason instanceof Error ? result.reason.message : String(result.reason));
+  });
+  const [requests, replies, notifications, users, activity, employeeRecords, financeRecords, legalItems, workerRecords, workerFiles, documents, assets, contracts, professionItems, assignmentItems, conversations, conversationMessages] = settledPortalData.map((result) => result.status === "fulfilled" ? result.value : []) as unknown as PortalDataValues<typeof portalDataPromises>;
+  const [businessHours, chatAutomation, websiteContent] = await Promise.all([
     getBusinessHoursState(),
     getChatAutomationConfig(),
     getWebsiteContent(),
