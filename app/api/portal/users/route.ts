@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
     const displayName = typeof payload.displayName === "string" ? payload.displayName.trim().slice(0, 160) : "";
     const password = typeof payload.password === "string" ? payload.password : "";
-    const functionalRole = payload.functionalRole === "system_owner" ? "system_owner" : null;
+    const functionalRole = payload.functionalRole === "system_owner" || payload.functionalRole === "system_admin" ? payload.functionalRole : null;
     if (functionalRole && !(access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin"))) return jsonNoStore({ error: "إنشاء مالك النظام متاح لمشرف النظام أو مالك قائم فقط" }, { status: 403 });
     const role = functionalRole ? "admin" : typeof payload.role === "string" ? payload.role : "employee";
     const department = functionalRole ? "general" : typeof payload.department === "string" ? payload.department : "general";
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       if (functionalRole) await tx.insert(portalAccessScopes).values({ userEmail: email, functionalRole, active: true, canApproveOwn: false, createdBy: access.user.email, createdAt: now, updatedAt: now });
       return created;
     });
-    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRole }, reason: functionalRole ? "إنشاء مالك نظام بصلاحيات كاملة" : "إنشاء حساب مباشر من إدارة المستخدمين", source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
+    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRole }, reason: functionalRole ? `إنشاء ${functionalRole === "system_owner" ? "مالك نظام" : "مشرف نظام"} بصلاحيات كاملة` : "إنشاء حساب مباشر من إدارة المستخدمين", source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
     await emitPortalNotification({ eventType: "portal-user-created", title: "أُضيف مستخدم جديد", message: `${displayName} — ${role} — ${department}.`, severity: "warning", module: "users", entityType: "portal-user", entityId: email, actionView: "users", targetRole: "admin" }).catch(() => undefined);
     return jsonNoStore({ user }, { status: 201 });
   } catch (error) {

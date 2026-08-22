@@ -36,10 +36,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (!contract) return jsonNoStore({ error: "العقد غير موجود" }, { status: 404 });
     if (!transitions[contract.status]?.includes(status)) return jsonNoStore({ error: "انتقال حالة العقد غير مسموح" }, { status: 409 });
     if (["cancelled", "terminated", "suspended"].includes(status) && reason.length < 10) return jsonNoStore({ error: "اكتب سببًا واضحًا لا يقل عن 10 أحرف" }, { status: 400 });
-    const isOwner = access.functionalRoles.includes("system_owner");
-    if (status === "approved" && !isOwner) return jsonNoStore({ error: "اعتماد العقد متاح للمالك فقط" }, { status: 403 });
-    if (["signed", "terminated", "cancelled", "superseded"].includes(status) && !isOwner) return jsonNoStore({ error: "هذه المرحلة تتطلب صلاحية المالك" }, { status: 403 });
-    if (status === "active" && !contract.approvedBy) return jsonNoStore({ error: "لا يمكن تفعيل العقد قبل اعتماده من المالك" }, { status: 409 });
+    const canApprove = access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
+    if (status === "approved" && !canApprove) return jsonNoStore({ error: "اعتماد العقد متاح للمالك أو مشرف النظام فقط" }, { status: 403 });
+    if (["signed", "terminated", "cancelled", "superseded"].includes(status) && !canApprove) return jsonNoStore({ error: "هذه المرحلة تتطلب صلاحية المالك أو مشرف النظام" }, { status: 403 });
+    if (status === "active" && !contract.approvedBy) return jsonNoStore({ error: "لا يمكن تفعيل العقد قبل اعتماده من المالك أو مشرف النظام" }, { status: 409 });
     const plannedAssignments = status === "active"
       ? await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), eq(contractWorkerAssignments.status, "planned")))
       : [];

@@ -86,6 +86,9 @@ async function activeFunctionalPermissions(roles: string[]) {
   const permissions = new Set<string>();
   const definitionByKey = new Map(definitions.filter((item) => item.active).map((item) => [item.roleKey, item]));
   for (const role of roles) {
+    // مالك النظام ومشرف النظام صلاحيتان جذريتان لا يجوز أن تنقصهما
+    // إعدادات دور قديمة أو تعريف ديناميكي ناقص.
+    if (role === "system_owner" || role === "system_admin") permissions.add("*");
     const definition = definitionByKey.get(role);
     if (!definition) continue;
     try {
