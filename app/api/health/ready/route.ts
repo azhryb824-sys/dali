@@ -20,11 +20,6 @@ async function hasStoredCredential() {
   return Boolean(credential && "identifier" in credential && credential.identifier);
 }
 
-async function checkRequiredLoginColumns() {
-  const rows = await getSqlClient().unsafe<Array<{ preferred_language_exists:boolean }>>("select exists(select 1 from information_schema.columns where table_schema='public' and table_name='portal_users' and column_name='preferred_language') as preferred_language_exists");
-  if (!rows[0]?.preferred_language_exists) throw new OperationalError("AUTH_SCHEMA_MIGRATION_REQUIRED");
-}
-
 async function checkCredentialAuthentication() {
   if (getConfiguredAuthMode() !== "credentials") return "external" as const;
   if (getConfiguredAuthSecret().length < 32) throw new OperationalError("AUTH_SECRET_INVALID");
@@ -49,7 +44,6 @@ export async function GET() {
 
   try {
     auth = await checkCredentialAuthentication();
-    if (auth === "ok") await checkRequiredLoginColumns();
   } catch (error) {
     auth = "unavailable";
     errorCodes.push(safeOperationalErrorCode(error, "AUTH_CONFIGURATION_INVALID"));

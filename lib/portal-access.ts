@@ -1,7 +1,7 @@
 import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import type { ChatGPTUser } from "@/app/chatgpt-auth";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
-import { getDb } from "@/db";
+import { getDb, getSqlClient } from "@/db";
 import { portalAccessScopes, portalRoles, portalUserPermissions, portalUsers } from "@/db/schema";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getPortalAdminConfig, normalizePortalEmail } from "@/lib/portal-auth-config";
@@ -112,11 +112,54 @@ function isPortalDepartment(value: string): value is PortalDepartment {
   return value === "employees" || value === "finance" || value === "legal" || value === "workforce" || value === "construction" || value === "general";
 }
 
+// Keep access resolution compatible with a database that is still applying
+// additive migrations. Drizzle relational queries select every schema column,
+// so adding an optional profile field in code could otherwise take login down
+// until the corresponding migration finishes.
+const portalAccessUserSelection = {
+  email: portalUsers.email,
+  displayName: portalUsers.displayName,
+  role: portalUsers.role,
+  department: portalUsers.department,
+  status: portalUsers.status,
+  requestedDepartment: portalUsers.requestedDepartment,
+  requestedJobTitle: portalUsers.requestedJobTitle,
+  requestReason: portalUsers.requestReason,
+  requestSubmittedAt: portalUsers.requestSubmittedAt,
+  termsAcceptedAt: portalUsers.termsAcceptedAt,
+  approvedBy: portalUsers.approvedBy,
+  approvedAt: portalUsers.approvedAt,
+  suspendedAt: portalUsers.suspendedAt,
+  createdAt: portalUsers.createdAt,
+  updatedAt: portalUsers.updatedAt,
+  lastLoginAt: portalUsers.lastLoginAt,
+  lastActivityAt: portalUsers.lastActivityAt,
+};
+
+async function readPreferredLanguage(email: string): Promise<PortalAccess["preferredLanguage"]> {
+  try {
+    const rows = await getSqlClient().unsafe<Array<{ preferred_language: string | null }>>(
+      "select preferred_language from portal_users where email = $1 limit 1",
+      [email],
+    );
+    const locale = rows[0]?.preferred_language;
+    return locale === "ar" || locale === "en" || locale === "ur" ? locale : null;
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code !== "42703") console.warn("portal-language-unavailable", error instanceof Error ? error.message : String(error));
+    return null;
+  }
+}
+
 export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogin?: boolean } = {}): Promise<PortalAccess> {
   const db = getDb();
   const email = normalizePortalEmail(user.email);
   const now = new Date().toISOString();
-  const existing = await db.query.portalUsers.findFirst({ where: eq(portalUsers.email, email) });
+  const [existing] = await db
+    .select(portalAccessUserSelection)
+    .from(portalUsers)
+    .where(eq(portalUsers.email, email))
+    .limit(1);
   const activityDue = !existing?.lastActivityAt || Date.now() - new Date(existing.lastActivityAt).getTime() >= 15 * 60 * 1000;
 
   if (getPortalAdminConfig().emails.has(email)) {
@@ -189,7 +232,7 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
   const status = isPortalStatus(existing.status) ? existing.status : "pending";
   const functionalRoles = status === "active" ? await activeFunctionalRoles(email) : [];
   const functionalPermissions = status === "active" ? await activeFunctionalPermissions(functionalRoles) : [];
-  const preferredLanguage = existing.preferredLanguage === "en" || existing.preferredLanguage === "ur" || existing.preferredLanguage === "ar" ? existing.preferredLanguage : null;
+  const preferredLanguage = await readPreferredLanguage(email);
   return { authorized: status === "active", role, department, status, user: { ...user, email }, functionalRoles, functionalPermissions, preferredLanguage };
 }
 
