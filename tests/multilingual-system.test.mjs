@@ -38,7 +38,7 @@ test("non-admin portal users choose a saved language on first login while superv
 });
 
 test("login schema repair runs before unrelated HR migrations", async () => {
-  const hotfix=await source("drizzle-pg/0027z_login_schema_hotfix.sql");
-  assert.ok("0027z_login_schema_hotfix.sql".localeCompare("0028_hr_employee_experience.sql")<0);
+  const name="00270_login_schema_hotfix.sql",hotfix=await source(`drizzle-pg/${name}`);
+  assert.match(name,/^\d+_.+\.sql$/);assert.ok(name.localeCompare("0028_hr_employee_experience.sql")<0);
   assert.match(hotfix,/preferred_language/);assert.match(hotfix,/language_selected_at/);
 });
