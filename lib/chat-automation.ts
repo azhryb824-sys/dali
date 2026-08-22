@@ -85,7 +85,7 @@ export function normalizeChatAutomationConfig(value: unknown): ChatAutomationCon
 }
 
 export async function getChatAutomationConfig() {
-  const saved = await getDb().query.portalSettings.findFirst({ where: eq(portalSettings.key, "chat-automation") });
+  const saved = await getDb().query.portalSettings.findFirst({ where: eq(portalSettings.key, "chat-automation") }).catch((error) => { console.error("chat-automation-load-failed", error instanceof Error ? error.message : String(error)); return undefined; });
   if (!saved) return defaultChatAutomation;
   try {
     return normalizeChatAutomationConfig(JSON.parse(saved.valueJson));

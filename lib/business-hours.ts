@@ -67,7 +67,7 @@ export function normalizeBusinessHoursConfig(value: unknown): BusinessHoursConfi
 }
 
 export async function getBusinessHoursConfig(): Promise<BusinessHoursConfig> {
-  const saved = await getDb().query.portalSettings.findFirst({ where: eq(portalSettings.key, "business-hours") });
+  const saved = await getDb().query.portalSettings.findFirst({ where: eq(portalSettings.key, "business-hours") }).catch((error) => { console.error("business-hours-load-failed", error instanceof Error ? error.message : String(error)); return undefined; });
   if (!saved) return defaultBusinessHours;
   try {
     return normalizeBusinessHoursConfig(JSON.parse(saved.valueJson));

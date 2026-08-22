@@ -29,6 +29,10 @@ function PortalLoading() {
   );
 }
 
+function boundedPortalLoad<T>(promise: Promise<T>, label: string, timeoutMs = 12000): Promise<T> {
+  return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`PORTAL_LOAD_TIMEOUT:${label}`)), timeoutMs))]);
+}
+
 async function ProtectedPortal() {
   const user = await requireChatGPTUser("/portal");
   const session = await verifyPortalSession(user.email);
@@ -200,7 +204,8 @@ async function ProtectedPortal() {
       : Promise.resolve([]),
   ] as const;
   type PortalDataValues<T extends readonly unknown[]> = { -readonly [K in keyof T]: Awaited<T[K]> };
-  const settledPortalData = await Promise.allSettled(portalDataPromises);
+  const portalDataLabels = ["requests","replies","notifications","users","activity","employees","finance","legal","workers","worker-files","documents","assets","contracts","professions","assignments","conversations","messages"];
+  const settledPortalData = await Promise.allSettled(portalDataPromises.map((promise,index)=>boundedPortalLoad<unknown>(promise as Promise<unknown>,portalDataLabels[index]||String(index))));
   settledPortalData.forEach((result, index) => {
     if (result.status === "rejected") console.error("portal-data-load-failed", index, result.reason instanceof Error ? result.reason.message : String(result.reason));
   });
