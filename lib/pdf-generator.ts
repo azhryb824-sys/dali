@@ -83,7 +83,7 @@ type PdfResources = {
   letterhead: PDFImage | null;
 };
 
-const PAGE = { width: 595.28, height: 841.89, margin: 48, footerTop: 220 };
+const PAGE = { width: 595.28, height: 841.89, margin: 48, footerTop: 230 };
 const COLORS = {
   navy: rgb(0, 0.114, 0.176),
   red: rgb(0.886, 0.11, 0.145),
@@ -260,7 +260,7 @@ function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: 
 function drawContractSignatures(page: PDFPage, resources: PdfResources, referenceCode: string) {
   const gap = 12;
   const cardWidth = (PAGE.width - PAGE.margin * 2 - gap) / 2;
-  const cardBottom = 86;
+  const cardBottom = 96;
   const cardHeight = 108;
   const rightCardX = PAGE.margin + cardWidth + gap;
   const leftCardX = PAGE.margin;
