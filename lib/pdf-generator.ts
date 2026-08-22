@@ -157,7 +157,7 @@ function arabicDigits(value: string | number) {
 
 function printableText(font: PDFFont, value: string) {
   const supported = new Set(font.getCharacterSet());
-  const normalized = String(value || "-")
+  const normalized = String(value || " ")
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
     .replace(/[\u2010-\u2015\u2212]/g, "-")
     .replace(/\u00a0/g, " ");
@@ -171,7 +171,7 @@ function printableText(font: PDFFont, value: string) {
     const alternatives: Record<string, string> = { ".": "٫", ",": "،", ";": "؛", "?": "؟", "%": "٪", ":": " ", "-": " " };
     const alternative = alternatives[character];
     return alternative && supported.has(alternative.codePointAt(0)!) ? alternative : " ";
-  }).join("").replace(/\s{2,}/g, " ").trim() || "-";
+  }).join("").replace(/\s{2,}/g, " ").trim();
 }
 
 function textWidth(font: PDFFont, value: string, size: number) {
@@ -332,7 +332,9 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
   }
 
   function paragraph(title: string, value: string) {
-    const lines = wrapWords(resources.regular, value, 10, PAGE.width - PAGE.margin * 2);
+    const cleanValue = printableText(resources.regular, value).trim();
+    if (!cleanValue) return;
+    const lines = wrapWords(resources.regular, cleanValue, 10, PAGE.width - PAGE.margin * 2);
     const height = 29 + Math.max(1, lines.length) * 16;
     ensure(height);
     drawRight(page, title, y, resources.bold, 10, COLORS.navy);
