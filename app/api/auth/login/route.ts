@@ -39,12 +39,12 @@ export async function POST(request: Request) {
       return new Response(null, { status: 403, headers: { "cache-control": "no-store", "x-request-id": correlationId } });
     }
 
-    const requested = String((await request.clone().formData()).get("returnTo") || "/portal");
+    const form = await request.formData();
+    const requested = String(form.get("returnTo") || "/portal");
     const returnTo = safePortalReturnPath(requested);
     const limit = await enforcePublicRateLimit(request, { scope: "portal-login", limit: 8, windowSeconds: 900, blockSeconds: 900 });
     if (!limit.allowed) return loginRedirect(request, returnTo, "rate-limit", correlationId, { retryAfterSeconds: limit.retryAfterSeconds });
 
-    const form = await request.formData();
     const identifier = normalizePortalIdentifier(String(form.get("identifier") || ""));
     const password = String(form.get("password") || "");
     if (!/^\d{10}$/.test(identifier)) return loginRedirect(request, returnTo, "credentials", correlationId);
@@ -52,7 +52,13 @@ export async function POST(request: Request) {
     stage = "credential-read";
     const db = getDb();
     const adminConfig = getPortalAdminConfig();
-    const stored = await db.query.portalAuthCredentials.findFirst({ where: eq(portalAuthCredentials.identifier, identifier) });
+    const [stored] = await db.select({
+      identifier: portalAuthCredentials.identifier,
+      email: portalAuthCredentials.email,
+      displayName: portalAuthCredentials.displayName,
+      passwordHash: portalAuthCredentials.passwordHash,
+      mustChangePassword: portalAuthCredentials.mustChangePassword,
+    }).from(portalAuthCredentials).where(eq(portalAuthCredentials.identifier, identifier)).limit(1);
     let credential = stored || null;
     let authenticated = stored ? await verifyPasswordHash(password, stored.passwordHash) : false;
 
@@ -65,7 +71,13 @@ export async function POST(request: Request) {
           displayName: adminConfig.displayName,
           passwordHash: adminConfig.passwordHash,
         }).onConflictDoNothing();
-        credential = await db.query.portalAuthCredentials.findFirst({ where: eq(portalAuthCredentials.identifier, identifier) }) || null;
+        [credential] = await db.select({
+          identifier: portalAuthCredentials.identifier,
+          email: portalAuthCredentials.email,
+          displayName: portalAuthCredentials.displayName,
+          passwordHash: portalAuthCredentials.passwordHash,
+          mustChangePassword: portalAuthCredentials.mustChangePassword,
+        }).from(portalAuthCredentials).where(eq(portalAuthCredentials.identifier, identifier)).limit(1);
         authenticated = Boolean(
           credential
           && normalizePortalEmail(credential.email) === adminConfig.primaryEmail

@@ -10,6 +10,7 @@ type LoginQuery = {
   reset?: string;
   requestId?: string;
   retryAfter?: string;
+  stage?: string;
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<LoginQuery> }) {
@@ -38,7 +39,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {errorMessage && (
           <p role="alert" className="gate-status suspended">
             {errorMessage}
-            {query.error === "service" && query.requestId && <small> رقم المتابعة: {query.requestId}</small>}
+            {query.error === "service" && query.requestId && <small> رقم المتابعة: {query.requestId}{query.stage ? ` · المرحلة: ${query.stage}` : ""}</small>}
           </p>
         )}
         {query.reset && <p role="status" className="operations-notice">تم تحديث كلمة المرور. يمكنك تسجيل الدخول الآن.</p>}
