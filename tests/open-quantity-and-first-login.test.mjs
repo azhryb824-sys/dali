@@ -8,6 +8,7 @@ test("open and fixed quantity quotes remain linked to one contract with tax poli
   assert.match(operations,/quantityMode === "open"/);assert.match(operations,/vatRateBps/);
   assert.match(contract,/عرض السعر المقبول/);assert.match(contract,/تم تحويل عرض السعر إلى عقد سابقًا/);assert.match(contract,/quoteVersionId/);
   assert.match(pdf,/الكميات مفتوحة/);assert.match(pdf,/الفواتير الفعلية/);assert.match(ui,/عرض السعر المرتبط/);assert.match(ui,/عدد مفتوح/);
+  assert.match(contract,/item\.unitSalaryHalalas <= 0/);assert.match(ui,/راتب العامل الشهري إلزامي لكل مهنة حتى في العقد مفتوح العدد/);
   assert.match(migration,/workforce_contracts_quote_version_unique/);assert.match(migration,/quantity_mode/);
 });
 

@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       if (!workSite || !startDate || !endDate || endDate < startDate || !professionInputs.length || uniqueLabels.size !== professionInputs.length) {
         return Response.json({ error: "أكمل موقع العمل ومدة العقد وأضف كل مهنة مرة واحدة" }, { status: 400 });
       }
-      if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || (quantityMode === "fixed" && (!Number.isInteger(item.unitSalaryHalalas) || item.unitSalaryHalalas <= 0)) || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
+      if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || !Number.isInteger(item.unitSalaryHalalas) || item.unitSalaryHalalas <= 0 || item.unitSalaryHalalas > 100000000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
         return Response.json({ error: "اختر المهنة أو اكتب اسم المهنة الفعلي يدوياً عند اختيار «أخرى»، وأدخل عدد العمالة وراتب العامل الصحيح لكل مهنة" }, { status: 400 });
       }
       const vatRateBpsForSchedule = vatEnabled ? Math.round(vatRate * 100) : 0;
