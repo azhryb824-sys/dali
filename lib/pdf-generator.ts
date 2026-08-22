@@ -300,8 +300,8 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     if (y - height < PAGE.footerTop + 22) addPage();
   }
 
-  function heading(value: string) {
-    ensure(42);
+  function heading(value: string, followingHeight = 52) {
+    ensure(42 + followingHeight);
     drawRight(page, value, y, resources.bold, 18, COLORS.navy);
     page.drawRectangle({ x: PAGE.width - PAGE.margin - 34, y: y - 13, width: 34, height: 3, color: COLORS.red });
     y -= 43;
@@ -454,7 +454,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       input.paymentSchedule.forEach((payment, index) => composer.pair(`الدفعة ${index + 1}`, payment.title, "الاستحقاق والقيمة", `${dateLabel(payment.dueDate)} · ${(payment.percentageBps / 100).toFixed(2)}% · ${moneyLabel(payment.amountHalalas)}`));
     }
     composer.paragraph("الشروط الخاصة ونطاق العمل", input.details);
-    composer.heading("الشروط والأحكام");
+    composer.heading("الشروط والأحكام", 96);
     const clauses = [
       ["1. التوريد والإسناد", "يلتزم الطرف الأول بتوفير القوى العاملة وفق المهن والأعداد المعتمدة، ويجوز استكمال أسماء العمالة أو استبدالها وفق الجاهزية والمتطلبات النظامية دون الإخلال بالعدد أو المهنة المتفق عليها."],
       ["2. المباشرة وموقع العمل", "تبدأ الخدمة في التاريخ المعتمد وبعد استكمال متطلبات الدخول للموقع. ولا يجوز نقل العمالة إلى موقع أو مهام مختلفة جوهرياً إلا بموافقة مكتوبة من الطرف الأول."],
