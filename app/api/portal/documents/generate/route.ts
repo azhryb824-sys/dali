@@ -34,8 +34,8 @@ const prefixes: Record<IssuedDocumentType, string> = {
   construction_record: "CST",
 };
 
-type ProfessionInput = { profession: string; requiredCount: number; workerIds: number[] };
-type PaymentInput = { title: string; dueDate: string; percentageBps: number; amountHalalas: number };
+type ProfessionInput = { profession: string; requiredCount: number; unitSalaryHalalas: number; workerIds: number[] };
+type PaymentInput = { title: string; dueDate: string; percentageBps: number; subtotalHalalas: number; vatHalalas: number; amountHalalas: number; billingBasis: "monthly_salary" | "seasonal_percentage"; servicePeriod: string | null };
 
 function isDocumentType(value: string): value is IssuedDocumentType {
   return value in issuedDocumentLabels;
@@ -64,20 +64,44 @@ function parseProfessions(value: unknown, legacyProfession: string, legacyCount:
     return {
       profession: cleanText(record.profession, 120),
       requiredCount: Number(record.requiredCount ?? record.count ?? 0),
+      unitSalaryHalalas: Math.round(Number(record.unitSalary || 0) * 100),
       workerIds,
     };
   });
 }
 
-function parsePayments(value: unknown, contractAmountHalalas: number): PaymentInput[] {
+function parsePayments(value: unknown, contractSubtotalHalalas: number, vatRateBps: number): PaymentInput[] {
   let raw: unknown = value;
   if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch { raw = null; } }
   if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
+  const payments: PaymentInput[] = raw.map((item) => {
     const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
     const percentageBps = Math.round(Number(row.percentage || 0) * 100);
-    return { title: cleanText(row.title, 160), dueDate: cleanDate(row.dueDate) || "", percentageBps, amountHalalas: Math.round(contractAmountHalalas * percentageBps / 10000) };
+    const subtotalHalalas = Math.round(contractSubtotalHalalas * percentageBps / 10000);
+    const vatHalalas = Math.round(subtotalHalalas * vatRateBps / 10000);
+    return { title: cleanText(row.title, 160), dueDate: cleanDate(row.dueDate) || "", percentageBps, subtotalHalalas, vatHalalas, amountHalalas: subtotalHalalas + vatHalalas, billingBasis: "seasonal_percentage", servicePeriod: null };
   });
+  if (payments.length && payments.reduce((sum, item) => sum + item.percentageBps, 0) === 10000) {
+    const last = payments[payments.length - 1];
+    last.subtotalHalalas = contractSubtotalHalalas - payments.slice(0, -1).reduce((sum, item) => sum + item.subtotalHalalas, 0);
+    last.vatHalalas = Math.round(last.subtotalHalalas * vatRateBps / 10000);
+    last.amountHalalas = last.subtotalHalalas + last.vatHalalas;
+  }
+  return payments;
+}
+
+function monthlyDueDates(firstDueDate: string, endDate: string) {
+  const dates: string[] = [];
+  const [year, month, day] = firstDueDate.split("-").map(Number);
+  if (!year || !month || !day) return dates;
+  for (let offset = 0; offset < 240; offset += 1) {
+    const base = new Date(Date.UTC(year, month - 1 + offset, 1));
+    const lastDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
+    const value = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+    if (value > endDate) break;
+    dates.push(value);
+  }
+  return dates;
 }
 
 export async function POST(request: Request) {
@@ -101,7 +125,6 @@ export async function POST(request: Request) {
     const clientName = cleanText(payload.clientName, 160);
     const clientCr = cleanText(payload.clientCr, 30);
     const clientVat = cleanText(payload.clientVat, 30);
-    const title = cleanText(payload.title, 180);
     const issueDate = cleanDate(payload.issueDate);
     const expiryDate = cleanDate(payload.expiryDate, true);
     const details = cleanText(payload.details, 4000);
@@ -127,14 +150,18 @@ export async function POST(request: Request) {
     const salesRepresentativeId = parsePositiveId(payload.salesRepresentativeId);
     const quoteVersionId = parsePositiveId(payload.quoteVersionId);
     const quantityMode = payload.quantityMode === "open" ? "open" : "fixed";
-    const contractAmountHalalas = Math.round(amount * 100);
-    const paymentSchedule = documentType === "workforce_contract" && quantityMode === "fixed" ? parsePayments(payload.paymentSchedule, contractAmountHalalas) : [];
+    const seasonType = payload.seasonType === "ramadan" || payload.seasonType === "hajj" ? payload.seasonType : "regular";
+    const billingMode = quantityMode === "open" ? "actual_usage" : seasonType === "regular" ? "monthly" : "seasonal_installments";
+    const firstPaymentDueDate = cleanDate(payload.firstPaymentDueDate, true);
+    let contractAmountHalalas = Math.round(amount * 100);
+    let paymentSchedule: PaymentInput[] = [];
     const validatedClientFiles: Array<{ file: File; kind: string; label: string; bytes: Uint8Array; validationDetails: string }> = [];
 
-    if (!isDocumentType(documentType) || documentType === "construction_record" || clientName.length < 2 || title.length < 3 || !issueDate || expiryDate === "" || details.length < 5) {
+    if (!isDocumentType(documentType) || documentType === "construction_record" || clientName.length < 2 || !issueDate || expiryDate === "" || details.length < 5) {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
     }
-    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000 || (documentType === "workforce_contract" && quantityMode === "fixed" && amount <= 0)) {
+    const title = `${issuedDocumentLabels[documentType]} — ${clientName}`;
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000 || (documentType === "workforce_contract" && quantityMode === "fixed" && seasonType !== "regular" && amount <= 0)) {
       return Response.json({ error: "قيمة المستند غير صحيحة" }, { status: 400 });
     }
     if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100 || (vatEnabled && !clientVat)) {
@@ -149,10 +176,21 @@ export async function POST(request: Request) {
       if (!workSite || !startDate || !endDate || endDate < startDate || !professionInputs.length || uniqueLabels.size !== professionInputs.length) {
         return Response.json({ error: "أكمل موقع العمل ومدة العقد وأضف كل مهنة مرة واحدة" }, { status: 400 });
       }
-      if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
-        return Response.json({ error: "اختر المهنة أو اكتب اسم المهنة الفعلي عند اختيار «أخرى»، وتحقق من الأعداد والعمالة المختارة" }, { status: 400 });
+      if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || (quantityMode === "fixed" && (!Number.isInteger(item.unitSalaryHalalas) || item.unitSalaryHalalas <= 0)) || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
+        return Response.json({ error: "اختر المهنة أو اكتب اسم المهنة الفعلي يدوياً عند اختيار «أخرى»، وأدخل عدد العمالة وراتب العامل الصحيح لكل مهنة" }, { status: 400 });
       }
-      if (quantityMode === "fixed" && (!paymentSchedule.length || paymentSchedule.some((item) => item.title.length < 2 || !item.dueDate || item.percentageBps <= 0 || item.amountHalalas <= 0) || paymentSchedule.reduce((sum, item) => sum + item.percentageBps, 0) !== 10000)) {
+      const vatRateBpsForSchedule = vatEnabled ? Math.round(vatRate * 100) : 0;
+      if (quantityMode === "fixed" && seasonType === "regular") {
+        if (!firstPaymentDueDate || firstPaymentDueDate === "" || !endDate || firstPaymentDueDate > endDate) return Response.json({ error: "أدخل تاريخ استحقاق أول دفعة شهرية على ألا يتجاوز نهاية العقد" }, { status: 400 });
+        const monthlySubtotal = professionInputs.reduce((sum, item) => sum + item.requiredCount * item.unitSalaryHalalas, 0);
+        const dueDates = monthlyDueDates(firstPaymentDueDate, endDate);
+        if (!dueDates.length) return Response.json({ error: "تعذر إنشاء جدول الدفعات الشهرية من التاريخ المحدد" }, { status: 400 });
+        paymentSchedule = dueDates.map((dueDate) => { const vatHalalas = Math.round(monthlySubtotal * vatRateBpsForSchedule / 10000); return { title: `استحقاق رواتب شهر ${dueDate.slice(0,7)}`, dueDate, percentageBps: Math.round(10000 / dueDates.length), subtotalHalalas: monthlySubtotal, vatHalalas, amountHalalas: monthlySubtotal + vatHalalas, billingBasis: "monthly_salary", servicePeriod: dueDate.slice(0,7) }; });
+        contractAmountHalalas = monthlySubtotal * dueDates.length;
+      } else if (quantityMode === "fixed") {
+        paymentSchedule = parsePayments(payload.paymentSchedule, contractAmountHalalas, vatRateBpsForSchedule);
+      }
+      if (quantityMode === "fixed" && seasonType !== "regular" && (!paymentSchedule.length || paymentSchedule.some((item) => item.title.length < 2 || !item.dueDate || item.percentageBps <= 0 || item.amountHalalas <= 0) || paymentSchedule.reduce((sum, item) => sum + item.percentageBps, 0) !== 10000)) {
         return Response.json({ error: "يجب إضافة جدول دفعات صحيح مجموع نسبه 100% قبل إنشاء العقد" }, { status: 400 });
       }
       if (!clientCr || !clientVat || !clientAddress) {
@@ -226,7 +264,7 @@ export async function POST(request: Request) {
     });
 
     const referenceCode = makeReference(prefixes[documentType]);
-    const subtotalHalalas = quantityMode === "open" ? undefined : amount ? Math.round(amount * 100) : undefined;
+    const subtotalHalalas = quantityMode === "open" ? undefined : contractAmountHalalas || undefined;
     const vatRateBps = vatEnabled ? Math.round(vatRate * 100) : 0;
     const vatHalalas = subtotalHalalas && vatRateBps ? Math.round((subtotalHalalas * vatRateBps) / 10000) : 0;
     const amountHalalas = subtotalHalalas ? subtotalHalalas + vatHalalas : undefined;
@@ -330,11 +368,14 @@ export async function POST(request: Request) {
         amountHalalas: amountHalalas || 0,
         quantityMode,
         vatRateBps,
+        seasonType,
+        billingMode,
+        firstPaymentDueDate: firstPaymentDueDate || null,
         details,
         createdBy: access.user.email,
       }).returning();
       savedContractId = contract.id;
-      await db.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas, status: payment.dueDate <= new Date().toISOString().slice(0, 10) ? "due" : "scheduled", createdBy: access.user.email })));
+      await db.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, subtotalHalalas: payment.subtotalHalalas, vatHalalas: payment.vatHalalas, vatRateBps, amountHalalas: payment.amountHalalas, billingBasis: payment.billingBasis, servicePeriod: payment.servicePeriod, status: payment.dueDate <= new Date().toISOString().slice(0, 10) ? "due" : "scheduled", createdBy: access.user.email })));
       for (const { file, kind, label, bytes, validationDetails } of validatedClientFiles) {
         const fileName=safeFileName(file.name);const clientStorageKey=objectKey("client-documents",fileName);auxiliaryStorageKeys.push(clientStorageKey);
         await getRuntimeEnv().BUCKET.put(clientStorageKey,bytes,{httpMetadata:{contentType:file.type},customMetadata:{uploadedBy:access.user.email,clientName,clientId:String(client!.id),contractReference:contract.referenceCode,documentKind:kind,validation:validationDetails}});
@@ -345,6 +386,7 @@ export async function POST(request: Request) {
         contractId: contract!.id,
         profession: item.profession,
         requiredCount: item.requiredCount,
+        unitSalaryHalalas: item.unitSalaryHalalas,
       }))).returning();
 
       for (const professionRecord of professionRecords) {

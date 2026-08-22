@@ -370,8 +370,6 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
   composer.field("العميل / الجهة", input.clientName);
   if (input.clientCr) composer.field("السجل التجاري للعميل", arabicDigits(input.clientCr));
   if (input.clientVat) composer.field("الرقم الضريبي للعميل", arabicDigits(input.clientVat));
-  composer.field("الموضوع", input.title);
-
   if (input.documentType === "workforce_contract") {
     const professions = input.professions?.length
       ? input.professions

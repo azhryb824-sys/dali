@@ -23,6 +23,17 @@ test("every generated PDF download uses hardened attachment headers", async () =
   }
 });
 
+test("authorized users can preview uploaded documents, stamp and signature inline", async () => {
+  const [documents, assets, ui, generator] = await Promise.all([
+    source("app/api/portal/documents/[id]/route.ts"), source("app/api/portal/company-assets/route.ts"), source("app/portal/PortalDashboard.tsx"), source("lib/pdf-generator.ts"),
+  ]);
+  assert.match(documents, /inline \? "inline" : "attachment"/);
+  assert.match(assets, /canAccessPortalDocuments/);assert.match(assets, /"inline"/);
+  assert.match(ui, /معاينة/);assert.match(ui, /\?inline=1/);
+  assert.doesNotMatch(ui, /عنوان المستند<input name="title"/);
+  assert.doesNotMatch(generator, /composer\.field\("الموضوع", input\.title\)/);
+});
+
 test("activity-aware quotations include itemized branded PDF output", async () => {
   const [generator, route, ui, operations] = await Promise.all([
     source("lib/pdf-generator.ts"),

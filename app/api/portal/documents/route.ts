@@ -17,7 +17,6 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const file = form.get("file");
-    const title = cleanText(form.get("title"), 180);
     const category = cleanText(form.get("category"), 30);
     const counterparty = cleanText(form.get("counterparty"), 160) || null;
     const expiryDate = cleanDate(form.get("expiryDate"), true);
@@ -29,11 +28,12 @@ export async function POST(request: Request) {
     }
     const validation = await validateUploadedFile(file, { contentTypes: uploadContentTypes, maxBytes: MAX_DOCUMENT_BYTES });
     if (!validation.valid) return Response.json({ error: validation.error }, { status: 400 });
-    if (title.length < 3 || !documentCategories.has(category) || expiryDate === "" || retentionUntil === "" || lockedUntil === "") {
+    if (!documentCategories.has(category) || expiryDate === "" || retentionUntil === "" || lockedUntil === "") {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
     }
 
     const fileName = safeFileName(file.name);
+    const title = fileName.replace(/\.[^.]+$/, "").trim() || "مستند مرفوع";
     storageKey = objectKey("company-documents", fileName);
     await getRuntimeEnv().BUCKET.put(storageKey, validation.bytes, {
       httpMetadata: { contentType: file.type },

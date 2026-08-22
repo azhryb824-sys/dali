@@ -1,14 +1,26 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyAssets, portalActivity } from "@/db/schema";
-import { cleanText, objectKey, safeFileName } from "@/lib/company-documents";
-import { canManageCompanyAssets, requirePortalApiRole } from "@/lib/portal-access";
+import { attachmentHeaders, cleanText, objectKey, safeFileName } from "@/lib/company-documents";
+import { canAccessPortalDocuments, canManageCompanyAssets, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg"]);
 const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+
+export async function GET(request: Request) {
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !canAccessPortalDocuments(access)) return Response.json({ error: "غير مصرح بمعاينة الأصل" }, { status: 403 });
+  const slot = new URL(request.url).searchParams.get("slot");
+  if (slot !== "stamp" && slot !== "signature") return Response.json({ error: "نوع الأصل غير صحيح" }, { status: 400 });
+  const asset = await getDb().query.companyAssets.findFirst({ where: eq(companyAssets.slot, slot) });
+  if (!asset) return Response.json({ error: "الأصل غير موجود" }, { status: 404 });
+  const object = await getRuntimeEnv().BUCKET.get(asset.storageKey);
+  if (!object) return Response.json({ error: "ملف الأصل غير متاح" }, { status: 404 });
+  return new Response(object.body, { headers: attachmentHeaders(asset.fileName, asset.contentType, object.httpEtag, "inline") });
+}
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });

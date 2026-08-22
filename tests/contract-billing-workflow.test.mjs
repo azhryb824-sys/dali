@@ -18,6 +18,9 @@ test("contract professions include hospitality and trades with enforced custom p
   const[requirements,route,ui]=await Promise.all([source("lib/workforce-requirements.ts"),source("app/api/portal/documents/generate/route.ts"),source("app/portal/PortalDashboard.tsx")]);
   for(const profession of ["سباك","كهربائي","ويتر","لحام","عامل تنظيف فندقي","أخرى"])assert.match(requirements,new RegExp(profession));
   assert.match(route,/item\.profession === "أخرى"/);assert.match(route,/اسم المهنة الفعلي/);
+  assert.match(requirements,/label: "حداد"/);assert.match(requirements,/label: "لحام"/);assert.doesNotMatch(requirements,/حداد \/ لحام/);
+  assert.match(route,/unitSalaryHalalas/);assert.match(route,/monthlyDueDates/);assert.match(route,/monthly_salary/);assert.match(route,/seasonal_percentage/);
+  assert.match(ui,/اكتب المهنة يدوياً/);assert.match(ui,/راتب العامل الشهري/);assert.match(ui,/العدد المطلوب/);
   assert.match(ui,/commercialRegistrationFile/);assert.match(ui,/vatCertificateFile/);assert.match(ui,/nationalAddressFile/);
 });
 
@@ -36,6 +39,7 @@ test("owner referral, accounting invoice, payment recording and legal escalation
   assert.match(route,/إحالة الدفعة للمحاسبة من صلاحيات المالك فقط/);
   assert.match(route,/hasPortalPermission\(access,"finance","write"\)/);
   assert.match(route,/contract-payment-invoiced/);assert.match(route,/contract-payment-paid/);assert.match(route,/client-file-referred-legal/);
+  assert.match(route,/subtotalHalalas:payment\.subtotalHalalas/);assert.match(route,/vatHalalas:payment\.vatHalalas/);
   assert.match(route,/payment\.dueDate>=now\.slice\(0,10\)/);
   assert.match(ui,/تنزيل PDF/);assert.match(ui,/مشاركة/);assert.match(ui,/تسجيل السداد/);assert.match(ui,/إحالة الملف للقانونية/);
 });

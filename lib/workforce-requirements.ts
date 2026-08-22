@@ -21,7 +21,7 @@ export const workforceProfessions: Array<{ label: string; requirements: Professi
   { label: "كهربائي", requirements: [{ code: "professional_certificate", label: "شهادة مهنية في الكهرباء" }, { code: "electrical_safety", label: "شهادة السلامة الكهربائية" }] },
   { label: "سباك", requirements: [{ code: "professional_certificate", label: "شهادة مهنية في السباكة" }, { code: "safety_certificate", label: "شهادة السلامة المهنية" }] },
   { label: "نجار", requirements: [{ code: "professional_certificate", label: "شهادة مهنية في النجارة" }, { code: "safety_certificate", label: "شهادة السلامة المهنية" }] },
-  { label: "حداد / لحام", requirements: [{ code: "welding_certificate", label: "شهادة تأهيل اللحام" }, { code: "safety_certificate", label: "شهادة السلامة المهنية" }] },
+  { label: "حداد", requirements: [{ code: "safety_certificate", label: "شهادة السلامة المهنية" }] },
   { label: "لحام", requirements: [{ code: "welding_certificate", label: "شهادة تأهيل اللحام" }, { code: "safety_certificate", label: "شهادة السلامة المهنية" }] },
   { label: "دهان", requirements: [{ code: "professional_certificate", label: "شهادة مهنية أو إثبات خبرة في الدهان" }, { code: "safety_certificate", label: "شهادة السلامة المهنية" }] },
   { label: "مبلط", requirements: [{ code: "professional_certificate", label: "شهادة مهنية أو إثبات خبرة" }, { code: "safety_certificate", label: "شهادة السلامة المهنية" }] },
