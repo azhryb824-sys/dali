@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const passwordHash = await hashPassword(password);
     const user = await db.transaction(async (tx) => {
-      await tx.insert(portalAuthCredentials).values({ identifier, email, displayName, passwordHash, createdAt: now, updatedAt: now });
+      await tx.insert(portalAuthCredentials).values({ identifier, email, displayName, passwordHash, mustChangePassword: true, passwordChangedAt: null, createdAt: now, updatedAt: now });
       const [created] = await tx.insert(portalUsers).values({ email, displayName, role, department, status: "active", requestedDepartment: department, requestedJobTitle: "أُضيف بواسطة الإدارة", requestReason: "إنشاء مباشر بواسطة المالك أو مشرف النظام", requestSubmittedAt: now, termsAcceptedAt: now, approvedBy: access.user.email, approvedAt: now, createdAt: now, updatedAt: now }).returning();
       if (functionalRole) await tx.insert(portalAccessScopes).values({ userEmail: email, functionalRole, active: true, canApproveOwn: false, createdBy: access.user.email, createdAt: now, updatedAt: now });
       return created;

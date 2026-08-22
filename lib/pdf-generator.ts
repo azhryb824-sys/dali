@@ -54,6 +54,7 @@ export type IssuedDocumentInput = {
   startDate?: string;
   endDate?: string;
   activityLabel?: string;
+  quantityMode?: "fixed" | "open";
   discountHalalas?: number;
   terms?: string;
   assumptions?: string;
@@ -310,13 +311,13 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     y -= height + 8;
   }
 
-  function quotationTable(items: NonNullable<IssuedDocumentInput["quotationItems"]>, workforcePricing = false) {
+  function quotationTable(items: NonNullable<IssuedDocumentInput["quotationItems"]>, workforcePricing = false, openQuantity = false) {
     const columns = { description: PAGE.width - PAGE.margin - 10, quantity: 302, duration: 242, unit: 173, total: 93 };
     const header = () => {
       ensure(34);
       page.drawRectangle({ x: PAGE.margin, y: y - 23, width: PAGE.width - PAGE.margin * 2, height: 28, color: COLORS.navy });
       drawRight(page, "الخدمة / البند", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.description);
-      drawRight(page, "الكمية", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.quantity);
+      drawRight(page, openQuantity ? "العدد" : "الكمية", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.quantity);
       drawRight(page, "المدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.duration);
       drawRight(page, workforcePricing ? "راتب العامل" : "سعر الوحدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.unit);
       if (!workforcePricing) drawRight(page, "الإجمالي", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.total);
@@ -331,7 +332,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
       if (y > PAGE.height - 145) header();
       if (index % 2 === 0) page.drawRectangle({ x: PAGE.margin, y: y - height + 5, width: PAGE.width - PAGE.margin * 2, height, color: COLORS.pale });
       lines.forEach((line, lineIndex) => drawRight(page, line, y - 9 - lineIndex * 12, resources.regular, 8, COLORS.text, columns.description));
-      drawRight(page, arabicDigits(item.quantity), y - 9, resources.regular, 8, COLORS.text, columns.quantity);
+      drawRight(page, openQuantity ? "مفتوح" : arabicDigits(item.quantity), y - 9, resources.regular, 8, COLORS.text, columns.quantity);
       drawRight(page, `${arabicDigits(item.durationMonths)} شهر`, y - 9, resources.regular, 8, COLORS.text, columns.duration);
       drawRight(page, moneyLabel(item.unitPriceHalalas), y - 9, resources.regular, 7.5, COLORS.text, columns.unit);
       if (!workforcePricing) drawRight(page, moneyLabel(item.lineTotalHalalas), y - 9, resources.bold, 7.5, COLORS.navy, columns.total);
@@ -376,7 +377,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       ? input.professions
       : [{ profession: input.profession || "عمالة فنية وإنشائية", requiredCount: input.workerCount || 0, assignedWorkers: [] }];
     const professionSummary = professions
-      .map((item) => `${item.profession}: ${item.requiredCount} عامل/فني`)
+      .map((item) => input.quantityMode === "open" ? `${item.profession}: العدد مفتوح بحسب طلبات الإسناد` : `${item.profession}: ${item.requiredCount} عامل/فني`)
       .join("\n");
     const assignedSummary = professions
       .flatMap((item) => (item.assignedWorkers || []).map((worker) => `${item.profession} — ${worker.fullName}${worker.iqamaNumber ? ` — إقامة ${worker.iqamaNumber}` : ""}`))
@@ -392,8 +393,11 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     if (assignedSummary) composer.field("العمالة المسندة عند الإصدار", assignedSummary);
     else composer.field("العمالة المسندة عند الإصدار", "لم تُحدَّد أسماء العمالة عند الإصدار، ويجوز استكمال الإسناد لاحقاً من النظام وفق العدد المطلوب لكل مهنة.");
     composer.field("مدة العقد", `من ${dateLabel(input.startDate)} إلى ${dateLabel(input.endDate)}`);
-    composer.field("القيمة التعاقدية", moneyLabel(input.amountHalalas));
-    if (input.amountHalalas) composer.field("القيمة التعاقدية كتابة", halalasToArabicWords(input.amountHalalas));
+    if (input.quantityMode === "open") composer.paragraph("آلية القيمة والضريبة", `هذا عقد بعدد مفتوح ولا يقرر قيمة إجمالية عند الإصدار. تحتسب الفواتير على العدد الفعلي والخدمة المنفذة، وتطبق ضريبة القيمة المضافة بنسبة ${arabicDigits((input.vatRateBps || 0) / 100)}٪ على كل فاتورة فعلية.`);
+    else {
+      composer.field("القيمة التعاقدية", moneyLabel(input.amountHalalas));
+      if (input.amountHalalas) composer.field("القيمة التعاقدية كتابة", halalasToArabicWords(input.amountHalalas));
+    }
     if (input.paymentSchedule?.length) {
       composer.heading("جدول الدفعات");
       input.paymentSchedule.forEach((payment, index) => composer.pair(`الدفعة ${index + 1}`, payment.title, "الاستحقاق والقيمة", `${dateLabel(payment.dueDate)} · ${(payment.percentageBps / 100).toFixed(2)}% · ${moneyLabel(payment.amountHalalas)}`));
@@ -421,12 +425,14 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     composer.paragraph("الاعتماد", "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.");
   } else if (input.documentType === "quotation" && input.quotationItems?.length) {
     const workforcePricing = input.activityLabel === "توريد العمالة";
+    const openQuantity = input.quantityMode === "open";
     if (input.activityLabel) composer.field("نشاط العرض", input.activityLabel);
     if (input.workSite) composer.field("موقع تقديم الخدمة", input.workSite);
     composer.paragraph("نطاق العرض", input.details);
     composer.heading(workforcePricing ? "بيان العمالة والمهن والرواتب" : "جدول الخدمات والأسعار");
-    composer.quotationTable(input.quotationItems, workforcePricing);
-    if (!workforcePricing) {
+    composer.quotationTable(input.quotationItems, workforcePricing, openQuantity);
+    if (openQuantity) composer.paragraph("آلية الاحتساب", `الكميات مفتوحة ولا تمثل التزاماً بعدد أو قيمة إجمالية. تطبق ضريبة القيمة المضافة بنسبة ${arabicDigits((input.vatRateBps || 0) / 100)}٪ على قيمة الفواتير الفعلية بحسب العمالة أو الأعمال المنفذة.`);
+    if (!workforcePricing && !openQuantity) {
       composer.field("الإجمالي قبل الخصم والضريبة", moneyLabel(input.subtotalHalalas));
       if (input.discountHalalas) composer.field("الخصم", moneyLabel(input.discountHalalas));
       if (input.vatHalalas) composer.pair("القيمة بعد الخصم", moneyLabel((input.subtotalHalalas || 0) - (input.discountHalalas || 0)), `ضريبة القيمة المضافة (${arabicDigits((input.vatRateBps || 0) / 100)}٪)`, moneyLabel(input.vatHalalas));

@@ -9,6 +9,9 @@ import {
   contractWorkerAssignments,
   financialRecords,
   portalActivity,
+  quoteItems,
+  quoteVersions,
+  salesOpportunities,
   salesRepresentatives,
   workers,
   workforceContracts,
@@ -123,14 +126,16 @@ export async function POST(request: Request) {
     const linkedContractId = parsePositiveId(payload.linkedContractId);
     const sourceRequestId = parsePositiveId(payload.sourceRequestId);
     const salesRepresentativeId = parsePositiveId(payload.salesRepresentativeId);
+    const quoteVersionId = parsePositiveId(payload.quoteVersionId);
+    const quantityMode = payload.quantityMode === "open" ? "open" : "fixed";
     const contractAmountHalalas = Math.round(amount * 100);
-    const paymentSchedule = documentType === "workforce_contract" ? parsePayments(payload.paymentSchedule, contractAmountHalalas) : [];
+    const paymentSchedule = documentType === "workforce_contract" && quantityMode === "fixed" ? parsePayments(payload.paymentSchedule, contractAmountHalalas) : [];
     const validatedClientFiles: Array<{ file: File; kind: string; label: string; bytes: Uint8Array; validationDetails: string }> = [];
 
     if (!isDocumentType(documentType) || documentType === "construction_record" || clientName.length < 2 || title.length < 3 || !issueDate || expiryDate === "" || details.length < 5) {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
     }
-    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000) {
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000 || (documentType === "workforce_contract" && quantityMode === "fixed" && amount <= 0)) {
       return Response.json({ error: "قيمة المستند غير صحيحة" }, { status: 400 });
     }
     if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100 || (vatEnabled && !clientVat)) {
@@ -146,10 +151,10 @@ export async function POST(request: Request) {
       if (!workSite || !startDate || !endDate || endDate < startDate || !professionInputs.length || uniqueLabels.size !== professionInputs.length) {
         return Response.json({ error: "أكمل موقع العمل ومدة العقد وأضف كل مهنة مرة واحدة" }, { status: 400 });
       }
-      if (professionInputs.some((item) => !validLabels.has(item.profession) || !Number.isInteger(item.requiredCount) || item.requiredCount < 1 || item.requiredCount > 100000 || item.workerIds.length > item.requiredCount)) {
+      if (professionInputs.some((item) => !validLabels.has(item.profession) || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
         return Response.json({ error: "بيانات المهن أو الأعداد غير صحيحة، أو تم اختيار عمالة أكثر من العدد المطلوب" }, { status: 400 });
       }
-      if (!paymentSchedule.length || paymentSchedule.some((item) => item.title.length < 2 || !item.dueDate || item.percentageBps <= 0 || item.amountHalalas <= 0) || paymentSchedule.reduce((sum, item) => sum + item.percentageBps, 0) !== 10000) {
+      if (quantityMode === "fixed" && (!paymentSchedule.length || paymentSchedule.some((item) => item.title.length < 2 || !item.dueDate || item.percentageBps <= 0 || item.amountHalalas <= 0) || paymentSchedule.reduce((sum, item) => sum + item.percentageBps, 0) !== 10000)) {
         return Response.json({ error: "يجب إضافة جدول دفعات صحيح مجموع نسبه 100% قبل إنشاء العقد" }, { status: 400 });
       }
       if (!clientCr || !clientVat || !clientAddress) {
@@ -168,12 +173,23 @@ export async function POST(request: Request) {
     }
 
     const db = getDb();
-    const [sourceRequest, salesRepresentative] = await Promise.all([
+    const [sourceRequest, salesRepresentative, sourceQuote, existingQuoteContract] = await Promise.all([
       sourceRequestId ? db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) }) : Promise.resolve(null),
       salesRepresentativeId ? db.query.salesRepresentatives.findFirst({ where: eq(salesRepresentatives.id, salesRepresentativeId) }) : Promise.resolve(null),
+      quoteVersionId ? db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, quoteVersionId) }) : Promise.resolve(null),
+      quoteVersionId ? db.query.workforceContracts.findFirst({ where: eq(workforceContracts.quoteVersionId, quoteVersionId) }) : Promise.resolve(null),
     ]);
     if (sourceRequestId && !sourceRequest) return Response.json({ error: "طلب الموقع المحدد غير موجود" }, { status: 404 });
     if (salesRepresentativeId && (!salesRepresentative || salesRepresentative.status !== "active")) return Response.json({ error: "المندوب المحدد غير موجود أو غير نشط" }, { status: 409 });
+    if (quoteVersionId && (!sourceQuote || sourceQuote.status !== "accepted")) return Response.json({ error: "لا يمكن إنشاء عقد إلا من عرض سعر مقبول" }, { status: 409 });
+    if (existingQuoteContract) return Response.json({ error: "تم تحويل عرض السعر إلى عقد سابقًا" }, { status: 409 });
+    if (sourceQuote && sourceQuote.quantityMode !== quantityMode) return Response.json({ error: "نوع العدد في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
+    const sourceOpportunity = sourceQuote ? await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, sourceQuote.opportunityId) }) : null;
+    const sourceQuoteItems = sourceQuote ? await db.select().from(quoteItems).where(eq(quoteItems.quoteVersionId, sourceQuote.id)) : [];
+    if (sourceQuote && (!sourceOpportunity || !sourceQuoteItems.length)) return Response.json({ error: "بيانات عرض السعر المرتبط غير مكتملة" }, { status: 409 });
+    if (sourceQuote && (sourceQuote.quantityMode === "open" ? professionInputs.some(item => item.requiredCount !== 0) : sourceQuoteItems.some(item => !professionInputs.some(profession => profession.profession === item.profession && profession.requiredCount === item.quantity)))) return Response.json({ error: "مهن وأعداد العقد لا تطابق عرض السعر المقبول" }, { status: 409 });
+    if (sourceQuote && quantityMode === "fixed" && contractAmountHalalas !== sourceQuote.subtotalHalalas) return Response.json({ error: "قيمة العقد يجب أن تطابق قيمة عرض السعر قبل الضريبة" }, { status: 409 });
+    if (sourceQuote && Math.round(vatRate * 100) !== sourceQuote.vatRateBps) return Response.json({ error: "نسبة ضريبة العقد يجب أن تطابق عرض السعر" }, { status: 409 });
     const assets = await db.select().from(companyAssets);
     if (!assets.some((asset) => asset.slot === "stamp") || !assets.some((asset) => asset.slot === "signature")) {
       return Response.json({ error: "ارفع الختم والتوقيع المعتمدين أولاً" }, { status: 409 });
@@ -212,7 +228,7 @@ export async function POST(request: Request) {
     });
 
     const referenceCode = makeReference(prefixes[documentType]);
-    const subtotalHalalas = amount ? Math.round(amount * 100) : undefined;
+    const subtotalHalalas = quantityMode === "open" ? undefined : amount ? Math.round(amount * 100) : undefined;
     const vatRateBps = vatEnabled ? Math.round(vatRate * 100) : 0;
     const vatHalalas = subtotalHalalas && vatRateBps ? Math.round((subtotalHalalas * vatRateBps) / 10000) : 0;
     const amountHalalas = subtotalHalalas ? subtotalHalalas + vatHalalas : undefined;
@@ -229,6 +245,7 @@ export async function POST(request: Request) {
       subtotalHalalas,
       vatHalalas,
       vatRateBps,
+      quantityMode,
       details,
       workSite: workSite || undefined,
       startDate: startDate || undefined,
@@ -285,7 +302,7 @@ export async function POST(request: Request) {
       sizeBytes: pdfBytes.byteLength,
       expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
       source: "generated",
-      metadataJson: JSON.stringify({ clientId: client?.id || null, sourceRequestId, salesRepresentativeId, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
+      metadataJson: JSON.stringify({ clientId: client?.id || null, sourceRequestId, salesRepresentativeId, quoteVersionId, quantityMode, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
       createdBy: access.user.email,
     }).returning();
     savedDocumentId = saved.id;
@@ -305,12 +322,16 @@ export async function POST(request: Request) {
         clientId: client!.id,
         sourceRequestId,
         salesRepresentativeId,
+        opportunityId: sourceOpportunity?.id || null,
+        quoteVersionId,
         title,
         workSite,
         issueDate,
         startDate: startDate!,
         endDate: endDate!,
         amountHalalas: amountHalalas || 0,
+        quantityMode,
+        vatRateBps,
         details,
         createdBy: access.user.email,
       }).returning();

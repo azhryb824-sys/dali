@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { portalAuthCredentials, portalUsers } from "@/db/schema";
-import { createIdentityToken, identityCookie, verifyPasswordHash } from "@/lib/credential-auth";
+import { passwordResetTokens, portalAuthCredentials, portalUsers } from "@/db/schema";
+import { createIdentityToken, identityCookie, sha256, verifyPasswordHash } from "@/lib/credential-auth";
 import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-error";
 import { getPortalAdminConfig, normalizePortalEmail, normalizePortalIdentifier } from "@/lib/portal-auth-config";
 import { externalRequestUrl } from "@/lib/request-origin";
@@ -76,6 +76,15 @@ export async function POST(request: Request) {
     }
 
     if (!credential || !authenticated) return loginRedirect(request, returnTo, "credentials", correlationId);
+
+    if (credential.mustChangePassword) {
+      stage = "first-password-change";
+      const rawToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
+      const tokenHash = await sha256(rawToken);
+      const now = new Date();
+      await db.insert(passwordResetTokens).values({ tokenHash, identifier: credential.identifier, email: credential.email, expiresAt: new Date(now.getTime() + 15 * 60 * 1000).toISOString(), createdAt: now.toISOString() });
+      return new Response(null,{status:303,headers:{location:externalRequestUrl(request,`/reset-password?token=${encodeURIComponent(rawToken)}&first=1`).toString(),"cache-control":"no-store","x-request-id":correlationId}});
+    }
 
     const email = normalizePortalEmail(credential.email);
     const displayName = credential.displayName.trim() || email;

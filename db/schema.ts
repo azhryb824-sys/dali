@@ -180,6 +180,8 @@ export const portalAuthCredentials = pgTable(
     email: text("email").notNull().unique(),
     displayName: text("display_name").notNull(),
     passwordHash: text("password_hash").notNull(),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
+    passwordChangedAt: text("password_changed_at"),
     mfaSecretEncrypted: text("mfa_secret_encrypted"),
     mfaEnabledAt: text("mfa_enabled_at"),
     mfaRecoveryHashesJson: text("mfa_recovery_hashes_json"),
@@ -697,6 +699,8 @@ export const workforceContracts = pgTable(
     startDate: text("start_date").notNull(),
     endDate: text("end_date").notNull(),
     amountHalalas: integer("amount_halalas").notNull().default(0),
+    quantityMode: text("quantity_mode").notNull().default("fixed"),
+    vatRateBps: integer("vat_rate_bps").notNull().default(0),
     details: text("details").notNull(),
     status: text("status").notNull().default("draft"),
     versionNumber: integer("version_number").notNull().default(1),
@@ -725,6 +729,8 @@ export const workforceContracts = pgTable(
     index("workforce_contracts_parent_idx").on(table.parentContractId),
     index("workforce_contracts_source_request_idx").on(table.sourceRequestId),
     index("workforce_contracts_sales_representative_idx").on(table.salesRepresentativeId),
+    uniqueIndex("workforce_contracts_quote_version_unique").on(table.quoteVersionId),
+    check("workforce_contracts_quantity_mode_check", sql`${table.quantityMode} in ('fixed','open')`),
     check("workforce_contracts_status_check", sql`${table.status} in ('draft','internal_review','legal_review','approved','sent','signed','active','suspended','expired','terminated','cancelled','superseded')`),
   ],
 );
@@ -972,6 +978,8 @@ export const quoteVersions = pgTable(
     subtotalHalalas: integer("subtotal_halalas").notNull().default(0),
     discountHalalas: integer("discount_halalas").notNull().default(0),
     totalHalalas: integer("total_halalas").notNull().default(0),
+    quantityMode: text("quantity_mode").notNull().default("fixed"),
+    vatRateBps: integer("vat_rate_bps").notNull().default(0),
     assumptions: text("assumptions"),
     terms: text("terms"),
     approvalReason: text("approval_reason"),
@@ -993,6 +1001,7 @@ export const quoteVersions = pgTable(
     index("quote_versions_status_idx").on(table.status),
     index("quote_versions_valid_until_idx").on(table.validUntil),
     check("quote_versions_status_check", sql`${table.status} in ('draft', 'pending_approval', 'approved', 'sent', 'accepted', 'rejected', 'expired', 'superseded')`),
+    check("quote_versions_quantity_mode_check", sql`${table.quantityMode} in ('fixed','open')`),
   ],
 );
 

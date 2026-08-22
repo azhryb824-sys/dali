@@ -5,6 +5,7 @@ type ResetPasswordQuery = {
   error?: string;
   requestId?: string;
   retryAfter?: string;
+  first?: string;
 };
 
 export default async function ResetPasswordPage({ searchParams }: { searchParams: Promise<ResetPasswordQuery> }) {
@@ -22,8 +23,8 @@ export default async function ResetPasswordPage({ searchParams }: { searchParams
 
   return <main className="portal-gate" dir="rtl"><section className="gate-card secure-gate-card">
     <Image src="/dally-logo.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" priority/>
-    <p className="gate-kicker">حماية الحساب</p><h1>تعيين كلمة مرور جديدة</h1>
-    <p className="gate-copy">استخدم كلمة مرور قوية لا تقل عن 12 حرفًا وتجنب إعادة استخدام كلمات المرور السابقة.</p>
+    <p className="gate-kicker">حماية الحساب</p><h1>{query.first === "1" ? "تغيير كلمة المرور المؤقتة" : "تعيين كلمة مرور جديدة"}</h1>
+    <p className="gate-copy">{query.first === "1" ? "هذا أول دخول للحساب. عيّن كلمة مرور دائمة؛ ستُلغى المؤقتة نهائيًا ولن يُطلب منك التغيير مرة أخرى." : "استخدم كلمة مرور قوية لا تقل عن 12 حرفًا وتجنب إعادة استخدام كلمات المرور السابقة."}</p>
     {errorMessage && <p role="alert" className="gate-status suspended">{errorMessage}{query.requestId && <small> رقم المتابعة: {query.requestId}</small>}</p>}
     <form className="access-request-form" method="post" action="/api/auth/reset-password">
       <input type="hidden" name="token" value={token}/>
