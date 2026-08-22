@@ -2,6 +2,8 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import tajawalRegularDataUrl from "@fontsource/tajawal/files/tajawal-arabic-400-normal.woff?inline";
 import tajawalBoldDataUrl from "@fontsource/tajawal/files/tajawal-arabic-700-normal.woff?inline";
+import tajawalLatinRegularDataUrl from "@fontsource/tajawal/files/tajawal-latin-400-normal.woff?inline";
+import tajawalLatinBoldDataUrl from "@fontsource/tajawal/files/tajawal-latin-700-normal.woff?inline";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { halalasToArabicWords } from "@/lib/arabic-money";
 
@@ -51,6 +53,18 @@ export type IssuedDocumentInput = {
   paymentSchedule?: Array<{ title: string; dueDate: string; percentageBps: number; amountHalalas: number }>;
   startDate?: string;
   endDate?: string;
+  activityLabel?: string;
+  discountHalalas?: number;
+  terms?: string;
+  assumptions?: string;
+  quotationItems?: Array<{
+    description: string;
+    quantity: number;
+    durationMonths: number;
+    unitPriceHalalas: number;
+    lineTotalHalalas: number;
+    notes?: string | null;
+  }>;
 };
 
 export type CompanyAsset = {
@@ -62,6 +76,8 @@ export type CompanyAsset = {
 type PdfResources = {
   regular: PDFFont;
   bold: PDFFont;
+  latinRegular: PDFFont;
+  latinBold: PDFFont;
   logo: PDFImage | null;
   stamp: PDFImage;
   signature: PDFImage;
@@ -92,9 +108,11 @@ async function embedImage(pdf: PDFDocument, bytes: Uint8Array, contentType: stri
 
 async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<PdfResources> {
   pdf.registerFontkit(fontkit);
-  const [regular, bold] = await Promise.all([
+  const [regular, bold, latinRegular, latinBold] = await Promise.all([
     pdf.embedFont(dataUrlBytes(tajawalRegularDataUrl), { subset: true }),
     pdf.embedFont(dataUrlBytes(tajawalBoldDataUrl), { subset: true }),
+    pdf.embedFont(dataUrlBytes(tajawalLatinRegularDataUrl), { subset: true }),
+    pdf.embedFont(dataUrlBytes(tajawalLatinBoldDataUrl), { subset: true }),
   ]);
 
   const runtime = getRuntimeEnv();
@@ -125,7 +143,11 @@ async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<
     embedImage(pdf, new Uint8Array(await stampObject.arrayBuffer()), stampAsset.contentType),
     embedImage(pdf, new Uint8Array(await signatureObject.arrayBuffer()), signatureAsset.contentType),
   ]);
-  return { regular, bold, logo, stamp, signature, letterhead };
+  return { regular, bold, latinRegular, latinBold, logo, stamp, signature, letterhead };
+}
+
+function arabicDigits(value: string | number) {
+  return String(value).replace(/\d/g, (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
 }
 
 function textWidth(font: PDFFont, value: string, size: number) {
@@ -172,7 +194,8 @@ function dateLabel(value?: string) {
 
 function moneyLabel(halalas?: number) {
   if (!halalas) return "غير محدد";
-  return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 2 }).format(halalas / 100);
+  const value = (halalas / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,/g, "٬").replace(/\./g, "٫");
+  return `${arabicDigits(value)} ريال سعودي`;
 }
 
 function drawHeader(page: PDFPage, resources: PdfResources, input: IssuedDocumentInput, pageNumber: number) {
@@ -189,8 +212,8 @@ function drawHeader(page: PDFPage, resources: PdfResources, input: IssuedDocumen
   } else {
     drawRight(page, "شركة دالي للتشغيل والصيانة", top - 26, resources.bold, 16, COLORS.navy);
   }
-  drawLeft(page, input.referenceCode, top - 10, resources.bold, 9, COLORS.navy);
-  drawLeft(page, `صفحة ${pageNumber}`, top - 28, resources.regular, 8, COLORS.muted);
+  drawLeft(page, input.referenceCode, top - 10, resources.latinBold, 9, COLORS.navy);
+  drawLeft(page, `صفحة ${arabicDigits(pageNumber)}`, top - 28, resources.regular, 8, COLORS.muted);
   page.drawLine({ start: { x: PAGE.margin, y: top - 58 }, end: { x: PAGE.width - PAGE.margin, y: top - 58 }, thickness: 1, color: COLORS.line });
 }
 
@@ -205,7 +228,7 @@ function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: 
   page.drawImage(resources.signature, { x: PAGE.margin + 40, y: y + 4, width: resources.signature.width * signatureScale, height: resources.signature.height * signatureScale });
   drawRight(page, "ختم الشركة", 39, resources.regular, 8, COLORS.muted, PAGE.width - PAGE.margin - 12);
   drawLeft(page, "التوقيع المفوض", 39, resources.regular, 8, COLORS.muted, PAGE.margin + 45);
-  drawLeft(page, referenceCode, 21, resources.regular, 7, COLORS.muted);
+  drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
   drawRight(page, "أُصدر إلكترونياً من نظام شركة دالي للتشغيل والصيانة", 21, resources.regular, 7, COLORS.muted);
 }
 
@@ -247,6 +270,16 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     y -= height + 8;
   }
 
+  function latinField(label: string, value: string) {
+    const width = PAGE.width - PAGE.margin * 2;
+    const height = 40;
+    ensure(height + 8);
+    page.drawRectangle({ x: PAGE.margin, y: y - height + 9, width, height, color: COLORS.pale, borderColor: COLORS.line, borderWidth: 0.6 });
+    drawRight(page, label, y - 4, resources.bold, 8, COLORS.red, PAGE.margin + width - 12);
+    drawRight(page, value, y - 22, resources.latinRegular, 10, COLORS.text, PAGE.margin + width - 12);
+    y -= height + 8;
+  }
+
   function paragraph(title: string, value: string) {
     const lines = wrapWords(resources.regular, value, 10, PAGE.width - PAGE.margin * 2);
     const height = 29 + Math.max(1, lines.length) * 16;
@@ -277,12 +310,45 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     y -= height + 8;
   }
 
+  function quotationTable(items: NonNullable<IssuedDocumentInput["quotationItems"]>) {
+    const columns = { description: PAGE.width - PAGE.margin - 10, quantity: 302, duration: 242, unit: 173, total: 93 };
+    const header = () => {
+      ensure(34);
+      page.drawRectangle({ x: PAGE.margin, y: y - 23, width: PAGE.width - PAGE.margin * 2, height: 28, color: COLORS.navy });
+      drawRight(page, "الخدمة / البند", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.description);
+      drawRight(page, "الكمية", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.quantity);
+      drawRight(page, "المدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.duration);
+      drawRight(page, "سعر الوحدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.unit);
+      drawRight(page, "الإجمالي", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.total);
+      y -= 31;
+    };
+    header();
+    items.forEach((item, index) => {
+      const description = item.notes ? `${item.description} - ${item.notes}` : item.description;
+      const lines = wrapWords(resources.regular, description, 8, 175);
+      const height = Math.max(31, 14 + lines.length * 12);
+      ensure(height + 4);
+      if (y > PAGE.height - 145) header();
+      if (index % 2 === 0) page.drawRectangle({ x: PAGE.margin, y: y - height + 5, width: PAGE.width - PAGE.margin * 2, height, color: COLORS.pale });
+      lines.forEach((line, lineIndex) => drawRight(page, line, y - 9 - lineIndex * 12, resources.regular, 8, COLORS.text, columns.description));
+      drawRight(page, arabicDigits(item.quantity), y - 9, resources.regular, 8, COLORS.text, columns.quantity);
+      drawRight(page, `${arabicDigits(item.durationMonths)} شهر`, y - 9, resources.regular, 8, COLORS.text, columns.duration);
+      drawRight(page, moneyLabel(item.unitPriceHalalas), y - 9, resources.regular, 7.5, COLORS.text, columns.unit);
+      drawRight(page, moneyLabel(item.lineTotalHalalas), y - 9, resources.bold, 7.5, COLORS.navy, columns.total);
+      page.drawLine({ start: { x: PAGE.margin, y: y - height + 5 }, end: { x: PAGE.width - PAGE.margin, y: y - height + 5 }, thickness: 0.45, color: COLORS.line });
+      y -= height;
+    });
+    y -= 8;
+  }
+
   addPage();
   return {
     heading,
     field,
+    latinField,
     pair,
     paragraph,
+    quotationTable,
     finish() { drawEndorsement(page, resources, input.referenceCode); },
   };
 }
@@ -298,11 +364,11 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
   const resources = await loadResources(pdf, assets);
   const composer = createComposer(pdf, resources, input);
   composer.heading(issuedDocumentLabels[input.documentType]);
-  composer.field("الرقم المرجعي", input.referenceCode);
+  composer.latinField("الرقم المرجعي", input.referenceCode);
   composer.field("تاريخ الإصدار", dateLabel(input.issueDate));
   composer.field("العميل / الجهة", input.clientName);
-  if (input.clientCr) composer.field("السجل التجاري للعميل", input.clientCr);
-  if (input.clientVat) composer.field("الرقم الضريبي للعميل", input.clientVat);
+  if (input.clientCr) composer.field("السجل التجاري للعميل", arabicDigits(input.clientCr));
+  if (input.clientVat) composer.field("الرقم الضريبي للعميل", arabicDigits(input.clientVat));
   composer.field("الموضوع", input.title);
 
   if (input.documentType === "workforce_contract") {
@@ -353,6 +419,22 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     ];
     clauses.forEach(([title, body]) => composer.paragraph(title, body));
     composer.paragraph("الاعتماد", "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.");
+  } else if (input.documentType === "quotation" && input.quotationItems?.length) {
+    if (input.activityLabel) composer.field("نشاط العرض", input.activityLabel);
+    if (input.workSite) composer.field("موقع تقديم الخدمة", input.workSite);
+    composer.paragraph("نطاق العرض", input.details);
+    composer.heading("جدول الخدمات والأسعار");
+    composer.quotationTable(input.quotationItems);
+    composer.field("الإجمالي قبل الخصم والضريبة", moneyLabel(input.subtotalHalalas));
+    if (input.discountHalalas) composer.field("الخصم", moneyLabel(input.discountHalalas));
+    if (input.vatHalalas) composer.pair("القيمة بعد الخصم", moneyLabel((input.subtotalHalalas || 0) - (input.discountHalalas || 0)), `ضريبة القيمة المضافة (${arabicDigits((input.vatRateBps || 0) / 100)}٪)`, moneyLabel(input.vatHalalas));
+    composer.field("الإجمالي النهائي", moneyLabel(input.amountHalalas));
+    composer.field("الإجمالي كتابة", halalasToArabicWords(input.amountHalalas || 0));
+    if (input.expiryDate) composer.field("صلاحية العرض", dateLabel(input.expiryDate));
+    if (input.paymentTerms) composer.paragraph("شروط الدفع", input.paymentTerms);
+    if (input.assumptions) composer.paragraph("الافتراضات والاستثناءات", input.assumptions);
+    if (input.terms) composer.paragraph("الشروط والأحكام", input.terms);
+    composer.paragraph("اعتماد العرض", "هذا العرض صالح خلال المدة المحددة أعلاه، ويبدأ التنفيذ بعد موافقة العميل واستكمال المتطلبات النظامية والتشغيلية وإصدار العقد أو أمر الإسناد المعتمد.");
   } else {
     if (input.amountHalalas) {
       if (input.vatHalalas && input.subtotalHalalas) {

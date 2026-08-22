@@ -146,7 +146,10 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     const issueDate = date(payload.issueDate);
     const validUntil = date(payload.validUntil);
     const rawItems = Array.isArray(payload.items) ? payload.items : [];
-    if (!opportunityId || !issueDate || !validUntil || validUntil < issueDate || !rawItems.length) throw new Error("بيانات عرض السعر غير مكتملة");
+    const activityLabel = text(payload.activityLabel, 120);
+    const workSite = text(payload.workSite, 180);
+    const vatRate = Number(payload.vatRate || 0);
+    if (!opportunityId || !issueDate || !validUntil || validUntil < issueDate || !rawItems.length || activityLabel.length < 3 || workSite.length < 2 || !Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100) throw new Error("بيانات عرض السعر غير مكتملة");
     const opportunity = await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, opportunityId) });
     if (!opportunity) throw new Error("الفرصة غير موجودة");
     const normalizedItems = rawItems.slice(0, 50).map((raw, index) => {
@@ -160,7 +163,9 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     });
     const subtotalHalalas = normalizedItems.reduce((sum, item) => sum + item.lineTotalHalalas, 0);
     const discountHalalas = Math.min(subtotalHalalas, Math.max(0, Math.round((Number(payload.discount) || 0) * 100)));
-    const [quote] = await db.insert(quoteVersions).values({ quoteCode: code("QUO"), opportunityId, versionNumber: 1, status: "draft", issueDate, validUntil, subtotalHalalas, discountHalalas, totalHalalas: subtotalHalalas - discountHalalas, assumptions: text(payload.assumptions, 3000) || null, terms: text(payload.terms, 3000) || null, createdBy: actor }).returning();
+    const vatHalalas = Math.round((subtotalHalalas - discountHalalas) * vatRate / 100);
+    const assumptions = [`النشاط: ${activityLabel}`, `موقع الخدمة: ${workSite}`, `الضريبة: ${vatRate}`, text(payload.assumptions, 2500)].filter(Boolean).join("\n");
+    const [quote] = await db.insert(quoteVersions).values({ quoteCode: code("QUO"), opportunityId, versionNumber: 1, status: "draft", issueDate, validUntil, subtotalHalalas, discountHalalas, totalHalalas: subtotalHalalas - discountHalalas + vatHalalas, assumptions, terms: text(payload.terms, 3000) || null, createdBy: actor }).returning();
     try {
       await db.insert(quoteItems).values(normalizedItems.map((item) => ({ ...item, quoteVersionId: quote.id })));
     } catch (error) {

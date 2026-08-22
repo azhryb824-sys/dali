@@ -314,7 +314,7 @@ function stringList(value: unknown, maxItems: number, itemLength: number, fallba
 
 function safeImage(value: unknown, fallback: string) {
   const image = plainText(value, 180);
-  return image === "/dally-logo.jpg" || /^\/images\/[a-zA-Z0-9][a-zA-Z0-9/_-]*\.(?:avif|gif|jpe?g|png|webp)$/.test(image) ? image : fallback;
+  return image === "/dally-logo.jpg" || /^\/images\/[a-zA-Z0-9][a-zA-Z0-9/_-]*\.(?:avif|gif|jpe?g|png|webp)$/.test(image) || /^\/api\/website-assets\/[a-f0-9-]{36}\.(?:jpg|png)$/.test(image) ? image : fallback;
 }
 
 function sanitizeFaqs(value: unknown, fallback: ManagedFaq[] = []) {

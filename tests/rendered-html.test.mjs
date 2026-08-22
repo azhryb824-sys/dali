@@ -99,6 +99,23 @@ test("construction access is scoped by functional role, geography, project and f
   assert.match(workspace, /توثيق موقع اليومية GPS/);
 });
 
+test("partner management uploads and publishes verified logos", async () => {
+  const [manager, upload, publicAsset, cards, sanitizer] = await Promise.all([
+    readFile(new URL("../app/portal/WebsiteManager.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/portal/website/assets/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/website-assets/[file]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/ManagedContentPages.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/website-content.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(manager, /شعار الشريك/);
+  assert.match(manager, /api\/portal\/website\/assets/);
+  assert.match(upload, /validateUploadedFile/);
+  assert.match(upload, /WEBSITE_ASSET_STORAGE_VERIFICATION_FAILED/);
+  assert.match(publicAsset, /immutable/);
+  assert.match(cards, /partner-card-logo/);
+  assert.match(sanitizer, /api\\\/website-assets/);
+});
+
 test("renders the public site and protects request workflows", async () => {
   const [quoteForm, quoteRoute, quoteMigration] = await Promise.all([
     readFile(new URL("../app/components/QuoteRequestForm.tsx", import.meta.url), "utf8"),

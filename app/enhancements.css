@@ -80,6 +80,7 @@
 .managed-collection-index { display: grid; gap: 54px; }
 .managed-card-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
 .managed-card-grid > article { min-height: 330px; padding: 30px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; }
+.managed-card-grid .partner-card-logo{width:100%;height:110px;margin:0 0 22px;object-fit:contain;object-position:center;padding:12px;border:1px solid var(--line);background:#fff}
 .managed-card-grid h2 { margin: 52px 0 14px; color: var(--navy); font-size: clamp(21px,2vw,28px); line-height: 1.45; }
 .managed-card-grid h2 a { color: inherit; }
 .managed-card-grid h2 a:hover { color: var(--red); }

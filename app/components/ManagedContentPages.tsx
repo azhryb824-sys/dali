@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import StructuredData from "@/app/components/StructuredData";
 import { absoluteUrl, SITE } from "@/lib/site";
 import { entryPath, type ManagedEntry, type WebsiteCollectionKey, type WebsiteContent } from "@/lib/website-content";
@@ -41,7 +42,7 @@ export function ManagedCollectionIndex({ content, collectionKey, title, descript
       {entries.length ? <div className="managed-card-grid">{entries.map((entry, index) => {
         const href = entryPath(collectionKey, entry);
         const linked = collectionKey !== "credentials" && collectionKey !== "partners";
-        return <article key={entry.id}><span>{String(index + 1).padStart(2, "0")}</span><p className="managed-card-tags">{entry.tags.slice(0, 3).join(" · ")}</p><h2>{linked ? <Link href={href}>{entry.shortTitle || entry.title}</Link> : entry.shortTitle || entry.title}</h2><p>{entry.summary}</p>{linked && <Link href={href}>عرض التفاصيل ←</Link>}</article>;
+        return <article key={entry.id}>{collectionKey === "partners" && entry.image && <Image className="partner-card-logo" src={entry.image} alt={entry.imageAlt || `شعار ${entry.shortTitle || entry.title}`} width={220} height={120} unoptimized/>}<span>{String(index + 1).padStart(2, "0")}</span><p className="managed-card-tags">{entry.tags.slice(0, 3).join(" · ")}</p><h2>{linked ? <Link href={href}>{entry.shortTitle || entry.title}</Link> : entry.shortTitle || entry.title}</h2><p>{entry.summary}</p>{linked && <Link href={href}>عرض التفاصيل ←</Link>}</article>;
       })}</div> : <div className="managed-empty-state"><span aria-hidden="true">✓</span><h2>{emptyTitle}</h2><p>{emptyText}</p><Link href="/contact">تواصل مع الشركة ←</Link></div>}
       <Link className="inner-callout" href="/contact#quote"><strong>هل لديك احتياج يحتاج إلى مراجعة؟</strong><span>شاركنا المهن والأعداد والموقع والمدة لنبدأ بنطاق واضح.</span><b>طلب عرض سعر ←</b></Link>
     </section>
