@@ -25,6 +25,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const db = getDb();
   const quote = await db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, id) });
   if (!quote) return Response.json({ error: "عرض السعر غير موجود" }, { status: 404 });
+  if (!quote.approvedBy || !["approved", "sent", "accepted"].includes(quote.status)) return Response.json({ error: "لا يمكن تنزيل عرض السعر قبل اعتماده من المالك" }, { status: 409 });
   const opportunity = await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, quote.opportunityId) });
   if (!opportunity) return Response.json({ error: "فرصة المبيعات غير موجودة" }, { status: 404 });
   const [client, items, assets] = await Promise.all([

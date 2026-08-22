@@ -756,6 +756,40 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     finally { setBusy(null); }
   }
 
+  async function editContract(contract: WorkforceContract) {
+    const clientName = window.prompt("اسم العميل أو الجهة", contract.clientName); if (clientName === null) return;
+    const title = window.prompt("عنوان العقد", contract.title); if (title === null) return;
+    const workSite = window.prompt("موقع العمل", contract.workSite); if (workSite === null) return;
+    const startDate = window.prompt("تاريخ بداية العقد (YYYY-MM-DD)", contract.startDate); if (startDate === null) return;
+    const endDate = window.prompt("تاريخ نهاية العقد (YYYY-MM-DD)", contract.endDate); if (endDate === null) return;
+    setBusy(`contract-edit-${contract.id}`);
+    try {
+      const response = await fetch(`/api/portal/contracts/${contract.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ clientName, title, workSite, startDate, endDate }) });
+      const result = await response.json() as { contract?: WorkforceContract; error?: string };
+      if (!response.ok || !result.contract) throw new Error(result.error || "تعذّر تعديل العقد");
+      setContracts(items => items.map(item => item.id === contract.id ? result.contract as WorkforceContract : item));
+      notify("تم تعديل العقد وإعادته للمسودة؛ يلزم اعتماد المالك مجددًا.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تعديل العقد."); }
+    finally { setBusy(null); }
+  }
+
+  async function deleteContract(contract: WorkforceContract) {
+    if (!window.confirm(`حذف مسودة العقد ${contract.referenceCode} وجميع بياناتها غير المحاسبية؟`)) return;
+    setBusy(`contract-delete-${contract.id}`);
+    try {
+      const response = await fetch(`/api/portal/contracts/${contract.id}`, { method: "DELETE" });
+      const result = await response.json() as { deleted?: boolean; error?: string };
+      if (!response.ok || !result.deleted) throw new Error(result.error || "تعذّر حذف العقد");
+      setContracts(items => items.filter(item => item.id !== contract.id));
+      setContractProfessions(items => items.filter(item => item.contractId !== contract.id));
+      setContractAssignments(items => items.filter(item => item.contractId !== contract.id));
+      setDocuments(items => items.filter(item => item.id !== contract.documentId));
+      setSelectedContractId(null);
+      notify("تم حذف مسودة العقد وتحديث مركز المستندات وسجل العمليات.");
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر حذف العقد."); }
+    finally { setBusy(null); }
+  }
+
   async function uploadAsset(slot: "stamp" | "signature", form: HTMLFormElement) {
     const input = form.elements.namedItem("file");
     const file = input instanceof HTMLInputElement ? input.files?.[0] : undefined;
@@ -928,7 +962,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
           <section className="panel request-panel workforce-requests"><div className="panel-head"><div><h2>طلبات القوى العاملة من الموقع</h2><p>الطلبات الواردة مباشرة من العملاء</p></div><span className="panel-count">{requestCounts.new} جديد</span></div><div className="table-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بالاسم أو رقم الطلب" /></label><div className="filter-tabs" role="group" aria-label="تصفية الطلبات">{(["all", "new", "reviewing", "contacted", "closed"] as const).map((value) => <button key={value} className={requestFilter === value ? "active" : ""} onClick={() => setRequestFilter(value)}>{value === "all" ? "الكل" : requestStatuses[value].label}</button>)}</div></div><RequestTable requests={visibleRequests} onSelect={setSelectedId}/></section>
         </ModuleSection>}
 
-        {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} onCreateContract={() => openIssueDocument("workforce_contract")}/>}
+        {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.includes("system_owner")} onCreateContract={() => openIssueDocument("workforce_contract")}/>}
         {view === "representatives" && canAccess("workforce") && <SalesRepresentativesWorkspace canWrite={canWrite}/>}
         {view === "construction" && canAccessConstruction && <ConstructionWorkspace/>}
 
@@ -969,7 +1003,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus}/>}
     {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply}/>}
     {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment}/>} 
-    {selectedContract && <ContractDrawer contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus}/>}
+    {selectedContract && <ContractDrawer contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.includes("system_owner")} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus} onEdit={editContract} onDelete={deleteContract}/>}
   </main>;
 }
 
@@ -1373,13 +1407,15 @@ function ContractOperations({ contracts, professions, assignments, onSelect }: {
 }
 
 const contractStatusLabels: Record<string, string> = { draft: "مسودة", internal_review: "مراجعة داخلية", legal_review: "مراجعة قانونية", approved: "معتمد", sent: "مرسل للطرف الثاني", signed: "موقع", active: "ساري", suspended: "معلق", expired: "منتهي", terminated: "منهى", cancelled: "ملغى", superseded: "استبدل بإصدار أحدث" };
-const contractNextStatuses: Record<string, string[]> = { draft: ["internal_review", "cancelled"], internal_review: ["draft", "legal_review", "cancelled"], legal_review: ["internal_review", "approved", "cancelled"], approved: ["sent", "cancelled"], sent: ["signed", "cancelled"], signed: ["active", "cancelled"], active: ["suspended", "terminated", "expired", "superseded"], suspended: ["active", "terminated"], expired: ["superseded"] };
+const contractNextStatuses: Record<string, string[]> = { draft: ["internal_review", "cancelled"], internal_review: ["draft", "legal_review", "cancelled"], legal_review: ["internal_review", "approved", "cancelled"], approved: ["active", "sent", "cancelled"], sent: ["signed", "cancelled"], signed: ["active", "cancelled"], active: ["suspended", "terminated", "expired", "superseded"], suspended: ["active", "terminated"], expired: ["superseded"] };
 
-function ContractDrawer({ contract, professions, assignments, workers, canWrite, isAdmin, busy, onClose, onAssign, onRelease, onStatus }: {
-  contract: WorkforceContract; professions: ContractProfession[]; assignments: ContractAssignment[]; workers: WorkerRecord[]; canWrite: boolean; isAdmin: boolean; busy: string | null; onClose: () => void;
+function ContractDrawer({ contract, professions, assignments, workers, canWrite, isAdmin, isOwner, busy, onClose, onAssign, onRelease, onStatus, onEdit, onDelete }: {
+  contract: WorkforceContract; professions: ContractProfession[]; assignments: ContractAssignment[]; workers: WorkerRecord[]; canWrite: boolean; isAdmin: boolean; isOwner: boolean; busy: string | null; onClose: () => void;
   onAssign: (contractId: number, contractProfessionId: number, workerId: number) => Promise<void>;
   onRelease: (contractId: number, assignmentId: number) => Promise<void>;
   onStatus: (contractId: number, status: string, reason: string) => Promise<void>;
+  onEdit: (contract: WorkforceContract) => Promise<void>;
+  onDelete: (contract: WorkforceContract) => Promise<void>;
 }) {
   const [choices, setChoices] = useState<Record<number, string>>({});
   const [nextStatus, setNextStatus] = useState("");
@@ -1389,8 +1425,9 @@ function ContractDrawer({ contract, professions, assignments, workers, canWrite,
   const requiredTotal = professions.reduce((sum, item) => sum + item.requiredCount, 0);
   return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="إغلاق إدارة العقد" onClick={onClose}/><aside className="request-drawer contract-drawer" role="dialog" aria-modal="true" aria-label={`إدارة عمالة العقد ${contract.referenceCode}`}><div className="drawer-head"><div><span dir="ltr">{contract.referenceCode}</span><h2>إدارة عمالة العقد</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div>
     <div className="contract-drawer-summary"><div><span>الجهة المستفيدة</span><strong>{contract.clientName}</strong><small>{contract.workSite}</small></div><div><span>الحالة التعاقدية</span><strong>{contractStatusLabels[contract.status] || contract.status}</strong><small>الإصدار {contract.versionNumber || 1}</small></div><div><span>التغطية الحالية</span><strong>{activeAssignments.length} / {requiredTotal}</strong><small>{plannedAssignments.length ? `${plannedAssignments.length} عامل مخطط للإسناد عند السريان` : `متبقٍ ${Math.max(0, requiredTotal - activeAssignments.length)} عامل`}</small></div><div><span>مدة العقد</span><strong>{formatDate(contract.startDate)}</strong><small>حتى {formatDate(contract.endDate)}</small></div></div>
-    <a className="contract-pdf-link" href={`/api/portal/documents/${contract.documentId}`}><Icon name="download"/> تنزيل نسخة العقد الصادرة</a>
-    {canWrite && (contractNextStatuses[contract.status]?.length || 0) > 0 && <section className="drawer-section contract-lifecycle"><h3>دورة اعتماد العقد</h3><p>لا يصبح العقد ساريًا ولا تتحول العمالة المخططة إلى إسناد فعلي إلا بعد المراجعة والاعتماد والتوقيع.</p><div><select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}><option value="">اختر الحالة التالية</option>{contractNextStatuses[contract.status].filter((status) => isAdmin || !["approved","signed","active","terminated","cancelled","superseded"].includes(status)).map((status) => <option value={status} key={status}>{contractStatusLabels[status]}</option>)}</select><textarea value={statusReason} onChange={(event) => setStatusReason(event.target.value)} rows={2} maxLength={1000} placeholder="سبب القرار إلزامي للتعليق أو الإنهاء أو الإلغاء"/><button className="admin-primary" disabled={!nextStatus || busy === `contract-status-${contract.id}`} onClick={() => void onStatus(contract.id, nextStatus, statusReason).then(() => { setNextStatus(""); setStatusReason(""); })}>{busy === `contract-status-${contract.id}` ? "جارٍ الحفظ..." : "حفظ انتقال الحالة"}</button></div></section>}
+    {contract.approvedBy ? <a className="contract-pdf-link" href={`/api/portal/documents/${contract.documentId}`}><Icon name="download"/> تنزيل نسخة العقد الصادرة</a> : <p className="readonly-note">يتاح تنزيل PDF العقد بعد اعتماد المالك فقط.</p>}
+    {canWrite && !["active","suspended","expired","terminated","superseded"].includes(contract.status) && <div className="document-actions"><button disabled={busy === `contract-edit-${contract.id}`} onClick={() => void onEdit(contract)}>تعديل بيانات العقد</button>{contract.status === "draft" && !contract.approvedBy && <button className="danger-action" disabled={busy === `contract-delete-${contract.id}`} onClick={() => void onDelete(contract)}>حذف مسودة العقد</button>}</div>}
+    {canWrite && (contractNextStatuses[contract.status]?.length || 0) > 0 && <section className="drawer-section contract-lifecycle"><h3>دورة اعتماد العقد</h3><p>اعتماد العقد للمالك فقط، وبعد الاعتماد يستطيع المالك أو صاحب صلاحية التشغيل تفعيله فتبدأ آثاره التشغيلية والمالية.</p><div><select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}><option value="">اختر الحالة التالية</option>{contractNextStatuses[contract.status].filter((status) => status === "approved" ? isOwner : isAdmin || !["signed","terminated","cancelled","superseded"].includes(status)).map((status) => <option value={status} key={status}>{contractStatusLabels[status]}</option>)}</select><textarea value={statusReason} onChange={(event) => setStatusReason(event.target.value)} rows={2} maxLength={1000} placeholder="سبب القرار إلزامي للتعليق أو الإنهاء أو الإلغاء"/><button className="admin-primary" disabled={!nextStatus || busy === `contract-status-${contract.id}`} onClick={() => void onStatus(contract.id, nextStatus, statusReason).then(() => { setNextStatus(""); setStatusReason(""); })}>{busy === `contract-status-${contract.id}` ? "جارٍ الحفظ..." : "حفظ انتقال الحالة"}</button></div></section>}
     <div className="contract-profession-sections">{professions.map((profession) => { const professionActive = activeAssignments.filter((item) => item.contractProfessionId === profession.id); const professionPlanned = plannedAssignments.filter((item) => item.contractProfessionId === profession.id); const visibleAssignments = professionActive.length ? professionActive : professionPlanned; const assignedIds = new Set(visibleAssignments.map((item) => item.workerId)); const candidates = workers.filter((worker) => worker.profession === profession.profession && worker.status === "available" && !assignedIds.has(worker.id)); const remaining = Math.max(0, profession.requiredCount - visibleAssignments.length); return <section key={profession.id}><header><div><strong>{profession.profession}</strong><small>مطلوب {profession.requiredCount} عامل</small></div><span className={remaining === 0 ? "complete" : ""}>{visibleAssignments.length}/{profession.requiredCount}</span></header><div className="contract-assigned-list">{visibleAssignments.map((assignment) => { const worker = workers.find((item) => item.id === assignment.workerId); const planned = assignment.status === "planned"; return <article key={assignment.id}><span>{initials(worker?.fullName || "عامل")}</span><p><strong>{worker?.fullName || `عامل رقم ${assignment.workerId}`}</strong><small>{worker?.iqamaNumber || "رقم الإقامة غير متاح"} · {planned ? "مخطط عند السريان" : formatDate(assignment.assignedAt)}</small></p>{planned ? <b className="planned-assignment">مخطط</b> : canWrite && <button disabled={busy === `contract-release-${assignment.id}`} onClick={() => void onRelease(contract.id, assignment.id)}>{busy === `contract-release-${assignment.id}` ? "جارٍ..." : "إنهاء الإسناد"}</button>}</article>; })}{!visibleAssignments.length && <p className="empty-operational">لم تُحدّد عمالة لهذه المهنة بعد.</p>}</div>{canWrite && contract.status === "active" && remaining > 0 && <div className="contract-add-worker"><label>إضافة عامل متاح<select value={choices[profession.id] || ""} onChange={(event) => setChoices((items) => ({ ...items, [profession.id]: event.target.value }))}><option value="">اختر العامل</option>{candidates.map((worker) => <option value={worker.id} key={worker.id}>{worker.fullName} — {worker.iqamaNumber}</option>)}</select></label><button className="admin-primary" disabled={!choices[profession.id] || busy === `contract-assign-${profession.id}`} onClick={() => choices[profession.id] && void onAssign(contract.id, profession.id, Number(choices[profession.id]))}>{busy === `contract-assign-${profession.id}` ? "جارٍ الإسناد..." : "إضافة إلى العقد"}</button>{!candidates.length && <small>لا توجد عمالة متاحة مطابقة للمهنة حالياً.</small>}</div>}{contract.status !== "active" && remaining > 0 && <p className="readonly-note">يُتاح الإسناد اليدوي بعد اعتماد العقد وتوقيعه وتحويله إلى ساري.</p>}{remaining === 0 && <p className="profession-complete-note">اكتمل العدد المطلوب لهذه المهنة.</p>}</section>; })}</div>
   </aside></div>;
 }

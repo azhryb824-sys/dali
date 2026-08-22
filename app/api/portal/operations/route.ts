@@ -428,8 +428,9 @@ async function transitionRecord(action: string, payload: Record<string, unknown>
     if (!item) throw new Error("عرض السعر غير موجود");
     const allowed: Record<string, string[]> = { draft: ["pending_approval"], pending_approval: ["approved", "rejected"], approved: ["sent"], sent: ["accepted", "rejected", "expired"], accepted: [], rejected: [], expired: [], superseded: [] };
     if (!allowed[item.status]?.includes(nextStatus)) throw new Error("انتقال حالة العرض غير مسموح");
-    if (["approved", "rejected"].includes(nextStatus) && access.role === "employee") throw new Error("غير مصرح باتخاذ قرار الاعتماد");
-    if (nextStatus === "approved" && item.createdBy === actor && access.role !== "admin") throw new Error("لا يجوز لمنشئ العرض اعتماده");
+    const isOwner = access.functionalRoles.includes("system_owner");
+    if (nextStatus === "approved" && !isOwner) throw new Error("اعتماد عرض السعر متاح للمالك فقط");
+    if (nextStatus === "rejected" && access.role === "employee") throw new Error("غير مصرح باتخاذ قرار الاعتماد");
     const now = new Date().toISOString();
     const [updated] = await db.update(quoteVersions).set({ status: nextStatus, approvalReason: ["approved", "rejected"].includes(nextStatus) ? reason : item.approvalReason, approvedBy: nextStatus === "approved" ? actor : item.approvedBy, approvedAt: nextStatus === "approved" ? now : item.approvedAt, acceptedAt: nextStatus === "accepted" ? now : item.acceptedAt, updatedAt: now, recordVersion: item.recordVersion + 1 }).where(and(eq(quoteVersions.id, id), eq(quoteVersions.recordVersion, integer(payload.version, 1) ?? item.recordVersion))).returning();
     if (!updated) throw new Error("تعارض في إصدار العرض؛ حدّث الصفحة وحاول مجددًا");

@@ -10,7 +10,7 @@ const transitions: Record<string, string[]> = {
   draft: ["internal_review", "cancelled"],
   internal_review: ["draft", "legal_review", "cancelled"],
   legal_review: ["internal_review", "approved", "cancelled"],
-  approved: ["sent", "cancelled"],
+  approved: ["sent", "active", "cancelled"],
   sent: ["signed", "cancelled"],
   signed: ["active", "cancelled"],
   active: ["suspended", "terminated", "expired", "superseded"],
@@ -23,7 +23,7 @@ function clean(value: unknown, length: number) { return typeof value === "string
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin", "manager"]);
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access || !(await hasPortalPermission(access, "workforce", "write"))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   try {
     const id = Number((await context.params).id);
@@ -36,7 +36,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (!contract) return jsonNoStore({ error: "العقد غير موجود" }, { status: 404 });
     if (!transitions[contract.status]?.includes(status)) return jsonNoStore({ error: "انتقال حالة العقد غير مسموح" }, { status: 409 });
     if (["cancelled", "terminated", "suspended"].includes(status) && reason.length < 10) return jsonNoStore({ error: "اكتب سببًا واضحًا لا يقل عن 10 أحرف" }, { status: 400 });
-    if (["approved", "signed", "active", "terminated", "cancelled", "superseded"].includes(status) && access.role !== "admin") return jsonNoStore({ error: "هذه المرحلة تتطلب اعتماد مدير النظام" }, { status: 403 });
+    const isOwner = access.functionalRoles.includes("system_owner");
+    if (status === "approved" && !isOwner) return jsonNoStore({ error: "اعتماد العقد متاح للمالك فقط" }, { status: 403 });
+    if (["signed", "terminated", "cancelled", "superseded"].includes(status) && !isOwner) return jsonNoStore({ error: "هذه المرحلة تتطلب صلاحية المالك" }, { status: 403 });
+    if (status === "active" && !contract.approvedBy) return jsonNoStore({ error: "لا يمكن تفعيل العقد قبل اعتماده من المالك" }, { status: 409 });
     const plannedAssignments = status === "active"
       ? await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), eq(contractWorkerAssignments.status, "planned")))
       : [];

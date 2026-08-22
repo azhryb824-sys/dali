@@ -9,7 +9,7 @@ type Client = { id: number; clientCode: string; legalName: string; tradeName: st
 type Contact = { id: number; clientId: number; fullName: string; email: string | null; mobile: string | null };
 type Opportunity = { id: number; opportunityCode: string; clientId: number | null; salesRepresentativeId: number | null; title: string; stage: string; expectedValueHalalas: number; probability: number; ownerEmail: string; version: number };
 type Representative = { id: number; representativeCode: string; fullName: string; status: string };
-type Quote = { id: number; quoteCode: string; opportunityId: number; versionNumber: number; status: string; issueDate: string; validUntil: string; totalHalalas: number; quantityMode: "fixed"|"open"; vatRateBps: number; createdBy: string; recordVersion: number };
+type Quote = { id: number; quoteCode: string; opportunityId: number; versionNumber: number; status: string; issueDate: string; validUntil: string; totalHalalas: number; quantityMode: "fixed"|"open"; vatRateBps: number; approvedBy: string | null; createdBy: string; recordVersion: number };
 type QuoteItem = { id: number; quoteVersionId: number; profession: string; quantity: number; durationMonths: number; unitPriceHalalas: number; lineTotalHalalas: number };
 type WorkOrder = { id: number; workOrderCode: string; clientId: number; title: string; workSite: string; startDate: string; endDate: string | null; status: string; version: number };
 type Requirement = { id: number; workOrderId: number; profession: string; requiredCount: number; filledCount: number; shiftName: string | null };
@@ -28,7 +28,7 @@ type CreateOperation = (action: string, form: HTMLFormElement, extra?: Record<st
 const money = (halalas: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 2 }).format(halalas / 100);
 const fmt = (value: string) => new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value.includes("T") ? value : `${value}T00:00:00`));
 
-export default function OperationsWorkspace({ canWrite, isAdmin, initialTab = "crm", initialQuery = "", onCreateContract }: { canWrite: boolean; isAdmin: boolean; initialTab?: OperationsTab; initialQuery?: string; onCreateContract: () => void }) {
+export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initialTab = "crm", initialQuery = "", onCreateContract }: { canWrite: boolean; isAdmin: boolean; isOwner: boolean; initialTab?: OperationsTab; initialQuery?: string; onCreateContract: () => void }) {
   const [data, setData] = useState<OperationsData | null>(null);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState(initialQuery);
@@ -76,6 +76,33 @@ export default function OperationsWorkspace({ canWrite, isAdmin, initialTab = "c
       setNotice("أُنشئ إصدار جديد وحُفظ الإصدار السابق كسجل متجاوز.");
       await load();
     } catch (error) { setNotice(error instanceof Error ? error.message : "تعذّر إنشاء الإصدار"); }
+    finally { setBusy(""); }
+  }
+
+  async function editQuote(quote: Quote) {
+    const issueDate = window.prompt("تاريخ إصدار العرض (YYYY-MM-DD)", quote.issueDate);
+    if (issueDate === null) return;
+    const validUntil = window.prompt("تاريخ انتهاء صلاحية العرض (YYYY-MM-DD)", quote.validUntil);
+    if (validUntil === null) return;
+    setBusy(`edit-quote-${quote.id}`); setNotice("");
+    try {
+      const response = await fetch(`/api/portal/operations/quotes/${quote.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ issueDate, validUntil }) });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "تعذّر تعديل عرض السعر");
+      setNotice("تم تعديل عرض السعر وإعادته للمسودة لاعتماده مجددًا."); await load();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "تعذّر تعديل العرض"); }
+    finally { setBusy(""); }
+  }
+
+  async function deleteQuote(quote: Quote) {
+    if (!window.confirm(`حذف مسودة عرض السعر ${quote.quoteCode} نهائيًا؟`)) return;
+    setBusy(`delete-quote-${quote.id}`); setNotice("");
+    try {
+      const response = await fetch(`/api/portal/operations/quotes/${quote.id}`, { method: "DELETE" });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "تعذّر حذف عرض السعر");
+      setNotice("تم حذف عرض السعر وتحديث سجل العمليات."); await load();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "تعذّر حذف العرض"); }
     finally { setBusy(""); }
   }
 
@@ -132,7 +159,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, initialTab = "c
     </OperationsSection>}
 
     {tab === "quotes" && <OperationsSection title="عروض الأسعار والإصدارات" count={data.quotes.length} form={canWrite ? <QuoteForm data={data} busy={busy} onCreate={create}/> : null}>
-      <div className="operations-list wide">{data.quotes.filter(includes).map((quote) => <div key={quote.id}><span className="record-code">{quote.quoteCode}<small>v{quote.versionNumber}</small></span><p><strong>{data.opportunities.find((item) => item.id === quote.opportunityId)?.title || "فرصة"}</strong><small>{fmt(quote.issueDate)} · صالح حتى {fmt(quote.validUntil)} · {data.quoteItems.filter((item) => item.quoteVersionId === quote.id).length} بنود</small></p><b>{quote.quantityMode==="open"?"عدد مفتوح":money(quote.totalHalalas)}</b><span className={`workflow-status ${quote.status}`}>{quote.status}</span><a className="quote-pdf" href={`/api/portal/operations/quotes/${quote.id}/pdf`}>تنزيل PDF</a>{canWrite && !["accepted","superseded"].includes(quote.status) && <button className="quote-revision" disabled={busy === `revision-${quote.id}`} onClick={() => void createQuoteRevision(quote)}>نسخة جديدة</button>}{canWrite && <TransitionSelect busy={busy === `transition-quote-${quote.id}`} value={quote.status} options={quoteNext[quote.status] || []} onChange={(status) => void transition("transition-quote", quote, status)}/>}</div>)}</div>
+      <div className="operations-list wide">{data.quotes.filter(includes).map((quote) => <div key={quote.id}><span className="record-code">{quote.quoteCode}<small>v{quote.versionNumber}</small></span><p><strong>{data.opportunities.find((item) => item.id === quote.opportunityId)?.title || "فرصة"}</strong><small>{fmt(quote.issueDate)} · صالح حتى {fmt(quote.validUntil)} · {data.quoteItems.filter((item) => item.quoteVersionId === quote.id).length} بنود</small></p><b>{quote.quantityMode==="open"?"عدد مفتوح":money(quote.totalHalalas)}</b><span className={`workflow-status ${quote.status}`}>{quote.status}</span>{quote.approvedBy ? <a className="quote-pdf" href={`/api/portal/operations/quotes/${quote.id}/pdf`}>تنزيل PDF</a> : <span className="quote-pdf locked">PDF بعد اعتماد المالك</span>}{canWrite && ["draft","rejected"].includes(quote.status) && <button className="quote-revision" disabled={busy === `edit-quote-${quote.id}`} onClick={() => void editQuote(quote)}>تعديل</button>}{canWrite && ["draft","rejected"].includes(quote.status) && <button className="quote-revision danger-action" disabled={busy === `delete-quote-${quote.id}`} onClick={() => void deleteQuote(quote)}>حذف</button>}{canWrite && !["accepted","superseded"].includes(quote.status) && <button className="quote-revision" disabled={busy === `revision-${quote.id}`} onClick={() => void createQuoteRevision(quote)}>نسخة جديدة</button>}{canWrite && <TransitionSelect busy={busy === `transition-quote-${quote.id}`} value={quote.status} options={(quoteNext[quote.status] || []).filter(status => status !== "approved" || isOwner)} onChange={(status) => void transition("transition-quote", quote, status)}/>}</div>)}</div>
     </OperationsSection>}
 
     {tab === "contracts" && <><div className="contract-create-toolbar">{canWrite&&<button className="admin-primary" onClick={onCreateContract}>إنشاء عقد</button>}</div><ContractBillingWorkspace/></>}

@@ -206,7 +206,7 @@ function drawHeader(page: PDFPage, resources: PdfResources, input: IssuedDocumen
     page.drawRectangle({ x: 0, y: PAGE.height - 10, width: PAGE.width, height: 10, color: COLORS.navy });
     page.drawRectangle({ x: PAGE.width - 10, y: PAGE.height - 10, width: 10, height: 10, color: COLORS.red });
   }
-  if (resources.logo) {
+  if (!resources.letterhead && resources.logo) {
     const ratio = resources.logo.width / resources.logo.height;
     const height = 42;
     page.drawImage(resources.logo, { x: PAGE.width - PAGE.margin - height * ratio, y: top - height, width: height * ratio, height });
@@ -233,13 +233,28 @@ function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: 
   drawRight(page, "أُصدر إلكترونياً من نظام شركة دالي للتشغيل والصيانة", 21, resources.regular, 7, COLORS.muted);
 }
 
+function drawContractSignatures(page: PDFPage, resources: PdfResources, referenceCode: string) {
+  const y = 48;
+  page.drawLine({ start: { x: PAGE.margin, y: PAGE.footerTop }, end: { x: PAGE.width - PAGE.margin, y: PAGE.footerTop }, thickness: 1, color: COLORS.line });
+  drawRight(page, "توقيعات طرفي العقد", PAGE.footerTop - 22, resources.bold, 10, COLORS.navy);
+  drawRight(page, "الطرف الأول — شركة دالي للتشغيل والصيانة", PAGE.footerTop - 42, resources.bold, 8, COLORS.text);
+  drawLeft(page, "الطرف الثاني — التوقيع والاسم", PAGE.footerTop - 42, resources.bold, 8, COLORS.text);
+  const stampScale = Math.min(82 / resources.stamp.width, 64 / resources.stamp.height);
+  const signatureScale = Math.min(105 / resources.signature.width, 55 / resources.signature.height);
+  page.drawImage(resources.stamp, { x: PAGE.width - PAGE.margin - 85, y, width: resources.stamp.width * stampScale, height: resources.stamp.height * stampScale });
+  page.drawImage(resources.signature, { x: PAGE.width - PAGE.margin - 205, y: y + 5, width: resources.signature.width * signatureScale, height: resources.signature.height * signatureScale });
+  page.drawLine({ start: { x: PAGE.margin, y: y + 18 }, end: { x: PAGE.margin + 180, y: y + 18 }, thickness: .7, color: COLORS.muted });
+  drawLeft(page, "الاسم: ____________________", y + 31, resources.regular, 8, COLORS.muted);
+  drawLeft(page, "الصفة: ____________________", y + 5, resources.regular, 8, COLORS.muted);
+  drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
+}
+
 function createComposer(pdf: PDFDocument, resources: PdfResources, input: IssuedDocumentInput) {
   let pageNumber = 0;
   let page: PDFPage;
   let y: number;
 
   function addPage() {
-    if (pageNumber > 0) drawEndorsement(page, resources, input.referenceCode);
     page = pdf.addPage([PAGE.width, PAGE.height]);
     pageNumber += 1;
     drawHeader(page, resources, input, pageNumber);
@@ -350,7 +365,10 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     pair,
     paragraph,
     quotationTable,
-    finish() { drawEndorsement(page, resources, input.referenceCode); },
+    finish() {
+      if (input.documentType === "workforce_contract") drawContractSignatures(page, resources, input.referenceCode);
+      else drawEndorsement(page, resources, input.referenceCode);
+    },
   };
 }
 
