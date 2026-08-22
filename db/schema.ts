@@ -464,6 +464,33 @@ export const legalRecords = pgTable(
   ],
 );
 
+export const legalCaseActivities = pgTable(
+  "legal_case_activities",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "cascade" }),
+    activityType: text("activity_type").notNull().default("task"),
+    title: text("title").notNull(),
+    details: text("details"),
+    priority: text("priority").notNull().default("medium"),
+    status: text("status").notNull().default("open"),
+    dueAt: text("due_at"),
+    assignedTo: text("assigned_to"),
+    completedAt: text("completed_at"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_case_activities_case_idx").on(table.legalRecordId),
+    index("legal_case_activities_due_idx").on(table.dueAt),
+    index("legal_case_activities_status_idx").on(table.status),
+    check("legal_case_activities_type_check", sql`${table.activityType} in ('task','deadline','note','communication','hearing','settlement')`),
+    check("legal_case_activities_priority_check", sql`${table.priority} in ('low','medium','high','critical')`),
+    check("legal_case_activities_status_check", sql`${table.status} in ('open','in_progress','completed','cancelled')`),
+  ],
+);
+
 export const complianceObligations = pgTable(
   "compliance_obligations",
   {

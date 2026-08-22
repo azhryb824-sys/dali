@@ -23,6 +23,8 @@ import ConstructionWorkspace from "./ConstructionWorkspace";
 import AccessScopeManager from "./AccessScopeManager";
 import RoleDefinitionManager from "./RoleDefinitionManager";
 import SalesRepresentativesWorkspace from "./SalesRepresentativesWorkspace";
+import LegalCaseWorkspace from "./LegalCaseWorkspace";
+import PaymentManagementDashboard from "./PaymentManagementDashboard";
 
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
@@ -940,6 +942,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
 
         {view === "finance" && canAccess("finance") && <ModuleSection eyebrow="مالية القوى العاملة" title="الإدارة المالية" description="رواتب العمالة والسلف والخصميات والمصروفات والفواتير والسندات المرتبطة بالعامل والعقد." actionLabel="إضافة حركة مالية" canWrite={canWrite} onAdd={() => setModal("finance")}>
           <section className="metric-grid compact-metrics finance-metrics"><Metric label="رواتب العمالة" value={formatMoney(payrollTotal)} note="إجمالي الرواتب المسجّلة"/><Metric label="السلف" value={formatMoney(advancesTotal)} note="سلف العمالة"/><Metric label="الخصميات" value={formatMoney(deductionsTotal)} note="خصميات مسجّلة"/><Metric label="مصروفات العمالة" value={formatMoney(workforceExpensesTotal)} note="سكن ونقل وإقامات وغيرها"/><Metric label="فواتير ومستخلصات" value={formatMoney(workforceInvoicesTotal)} note="مرتبطة بعقود العمالة"/><Metric label="إجمالي الحركات" value={formatMoney(financialTotal)} note={`${finance.length} حركة مالية`}/></section>
+          <PaymentManagementDashboard/>
           {canWrite && <FinanceDocumentActions onIssue={openIssueDocument}/>}
           <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالمرجع أو العامل أو العقد أو البيان"><FinanceTable records={finance} workers={workers} contracts={contracts} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("finance", id, status)} /></ManagementPanel>
           <AccountingWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin}/>
@@ -953,6 +956,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "legal" && canAccess("legal") && <ModuleSection eyebrow="العقود والامتثال" title="الشؤون القانونية" description="متابعة العقود والقضايا والتراخيص والتنبيهات النظامية." actionLabel="إضافة ملف قانوني" canWrite={canWrite} onAdd={() => setModal("legal")}>
           <section className="metric-grid compact-metrics"><Metric label="إجمالي الملفات" value={legal.length} note="كل السجلات"/><Metric label="عقود سارية" value={legal.filter((item) => item.category === "contract" && item.status === "active").length} note="عقود فعّالة"/><Metric label="قيد المراجعة" value={legal.filter((item) => item.status === "reviewing").length} note="ملفات مفتوحة"/><Metric label="تنبيهات التجديد" value={legalAlerts} note="خلال 45 يوماً"/></section>
           <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالعنوان أو الطرف أو المرجع"><LegalTable records={legal} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("legal", id, status)} /></ManagementPanel>
+          <LegalCaseWorkspace/>
           <ComplianceWorkspace canWrite={canWrite}/>
         </ModuleSection>}
 

@@ -1,11 +1,12 @@
 import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/db";
-import { companyAssets, companyDocuments, contractPaymentSchedules, financialRecords, legalRecords, workforceContracts } from "@/db/schema";
+import { clientContacts, companyAssets, companyDocuments, contractPaymentSchedules, financialRecords, legalRecords, workforceContracts } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { cleanText, makeReference, objectKey } from "@/lib/company-documents";
 import { generateIssuedPdf } from "@/lib/pdf-generator";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
+import { issueDueContractInvoice } from "@/lib/contract-payment-invoicing";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
 
@@ -17,8 +18,11 @@ export async function GET(){
   if(!access||!(await hasPortalPermission(access,"workforce","read"))&&!(await hasPortalPermission(access,"finance","read")))return jsonNoStore({error:"غير مصرح"},{status:403});
   const db=getDb();const today=new Date().toISOString().slice(0,10);
   await db.update(contractPaymentSchedules).set({status:"due",updatedAt:new Date().toISOString()}).where(and(eq(contractPaymentSchedules.status,"scheduled"),lte(contractPaymentSchedules.dueDate,today)));
-  const [contracts,payments]=await Promise.all([db.select().from(workforceContracts).orderBy(asc(workforceContracts.startDate)),db.select().from(contractPaymentSchedules).orderBy(asc(contractPaymentSchedules.dueDate),asc(contractPaymentSchedules.installmentNumber))]);
-  return jsonNoStore({contracts,payments,canManageContracts:await hasPortalPermission(access,"workforce","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","approve")||await hasPortalPermission(access,"finance","write"),canReferLegal:owner(access)});
+  const due=await db.select().from(contractPaymentSchedules).where(and(eq(contractPaymentSchedules.status,"due"),lte(contractPaymentSchedules.dueDate,today)));
+  for(const payment of due)await issueDueContractInvoice(payment.id,"system@dally-corporation.com").catch(async error=>{await emitPortalNotification({eventType:"contract-payment-auto-invoice-failed",title:"تعذر إنشاء فاتورة دفعة مستحقة",message:`الدفعة ${payment.id} — ${error instanceof Error?error.message:"خطأ غير معروف"}`,severity:"critical",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance",dedupeKey:`auto-invoice-failed:${payment.id}:${payment.dueDate}`}).catch(()=>undefined)});
+  const [contracts,payments,contacts]=await Promise.all([db.select().from(workforceContracts).orderBy(asc(workforceContracts.startDate)),db.select().from(contractPaymentSchedules).orderBy(asc(contractPaymentSchedules.dueDate),asc(contractPaymentSchedules.installmentNumber)),db.select().from(clientContacts)]);
+  const clientMobiles=Object.fromEntries(contacts.filter(item=>item.mobile).sort((a,b)=>Number(b.isPrimary)-Number(a.isPrimary)).map(item=>[item.clientId,item.mobile]));
+  return jsonNoStore({contracts,payments,clientMobiles,canManageContracts:await hasPortalPermission(access,"workforce","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","approve")||await hasPortalPermission(access,"finance","write"),canReferLegal:owner(access)});
 }
 
 export async function POST(request:Request){

@@ -4,6 +4,7 @@ import {
   companyDocuments,
   capacityPlans,
   contractProfessions,
+  contractPaymentSchedules,
   contractWorkerAssignments,
   constructionOpportunities,
   constructionProjects,
@@ -11,6 +12,7 @@ import {
   dataSubjectRequests,
   integrationOutbox,
   legalRecords,
+  legalCaseActivities,
   portalNotificationReads,
   portalNotifications,
   portalSettings,
@@ -27,6 +29,7 @@ import { getBusinessHoursState } from "@/lib/business-hours";
 import { emailDeliveryConfigured } from "@/lib/email-delivery";
 import type { PortalAccess, PortalDepartment, PortalRole } from "@/lib/portal-access";
 import { requirementsForProfession } from "@/lib/workforce-requirements";
+import { issueDueContractInvoice } from "@/lib/contract-payment-invoicing";
 
 export type NotificationSeverity = "info" | "success" | "warning" | "critical";
 export type NotificationModule = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "construction" | "conversations" | "documents" | "users" | "sales" | "operations" | "privacy" | "capacity" | "website";
@@ -151,9 +154,11 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   if (!options.force && marker && now.getTime() - new Date(marker.updatedAt).getTime() < 5 * 60 * 1000) return;
   await db.insert(portalSettings).values({ key: "operational-notifications-last-refresh", valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() }).onConflictDoUpdate({ target: portalSettings.key, set: { valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() } });
 
-  const [documents, legalItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems] = await Promise.all([
+  const [documents, legalItems, legalActivities, paymentItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems] = await Promise.all([
     db.select().from(companyDocuments).where(eq(companyDocuments.status, "active")).limit(1000),
     db.select().from(legalRecords).where(ne(legalRecords.status, "closed")).limit(1000),
+    db.select().from(legalCaseActivities).where(ne(legalCaseActivities.status, "completed")).limit(5000),
+    db.select().from(contractPaymentSchedules).where(ne(contractPaymentSchedules.status, "paid")).limit(5000),
     db.select().from(workers).limit(2000),
     db.select().from(workerAttachments).limit(10000),
     db.select().from(financialRecords).limit(2000),
@@ -178,6 +183,13 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     pendingChecks.set(input.dedupeKey, input);
   };
 
+  for(const payment of paymentItems){
+    if(["scheduled","due"].includes(payment.status)&&payment.dueDate<=now.toISOString().slice(0,10)){
+      if(payment.status==="scheduled")await db.update(contractPaymentSchedules).set({status:"due",updatedAt:now.toISOString()}).where(eq(contractPaymentSchedules.id,payment.id));
+      await issueDueContractInvoice(payment.id,"system@dally-corporation.com").then(async result=>{if("document" in result)await emitPortalNotification({eventType:"contract-payment-auto-invoiced",title:"أُنشئت فاتورة دفعة مستحقة تلقائيًا",message:`${result.document.referenceCode} — ${result.contract.clientName} — ${payment.title}`,severity:"success",module:"finance",entityType:"company-document",entityId:result.document.id,actionView:"operations",targetDepartment:"finance"})}).catch(()=>undefined);
+    }
+  }
+
   if (!emailDeliveryConfigured()) {
     ensure({
       dedupeKey: "system:email-delivery-not-configured",
@@ -192,6 +204,9 @@ export async function refreshOperationalNotifications(options: { force?: boolean
       targetRole: "admin",
     });
   }
+
+  for(const payment of paymentItems){if(payment.status==="cancelled")continue;const days=daysUntil(payment.dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`contract-payment-due:${payment.id}:${payment.dueDate}`,eventType:days<0?"contract-payment-overdue":"contract-payment-due",title:days<0?"دفعة عقد متأخرة":"دفعة عقد تقترب من الاستحقاق",message:`الدفعة ${payment.installmentNumber} — ${payment.title} — ${formatAlertDate(payment.dueDate)}.`,severity:days<0?"critical":days<=2?"warning":"info",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance"})}
+  for(const activity of legalActivities){if(!activity.dueAt||activity.status==="cancelled")continue;const dueDate=activity.dueAt.slice(0,10);const days=daysUntil(dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`legal-activity-due:${activity.id}:${dueDate}`,eventType:days<0?"legal-activity-overdue":"legal-activity-due",title:days<0?"إجراء قانوني متأخر":"موعد قانوني قريب",message:`${activity.title} — ${formatAlertDate(dueDate)}.`,severity:days<0||activity.priority==="critical"?"critical":"warning",module:"legal",entityType:"legal-record",entityId:activity.legalRecordId,actionView:"legal",targetDepartment:"legal",targetEmail:activity.assignedTo})}
 
   for (const request of privacyRequests) {
     const dueDays = Math.ceil((new Date(request.dueAt).getTime() - Date.now()) / 86400000);

@@ -82,3 +82,12 @@ test("contract cancellation transfers a complete immutable client case snapshot 
   assert.match(schema,/referralReason/);assert.match(schema,/referredBy/);assert.match(schema,/fileSnapshotJson/);
   assert.match(migration,/legal_records_contract_id_idx/);assert.match(portal,/فتح الملف الكامل/);assert.match(portal,/سبب الإحالة/);
 });
+
+test("due installments auto invoice once, support secure WhatsApp sharing, and feed finance and legal command centers",async()=>{
+  const[invoicing,paymentsApi,paymentsUi,dashboard,legalApi,legalUi,notifications,schema,migration]=await Promise.all([source("lib/contract-payment-invoicing.ts"),source("app/api/portal/contract-payments/route.ts"),source("app/portal/PaymentManagementDashboard.tsx"),source("app/portal/ContractBillingWorkspace.tsx"),source("app/api/portal/legal-cases/route.ts"),source("app/portal/LegalCaseWorkspace.tsx"),source("lib/portal-notifications.ts"),source("db/schema.ts"),source("drizzle-pg/0025_legal_case_management.sql")]);
+  assert.match(invoicing,/isNull\(contractPaymentSchedules\.invoiceDocumentId\)/);assert.match(invoicing,/contract-payment-auto-invoiced/);
+  assert.match(paymentsApi,/issueDueContractInvoice/);assert.match(paymentsApi,/clientMobiles/);assert.match(dashboard,/https:\/\/wa\.me\//);assert.match(dashboard,/رابط PDF الآمن/);
+  assert.match(paymentsUi,/مركز إدارة الدفعات والتحصيل/);assert.match(paymentsUi,/نسبة التحصيل/);assert.match(paymentsUi,/متأخر/);
+  assert.match(legalApi,/legal-case-activity-created/);assert.match(legalUi,/لوحة القضايا والإجراءات والمواعيد/);assert.match(schema,/legalCaseActivities/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);
+  assert.match(notifications,/contract-payment-overdue/);assert.match(notifications,/legal-activity-overdue/);assert.match(notifications,/issueDueContractInvoice/);
+});

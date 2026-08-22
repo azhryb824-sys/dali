@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clients, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { clients, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, financialRecords, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -84,6 +84,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       let legal = createdLegal || await db.query.legalRecords.findFirst({ where: eq(legalRecords.referenceCode, legalReference) });
       if (legal && !createdLegal) [legal] = await db.update(legalRecords).set({ clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), status: "reviewing", updatedAt: now }).where(eq(legalRecords.id, legal.id)).returning();
       if (legal) {
+        if(createdLegal)await db.insert(legalCaseActivities).values([{legalRecordId:legal.id,activityType:"task",title:"مراجعة العقد وسبب الإلغاء",details:"مراجعة البنود والإشعارات والمراسلات وتحديد المركز النظامي.",priority:"high",status:"open",assignedTo:null,createdBy:access.user.email},{legalRecordId:legal.id,activityType:"task",title:"مطابقة الرصيد المالي والفواتير",details:"مطابقة الدفعات المسددة والمستحقة والفواتير والقيود قبل أي مطالبة.",priority:"high",status:"open",assignedTo:null,createdBy:access.user.email},{legalRecordId:legal.id,activityType:"deadline",title:"تحديد مهلة الإشعار أو المطالبة",details:"تحديد الموعد وفق العقد والأنظمة بعد مراجعة قانونية بشرية.",priority:"critical",status:"open",dueAt:new Date(Date.now()+3*86400000).toISOString(),assignedTo:null,createdBy:access.user.email}]);
         await auditPortalAction({ actorEmail: access.user.email, action: "contract-cancellation-referred-legal", entityType: "legal-record", entityId: legal.id, after: { ...legal, snapshotCounts: { documents: documents.length, payments: payments.length, finances: finances.length, workers: linkedWorkers.length } }, reason });
         await emitPortalNotification({ eventType: "contract-cancellation-referred-legal", title: "ملف عميل كامل محال للشؤون القانونية", message: `${contract.referenceCode} — ${contract.clientName} — ${documents.length} مستندات، ${finances.length} سجلات مالية، ${payments.length} دفعات.`, severity: "critical", module: "legal", entityType: "legal-record", entityId: legal.id, actionView: "legal", targetDepartment: "legal" }).catch(() => undefined);
       }
