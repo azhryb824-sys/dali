@@ -164,6 +164,9 @@ export async function POST(request: Request) {
     if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000 || (documentType === "workforce_contract" && quantityMode === "fixed" && seasonType !== "regular" && amount <= 0)) {
       return Response.json({ error: "قيمة المستند غير صحيحة" }, { status: 400 });
     }
+    if (documentType === "quotation" && (!expiryDate || amount <= 0)) {
+      return Response.json({ error: "صلاحية العرض وقيمة الخدمة من متطلبات نموذج عرض السعر" }, { status: 400 });
+    }
     if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100 || (vatEnabled && !clientVat)) {
       return Response.json({ error: vatEnabled && !clientVat ? "أدخل الرقم الضريبي للعميل عند تفعيل الضريبة" : "نسبة الضريبة غير صحيحة" }, { status: 400 });
     }

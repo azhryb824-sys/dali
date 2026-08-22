@@ -54,6 +54,20 @@ test("activity-aware quotations include itemized branded PDF output", async () =
   assert.match(operations, /activityLabel/);
 });
 
+test("every quotation uses the single documents-page quotation template", async () => {
+  const [generator, documentsRoute, documentsUi] = await Promise.all([
+    source("lib/pdf-generator.ts"),
+    source("app/api/portal/documents/generate/route.ts"),
+    source("app/portal/PortalDashboard.tsx"),
+  ]);
+  assert.match(generator, /input\.documentType === "quotation"\)/);
+  assert.doesNotMatch(generator, /input\.documentType === "quotation" && input\.quotationItems\?\.length/);
+  assert.match(generator, /const quotationItems = input\.quotationItems\?\.length/);
+  assert.match(generator, /composer\.quotationTable\(quotationItems/);
+  assert.match(documentsRoute, /صلاحية العرض وقيمة الخدمة من متطلبات نموذج عرض السعر/);
+  assert.match(documentsUi, /required=\{documentType === "quotation"\}/);
+});
+
 test("all supported issued document types remain connected to the PDF generator", async () => {
   const [generator, route, identity] = await Promise.all([
     source("lib/pdf-generator.ts"), source("app/api/portal/documents/generate/route.ts"), source("lib/brand-identity-pdf.ts"),

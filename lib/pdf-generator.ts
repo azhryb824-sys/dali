@@ -439,14 +439,24 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     ];
     clauses.forEach(([title, body]) => composer.paragraph(title, body));
     composer.paragraph("الاعتماد", "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.");
-  } else if (input.documentType === "quotation" && input.quotationItems?.length) {
+  } else if (input.documentType === "quotation") {
     const workforcePricing = input.activityLabel === "توريد العمالة";
     const openQuantity = input.quantityMode === "open";
+    const quotationItems = input.quotationItems?.length
+      ? input.quotationItems
+      : [{
+          description: input.details,
+          quantity: 1,
+          durationMonths: 1,
+          unitPriceHalalas: input.subtotalHalalas || input.amountHalalas || 0,
+          lineTotalHalalas: input.subtotalHalalas || input.amountHalalas || 0,
+          notes: null,
+        }];
     if (input.activityLabel) composer.field("نشاط العرض", input.activityLabel);
     if (input.workSite) composer.field("موقع تقديم الخدمة", input.workSite);
     composer.paragraph("نطاق العرض", input.details);
     composer.heading(workforcePricing ? "بيان العمالة والمهن والرواتب" : "جدول الخدمات والأسعار");
-    composer.quotationTable(input.quotationItems, workforcePricing, openQuantity);
+    composer.quotationTable(quotationItems, workforcePricing, openQuantity);
     if (openQuantity) composer.paragraph("آلية الاحتساب", `الكميات مفتوحة ولا تمثل التزاماً بعدد أو قيمة إجمالية. تطبق ضريبة القيمة المضافة بنسبة ${arabicDigits((input.vatRateBps || 0) / 100)}٪ على قيمة الفواتير الفعلية بحسب العمالة أو الأعمال المنفذة.`);
     if (!workforcePricing && !openQuantity) {
       composer.field("الإجمالي قبل الخصم والضريبة", moneyLabel(input.subtotalHalalas));
