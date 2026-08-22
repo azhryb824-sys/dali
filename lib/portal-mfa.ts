@@ -150,12 +150,16 @@ function tokenFromCookieHeader(cookieHeader: string | null) {
 export function mfaChallengeCookie(request: Request, token: string) {
   const secure = isSecureExternalRequest(request);
   const name = secure ? MFA_CHALLENGE_COOKIE : MFA_DEV_CHALLENGE_COOKIE;
-  return `${name}=${encodeURIComponent(token)}; Path=/login/mfa; HttpOnly; SameSite=Strict; Max-Age=${CHALLENGE_MINUTES * 60}${secure ? "; Secure" : ""}; Priority=High`;
+  // The challenge is read both by the enrollment page and by the verification
+  // endpoint under /api. A /login/mfa-only path prevents browsers from sending
+  // the cookie with the verification POST and makes every valid challenge look
+  // expired at submission time.
+  return `${name}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${CHALLENGE_MINUTES * 60}${secure ? "; Secure" : ""}; Priority=High`;
 }
 
 export function clearMfaChallengeCookies(request: Request) {
   const secure = isSecureExternalRequest(request);
-  return [MFA_CHALLENGE_COOKIE, MFA_DEV_CHALLENGE_COOKIE].map((name) => `${name}=; Path=/login/mfa; HttpOnly; SameSite=Strict; Max-Age=0${secure && name === MFA_CHALLENGE_COOKIE ? "; Secure" : ""}; Priority=High`);
+  return [MFA_CHALLENGE_COOKIE, MFA_DEV_CHALLENGE_COOKIE].map((name) => `${name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure && name === MFA_CHALLENGE_COOKIE ? "; Secure" : ""}; Priority=High`);
 }
 
 export async function createMfaChallenge(credential: typeof portalAuthCredentials.$inferSelect, request: Request, returnTo: string) {
