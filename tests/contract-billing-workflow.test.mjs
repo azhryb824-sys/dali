@@ -11,6 +11,8 @@ test("contracts require a balanced payment schedule and preserve mandatory clien
   assert.match(ui,/nationalAddressFile/);assert.match(ui,/العنوان الوطني للعميل/);assert.match(ui,/required name="commercialRegistrationFile"/);
   assert.match(operations,/إنشاء عقد/);assert.match(operations,/onCreateContract/);
   assert.match(pdf,/جدول الدفعات/);assert.match(ui,/paymentSchedule/);assert.match(ui,/مجموع النسب 100%/);
+  assert.match(ui,/type="hidden" name="seasonType" value=\{seasonType\}/);assert.match(ui,/type="hidden" name="firstPaymentDueDate"/);
+  assert.match(route,/if \(paymentSchedule\.length\) await db\.insert\(contractPaymentSchedules\)/);
   assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/contract_payment_schedules_invoice_unique/);
 });
 
