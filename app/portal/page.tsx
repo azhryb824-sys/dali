@@ -72,6 +72,8 @@ async function ProtectedPortal() {
     );
   }
 
+  if (access.role !== "admin" && !access.preferredLanguage) redirect("/portal/language");
+
   const db = getDb();
   const canManageRequests = access.role === "admin" || access.role === "manager" || canAccessPortalDepartment(access, "workforce", true);
   const canAdministerUsers = access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
@@ -217,6 +219,7 @@ async function ProtectedPortal() {
         role: access.role,
         department: access.department,
         functionalRoles: access.functionalRoles,
+        preferredLanguage: access.preferredLanguage || "ar",
       }}
       initialRequests={requests}
       initialRequestReplies={replies}

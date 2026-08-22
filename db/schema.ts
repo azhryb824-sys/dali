@@ -158,6 +158,8 @@ export const portalUsers = pgTable(
     requestReason: text("request_reason"),
     requestSubmittedAt: text("request_submitted_at"),
     termsAcceptedAt: text("terms_accepted_at"),
+    preferredLanguage: text("preferred_language"),
+    languageSelectedAt: text("language_selected_at"),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
     suspendedAt: text("suspended_at"),

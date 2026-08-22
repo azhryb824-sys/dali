@@ -25,6 +25,7 @@ import RoleDefinitionManager from "./RoleDefinitionManager";
 import SalesRepresentativesWorkspace from "./SalesRepresentativesWorkspace";
 import LegalCaseWorkspace from "./LegalCaseWorkspace";
 import PaymentManagementDashboard from "./PaymentManagementDashboard";
+import LocaleRuntime from "@/app/components/LocaleRuntime";
 
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
@@ -227,7 +228,7 @@ function Icon({ name }: { name: IconName }) {
 }
 
 export default function PortalDashboard({ currentUser, initialRequests, initialRequestReplies, initialNotifications, initialUsers, initialActivity, initialEmployees, initialFinance, initialLegal, initialWorkers, initialWorkerAttachments, initialDocuments, initialAssets, initialContracts, initialContractProfessions, initialContractAssignments, initialConversations, initialConversationMessages, initialBusinessHours, initialChatAutomation, initialWebsiteContent, canAccessWebsite, canManageWebsite, canAccessConstruction, canManageChatSettings, canManageDocuments, canManageAssets, emailConfigured, signOutPath }: {
-  currentUser: { email: string; displayName: string; role: PortalRole; department: PortalDepartment; functionalRoles: string[] };
+  currentUser: { email: string; displayName: string; role: PortalRole; department: PortalDepartment; functionalRoles: string[]; preferredLanguage: "ar" | "en" | "ur" };
   initialRequests: WorkforceRequest[]; initialRequestReplies: WorkforceRequestReply[]; initialNotifications: PortalNotification[]; initialUsers: PortalUser[]; initialActivity: Activity[];
   initialEmployees: EmployeeRecord[]; initialFinance: FinanceRecord[]; initialLegal: LegalRecord[]; initialWorkers: WorkerRecord[]; initialWorkerAttachments: WorkerAttachment[];
   initialDocuments: CompanyDocument[]; initialAssets: CompanyAsset[]; canManageDocuments: boolean; canManageAssets: boolean;
@@ -833,6 +834,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   });
 
   return <main className="admin-shell">
+    <LocaleRuntime initialLocale={currentUser.preferredLanguage} portal/>
     <aside className={`admin-sidebar ${menuOpen ? "sidebar-open" : ""}`}>
       <div className="sidebar-brand"><Image src="/dally-logo.jpg" alt="شعار شركة دالي" width={545} height={280} sizes="160px"/><span>النظام الإداري</span></div>
       <nav aria-label="أقسام النظام">

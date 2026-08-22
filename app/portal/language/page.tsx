@@ -1,0 +1,3 @@
+import{redirect}from"next/navigation";import{getChatGPTUser}from"@/app/chatgpt-auth";import{verifyPortalSession}from"@/lib/portal-session";import{resolvePortalAccess}from"@/lib/portal-access";import LanguageChoice from"./LanguageChoice";
+export const dynamic="force-dynamic";
+export default async function LanguagePage(){const user=await getChatGPTUser();if(!user)redirect("/login?returnTo=/portal/language");const session=await verifyPortalSession(user.email);if(session.status!=="valid")redirect("/login?returnTo=/portal/language");const access=await resolvePortalAccess(user);if(!access.authorized)redirect("/portal");if(access.role==="admin")redirect("/portal");return <LanguageChoice/>}

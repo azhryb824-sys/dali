@@ -19,6 +19,7 @@ export type PortalAccess = {
   user: ChatGPTUser;
   functionalRoles: string[];
   functionalPermissions: string[];
+  preferredLanguage: "ar" | "en" | "ur" | null;
 };
 
 const allDepartments: Exclude<PortalDepartment, "general">[] = ["employees", "finance", "legal", "workforce", "construction"];
@@ -143,7 +144,7 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
         },
       });
 
-    return { authorized: true, role: "admin", department: "general", status: "active", user: { ...user, email }, functionalRoles: ["system_owner"], functionalPermissions: ["*"] };
+    return { authorized: true, role: "admin", department: "general", status: "active", user: { ...user, email }, functionalRoles: ["system_owner"], functionalPermissions: ["*"], preferredLanguage: "ar" };
   }
 
   if (!existing) {
@@ -169,7 +170,7 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
       targetRole: "admin",
       dedupeKey: `portal-user-pending:${email}`,
     }).catch(() => undefined);
-    return { authorized: false, role: "employee", department: "general", status: "pending", user: { ...user, email }, functionalRoles: [], functionalPermissions: [] };
+    return { authorized: false, role: "employee", department: "general", status: "pending", user: { ...user, email }, functionalRoles: [], functionalPermissions: [], preferredLanguage: null };
   }
 
   if (options.markLogin || activityDue || existing.displayName !== user.displayName) {
@@ -188,7 +189,8 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
   const status = isPortalStatus(existing.status) ? existing.status : "pending";
   const functionalRoles = status === "active" ? await activeFunctionalRoles(email) : [];
   const functionalPermissions = status === "active" ? await activeFunctionalPermissions(functionalRoles) : [];
-  return { authorized: status === "active", role, department, status, user: { ...user, email }, functionalRoles, functionalPermissions };
+  const preferredLanguage = existing.preferredLanguage === "en" || existing.preferredLanguage === "ur" || existing.preferredLanguage === "ar" ? existing.preferredLanguage : null;
+  return { authorized: status === "active", role, department, status, user: { ...user, email }, functionalRoles, functionalPermissions, preferredLanguage };
 }
 
 export async function requirePortalApiRole(allowed: PortalRole[]) {

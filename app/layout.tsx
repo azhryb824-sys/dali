@@ -8,6 +8,9 @@ import { WebsiteContentProvider } from "@/app/components/WebsiteContentProvider"
 import { SITE } from "@/lib/site";
 import { getWebsiteContent, toPublicWebsiteContent } from "@/lib/website-content";
 import { TodayDateDefaults } from "@/app/components/TodayDateDefaults";
+import { cookies } from "next/headers";
+import LocaleRuntime from "@/app/components/LocaleRuntime";
+import { isAppLocale, localeCookieName, localeDirection } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -45,5 +48,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const content = await getWebsiteContent();
-  return <html lang="ar" dir="rtl"><body><TodayDateDefaults/><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></body></html>;
+  const stored=(await cookies()).get(localeCookieName)?.value;const locale=isAppLocale(stored)?stored:"ar";
+  return <html lang={locale} dir={localeDirection(locale)}><body><LocaleRuntime initialLocale={locale}/><TodayDateDefaults/><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></body></html>;
 }
