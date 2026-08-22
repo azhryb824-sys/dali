@@ -19,17 +19,21 @@ test("constructs portal redirects with complete mutable headers", async () => {
 });
 
 test("Render runtime preserves durable storage when Worker bindings are absent", async () => {
-  const [source, migration, uploadRoute] = await Promise.all([
+  const [source, migration, accessMigration, uploadRoute] = await Promise.all([
     readFile(new URL("../lib/runtime-env.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle-pg/0006_durable_company_assets.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle-pg/0015_durable_storage_runtime_access.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/portal/company-assets/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(source, /BUCKET: injected\.BUCKET \?\? node\.BUCKET/);
   assert.match(source, /createPostgresStorageBucket/);
   assert.match(source, /private\.object_storage/);
   assert.match(source, /ON CONFLICT \(storage_key\) DO UPDATE/);
+  assert.doesNotMatch(source, /CREATE TABLE IF NOT EXISTS private\.object_storage/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS private\.object_storage/);
   assert.match(migration, /REVOKE ALL ON TABLE private\.object_storage FROM PUBLIC, anon, authenticated/);
+  assert.match(accessMigration, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE private\.object_storage TO dali_app/);
+  assert.match(uploadRoute, /COMPANY_ASSET_STORAGE_VERIFICATION_FAILED/);
   assert.match(uploadRoute, /previous\.storageKey !== storageKey/);
   assert.match(uploadRoute, /BUCKET\.delete\(previous\.storageKey\)/);
 });

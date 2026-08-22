@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import {
   companyAssets,
   companyDocuments,
+  clients,
   contractPaymentSchedules,
   contractProfessions,
   contractWorkerAssignments,
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
   let storageKey = "";
   let savedDocumentId: number | null = null;
   let savedContractId: number | null = null;
+  let createdClientId: number | null = null;
   const auxiliaryStorageKeys: string[] = [];
   const auxiliaryDocumentIds: number[] = [];
   try {
@@ -90,6 +92,7 @@ export async function POST(request: Request) {
     const payload = Object.fromEntries(form.entries()) as Record<string, unknown>;
     const commercialRegistrationFile = form.get("commercialRegistrationFile");
     const vatCertificateFile = form.get("vatCertificateFile");
+    const nationalAddressFile = form.get("nationalAddressFile");
     const documentType = cleanText(payload.documentType, 40);
     const clientName = cleanText(payload.clientName, 160);
     const clientCr = cleanText(payload.clientCr, 30);
@@ -118,6 +121,7 @@ export async function POST(request: Request) {
     const linkedContractId = parsePositiveId(payload.linkedContractId);
     const contractAmountHalalas = Math.round(amount * 100);
     const paymentSchedule = documentType === "workforce_contract" ? parsePayments(payload.paymentSchedule, contractAmountHalalas) : [];
+    const validatedClientFiles: Array<{ file: File; kind: string; label: string; bytes: Uint8Array; validationDetails: string }> = [];
 
     if (!isDocumentType(documentType) || documentType === "construction_record" || clientName.length < 2 || title.length < 3 || !issueDate || expiryDate === "" || details.length < 5) {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
@@ -143,6 +147,15 @@ export async function POST(request: Request) {
       }
       if (!paymentSchedule.length || paymentSchedule.some((item) => item.title.length < 2 || !item.dueDate || item.percentageBps <= 0 || item.amountHalalas <= 0) || paymentSchedule.reduce((sum, item) => sum + item.percentageBps, 0) !== 10000) {
         return Response.json({ error: "يجب إضافة جدول دفعات صحيح مجموع نسبه 100% قبل إنشاء العقد" }, { status: 400 });
+      }
+      if (!clientCr || !clientVat || !clientAddress) {
+        return Response.json({ error: "السجل التجاري والرقم الضريبي والعنوان الوطني للعميل بيانات إلزامية عند إنشاء العقد" }, { status: 400 });
+      }
+      for (const [file, kind, label] of [[commercialRegistrationFile, "commercial-registration", "السجل التجاري"], [vatCertificateFile, "vat-certificate", "الشهادة الضريبية"], [nationalAddressFile, "national-address", "العنوان الوطني"]] as const) {
+        if (!(file instanceof File) || !file.size) return Response.json({ error: `ملف ${label} إلزامي عند إنشاء العقد` }, { status: 400 });
+        const validation = await validateUploadedFile(file, { contentTypes: new Set(["application/pdf", "image/png", "image/jpeg"]), maxBytes: 12 * 1024 * 1024 });
+        if (!validation.valid) return Response.json({ error: `${label}: ${validation.error}` }, { status: 400 });
+        validatedClientFiles.push({ file, kind, label, bytes: validation.bytes, validationDetails: validation.validationDetails });
       }
       const allSelected = professionInputs.flatMap((item) => item.workerIds);
       if (new Set(allSelected).size !== allSelected.length) {
@@ -229,12 +242,25 @@ export async function POST(request: Request) {
       paymentSchedule,
     }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
 
+    let client = null;
+    if (documentType === "workforce_contract") {
+      const existingClient = await db.query.clients.findFirst({ where: eq(clients.commercialRegistration, clientCr) });
+      if (existingClient) {
+        [client] = await db.update(clients).set({ legalName: clientName, vatNumber: clientVat, address: clientAddress, status: "active", updatedAt: new Date().toISOString(), version: existingClient.version + 1 }).where(eq(clients.id, existingClient.id)).returning();
+      } else {
+        [client] = await db.insert(clients).values({ clientCode: makeReference("CLI"), legalName: clientName, commercialRegistration: clientCr, vatNumber: clientVat, address: clientAddress, status: "active", createdBy: access.user.email }).returning();
+        createdClientId = client.id;
+      }
+    }
+
     const fileName = `${referenceCode}.pdf`;
     storageKey = objectKey("issued-pdfs", fileName);
     await getRuntimeEnv().BUCKET.put(storageKey, pdfBytes, {
       httpMetadata: { contentType: "application/pdf" },
       customMetadata: { issuedBy: access.user.email, referenceCode, documentType },
     });
+    const storedPdf = await getRuntimeEnv().BUCKET.get(storageKey);
+    if (!storedPdf || (await storedPdf.arrayBuffer()).byteLength !== pdfBytes.byteLength) throw new Error("تعذر التحقق من حفظ ملف العقد");
 
     const category = documentType === "workforce_contract" ? "contract" : ["invoice", "receipt", "payment_voucher", "progress_claim"].includes(documentType) ? "finance" : "other";
     const [saved] = await db.insert(companyDocuments).values({
@@ -249,7 +275,7 @@ export async function POST(request: Request) {
       sizeBytes: pdfBytes.byteLength,
       expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
       source: "generated",
-      metadataJson: JSON.stringify({ clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
+      metadataJson: JSON.stringify({ clientId: client?.id || null, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
       createdBy: access.user.email,
     }).returning();
     savedDocumentId = saved.id;
@@ -266,6 +292,7 @@ export async function POST(request: Request) {
         clientName,
         clientCr: clientCr || null,
         clientVat: clientVat || null,
+        clientId: client!.id,
         title,
         workSite,
         issueDate,
@@ -277,13 +304,11 @@ export async function POST(request: Request) {
       }).returning();
       savedContractId = contract.id;
       await db.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas, status: payment.dueDate <= new Date().toISOString().slice(0, 10) ? "due" : "scheduled", createdBy: access.user.email })));
-      for (const [file, kind, label] of [[commercialRegistrationFile,"commercial-registration","السجل التجاري"],[vatCertificateFile,"vat-certificate","الشهادة الضريبية"]] as const) {
-        if (!(file instanceof File) || !file.size) continue;
-        const validation = await validateUploadedFile(file,{contentTypes:new Set(["application/pdf","image/png","image/jpeg"]),maxBytes:12*1024*1024});
-        if(!validation.valid) throw new Error(`${label}: ${validation.error}`);
+      for (const { file, kind, label, bytes, validationDetails } of validatedClientFiles) {
         const fileName=safeFileName(file.name);const clientStorageKey=objectKey("client-documents",fileName);auxiliaryStorageKeys.push(clientStorageKey);
-        await getRuntimeEnv().BUCKET.put(clientStorageKey,validation.bytes,{httpMetadata:{contentType:file.type},customMetadata:{uploadedBy:access.user.email,clientName,contractReference:contract.referenceCode,documentKind:kind,validation:validation.validationDetails}});
-        const[clientDocument]=await db.insert(companyDocuments).values({referenceCode:makeReference("CLD"),title:`${label} - ${clientName}`,category:"certificate",documentType:kind,counterparty:clientName,fileName,storageKey:clientStorageKey,contentType:file.type,sizeBytes:file.size,source:"uploaded",validationStatus:"signature-validated",validationDetails:validation.validationDetails,metadataJson:JSON.stringify({clientName,contractId:contract.id,contractReference:contract.referenceCode,documentKind:kind}),createdBy:access.user.email}).returning();auxiliaryDocumentIds.push(clientDocument.id);
+        await getRuntimeEnv().BUCKET.put(clientStorageKey,bytes,{httpMetadata:{contentType:file.type},customMetadata:{uploadedBy:access.user.email,clientName,clientId:String(client!.id),contractReference:contract.referenceCode,documentKind:kind,validation:validationDetails}});
+        const storedClientFile = await getRuntimeEnv().BUCKET.get(clientStorageKey);if(!storedClientFile||(await storedClientFile.arrayBuffer()).byteLength!==bytes.byteLength)throw new Error(`تعذر التحقق من حفظ ملف ${label}`);
+        const[clientDocument]=await db.insert(companyDocuments).values({referenceCode:makeReference("CLD"),title:`${label} - ${clientName}`,category:"certificate",documentType:kind,counterparty:clientName,fileName,storageKey:clientStorageKey,contentType:file.type,sizeBytes:file.size,source:"uploaded",validationStatus:"signature-validated",validationDetails,metadataJson:JSON.stringify({clientId:client!.id,clientName,contractId:contract.id,contractReference:contract.referenceCode,documentKind:kind}),createdBy:access.user.email}).returning();auxiliaryDocumentIds.push(clientDocument.id);
       }
       professionRecords = await db.insert(contractProfessions).values(professionInputs.map((item) => ({
         contractId: contract!.id,
@@ -335,6 +360,7 @@ export async function POST(request: Request) {
       entityType: "company-document",
       entityId: String(saved.id),
     });
+    if (createdClientId) await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "client-created-from-contract", entityType: "client", entityId: String(createdClientId) });
     const unassignedCount = capacity.reduce((total, item) => total + item.unassignedCount, 0);
     await emitPortalNotification(documentType === "workforce_contract" && contract ? {
       eventType: "workforce-contract-created",
@@ -359,6 +385,7 @@ export async function POST(request: Request) {
     }).catch(() => undefined);
     return Response.json({
       document: saved,
+      client,
       contract,
       professions: professionRecords,
       assignments: assignmentRecords,
@@ -376,6 +403,7 @@ export async function POST(request: Request) {
     }
     if (savedDocumentId) await db.delete(companyDocuments).where(eq(companyDocuments.id, savedDocumentId)).catch(() => undefined);
     for (const id of auxiliaryDocumentIds) await db.delete(companyDocuments).where(eq(companyDocuments.id,id)).catch(()=>undefined);
+    if (createdClientId) await db.delete(clients).where(eq(clients.id, createdClientId)).catch(() => undefined);
     if (storageKey) await getRuntimeEnv().BUCKET.delete(storageKey).catch(() => undefined);
     for (const key of auxiliaryStorageKeys) await getRuntimeEnv().BUCKET.delete(key).catch(() => undefined);
     const message = error instanceof Error ? error.message : "";

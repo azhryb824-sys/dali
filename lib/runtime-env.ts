@@ -125,21 +125,9 @@ function createFileStorageBucket(root: string): StorageBucket {
 }
 
 function createPostgresStorageBucket(): StorageBucket {
-  let ready: Promise<void> | undefined;
   async function client() {
     const { getSqlClient } = await import("@/db");
-    const sql = getSqlClient();
-    ready ??= sql.unsafe(`
-      CREATE TABLE IF NOT EXISTS private.object_storage (
-        storage_key text PRIMARY KEY,
-        object_data bytea NOT NULL,
-        content_type text,
-        etag text NOT NULL,
-        updated_at timestamptz NOT NULL DEFAULT now()
-      )
-    `).then(() => undefined);
-    await ready;
-    return sql;
+    return getSqlClient();
   }
   return {
     async get(key) {

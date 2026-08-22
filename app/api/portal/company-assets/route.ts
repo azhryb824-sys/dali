@@ -33,6 +33,10 @@ export async function POST(request: Request) {
       httpMetadata: { contentType: file.type },
       customMetadata: { uploadedBy: access.user.email, assetSlot: slot, validation: validation.validationDetails },
     });
+    const storedObject = await getRuntimeEnv().BUCKET.get(storageKey);
+    if (!storedObject || (await storedObject.arrayBuffer()).byteLength !== validation.bytes.byteLength) {
+      throw new Error("COMPANY_ASSET_STORAGE_VERIFICATION_FAILED");
+    }
 
     const db = getDb();
     const previous = await db.query.companyAssets.findFirst({ where: eq(companyAssets.slot, slot) });
@@ -58,7 +62,8 @@ export async function POST(request: Request) {
     }
     await emitPortalNotification({ eventType: `company-${slot}-updated`, title: slot === "stamp" ? "تم تحديث ختم الشركة" : "تم تحديث توقيع الشركة", message: `حدّث مدير النظام الأصل الرسمي المستخدم في ملفات PDF.`, severity: "warning", module: "documents", entityType: "company-asset", entityId: slot, actionView: "documents", targetRole: "admin" }).catch(() => undefined);
     return Response.json({ asset: { slot: saved.slot, fileName: saved.fileName, contentType: saved.contentType, sizeBytes: saved.sizeBytes, uploadedBy: saved.uploadedBy, updatedAt: saved.updatedAt } });
-  } catch {
+  } catch (error) {
+    console.error("company-asset-upload-failed", error instanceof Error ? error.message : String(error));
     if (storageKey) await getRuntimeEnv().BUCKET.delete(storageKey).catch(() => undefined);
     return Response.json({ error: "تعذّر حفظ الختم أو التوقيع" }, { status: 500 });
   }
