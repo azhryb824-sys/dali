@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
-import { contractWorkerAssignments, workers, workforceContracts } from "@/db/schema";
+import { contractPaymentSchedules, contractWorkerAssignments, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -61,6 +61,21 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       updatedAt: now,
     }).where(and(eq(workforceContracts.id, id), eq(workforceContracts.status, contract.status))).returning();
     if (!updated) return jsonNoStore({ error: "تغيرت حالة العقد قبل حفظ القرار" }, { status: 409 });
+    if (["cancelled", "terminated"].includes(status)) {
+      await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), inArray(contractPaymentSchedules.status, ["scheduled", "due", "referred"])));
+      const assignments = await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), inArray(contractWorkerAssignments.status, ["planned", "active"])));
+      for (const assignment of assignments) {
+        await db.update(contractWorkerAssignments).set({ status: "released", releasedAt: now }).where(eq(contractWorkerAssignments.id, assignment.id));
+        await db.update(workers).set({ status: "available", beneficiaryName: null, clientSite: "غير مسند", assignmentStartDate: null, updatedAt: now }).where(eq(workers.id, assignment.workerId));
+      }
+      const legalReference = `LGL-CAN-${contract.referenceCode}`.slice(0, 120);
+      const [createdLegal] = await db.insert(legalRecords).values({ referenceCode: legalReference, category: "contract_cancellation", title: `${status === "terminated" ? "إنهاء" : "إلغاء"} العقد ${contract.referenceCode}`, counterparty: contract.clientName, expiryDate: null, status: "reviewing" }).onConflictDoNothing().returning();
+      const legal = createdLegal || await db.query.legalRecords.findFirst({ where: eq(legalRecords.referenceCode, legalReference) });
+      if (legal) {
+        await auditPortalAction({ actorEmail: access.user.email, action: "contract-cancellation-referred-legal", entityType: "legal-record", entityId: legal.id, after: { ...legal, contractId: id, reason }, reason });
+        await emitPortalNotification({ eventType: "contract-cancellation-referred-legal", title: "عقد ملغى محال للشؤون القانونية", message: `${contract.referenceCode} — ${contract.clientName} — ${reason}`, severity: "critical", module: "legal", entityType: "legal-record", entityId: legal.id, actionView: "legal", targetDepartment: "legal" }).catch(() => undefined);
+      }
+    }
     if (status === "active") {
       try {
         for (const assignment of plannedAssignments) {

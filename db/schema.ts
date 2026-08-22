@@ -1020,7 +1020,7 @@ export const quoteVersions = pgTable(
     index("quote_versions_opportunity_idx").on(table.opportunityId),
     index("quote_versions_status_idx").on(table.status),
     index("quote_versions_valid_until_idx").on(table.validUntil),
-    check("quote_versions_status_check", sql`${table.status} in ('draft', 'pending_approval', 'approved', 'sent', 'accepted', 'rejected', 'expired', 'superseded')`),
+    check("quote_versions_status_check", sql`${table.status} in ('draft', 'pending_approval', 'approved', 'sent', 'accepted', 'rejected', 'expired', 'superseded', 'cancelled')`),
     check("quote_versions_quantity_mode_check", sql`${table.quantityMode} in ('fixed','open')`),
   ],
 );

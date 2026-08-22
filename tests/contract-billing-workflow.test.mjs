@@ -62,3 +62,15 @@ test("owner referral, accounting invoice, payment recording and legal escalation
   assert.match(route,/payment\.dueDate>=now\.slice\(0,10\)/);
   assert.match(ui,/تنزيل PDF/);assert.match(ui,/مشاركة/);assert.match(ui,/تسجيل السداد/);assert.match(ui,/إحالة الملف للقانونية/);
 });
+
+test("contract and quotation edit delete and cancellation actions preserve financial and legal history",async()=>{
+  const[contractsUi,contractsApi,statusApi,quotesUi,quotesApi,operations,schema,migration]=await Promise.all([source("app/portal/ContractBillingWorkspace.tsx"),source("app/api/portal/contracts/[id]/route.ts"),source("app/api/portal/contracts/[id]/status/route.ts"),source("app/portal/OperationsWorkspace.tsx"),source("app/api/portal/operations/quotes/[id]/route.ts"),source("app/api/portal/operations/route.ts"),source("db/schema.ts"),source("drizzle-pg/0023_quote_cancellation.sql")]);
+  for(const label of ["تعديل","حذف","إلغاء العقد"])assert.match(contractsUi,new RegExp(label));
+  for(const label of ["تعديل","حذف","إلغاء عرض السعر"])assert.match(quotesUi,new RegExp(label));
+  assert.match(contractsApi,/لا يمكن حذف عقد ساري ومعتمد/);assert.match(contractsApi,/workforce-contract-deleted/);
+  assert.match(quotesApi,/QUOTE_DELETE_BLOCKED/);assert.match(operations,/إلغاء عرض السعر متاح للمالك أو مشرف النظام فقط/);
+  assert.match(statusApi,/contract-cancellation-referred-legal/);assert.match(statusApi,/category: "contract_cancellation"/);
+  assert.match(statusApi,/inArray\(contractPaymentSchedules\.status, \["scheduled", "due", "referred"\]\)/);
+  assert.doesNotMatch(statusApi,/inArray\(contractPaymentSchedules\.status, \["invoiced", "paid"\]\)/);
+  assert.match(schema,/superseded', 'cancelled'/);assert.match(migration,/quote_versions_status_check/);
+});

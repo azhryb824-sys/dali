@@ -18,7 +18,7 @@ export async function GET(){
   const db=getDb();const today=new Date().toISOString().slice(0,10);
   await db.update(contractPaymentSchedules).set({status:"due",updatedAt:new Date().toISOString()}).where(and(eq(contractPaymentSchedules.status,"scheduled"),lte(contractPaymentSchedules.dueDate,today)));
   const [contracts,payments]=await Promise.all([db.select().from(workforceContracts).orderBy(asc(workforceContracts.startDate)),db.select().from(contractPaymentSchedules).orderBy(asc(contractPaymentSchedules.dueDate),asc(contractPaymentSchedules.installmentNumber))]);
-  return jsonNoStore({contracts,payments,canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","approve")||await hasPortalPermission(access,"finance","write"),canReferLegal:owner(access)});
+  return jsonNoStore({contracts,payments,canManageContracts:await hasPortalPermission(access,"workforce","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","approve")||await hasPortalPermission(access,"finance","write"),canReferLegal:owner(access)});
 }
 
 export async function POST(request:Request){

@@ -43,3 +43,28 @@
   opacity: 0.65;
   cursor: wait;
 }
+
+.contract-card-action {
+  min-height: 38px;
+  padding: 0 15px;
+  border: 1px solid #d8e0e4;
+  border-radius: 8px;
+  background: #fff;
+  color: #09283a;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.contract-card-action.danger-action,
+.cancel-action {
+  border-color: #efb5b8;
+  background: #fff5f5;
+  color: #c5232c;
+}
+
+.contract-card-action:disabled,
+.cancel-action:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

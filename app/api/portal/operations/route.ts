@@ -427,9 +427,10 @@ async function transitionRecord(action: string, payload: Record<string, unknown>
     const item = await db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, id) });
     if (!item) throw new Error("عرض السعر غير موجود");
     const canApprove = access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
-    const allowed: Record<string, string[]> = { draft: canApprove ? ["pending_approval", "approved"] : ["pending_approval"], pending_approval: ["approved", "rejected"], approved: ["sent"], sent: ["accepted", "rejected", "expired"], accepted: [], rejected: [], expired: [], superseded: [] };
+    const allowed: Record<string, string[]> = { draft: canApprove ? ["pending_approval", "approved", "cancelled"] : ["pending_approval"], pending_approval: canApprove ? ["approved", "rejected", "cancelled"] : ["approved", "rejected"], approved: canApprove ? ["sent", "cancelled"] : ["sent"], sent: canApprove ? ["accepted", "rejected", "expired", "cancelled"] : ["accepted", "rejected", "expired"], accepted: [], rejected: canApprove ? ["cancelled"] : [], expired: [], superseded: [], cancelled: [] };
     if (!allowed[item.status]?.includes(nextStatus)) throw new Error("انتقال حالة العرض غير مسموح");
     if (nextStatus === "approved" && !canApprove) throw new Error("اعتماد عرض السعر متاح للمالك أو مشرف النظام فقط");
+    if (nextStatus === "cancelled" && !canApprove) throw new Error("إلغاء عرض السعر متاح للمالك أو مشرف النظام فقط");
     if (nextStatus === "rejected" && access.role === "employee") throw new Error("غير مصرح باتخاذ قرار الاعتماد");
     const now = new Date().toISOString();
     const [updated] = await db.update(quoteVersions).set({ status: nextStatus, approvalReason: ["approved", "rejected"].includes(nextStatus) ? reason : item.approvalReason, approvedBy: nextStatus === "approved" ? actor : item.approvedBy, approvedAt: nextStatus === "approved" ? now : item.approvedAt, acceptedAt: nextStatus === "accepted" ? now : item.acceptedAt, updatedAt: now, recordVersion: item.recordVersion + 1 }).where(and(eq(quoteVersions.id, id), eq(quoteVersions.recordVersion, integer(payload.version, 1) ?? item.recordVersion))).returning();
@@ -446,7 +447,7 @@ async function transitionRecord(action: string, payload: Record<string, unknown>
     await recordStatusChange({ entityType: "quote-version", entityId: id, fromStatus: item.status, toStatus: nextStatus, reason, actorEmail: actor, correlationId });
     await auditPortalAction({ actorEmail: actor, action, entityType: "quote-version", entityId: id, before: item, after: updated, reason, correlationId });
     await enqueueOutbox({ eventType: `quote.${nextStatus}`, aggregateType: "quote-version", aggregateId: id, payload: { quoteId: id, status: nextStatus } });
-    await emitPortalNotification({ eventType: `quote-${nextStatus}`, title: nextStatus === "pending_approval" ? "عرض سعر ينتظر الاعتماد" : "تغيّرت حالة عرض سعر", message: `${item.quoteCode} — ${item.status} ← ${nextStatus}.`, severity: nextStatus === "accepted" || nextStatus === "approved" ? "success" : nextStatus === "rejected" ? "warning" : "info", module: "sales", entityType: "quote-version", entityId: id, actionView: "operations", targetRole: nextStatus === "pending_approval" ? "manager" : null, targetDepartment: nextStatus === "pending_approval" ? null : "workforce" }).catch(() => undefined);
+    await emitPortalNotification({ eventType: `quote-${nextStatus}`, title: nextStatus === "pending_approval" ? "عرض سعر ينتظر الاعتماد" : nextStatus === "cancelled" ? "أُلغي عرض سعر" : "تغيّرت حالة عرض سعر", message: `${item.quoteCode} — ${item.status} ← ${nextStatus}${reason ? ` — ${reason}` : ""}.`, severity: nextStatus === "accepted" || nextStatus === "approved" ? "success" : ["rejected","cancelled"].includes(nextStatus) ? "warning" : "info", module: "sales", entityType: "quote-version", entityId: id, actionView: "operations", targetRole: nextStatus === "pending_approval" ? "manager" : null, targetDepartment: nextStatus === "pending_approval" ? null : "workforce" }).catch(() => undefined);
     return { quote: updated };
   }
 
