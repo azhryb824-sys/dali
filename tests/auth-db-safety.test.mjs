@@ -51,11 +51,28 @@ test("functional roles actively control departments and privileged actions", asy
     assert.match(policy, new RegExp(role));
   }
   assert.match(access, /activeFunctionalRoles/);
-  assert.match(access, /functionalDepartmentAccess/);
-  assert.match(access, /functionalApprovals/);
-  assert.match(access, /action === "post"/);
+  assert.match(access, /portalRoles/);
+  assert.match(access, /activeFunctionalPermissions/);
+  assert.match(access, /functionalPermissions\.includes\(`\$\{resource\}\.\$\{action\}`\)/);
   assert.match(portal, /canWriteDepartment/);
   assert.match(portal, /functionalAdmin/);
+});
+
+test("only owner and system administrator can manage dynamic user roles", async () => {
+  const [route, migration, manager] = await Promise.all([
+    source("app/api/portal/role-definitions/route.ts"),
+    source("drizzle-pg/0013_dynamic_portal_roles.sql"),
+    source("app/portal/RoleDefinitionManager.tsx"),
+  ]);
+  assert.match(route, /system_owner/);
+  assert.match(route, /system_admin/);
+  assert.match(route, /إدارة المستخدمين محصورة/);
+  assert.match(route, /portal-role-created/);
+  assert.match(route, /portal-role-updated/);
+  assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /\('system_admin'.*'\["\*"\]'/);
+  assert.match(migration, /REVOKE ALL ON TABLE public\.portal_roles FROM PUBLIC, anon, authenticated/);
+  assert.match(manager, /تعريف الأدوار والصلاحيات/);
 });
 
 test("liveness and readiness are separate deployment signals", async () => {

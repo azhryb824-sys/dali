@@ -399,6 +399,37 @@ export const financialRecords = pgTable(
   ],
 );
 
+export const contractPaymentSchedules = pgTable(
+  "contract_payment_schedules",
+  {
+    id: serial("id").primaryKey(),
+    contractId: integer("contract_id").notNull().references(() => workforceContracts.id, { onDelete: "cascade" }),
+    installmentNumber: integer("installment_number").notNull(),
+    title: text("title").notNull(),
+    dueDate: text("due_date").notNull(),
+    percentageBps: integer("percentage_bps").notNull(),
+    amountHalalas: integer("amount_halalas").notNull(),
+    status: text("status").notNull().default("scheduled"),
+    referredBy: text("referred_by"),
+    referredAt: text("referred_at"),
+    invoiceDocumentId: integer("invoice_document_id").references(() => companyDocuments.id, { onDelete: "restrict" }),
+    financialRecordId: integer("financial_record_id").references(() => financialRecords.id, { onDelete: "restrict" }),
+    invoicedBy: text("invoiced_by"),
+    invoicedAt: text("invoiced_at"),
+    paidAt: text("paid_at"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    uniqueIndex("contract_payment_schedules_contract_installment_unique").on(table.contractId, table.installmentNumber),
+    uniqueIndex("contract_payment_schedules_invoice_unique").on(table.invoiceDocumentId),
+    index("contract_payment_schedules_due_status_idx").on(table.dueDate, table.status),
+    check("contract_payment_schedules_status_check", sql`${table.status} in ('scheduled','due','referred','invoiced','paid','cancelled')`),
+    check("contract_payment_schedules_amount_check", sql`${table.amountHalalas} > 0 and ${table.percentageBps} > 0 and ${table.percentageBps} <= 10000`),
+  ],
+);
+
 export const legalRecords = pgTable(
   "legal_records",
   {
@@ -1199,6 +1230,25 @@ export const portalUserPermissions = pgTable(
     uniqueIndex("portal_user_permissions_unique").on(table.userEmail, table.resource, table.action, table.scope),
     index("portal_user_permissions_user_idx").on(table.userEmail),
     check("portal_user_permissions_scope_check", sql`${table.scope} in ('own', 'department', 'all')`),
+  ],
+);
+
+export const portalRoles = pgTable(
+  "portal_roles",
+  {
+    roleKey: text("role_key").primaryKey(),
+    labelAr: text("label_ar").notNull(),
+    description: text("description"),
+    permissionsJson: text("permissions_json").notNull().default("[]"),
+    protected: boolean("protected").notNull().default(false),
+    active: boolean("active").notNull().default(true),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("portal_roles_active_idx").on(table.active),
+    check("portal_roles_key_check", sql`${table.roleKey} ~ '^[a-z][a-z0-9_]{2,63}$'`),
   ],
 );
 

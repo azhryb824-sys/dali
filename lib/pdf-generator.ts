@@ -48,6 +48,7 @@ export type IssuedDocumentInput = {
     requiredCount: number;
     assignedWorkers?: Array<{ fullName: string; iqamaNumber: string | null }>;
   }>;
+  paymentSchedule?: Array<{ title: string; dueDate: string; percentageBps: number; amountHalalas: number }>;
   startDate?: string;
   endDate?: string;
 };
@@ -327,6 +328,10 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     composer.field("مدة العقد", `من ${dateLabel(input.startDate)} إلى ${dateLabel(input.endDate)}`);
     composer.field("القيمة التعاقدية", moneyLabel(input.amountHalalas));
     if (input.amountHalalas) composer.field("القيمة التعاقدية كتابة", halalasToArabicWords(input.amountHalalas));
+    if (input.paymentSchedule?.length) {
+      composer.heading("جدول الدفعات");
+      input.paymentSchedule.forEach((payment, index) => composer.pair(`الدفعة ${index + 1}`, payment.title, "الاستحقاق والقيمة", `${dateLabel(payment.dueDate)} · ${(payment.percentageBps / 100).toFixed(2)}% · ${moneyLabel(payment.amountHalalas)}`));
+    }
     composer.paragraph("الشروط الخاصة ونطاق العمل", input.details);
     composer.heading("الشروط والأحكام");
     const clauses = [

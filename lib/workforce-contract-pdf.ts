@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
-import { companyAssets, companyDocuments, contractProfessions, contractWorkerAssignments, workers, workforceContracts } from "@/db/schema";
+import { companyAssets, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, workers, workforceContracts } from "@/db/schema";
 import { generateIssuedPdf } from "@/lib/pdf-generator";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 
@@ -26,6 +26,7 @@ export async function regenerateWorkforceContractPdf(documentId: number) {
   if (!document || !contract || document.documentType !== "workforce_contract") return null;
 
   const professions = await db.select().from(contractProfessions).where(eq(contractProfessions.contractId, contract.id));
+  const paymentSchedule = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, contract.id));
   const assignments = await db.select().from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, contract.id));
   const activeAssignments = assignments.filter((item) => item.status === "active");
   const workerIds = [...new Set(activeAssignments.map((item) => item.workerId))];
@@ -67,6 +68,7 @@ export async function regenerateWorkforceContractPdf(documentId: number) {
         .filter((worker): worker is NonNullable<typeof worker> => Boolean(worker))
         .map((worker) => ({ fullName: worker.fullName, iqamaNumber: worker.iqamaNumber })),
     })),
+    paymentSchedule: paymentSchedule.sort((a, b) => a.installmentNumber - b.installmentNumber).map((payment) => ({ title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas })),
   }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
 
   await getRuntimeEnv().BUCKET.put(document.storageKey, pdfBytes, {

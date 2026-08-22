@@ -2,7 +2,7 @@ import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import type { ChatGPTUser } from "@/app/chatgpt-auth";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { getDb } from "@/db";
-import { portalAccessScopes, portalUserPermissions, portalUsers } from "@/db/schema";
+import { portalAccessScopes, portalRoles, portalUserPermissions, portalUsers } from "@/db/schema";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getConfiguredAuthMode, getPortalAdminConfig, normalizePortalEmail } from "@/lib/portal-auth-config";
 import { verifyPortalSession } from "@/lib/portal-session";
@@ -19,6 +19,7 @@ export type PortalAccess = {
   status: PortalStatus;
   user: ChatGPTUser;
   functionalRoles: string[];
+  functionalPermissions: string[];
 };
 
 const allDepartments: Exclude<PortalDepartment, "general">[] = ["employees", "finance", "legal", "workforce", "construction"];
@@ -56,6 +57,44 @@ async function activeFunctionalRoles(email: string) {
     or(isNull(portalAccessScopes.validUntil), gte(portalAccessScopes.validUntil, today)),
   ));
   return [...new Set(rows.map((row) => row.role))];
+}
+
+function fallbackPermissions(roles: string[]) {
+  const permissions = new Set<string>();
+  for (const role of roles) {
+    if (role === "system_owner" || role === "system_admin") permissions.add("*");
+    const access = functionalDepartmentAccess[role];
+    access?.read.forEach((department) => permissions.add(`${department}.read`));
+    access?.write.forEach((department) => permissions.add(`${department}.write`));
+    for (const [resource, approvers] of Object.entries(functionalApprovals)) if (approvers.includes(role)) permissions.add(`${resource}.approve`);
+    if (role === "finance_director") permissions.add("finance.post");
+  }
+  return [...permissions];
+}
+
+async function activeFunctionalPermissions(roles: string[]) {
+  if (!roles.length) return [];
+  let definitions: Array<typeof portalRoles.$inferSelect> = [];
+  try {
+    definitions = await getDb().select().from(portalRoles);
+  } catch (error) {
+    // Render starts the HTTP process before additive migrations finish. Keep
+    // existing users able to sign in during that short deployment window.
+    console.warn("portal-role-catalog-unavailable", error instanceof Error ? error.message : String(error));
+    return fallbackPermissions(roles);
+  }
+  if (!definitions.length) return fallbackPermissions(roles);
+  const permissions = new Set<string>();
+  const definitionByKey = new Map(definitions.filter((item) => item.active).map((item) => [item.roleKey, item]));
+  for (const role of roles) {
+    const definition = definitionByKey.get(role);
+    if (!definition) continue;
+    try {
+      const parsed = JSON.parse(definition.permissionsJson) as unknown;
+      if (Array.isArray(parsed)) parsed.filter((item): item is string => typeof item === "string").forEach((item) => permissions.add(item));
+    } catch { /* An invalid role definition grants nothing. */ }
+  }
+  return [...permissions];
 }
 
 function isPortalRole(value: string): value is PortalRole {
@@ -102,7 +141,7 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
         },
       });
 
-    return { authorized: true, role: "admin", department: "general", status: "active", user: { ...user, email }, functionalRoles: ["system_owner"] };
+    return { authorized: true, role: "admin", department: "general", status: "active", user: { ...user, email }, functionalRoles: ["system_owner"], functionalPermissions: ["*"] };
   }
 
   if (!existing) {
@@ -128,7 +167,7 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
       targetRole: "admin",
       dedupeKey: `portal-user-pending:${email}`,
     }).catch(() => undefined);
-    return { authorized: false, role: "employee", department: "general", status: "pending", user: { ...user, email }, functionalRoles: [] };
+    return { authorized: false, role: "employee", department: "general", status: "pending", user: { ...user, email }, functionalRoles: [], functionalPermissions: [] };
   }
 
   if (options.markLogin || activityDue || existing.displayName !== user.displayName) {
@@ -146,7 +185,8 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
   const department = isPortalDepartment(existing.department) ? existing.department : "general";
   const status = isPortalStatus(existing.status) ? existing.status : "pending";
   const functionalRoles = status === "active" ? await activeFunctionalRoles(email) : [];
-  return { authorized: status === "active", role, department, status, user: { ...user, email }, functionalRoles };
+  const functionalPermissions = status === "active" ? await activeFunctionalPermissions(functionalRoles) : [];
+  return { authorized: status === "active", role, department, status, user: { ...user, email }, functionalRoles, functionalPermissions };
 }
 
 export async function requirePortalApiRole(allowed: PortalRole[]) {
@@ -171,33 +211,33 @@ export async function requirePortalSessionIdentity() {
 }
 
 export function canAccessPortalDepartment(
-  access: Pick<PortalAccess, "role" | "department" | "functionalRoles">,
+  access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">,
   department: Exclude<PortalDepartment, "general">,
   write = false,
 ) {
   if (access.role === "admin" || access.role === "manager") return true;
-  if (access.functionalRoles.some((role) => functionalDepartmentAccess[role]?.[write ? "write" : "read"].includes(department))) return true;
+  if (access.functionalPermissions.includes("*") || access.functionalPermissions.includes(`${department}.${write ? "write" : "read"}`)) return true;
   return !write && access.department === department;
 }
 
-export function canAccessPortalDocuments(access: Pick<PortalAccess, "role" | "department" | "functionalRoles">) {
-  return access.role === "admin" || access.role === "manager" || access.department === "legal" || access.department === "finance" || access.functionalRoles.some((role) => functionalDepartmentAccess[role]?.read.some((department) => department === "legal" || department === "finance"));
+export function canAccessPortalDocuments(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
+  return access.role === "admin" || access.role === "manager" || access.department === "legal" || access.department === "finance" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.read") || access.functionalPermissions.includes("legal.read") || access.functionalPermissions.includes("finance.read");
 }
 
-export function canManagePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles">) {
-  return access.role === "admin" || access.role === "manager" || access.functionalRoles.some((role) => ["system_owner", "system_admin", "finance_director", "contracts_manager", "document_controller"].includes(role));
+export function canManagePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
+  return access.role === "admin" || access.role === "manager" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.write") || access.functionalPermissions.includes("finance.write");
 }
 
-export function canManageCompanyAssets(access: Pick<PortalAccess, "role" | "functionalRoles">) {
-  return access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
+export function canManageCompanyAssets(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
+  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("assets.administer");
 }
 
-export function canManagePortalConversations(access: Pick<PortalAccess, "role" | "department" | "functionalRoles">) {
-  return access.role === "admin" || access.role === "manager" || access.department === "workforce" || access.functionalRoles.some((role) => functionalDepartmentAccess[role]?.write.includes("workforce"));
+export function canManagePortalConversations(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
+  return access.role === "admin" || access.role === "manager" || access.department === "workforce" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("workforce.write") || access.functionalPermissions.includes("conversations.write");
 }
 
 export async function hasPortalPermission(
-  access: Pick<PortalAccess, "role" | "department" | "user" | "functionalRoles">,
+  access: Pick<PortalAccess, "role" | "department" | "user" | "functionalRoles" | "functionalPermissions">,
   resource: string,
   action: string,
 ) {
@@ -210,9 +250,7 @@ export async function hasPortalPermission(
     ),
   });
   if (explicit) return explicit.allowed;
-  if (access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin")) return true;
-  if (action === "approve" && functionalApprovals[resource]?.some((role) => access.functionalRoles.includes(role))) return true;
-  if (resource === "finance" && action === "post" && access.functionalRoles.includes("finance_director")) return true;
+  if (access.functionalPermissions.includes("*") || access.functionalPermissions.includes(`${resource}.${action}`)) return true;
   if (["read", "write"].includes(action) && ["employees", "finance", "legal", "workforce", "construction"].includes(resource)) {
     return canAccessPortalDepartment(access, resource as Exclude<PortalDepartment, "general">, action === "write");
   }

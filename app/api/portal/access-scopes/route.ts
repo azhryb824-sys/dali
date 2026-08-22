@@ -1,7 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { businessLines, constructionProjects, portalAccessScopes, portalUsers, serviceCities, serviceRegions } from "@/db/schema";
-import { functionalRoleLabels, functionalRoles } from "@/lib/access-policy";
+import { businessLines, constructionProjects, portalAccessScopes, portalRoles, portalUsers, serviceCities, serviceRegions } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
@@ -24,15 +23,16 @@ export async function GET() {
   const access = await requirePortalApiRole(["admin"]);
   if (!access) return jsonNoStore({ error: "غير مصرح بإدارة نطاقات الوصول" }, { status: 403 });
   const db = getDb();
-  const [scopes, users, lines, regions, cities, projects] = await Promise.all([
+  const [scopes, users, lines, regions, cities, projects, roles] = await Promise.all([
     db.select().from(portalAccessScopes).orderBy(desc(portalAccessScopes.active), desc(portalAccessScopes.updatedAt)).limit(1000),
     db.select({ email: portalUsers.email, displayName: portalUsers.displayName, status: portalUsers.status }).from(portalUsers).orderBy(portalUsers.displayName),
     db.select().from(businessLines).orderBy(businessLines.id),
     db.select().from(serviceRegions).orderBy(serviceRegions.sortOrder),
     db.select().from(serviceCities).orderBy(serviceCities.nameAr).limit(1000),
     db.select({ id: constructionProjects.id, projectCode: constructionProjects.projectCode, title: constructionProjects.title, cityId: constructionProjects.cityId }).from(constructionProjects).orderBy(desc(constructionProjects.updatedAt)).limit(500),
+    db.select().from(portalRoles).where(eq(portalRoles.active, true)).orderBy(portalRoles.labelAr),
   ]);
-  return jsonNoStore({ scopes, users, lines, regions, cities, projects, roleLabels: functionalRoleLabels });
+  return jsonNoStore({ scopes, users, lines, regions, cities, projects, roleLabels: Object.fromEntries(roles.map((role) => [role.roleKey, role.labelAr])) });
 }
 
 export async function POST(request: Request) {
@@ -52,13 +52,15 @@ export async function POST(request: Request) {
   const approvalLimitHalalas = money(body.approvalLimit);
   const validFrom = date(body.validFrom);
   const validUntil = date(body.validUntil);
-  if (!userEmail || !functionalRoles.includes(functionalRole as never) || [businessLineId, regionId, cityId, projectId, financialLimitHalalas, approvalLimitHalalas, validFrom, validUntil].includes(undefined) || (validFrom && validUntil && validUntil < validFrom)) {
+  if (!userEmail || !functionalRole || [businessLineId, regionId, cityId, projectId, financialLimitHalalas, approvalLimitHalalas, validFrom, validUntil].includes(undefined) || (validFrom && validUntil && validUntil < validFrom)) {
     return jsonNoStore({ error: "بيانات الدور أو النطاق أو الحدود المالية غير صحيحة" }, { status: 400 });
   }
   if (userEmail === access.user.email) return jsonNoStore({ error: "لا يمكن تعديل نطاق حسابك من جلستك الحالية" }, { status: 409 });
   const db = getDb();
   const target = await db.query.portalUsers.findFirst({ where: eq(portalUsers.email, userEmail) });
   if (!target) return jsonNoStore({ error: "المستخدم غير موجود" }, { status: 404 });
+  const roleDefinition = await db.query.portalRoles.findFirst({ where: and(eq(portalRoles.roleKey, functionalRole), eq(portalRoles.active, true)) });
+  if (!roleDefinition) return jsonNoStore({ error: "الدور الوظيفي غير موجود أو غير نشط" }, { status: 400 });
   const [created] = await db.insert(portalAccessScopes).values({
     userEmail, functionalRole, businessLineId, regionId, cityId, projectId,
     financialLimitHalalas, approvalLimitHalalas, canApproveOwn: false,
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
   const correlationId = requestCorrelationId(request);
   await revokePortalSessionsForUser(userEmail, "access-scope-changed");
   await auditPortalAction({ actorEmail: access.user.email, action: "access-scope-created", entityType: "portal-access-scope", entityId: created.id, after: created, correlationId, source: "security" });
-  await emitPortalNotification({ eventType: "access-scope-created", title: "أُسند نطاق وصول وظيفي", message: `${functionalRoleLabels[functionalRole as keyof typeof functionalRoleLabels]} — أُبطلت الجلسات السابقة ويلزم تسجيل الدخول مجدداً.`, severity: "info", module: "users", entityType: "portal-access-scope", entityId: created.id, actionView: "users", targetEmail: userEmail }).catch(() => undefined);
+  await emitPortalNotification({ eventType: "access-scope-created", title: "أُسند نطاق وصول وظيفي", message: `${roleDefinition.labelAr} — أُبطلت الجلسات السابقة ويلزم تسجيل الدخول مجدداً.`, severity: "info", module: "users", entityType: "portal-access-scope", entityId: created.id, actionView: "users", targetEmail: userEmail }).catch(() => undefined);
   return jsonNoStore({ scope: created }, { status: 201 });
 }
 

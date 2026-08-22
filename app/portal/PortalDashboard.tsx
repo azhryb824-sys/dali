@@ -20,6 +20,7 @@ import ReportPdfDownload from "./ReportPdfDownload";
 import BankReconciliationWorkspace from "./BankReconciliationWorkspace";
 import ConstructionWorkspace from "./ConstructionWorkspace";
 import AccessScopeManager from "./AccessScopeManager";
+import RoleDefinitionManager from "./RoleDefinitionManager";
 
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
@@ -649,10 +650,10 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
 
   async function issueDocument(form: HTMLFormElement) {
     setBusy("issue-document");
-    const data = Object.fromEntries(new FormData(form).entries()) as Record<string, FormDataEntryValue>;
-    if (data.documentType === "workforce_contract" && data.endDate) data.expiryDate = data.endDate;
+    const data = new FormData(form);
+    if (data.get("documentType") === "workforce_contract" && data.get("endDate")) data.set("expiryDate", String(data.get("endDate")));
     try {
-      const response = await fetch("/api/portal/documents/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(data) });
+      const response = await fetch("/api/portal/documents/generate", { method: "POST", body: data });
       const result = await response.json() as {
         document?: CompanyDocument; contract?: WorkforceContract | null; professions?: ContractProfession[]; assignments?: ContractAssignment[];
         workers?: WorkerRecord[]; financialRecord?: FinanceRecord | null;
@@ -917,6 +918,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
 
         {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني.">
           <section className="panel users-panel"><div className="panel-head"><div><h2>حسابات النظام</h2><p>{users.filter((item) => item.status === "pending").length} حساب بانتظار الاعتماد · لا توجد كلمات مرور محفوظة في النظام</p></div></div><div className="user-list">{users.map((item) => <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}`} onSave={updateUser}/>)}</div></section>
+          <RoleDefinitionManager/>
           <AccessScopeManager currentEmail={currentUser.email}/>
         </ModuleSection>}
       </div>
@@ -1157,10 +1159,12 @@ function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { b
 
 function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts, onClose, onSubmit }: { initialType: string; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   type DraftProfession = { key: string; profession: string; requiredCount: number };
+  type DraftPayment = { key: string; title: string; dueDate: string; percentage: number };
   const [documentType, setDocumentType] = useState(initialType);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [professions, setProfessions] = useState<DraftProfession[]>([{ key: "profession-1", profession: workforceProfessions[0].label, requiredCount: 1 }]);
   const [selectedWorkers, setSelectedWorkers] = useState<Record<string, number[]>>({});
+  const [payments,setPayments]=useState<DraftPayment[]>([{key:"payment-1",title:"الدفعة الأولى",dueDate:"",percentage:100}]);
   const isContract = documentType === "workforce_contract";
   const capacity = professions.map((item) => {
     const registered = workers.filter((worker) => worker.profession === item.profession).length;
@@ -1199,11 +1203,13 @@ function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
 
   const serializedProfessions = JSON.stringify(professions.map((item) => ({ profession: item.profession, requiredCount: item.requiredCount, workerIds: selectedWorkers[item.key] || [] })));
+  const serializedPayments=JSON.stringify(payments.map(({title,dueDate,percentage})=>({title,dueDate,percentage})));
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إصدار المستند" onClick={onClose}/><section className="record-modal document-modal issue-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف PDF رسمي"><div className="drawer-head"><div><span>الإصدار الرسمي</span><h2>{isContract ? "إنشاء عقد توفير عمالة" : "إنشاء ملف PDF"}</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div>
     {!assetsReady && <div className="asset-required"><Icon name="stamp"/><p><strong>الختم والتوقيع غير مكتملين</strong><span>يجب أن يرفع مدير النظام الأصلين المعتمدين قبل الإصدار.</span></p></div>}
-    {isContract && <div className="contract-wizard-steps"><button type="button" className={step === 1 ? "active" : "done"} onClick={() => setStep(1)}>1 بيانات العقد</button><button type="button" className={step === 2 ? "active" : step > 2 ? "done" : ""} onClick={() => setStep(2)}>2 المهن والأعداد</button><button type="button" className={step === 3 ? "active" : ""} onClick={() => setStep(3)}>3 اختيار العمالة</button></div>}
+    {isContract && <div className="contract-wizard-steps"><button type="button" className={step === 1 ? "active" : "done"} onClick={() => setStep(1)}>1 بيانات العقد</button><button type="button" className={step === 2 ? "active" : step > 2 ? "done" : ""} onClick={() => setStep(2)}>2 المهن والأعداد</button><button type="button" className={step === 3 ? "active" : step > 3 ? "done" : ""} onClick={() => setStep(3)}>3 اختيار العمالة</button><button type="button" className={step === 4 ? "active" : ""} onClick={() => setStep(4)}>4 الدفعات والمرفقات</button></div>}
     <form onSubmit={submit}>
       <input type="hidden" name="professions" value={serializedProfessions}/>
+      <input type="hidden" name="paymentSchedule" value={serializedPayments}/>
       <div className={`issue-form-step span-two ${!isContract || step === 1 ? "visible" : ""}`}>
         <label>نوع المستند<select name="documentType" value={documentType} onChange={(event) => { setDocumentType(event.target.value); setStep(1); }}><option value="workforce_contract">عقد مقاولات لتوفير العمالة</option><option value="quotation">عرض سعر</option><option value="progress_claim">مستخلص أعمال</option><option value="invoice">فاتورة</option><option value="receipt">سند قبض</option><option value="payment_voucher">سند صرف</option></select></label>
         <label>تاريخ الإصدار<input name="issueDate" required type="date" defaultValue={new Date().toISOString().slice(0, 10)}/></label><label>اسم العميل أو الجهة<input name="clientName" required maxLength={160}/></label><label>عنوان المستند<input name="title" required maxLength={180} placeholder="موضوع المستند"/></label><label>السجل التجاري للعميل<input name="clientCr" maxLength={30} dir="ltr" placeholder="اختياري"/></label><label>الرقم الضريبي للعميل<input name="clientVat" maxLength={30} dir="ltr" placeholder="مطلوب فقط عند تفعيل الضريبة"/></label><label>قيمة الخدمة قبل الضريبة<input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr"/></label>{!isContract && <><label>تطبيق ضريبة القيمة المضافة<select name="vatEnabled" defaultValue="false"><option value="false">بدون ضريبة</option><option value="true">تطبيق الضريبة</option></select></label><label>نسبة الضريبة %<input name="vatRate" type="number" min="0" max="100" step="0.01" defaultValue="15" dir="ltr"/></label></>}
@@ -1215,7 +1221,9 @@ function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts
 
       {isContract && <div className={`issue-form-step span-two ${step === 3 ? "visible" : ""}`}><div className="selection-intro"><strong>اختيار العمالة المتاحة</strong><p>اختيار الأسماء اختياري. يمكنك تخطي هذه الخطوة وإنشاء العقد ثم إضافة العمالة لاحقاً.</p></div><div className="worker-selection-groups">{capacity.map((item) => { const candidates = workers.filter((worker) => worker.profession === item.profession && worker.status === "available"); const selected = selectedWorkers[item.key] || []; return <section key={item.key}><header><div><strong>{item.profession}</strong><small>مطلوب {item.requiredCount} · مختار {selected.length}</small></div><span className={selected.length === item.requiredCount ? "complete" : ""}>{item.requiredCount - selected.length} متبقٍ</span></header><div>{candidates.length ? candidates.map((worker) => <label key={worker.id} className={selected.includes(worker.id) ? "selected" : ""}><input type="checkbox" checked={selected.includes(worker.id)} disabled={!selected.includes(worker.id) && selected.length >= item.requiredCount} onChange={() => toggleWorker(item.key, worker.id, item.requiredCount)}/><span>{initials(worker.fullName)}</span><p><strong>{worker.fullName}</strong><small>{worker.workerNumber} · إقامة {worker.iqamaNumber || "غير مسجلة"}</small></p></label>) : <p className="empty-operational">لا توجد عمالة متاحة بهذه المهنة حالياً.</p>}</div></section>; })}</div>{totalShortage > 0 && <div className="contract-shortage-summary"><Icon name="bell"/><p><strong>يمكن إصدار العقد رغم العجز</strong><span>إجمالي العجز التشغيلي الحالي {totalShortage} عامل عبر المهن المطلوبة.</span></p></div>}</div>}
 
-      <p className="form-hint span-two">سيُنشأ رقم مرجعي تلقائي، ويُحفظ الملف في المركز، ويُدرج الختم والتوقيع المعتمدان في النسخة الصادرة.</p><div className="modal-actions span-two">{isContract && step > 1 ? <button type="button" onClick={() => setStep((step - 1) as 1 | 2)}>السابق</button> : <button type="button" onClick={onClose}>إلغاء</button>}{isContract && step < 3 ? <button className="admin-primary" type="button" onClick={(event) => { if (step === 1 && !event.currentTarget.form?.reportValidity()) return; setStep((step + 1) as 2 | 3); }}>التالي</button> : <button className="admin-primary" type="submit" disabled={busy || !assetsReady}>{busy ? "جارٍ الإصدار..." : isContract && totalShortage ? "إصدار العقد رغم العجز" : "إصدار واعتماد PDF"}</button>}</div>
+      {isContract&&<div className={`issue-form-step span-two ${step===4?"visible":""}`}><div className="selection-intro"><strong>جدول دفعات العقد</strong><p>يجب أن يكون مجموع النسب 100%. تتحول الدفعة المستحقة إلى المحاسبة بأمر المالك.</p></div><div className="contract-payment-builder">{payments.map((payment,index)=><article key={payment.key}><input required value={payment.title} onChange={event=>setPayments(items=>items.map(item=>item.key===payment.key?{...item,title:event.target.value}:item))} placeholder="اسم الدفعة"/><input required type="date" value={payment.dueDate} onChange={event=>setPayments(items=>items.map(item=>item.key===payment.key?{...item,dueDate:event.target.value}:item))}/><label>النسبة %<input required type="number" min="0.01" max="100" step="0.01" value={payment.percentage} onChange={event=>setPayments(items=>items.map(item=>item.key===payment.key?{...item,percentage:Number(event.target.value)}:item))}/></label>{payments.length>1&&<button type="button" onClick={()=>setPayments(items=>items.filter(item=>item.key!==payment.key))}>حذف</button>}<small>الدفعة {index+1}</small></article>)}</div><div className="profession-builder-head"><strong>المجموع: {payments.reduce((sum,item)=>sum+item.percentage,0).toFixed(2)}%</strong><button type="button" onClick={()=>setPayments(items=>[...items,{key:`payment-${Date.now()}`,title:`الدفعة ${items.length+1}`,dueDate:"",percentage:0}])}><Icon name="plus"/> إضافة دفعة</button></div><div className="client-document-files"><label>السجل التجاري للعميل (PDF/JPG/PNG)<input name="commercialRegistrationFile" type="file" accept="application/pdf,image/jpeg,image/png"/></label><label>الشهادة الضريبية للعميل (PDF/JPG/PNG)<input name="vatCertificateFile" type="file" accept="application/pdf,image/jpeg,image/png"/></label></div><p className="form-hint">تُحفظ المرفقات المضافة ضمن ملف العميل والعقد وتصبح قابلة للتنزيل والمشاركة من مركز المستندات.</p></div>}
+
+      <p className="form-hint span-two">سيُنشأ رقم مرجعي تلقائي، ويُحفظ الملف في المركز، ويُدرج الختم والتوقيع المعتمدان في النسخة الصادرة.</p><div className="modal-actions span-two">{isContract && step > 1 ? <button type="button" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>السابق</button> : <button type="button" onClick={onClose}>إلغاء</button>}{isContract && step < 4 ? <button className="admin-primary" type="button" onClick={() => setStep((step + 1) as 2 | 3 | 4)}>التالي</button> : <button className="admin-primary" type="submit" disabled={busy || !assetsReady || (isContract&&Math.abs(payments.reduce((sum,item)=>sum+item.percentage,0)-100)>0.001)}>{busy ? "جارٍ الإصدار..." : isContract && totalShortage ? "إصدار العقد رغم العجز" : "إصدار واعتماد PDF"}</button>}</div>
     </form>
   </section></div>;
 }

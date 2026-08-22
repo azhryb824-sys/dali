@@ -2,6 +2,7 @@ import { auditPortalAction } from "@/lib/audit";
 import { brandIdentityAssets, isBrandIdentityAssetId } from "@/lib/brand-identity";
 import { generateBrandIdentityPdf } from "@/lib/brand-identity-pdf";
 import { requirePortalApiRole } from "@/lib/portal-access";
+import { attachmentHeaders } from "@/lib/company-documents";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
@@ -11,6 +12,5 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const item = brandIdentityAssets.find((asset) => asset.id === id)!;
   const pdf = await generateBrandIdentityPdf(id);
   await auditPortalAction({ actorEmail: access.user.email, action: "brand-identity-downloaded", entityType: "brand-identity-asset", entityId: id, after: { title: item.title, format: "pdf" } });
-  return new Response(new Uint8Array(pdf).buffer, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="dali-${id}.pdf"`, "cache-control": "private, no-store", "x-content-type-options": "nosniff" } });
+  return new Response(new Uint8Array(pdf).buffer, { headers: attachmentHeaders(`dali-${id}.pdf`, "application/pdf") });
 }
-

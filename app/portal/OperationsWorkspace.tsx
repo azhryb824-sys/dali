@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { workforceProfessions } from "@/lib/workforce-requirements";
 import IntegrationManager from "./IntegrationManager";
+import ContractBillingWorkspace from "./ContractBillingWorkspace";
 
 type Client = { id: number; clientCode: string; legalName: string; tradeName: string | null; city: string; status: string; ownerEmail: string | null };
 type Contact = { id: number; clientId: number; fullName: string; email: string | null; mobile: string | null };
@@ -19,7 +20,7 @@ type ClientUser = { email: string; clientId: number; displayName: string; status
 type WorkerUser = { email: string; workerId: number; displayName: string; status: string };
 type Worker = { id: number; fullName: string; workerNumber: string; profession: string; status: string; clientId: number | null; workOrderId: number | null };
 type OperationsData = { clients: Client[]; contacts: Contact[]; opportunities: Opportunity[]; quotes: Quote[]; quoteItems: QuoteItem[]; workOrders: WorkOrder[]; requirements: Requirement[]; timesheets: Timesheet[]; timeEntries: unknown[]; workers: Worker[]; capacityPlans: CapacityPlan[]; approvals: Approval[]; privacyRequests: PrivacyRequest[]; clientUsers: ClientUser[]; workerUsers: WorkerUser[] };
-export type OperationsTab = "crm" | "quotes" | "orders" | "timesheets" | "capacity" | "privacy" | "clients" | "integrations";
+export type OperationsTab = "crm" | "quotes" | "contracts" | "orders" | "timesheets" | "capacity" | "privacy" | "clients" | "integrations";
 type Tab = OperationsTab;
 type CreateOperation = (action: string, form: HTMLFormElement, extra?: Record<string, unknown>) => Promise<void>;
 
@@ -121,7 +122,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, initialTab = "c
     {notice && <div className="operations-notice" role="status">{notice}</div>}
     <section className="metric-grid compact-metrics operations-metrics"><article><span>العملاء</span><strong>{metrics.clients}</strong><small>عميل وفرصة</small></article><article><span>قيمة المسار</span><strong>{money(metrics.pipeline)}</strong><small>فرص مفتوحة</small></article><article><span>موافقات معلقة</span><strong>{metrics.approvals}</strong><small>عروض ودوام</small></article><article><span>أوامر قيد التجهيز</span><strong>{metrics.staffing}</strong><small>تحتاج إسنادًا</small></article></section>
     <section className="operations-tabs" role="tablist" aria-label="وحدات المبيعات والتشغيل">
-      {(["crm","quotes","orders","timesheets","capacity","privacy",...(isAdmin ? ["clients","integrations"] : [])] as Tab[]).map((value) => <button role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} key={value} onClick={() => setTab(value)}>{({ crm: "العملاء والفرص", quotes: "عروض الأسعار", orders: "أوامر التشغيل", timesheets: "الدوام", capacity: "السعة الموسمية", privacy: "طلبات الخصوصية", clients: "وصول البوابات", integrations: "التكامل والصيانة" } as Record<Tab,string>)[value]}</button>)}
+      {(["crm","quotes","contracts","orders","timesheets","capacity","privacy",...(isAdmin ? ["clients","integrations"] : [])] as Tab[]).map((value) => <button role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} key={value} onClick={() => setTab(value)}>{({ crm: "العملاء والفرص", quotes: "عروض الأسعار", contracts:"العقود والدفعات", orders: "أوامر التشغيل", timesheets: "الدوام", capacity: "السعة الموسمية", privacy: "طلبات الخصوصية", clients: "وصول البوابات", integrations: "التكامل والصيانة" } as Record<Tab,string>)[value]}</button>)}
     </section>
     <div className="operations-search"><label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث داخل الوحدة الحالية"/></label></div>
 
@@ -132,6 +133,8 @@ export default function OperationsWorkspace({ canWrite, isAdmin, initialTab = "c
     {tab === "quotes" && <OperationsSection title="عروض الأسعار والإصدارات" count={data.quotes.length} form={canWrite ? <QuoteForm data={data} busy={busy} onCreate={create}/> : null}>
       <div className="operations-list wide">{data.quotes.filter(includes).map((quote) => <div key={quote.id}><span className="record-code">{quote.quoteCode}<small>v{quote.versionNumber}</small></span><p><strong>{data.opportunities.find((item) => item.id === quote.opportunityId)?.title || "فرصة"}</strong><small>{fmt(quote.issueDate)} · صالح حتى {fmt(quote.validUntil)} · {data.quoteItems.filter((item) => item.quoteVersionId === quote.id).length} بنود</small></p><b>{money(quote.totalHalalas)}</b><span className={`workflow-status ${quote.status}`}>{quote.status}</span>{canWrite && !["accepted","superseded"].includes(quote.status) && <button className="quote-revision" disabled={busy === `revision-${quote.id}`} onClick={() => void createQuoteRevision(quote)}>نسخة جديدة</button>}{canWrite && <TransitionSelect busy={busy === `transition-quote-${quote.id}`} value={quote.status} options={quoteNext[quote.status] || []} onChange={(status) => void transition("transition-quote", quote, status)}/>}</div>)}</div>
     </OperationsSection>}
+
+    {tab === "contracts" && <ContractBillingWorkspace/>}
 
     {tab === "orders" && <OperationsSection title="أوامر التشغيل" count={data.workOrders.length} form={canWrite ? <WorkOrderForms data={data} busy={busy} onCreate={create}/> : null}>
       <div className="operations-list wide">{data.workOrders.filter(includes).map((order) => { const reqs = data.requirements.filter((item) => item.workOrderId === order.id); const shortage = reqs.reduce((sum,item) => sum + Math.max(0,item.requiredCount-item.filledCount),0); return <div key={order.id}><span className="record-code">{order.workOrderCode}</span><p><strong>{order.title}</strong><small>{order.workSite} · {fmt(order.startDate)} · {reqs.map((item) => `${item.profession} ${item.requiredCount}`).join("، ")}</small></p><b className={shortage ? "shortage" : "complete"}>{shortage ? `نقص ${shortage}` : "مكتمل"}</b><span className={`workflow-status ${order.status}`}>{order.status}</span>{canWrite && <TransitionSelect busy={busy === `transition-work-order-${order.id}`} value={order.status} options={orderNext[order.status] || []} onChange={(status) => void transition("transition-work-order", order, status)}/>}</div>; })}</div>

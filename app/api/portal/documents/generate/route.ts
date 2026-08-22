@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import {
   companyAssets,
   companyDocuments,
+  contractPaymentSchedules,
   contractProfessions,
   contractWorkerAssignments,
   financialRecords,
@@ -10,13 +11,13 @@ import {
   workers,
   workforceContracts,
 } from "@/db/schema";
-import { cleanDate, cleanText, makeReference, objectKey } from "@/lib/company-documents";
+import { cleanDate, cleanText, makeReference, objectKey, safeFileName } from "@/lib/company-documents";
 import { generateIssuedPdf, issuedDocumentLabels, type IssuedDocumentType } from "@/lib/pdf-generator";
 import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { workforceProfessions } from "@/lib/workforce-requirements";
-import { rejectCrossSiteRequest } from "@/lib/security";
+import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
 
 const prefixes: Record<IssuedDocumentType, string> = {
   workforce_contract: "CTR",
@@ -29,6 +30,7 @@ const prefixes: Record<IssuedDocumentType, string> = {
 };
 
 type ProfessionInput = { profession: string; requiredCount: number; workerIds: number[] };
+type PaymentInput = { title: string; dueDate: string; percentageBps: number; amountHalalas: number };
 
 function isDocumentType(value: string): value is IssuedDocumentType {
   return value in issuedDocumentLabels;
@@ -62,6 +64,17 @@ function parseProfessions(value: unknown, legacyProfession: string, legacyCount:
   });
 }
 
+function parsePayments(value: unknown, contractAmountHalalas: number): PaymentInput[] {
+  let raw: unknown = value;
+  if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch { raw = null; } }
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const percentageBps = Math.round(Number(row.percentage || 0) * 100);
+    return { title: cleanText(row.title, 160), dueDate: cleanDate(row.dueDate) || "", percentageBps, amountHalalas: Math.round(contractAmountHalalas * percentageBps / 10000) };
+  });
+}
+
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
@@ -70,8 +83,13 @@ export async function POST(request: Request) {
   let storageKey = "";
   let savedDocumentId: number | null = null;
   let savedContractId: number | null = null;
+  const auxiliaryStorageKeys: string[] = [];
+  const auxiliaryDocumentIds: number[] = [];
   try {
-    const payload = await request.json() as Record<string, unknown>;
+    const form = await request.formData();
+    const payload = Object.fromEntries(form.entries()) as Record<string, unknown>;
+    const commercialRegistrationFile = form.get("commercialRegistrationFile");
+    const vatCertificateFile = form.get("vatCertificateFile");
     const documentType = cleanText(payload.documentType, 40);
     const clientName = cleanText(payload.clientName, 160);
     const clientCr = cleanText(payload.clientCr, 30);
@@ -98,6 +116,8 @@ export async function POST(request: Request) {
     const vatEnabled = payload.vatEnabled === true || payload.vatEnabled === "on" || payload.vatEnabled === "true";
     const vatRate = vatEnabled ? Number(payload.vatRate || 15) : 0;
     const linkedContractId = parsePositiveId(payload.linkedContractId);
+    const contractAmountHalalas = Math.round(amount * 100);
+    const paymentSchedule = documentType === "workforce_contract" ? parsePayments(payload.paymentSchedule, contractAmountHalalas) : [];
 
     if (!isDocumentType(documentType) || documentType === "construction_record" || clientName.length < 2 || title.length < 3 || !issueDate || expiryDate === "" || details.length < 5) {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
@@ -120,6 +140,9 @@ export async function POST(request: Request) {
       }
       if (professionInputs.some((item) => !validLabels.has(item.profession) || !Number.isInteger(item.requiredCount) || item.requiredCount < 1 || item.requiredCount > 100000 || item.workerIds.length > item.requiredCount)) {
         return Response.json({ error: "بيانات المهن أو الأعداد غير صحيحة، أو تم اختيار عمالة أكثر من العدد المطلوب" }, { status: 400 });
+      }
+      if (!paymentSchedule.length || paymentSchedule.some((item) => item.title.length < 2 || !item.dueDate || item.percentageBps <= 0 || item.amountHalalas <= 0) || paymentSchedule.reduce((sum, item) => sum + item.percentageBps, 0) !== 10000) {
+        return Response.json({ error: "يجب إضافة جدول دفعات صحيح مجموع نسبه 100% قبل إنشاء العقد" }, { status: 400 });
       }
       const allSelected = professionInputs.flatMap((item) => item.workerIds);
       if (new Set(allSelected).size !== allSelected.length) {
@@ -203,6 +226,7 @@ export async function POST(request: Request) {
           .filter((worker) => item.workerIds.includes(worker.id))
           .map((worker) => ({ fullName: worker.fullName, iqamaNumber: worker.iqamaNumber })),
       })),
+      paymentSchedule,
     }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
 
     const fileName = `${referenceCode}.pdf`;
@@ -225,7 +249,7 @@ export async function POST(request: Request) {
       sizeBytes: pdfBytes.byteLength,
       expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
       source: "generated",
-      metadataJson: JSON.stringify({ clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
+      metadataJson: JSON.stringify({ clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId }),
       createdBy: access.user.email,
     }).returning();
     savedDocumentId = saved.id;
@@ -252,6 +276,15 @@ export async function POST(request: Request) {
         createdBy: access.user.email,
       }).returning();
       savedContractId = contract.id;
+      await db.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas, status: payment.dueDate <= new Date().toISOString().slice(0, 10) ? "due" : "scheduled", createdBy: access.user.email })));
+      for (const [file, kind, label] of [[commercialRegistrationFile,"commercial-registration","السجل التجاري"],[vatCertificateFile,"vat-certificate","الشهادة الضريبية"]] as const) {
+        if (!(file instanceof File) || !file.size) continue;
+        const validation = await validateUploadedFile(file,{contentTypes:new Set(["application/pdf","image/png","image/jpeg"]),maxBytes:12*1024*1024});
+        if(!validation.valid) throw new Error(`${label}: ${validation.error}`);
+        const fileName=safeFileName(file.name);const clientStorageKey=objectKey("client-documents",fileName);auxiliaryStorageKeys.push(clientStorageKey);
+        await getRuntimeEnv().BUCKET.put(clientStorageKey,validation.bytes,{httpMetadata:{contentType:file.type},customMetadata:{uploadedBy:access.user.email,clientName,contractReference:contract.referenceCode,documentKind:kind,validation:validation.validationDetails}});
+        const[clientDocument]=await db.insert(companyDocuments).values({referenceCode:makeReference("CLD"),title:`${label} - ${clientName}`,category:"certificate",documentType:kind,counterparty:clientName,fileName,storageKey:clientStorageKey,contentType:file.type,sizeBytes:file.size,source:"uploaded",validationStatus:"signature-validated",validationDetails:validation.validationDetails,metadataJson:JSON.stringify({clientName,contractId:contract.id,contractReference:contract.referenceCode,documentKind:kind}),createdBy:access.user.email}).returning();auxiliaryDocumentIds.push(clientDocument.id);
+      }
       professionRecords = await db.insert(contractProfessions).values(professionInputs.map((item) => ({
         contractId: contract!.id,
         profession: item.profession,
@@ -338,10 +371,13 @@ export async function POST(request: Request) {
     if (savedContractId) {
       await db.delete(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, savedContractId)).catch(() => undefined);
       await db.delete(contractProfessions).where(eq(contractProfessions.contractId, savedContractId)).catch(() => undefined);
+      await db.delete(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, savedContractId)).catch(() => undefined);
       await db.delete(workforceContracts).where(eq(workforceContracts.id, savedContractId)).catch(() => undefined);
     }
     if (savedDocumentId) await db.delete(companyDocuments).where(eq(companyDocuments.id, savedDocumentId)).catch(() => undefined);
+    for (const id of auxiliaryDocumentIds) await db.delete(companyDocuments).where(eq(companyDocuments.id,id)).catch(()=>undefined);
     if (storageKey) await getRuntimeEnv().BUCKET.delete(storageKey).catch(() => undefined);
+    for (const key of auxiliaryStorageKeys) await getRuntimeEnv().BUCKET.delete(key).catch(() => undefined);
     const message = error instanceof Error ? error.message : "";
     return Response.json({ error: message || "تعذّر إصدار ملف PDF حالياً" }, { status: 500 });
   }

@@ -6,6 +6,7 @@ import { auditPortalAction } from "@/lib/audit";
 import { generateIssuedPdf } from "@/lib/pdf-generator";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
+import { attachmentHeaders } from "@/lib/company-documents";
 import { requestCorrelationId } from "@/lib/security";
 
 const labels:Record<string,string>={survey:"محضر معاينة",estimate:"تقدير تكلفة",boq:"جدول كميات",contract:"عقد مقاولات",wbs:"هيكل تقسيم العمل",daily_log:"يومية موقع",document:"سجل وثيقة هندسية",rfi:"طلب معلومات RFI",submittal:"اعتماد مادة",inspection:"طلب فحص",ncr:"حالة عدم مطابقة",safety:"سجل سلامة",procurement:"طلب شراء مشروع",subcontract:"سجل مقاول باطن",change_order:"أمر تغيير",payment_certificate:"مستخلص أعمال",handover:"محضر تسليم وضمان",risk:"سجل مخاطر"};
@@ -37,5 +38,5 @@ export async function GET(request:Request){
   const correlationId=requestCorrelationId(request);
   await auditPortalAction({actorEmail:access.user.email,action:"construction-record-pdf-generated",entityType:`construction-${record.recordType}`,entityId:record.id,after:{recordCode:record.recordCode,revision:record.revision},correlationId});
   await emitPortalNotification({eventType:"construction-record-pdf-generated",title:"أُصدر ملف PDF لمشروع مقاولات",message:`${record.recordCode} — ${record.title}.`,severity:"info",module:"construction",entityType:`construction-${record.recordType}`,entityId:record.id,actionView:"construction",targetEmail:access.user.email}).catch(()=>undefined);
-  return new Response(bytes as BodyInit,{headers:{"content-type":"application/pdf","content-disposition":`attachment; filename="${record.recordCode}.pdf"`,"cache-control":"private, no-store","x-content-type-options":"nosniff"}});
+  return new Response(bytes as BodyInit,{headers:attachmentHeaders(`${record.recordCode}.pdf`,"application/pdf")});
 }
