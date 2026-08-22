@@ -7,8 +7,8 @@ import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
 
 const transitions: Record<string, string[]> = {
-  draft: ["internal_review", "cancelled"],
-  internal_review: ["draft", "legal_review", "cancelled"],
+  draft: ["internal_review", "approved", "cancelled"],
+  internal_review: ["draft", "legal_review", "approved", "cancelled"],
   legal_review: ["internal_review", "approved", "cancelled"],
   approved: ["sent", "active", "cancelled"],
   sent: ["signed", "cancelled"],

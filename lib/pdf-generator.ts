@@ -478,9 +478,9 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       } else composer.field("القيمة", moneyLabel(input.amountHalalas));
       composer.field("المبلغ كتابة", halalasToArabicWords(input.amountHalalas));
     }
-    if (input.expiryDate) composer.field(input.documentType === "quotation" ? "صلاحية العرض" : "تاريخ الاستحقاق", dateLabel(input.expiryDate));
+    if (input.expiryDate) composer.field("تاريخ الاستحقاق", dateLabel(input.expiryDate));
     composer.paragraph("البيان والتفاصيل", input.details);
-    if (["quotation", "invoice", "progress_claim"].includes(input.documentType)) {
+    if (["invoice", "progress_claim"].includes(input.documentType)) {
       composer.paragraph("ملاحظات", "القيم مبينة بالريال السعودي، وتُطبَّق الضرائب والاستقطاعات النظامية وفق البيانات المعتمدة في المستند والعقد المرتبط به.");
     }
   }

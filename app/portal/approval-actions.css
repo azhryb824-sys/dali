@@ -1,0 +1,21 @@
+.document-actions .document-direct-approve {
+  background: #168552;
+  border-color: #168552;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(22, 133, 82, 0.2);
+}
+
+.documents-heading .document-approval-entry {
+  background: #168552;
+  border-color: #168552;
+}
+
+.contract-direct-approve {
+  width: 100%;
+  min-height: 46px;
+  margin: 10px 0;
+  background: #168552;
+  box-shadow: 0 6px 16px rgba(22, 133, 82, 0.22);
+  font-size: 13px;
+}

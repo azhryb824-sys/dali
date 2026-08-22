@@ -96,6 +96,14 @@ test("legacy generated PDFs are rebuilt with the current template when accessed"
   assert.match(generation, /templateVersion: "letterhead-v3-unified-quotation"/);
 });
 
+test("documents center uses the complete canonical quotation form instead of the generic issuer", async () => {
+  const [dashboard, workspace, styles] = await Promise.all([source("app/portal/PortalDashboard.tsx"),source("app/portal/OperationsWorkspace.tsx"),source("app/portal/portal.css")]);
+  assert.match(dashboard, /onIssueQuotation/);assert.match(dashboard, /QuotationIssueModal/);assert.doesNotMatch(dashboard, /<option value="quotation">عرض سعر<\/option>/);
+  assert.match(workspace, /نموذج المستندات المعتمد/);assert.match(workspace, /حفظ مسودة عرض السعر للاعتماد/);
+  for (const requirement of ["نوع طلب العميل","نطاق العدد","موقع تقديم الخدمة","الخصم بالريال","ضريبة القيمة المضافة","شروط الدفع","الافتراضات والاستثناءات"]) assert.match(workspace,new RegExp(requirement));
+  assert.match(styles,/\.admin-shell h2\{font-size:18px\}/);assert.match(styles,/\.contract-billing>header h2/);
+});
+
 test("all supported issued document types remain connected to the PDF generator", async () => {
   const [generator, route, identity] = await Promise.all([
     source("lib/pdf-generator.ts"), source("app/api/portal/documents/generate/route.ts"), source("lib/brand-identity-pdf.ts"),
