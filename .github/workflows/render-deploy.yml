@@ -1,0 +1,127 @@
+name: Deploy Dali to Render
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dali-render-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      BASE_URL: https://dali-ql1q.onrender.com
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+    steps:
+      - name: Verify deploy channel configuration
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+              echo "::error::RENDER_DEPLOY_HOOK_URL is not configured in GitHub Actions secrets."
+              exit 1
+            fi
+            echo "::warning::Render deploy hook is not configured; skipping automatic deployment."
+            exit 0
+          fi
+          echo "::add-mask::${RENDER_DEPLOY_HOOK_URL}"
+          case "${RENDER_DEPLOY_HOOK_URL}" in
+            https://api.render.com/deploy/*|https://api.render.com/v1/*) ;;
+            *)
+              echo "::error::RENDER_DEPLOY_HOOK_URL is not an approved HTTPS Render endpoint."
+              exit 1
+              ;;
+          esac
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger Render deployment
+        if: steps.channel.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          response_code="$(curl --request POST \
+            --silent --show-error \
+            --max-time 60 \
+            --retry 2 \
+            --retry-delay 5 \
+            --retry-all-errors \
+            --output /tmp/render-deploy-response.txt \
+            --write-out '%{http_code}' \
+            "${RENDER_DEPLOY_HOOK_URL}")"
+          if [[ ! "$response_code" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error::Render deploy hook returned HTTP ${response_code:-000}."
+            head -c 600 /tmp/render-deploy-response.txt 2>/dev/null || true
+            echo
+            exit 1
+          fi
+          echo "Render accepted the deployment request."
+
+      - name: Verify production readiness
+        if: steps.channel.outputs.configured == 'true'
+        shell: bash
+        run: |
+          set -u
+          legacy_code="000"
+          live_code="000"
+          ready_code="000"
+          login_code="000"
+
+          for attempt in $(seq 1 72); do
+            legacy_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-health.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health" || true)"
+            live_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-live.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health/live" || true)"
+            ready_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-ready.json --write-out '%{http_code}' \
+              "${BASE_URL}/api/health/ready" || true)"
+            login_code="$(curl --location --silent --show-error --max-time 35 \
+              --output /tmp/dali-login.html --write-out '%{http_code}' \
+              "${BASE_URL}/login" || true)"
+
+            echo "attempt=${attempt} health=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+
+            if [[ "$legacy_code" == "200" \
+              && "$live_code" == "200" \
+              && "$ready_code" == "200" \
+              && "$login_code" == "200" ]] \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-health.json \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-live.json \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
+              && grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"' /tmp/dali-ready.json \
+              && grep -Eq '"auth"[[:space:]]*:[[:space:]]*"(ok|external)"' /tmp/dali-ready.json \
+              && grep -q 'تسجيل الدخول الآمن' /tmp/dali-login.html; then
+              echo "Render deployment is live and ready."
+              cat /tmp/dali-health.json
+              cat /tmp/dali-live.json
+              cat /tmp/dali-ready.json
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::Render did not become ready within the bounded verification window."
+          echo "Final HTTP codes: health=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+          echo "--- health ---"
+          cat /tmp/dali-health.json 2>/dev/null || true
+          echo
+          echo "--- live ---"
+          cat /tmp/dali-live.json 2>/dev/null || true
+          echo
+          echo "--- ready ---"
+          cat /tmp/dali-ready.json 2>/dev/null || true
+          echo
+          exit 1
