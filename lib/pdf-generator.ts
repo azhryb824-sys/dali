@@ -115,9 +115,11 @@ async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<
   ]);
 
   const runtime = getRuntimeEnv();
-  const [logoResponse, letterheadResponse] = await Promise.all([
+  const [logoResponse, letterheadResponse, transparentStampResponse, transparentSignatureResponse] = await Promise.all([
     runtime.ASSETS.fetch(new Request("https://assets.local/dally-logo.jpg")),
     runtime.ASSETS.fetch(new Request("https://assets.local/images/dali-letterhead.png")),
+    runtime.ASSETS.fetch(new Request("https://assets.local/images/company-stamp-transparent.png")),
+    runtime.ASSETS.fetch(new Request("https://assets.local/images/company-signature-transparent.png")),
   ]);
   const logo = logoResponse.ok
     ? await pdf.embedJpg(new Uint8Array(await logoResponse.arrayBuffer()))
@@ -133,14 +135,18 @@ async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<
   }
 
   const [stampObject, signatureObject] = await Promise.all([
-    runtime.BUCKET.get(stampAsset.storageKey),
-    runtime.BUCKET.get(signatureAsset.storageKey),
+    transparentStampResponse.ok ? Promise.resolve(null) : runtime.BUCKET.get(stampAsset.storageKey),
+    transparentSignatureResponse.ok ? Promise.resolve(null) : runtime.BUCKET.get(signatureAsset.storageKey),
   ]);
-  if (!stampObject || !signatureObject) throw new Error("تعذّر تحميل الختم أو التوقيع المعتمد");
+  if ((!transparentStampResponse.ok && !stampObject) || (!transparentSignatureResponse.ok && !signatureObject)) throw new Error("تعذّر تحميل الختم أو التوقيع المعتمد");
 
   const [stamp, signature] = await Promise.all([
-    embedImage(pdf, new Uint8Array(await stampObject.arrayBuffer()), stampAsset.contentType),
-    embedImage(pdf, new Uint8Array(await signatureObject.arrayBuffer()), signatureAsset.contentType),
+    transparentStampResponse.ok
+      ? pdf.embedPng(new Uint8Array(await transparentStampResponse.arrayBuffer()))
+      : embedImage(pdf, new Uint8Array(await stampObject!.arrayBuffer()), stampAsset.contentType),
+    transparentSignatureResponse.ok
+      ? pdf.embedPng(new Uint8Array(await transparentSignatureResponse.arrayBuffer()))
+      : embedImage(pdf, new Uint8Array(await signatureObject!.arrayBuffer()), signatureAsset.contentType),
   ]);
   return { regular, bold, latinRegular, latinBold, logo, stamp, signature, letterhead };
 }
