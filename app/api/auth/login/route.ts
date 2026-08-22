@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, getSqlClient } from "@/db";
-import { passwordResetTokens, portalAuthCredentials, portalUsers } from "@/db/schema";
+import { passwordResetTokens, portalAuthCredentials } from "@/db/schema";
 import { createIdentityToken, identityCookie, sha256, verifyPasswordHash } from "@/lib/credential-auth";
 import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-error";
 import { getPortalAdminConfig, normalizePortalEmail, normalizePortalIdentifier } from "@/lib/portal-auth-config";
@@ -105,27 +105,9 @@ export async function POST(request: Request) {
     stage = "user-sync";
     if (adminConfig.emails.has(email)) {
       const now = new Date().toISOString();
-      await db.insert(portalUsers).values({
-        email,
-        displayName,
-        role: "admin",
-        department: "general",
-        status: "active",
-        lastLoginAt: now,
-        lastActivityAt: now,
-        updatedAt: now,
-      }).onConflictDoUpdate({
-        target: portalUsers.email,
-        set: {
-          displayName,
-          role: "admin",
-          department: "general",
-          status: "active",
-          lastLoginAt: now,
-          lastActivityAt: now,
-          updatedAt: now,
-        },
-      });
+      await getSqlClient()`insert into portal_users (email,display_name,role,department,status,last_login_at,last_activity_at,updated_at)
+        values (${email},${displayName},'admin','general','active',${now},${now},${now})
+        on conflict (email) do update set display_name=excluded.display_name,role='admin',department='general',status='active',last_login_at=excluded.last_login_at,last_activity_at=excluded.last_activity_at,updated_at=excluded.updated_at`;
     }
 
     stage = "identity-token";
