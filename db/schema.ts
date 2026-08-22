@@ -265,6 +265,12 @@ export const employees = pgTable(
     department: text("department").notNull(),
     mobile: text("mobile").notNull(),
     email: text("email"),
+    portalUserEmail: text("portal_user_email").references(() => portalUsers.email, { onDelete: "set null" }),
+    managerId: integer("manager_id"),
+    workLocation: text("work_location"),
+    employmentType: text("employment_type").notNull().default("full_time"),
+    contractType: text("contract_type").notNull().default("fixed_term"),
+    gosiNumber: text("gosi_number"),
     nationalId: text("national_id"),
     nationality: text("nationality"),
     bankName: text("bank_name"),
@@ -287,8 +293,30 @@ export const employees = pgTable(
   (table) => [
     index("employees_status_idx").on(table.status),
     index("employees_department_idx").on(table.department),
+    uniqueIndex("employees_portal_user_unique").on(table.portalUserEmail),
+    index("employees_manager_idx").on(table.managerId),
   ],
 );
+
+export const employeeDocuments = pgTable("employee_documents", {
+  id: serial("id").primaryKey(), employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  documentType: text("document_type").notNull(), documentNumber: text("document_number"), issueDate: text("issue_date"), expiryDate: text("expiry_date"),
+  fileName: text("file_name"), storageKey: text("storage_key"), status: text("status").notNull().default("valid"), notes: text("notes"),
+  createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [index("employee_documents_employee_idx").on(table.employeeId), index("employee_documents_expiry_idx").on(table.expiryDate), check("employee_documents_status_check", sql`${table.status} in ('valid','expiring','expired','archived')`)]);
+
+export const employeeLeaveRequests = pgTable("employee_leave_requests", {
+  id: serial("id").primaryKey(), employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }), leaveType: text("leave_type").notNull(),
+  startDate: text("start_date").notNull(), endDate: text("end_date").notNull(), days: integer("days").notNull(), reason: text("reason"), status: text("status").notNull().default("pending"),
+  requestedBy: text("requested_by").notNull(), decidedBy: text("decided_by"), decisionNote: text("decision_note"), decidedAt: text("decided_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [index("employee_leave_status_idx").on(table.employeeId, table.status), check("employee_leave_status_check", sql`${table.status} in ('pending','approved','rejected','cancelled')`), check("employee_leave_days_check", sql`${table.days} > 0`)]);
+
+export const employeeAttendance = pgTable("employee_attendance", {
+  id: serial("id").primaryKey(), employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }), attendanceDate: text("attendance_date").notNull(),
+  checkInAt: text("check_in_at"), checkOutAt: text("check_out_at"), status: text("status").notNull().default("present"), lateMinutes: integer("late_minutes").notNull().default(0), overtimeMinutes: integer("overtime_minutes").notNull().default(0), notes: text("notes"),
+  createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [uniqueIndex("employee_attendance_day_unique").on(table.employeeId, table.attendanceDate), index("employee_attendance_date_idx").on(table.attendanceDate), check("employee_attendance_status_check", sql`${table.status} in ('present','absent','leave','sick','remote','holiday')`)]);
 
 export const employeeMovements = pgTable(
   "employee_movements",

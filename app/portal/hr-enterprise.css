@@ -1,0 +1,8 @@
+.hr-forms{grid-template-columns:repeat(3,minmax(0,1fr))}
+.hr-people-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(320px,1fr);gap:14px}
+.employee-profile-row{display:grid;grid-template-columns:1.4fr 1fr 1fr auto;align-items:center;gap:12px;padding:14px 18px;border-top:1px solid #e8edef}
+.employee-profile-row b,.employee-profile-row span{display:grid;gap:4px;color:var(--admin-navy)}
+.employee-profile-row small{color:var(--admin-muted);font-size:10px;font-weight:400}.employee-profile-row strong{color:var(--admin-red);white-space:nowrap}
+.leave-approval{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 17px;border-top:1px solid #e8edef}.leave-approval b{display:grid;color:var(--admin-navy)}.leave-approval small{color:var(--admin-muted);font-weight:400}.leave-approval span{display:flex;gap:6px}.leave-approval button{border:0;border-radius:8px;background:var(--admin-navy);color:#fff;padding:8px 11px;cursor:pointer}.leave-approval button.danger{background:#fff1f2;color:#a8242d;border:1px solid #efc7ca}
+@media(max-width:1050px){.hr-forms,.hr-people-grid{grid-template-columns:1fr}.employee-profile-row{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.employee-profile-row{grid-template-columns:1fr}.leave-approval{align-items:flex-start;flex-direction:column}}

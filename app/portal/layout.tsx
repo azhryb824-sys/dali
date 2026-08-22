@@ -4,6 +4,7 @@ import "./approval-actions.css";
 import "./enhancements.css";
 import "./contract-lifecycle.css";
 import "./hr-workspace.css";
+import "./hr-enterprise.css";
 import "./compliance-workspace.css";
 import "./financial-posting.css";
 import "./purchasing-workspace.css";

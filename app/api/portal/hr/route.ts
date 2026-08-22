@@ -1,6 +1,6 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { chartOfAccounts, employeeMovements, employees, journalEntries, payrollItems, payrollRuns } from "@/db/schema";
+import { chartOfAccounts, employeeAttendance, employeeDocuments, employeeLeaveRequests, employeeMovements, employees, journalEntries, payrollItems, payrollRuns, portalUsers } from "@/db/schema";
 import { createDraftJournal } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -27,13 +27,17 @@ export async function GET() {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access || !(await hasPortalPermission(access, "employees", "read"))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   const db = getDb();
-  const [staff, movements, runs, items] = await Promise.all([
+  const [staff, movements, runs, items, documents, leaves, attendance, users] = await Promise.all([
     db.select().from(employees).orderBy(employees.fullName).limit(1000),
     db.select().from(employeeMovements).orderBy(desc(employeeMovements.effectiveDate), desc(employeeMovements.id)).limit(1000),
     db.select().from(payrollRuns).orderBy(desc(payrollRuns.periodMonth)).limit(120),
     db.select().from(payrollItems).orderBy(desc(payrollItems.id)).limit(5000),
+    db.select().from(employeeDocuments).orderBy(desc(employeeDocuments.id)).limit(3000),
+    db.select().from(employeeLeaveRequests).orderBy(desc(employeeLeaveRequests.id)).limit(3000),
+    db.select().from(employeeAttendance).orderBy(desc(employeeAttendance.attendanceDate)).limit(5000),
+    db.select({email:portalUsers.email,displayName:portalUsers.displayName,status:portalUsers.status}).from(portalUsers).limit(1000),
   ]);
-  return jsonNoStore({ employees: staff, movements, runs, items });
+  return jsonNoStore({ employees: staff, movements, runs, items, documents, leaves, attendance, users });
 }
 
 export async function POST(request: Request) {
@@ -45,6 +49,30 @@ export async function POST(request: Request) {
     const action = clean(payload.action, 40);
     const db = getDb();
     const now = new Date().toISOString();
+
+    if (action === "employee-profile") {
+      const employeeId=positiveId(payload.employeeId); const employee=await db.query.employees.findFirst({where:eq(employees.id,employeeId)});
+      if(!employee)return jsonNoStore({error:"الموظف غير موجود"},{status:404});
+      const portalUserEmail=clean(payload.portalUserEmail,160).toLowerCase()||null; if(portalUserEmail){const user=await db.query.portalUsers.findFirst({where:eq(portalUsers.email,portalUserEmail)});if(!user)return jsonNoStore({error:"حساب المستخدم غير موجود"},{status:404});}
+      const managerId=positiveId(payload.managerId)||null;if(managerId===employeeId)return jsonNoStore({error:"لا يمكن أن يكون الموظف مديراً لنفسه"},{status:400});
+      const [saved]=await db.update(employees).set({portalUserEmail,managerId,workLocation:clean(payload.workLocation,120)||null,employmentType:clean(payload.employmentType,30)||"full_time",contractType:clean(payload.contractType,30)||"fixed_term",gosiNumber:clean(payload.gosiNumber,40)||null,updatedAt:now}).where(eq(employees.id,employeeId)).returning();
+      await auditPortalAction({actorEmail:access.user.email,action:"employee-profile-linked",entityType:"employee",entityId:employeeId,before:employee,after:saved});return jsonNoStore({employee:saved});
+    }
+
+    if(action==="document"){
+      const employeeId=positiveId(payload.employeeId),documentType=clean(payload.documentType,60),expiryDate=clean(payload.expiryDate,10)||null;if(!employeeId||!documentType||(expiryDate&&!/^\d{4}-\d{2}-\d{2}$/.test(expiryDate)))return jsonNoStore({error:"بيانات الوثيقة غير صحيحة"},{status:400});
+      const [document]=await db.insert(employeeDocuments).values({employeeId,documentType,documentNumber:clean(payload.documentNumber,80)||null,expiryDate,notes:clean(payload.notes,500)||null,createdBy:access.user.email,updatedAt:now}).returning();await auditPortalAction({actorEmail:access.user.email,action:"employee-document-created",entityType:"employee-document",entityId:document.id,after:document});return jsonNoStore({document},{status:201});
+    }
+
+    if(action==="leave-request"){
+      const employeeId=positiveId(payload.employeeId),startDate=clean(payload.startDate,10),endDate=clean(payload.endDate,10);const start=new Date(`${startDate}T00:00:00Z`),end=new Date(`${endDate}T00:00:00Z`);const days=Math.floor((end.getTime()-start.getTime())/86400000)+1;if(!employeeId||!/^\d{4}-\d{2}-\d{2}$/.test(startDate)||!/^\d{4}-\d{2}-\d{2}$/.test(endDate)||days<1)return jsonNoStore({error:"فترة الإجازة غير صحيحة"},{status:400});
+      const [leave]=await db.insert(employeeLeaveRequests).values({employeeId,leaveType:clean(payload.leaveType,40)||"annual",startDate,endDate,days,reason:clean(payload.reason,500)||null,requestedBy:access.user.email,updatedAt:now}).returning();await auditPortalAction({actorEmail:access.user.email,action:"employee-leave-requested",entityType:"employee-leave",entityId:leave.id,after:leave});return jsonNoStore({leave},{status:201});
+    }
+
+    if(action==="attendance"){
+      const employeeId=positiveId(payload.employeeId),attendanceDate=clean(payload.attendanceDate,10),status=clean(payload.status,20);if(!employeeId||!/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate)||!["present","absent","leave","sick","remote","holiday"].includes(status))return jsonNoStore({error:"بيانات الحضور غير صحيحة"},{status:400});
+      const [row]=await db.insert(employeeAttendance).values({employeeId,attendanceDate,status,checkInAt:clean(payload.checkInAt,30)||null,checkOutAt:clean(payload.checkOutAt,30)||null,lateMinutes:Math.max(0,Number(payload.lateMinutes)||0),overtimeMinutes:Math.max(0,Number(payload.overtimeMinutes)||0),notes:clean(payload.notes,500)||null,createdBy:access.user.email,updatedAt:now}).onConflictDoUpdate({target:[employeeAttendance.employeeId,employeeAttendance.attendanceDate],set:{status,checkInAt:clean(payload.checkInAt,30)||null,checkOutAt:clean(payload.checkOutAt,30)||null,lateMinutes:Math.max(0,Number(payload.lateMinutes)||0),overtimeMinutes:Math.max(0,Number(payload.overtimeMinutes)||0),notes:clean(payload.notes,500)||null,updatedAt:now}}).returning();return jsonNoStore({attendance:row},{status:201});
+    }
 
     if (action === "employee-finance") {
       const employeeId = positiveId(payload.employeeId);
@@ -130,6 +158,13 @@ export async function PATCH(request: Request) {
     const action = clean(payload.action, 40);
     const runId = positiveId(payload.runId);
     const db = getDb();
+    if(action==="leave-decision"){
+      const leaveId=positiveId(payload.leaveId),decision=clean(payload.decision,20);if(!["approved","rejected"].includes(decision))return jsonNoStore({error:"قرار الإجازة غير صحيح"},{status:400});
+      const leave=await db.query.employeeLeaveRequests.findFirst({where:eq(employeeLeaveRequests.id,leaveId)});if(!leave||leave.status!=="pending")return jsonNoStore({error:"طلب الإجازة غير متاح للاعتماد"},{status:409});
+      const [updated]=await db.update(employeeLeaveRequests).set({status:decision,decidedBy:access.user.email,decisionNote:clean(payload.note,500)||null,decidedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}).where(eq(employeeLeaveRequests.id,leaveId)).returning();
+      if(decision==="approved")await db.update(employees).set({leaveBalanceDays:sql`${employees.leaveBalanceDays} - ${leave.days}`,updatedAt:new Date().toISOString()}).where(eq(employees.id,leave.employeeId));
+      await auditPortalAction({actorEmail:access.user.email,action:`employee-leave-${decision}`,entityType:"employee-leave",entityId:leaveId,before:leave,after:updated});return jsonNoStore({leave:updated});
+    }
     const run = await db.query.payrollRuns.findFirst({ where: eq(payrollRuns.id, runId) });
     if (!run) return jsonNoStore({ error: "مسير الرواتب غير موجود" }, { status: 404 });
     const now = new Date().toISOString();
