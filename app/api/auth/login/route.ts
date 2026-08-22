@@ -17,10 +17,11 @@ function loginRedirect(
   returnTo: string,
   error: "credentials" | "rate-limit" | "service",
   correlationId: string,
-  options: { retryAfterSeconds?: number } = {},
+  options: { retryAfterSeconds?: number; stage?: string } = {},
 ) {
   const params = new URLSearchParams({ error, returnTo });
   if (error === "service") params.set("requestId", correlationId);
+  if (error === "service" && options.stage) params.set("stage", options.stage);
   if (options.retryAfterSeconds) params.set("retryAfter", String(options.retryAfterSeconds));
   const headers = new Headers({
     location: externalRequestUrl(request, `/login?${params.toString()}`).toString(),
@@ -33,6 +34,7 @@ function loginRedirect(
 
 export async function POST(request: Request) {
   const correlationId = requestCorrelationId(request);
+  let stage = "request";
   try {
     if (rejectCrossSiteRequest(request)) {
       return new Response(null, { status: 403, headers: { "cache-control": "no-store", "x-request-id": correlationId } });
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
     const password = String(form.get("password") || "");
     if (!/^\d{10}$/.test(identifier)) return loginRedirect(request, returnTo, "credentials", correlationId);
 
+    stage = "credential-read";
     const db = getDb();
     const adminConfig = getPortalAdminConfig();
     const stored = await db.query.portalAuthCredentials.findFirst({ where: eq(portalAuthCredentials.identifier, identifier) });
@@ -92,6 +95,7 @@ export async function POST(request: Request) {
     const displayName = credential.displayName.trim() || email;
     if (!email) throw new OperationalError("PORTAL_CREDENTIAL_EMAIL_INVALID");
 
+    stage = "user-sync";
     if (adminConfig.emails.has(email)) {
       const now = new Date().toISOString();
       await db.insert(portalUsers).values({
@@ -117,7 +121,9 @@ export async function POST(request: Request) {
       });
     }
 
+    stage = "mfa-policy";
     if (await userRequiresMfa(email)) {
+      stage = "mfa-challenge";
       const challenge = await createMfaChallenge(credential, request, returnTo);
       return new Response(null, {
         status: 303,
@@ -130,6 +136,7 @@ export async function POST(request: Request) {
       });
     }
 
+    stage = "identity-token";
     const token = await createIdentityToken(email, displayName);
     return new Response(null, {
       status: 303,
@@ -142,7 +149,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const errorCode = safeOperationalErrorCode(error, "PORTAL_LOGIN_FAILED");
-    console.error("[auth/login] failed", { correlationId, errorCode, error });
-    return loginRedirect(request, "/portal", "service", correlationId);
+    console.error("[auth/login] failed", { correlationId, stage, errorCode, error });
+    return loginRedirect(request, "/portal", "service", correlationId, { stage });
   }
 }
