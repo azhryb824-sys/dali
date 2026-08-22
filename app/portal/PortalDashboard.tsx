@@ -70,6 +70,7 @@ type FinanceRecord = {
 };
 type LegalRecord = {
   id: number; referenceCode: string; category: string; title: string; counterparty: string;
+  clientId: number | null; contractId: number | null; referralReason: string | null; referredBy: string | null; referredAt: string | null; fileSnapshotJson: string | null;
   expiryDate: string | null; status: string; createdAt: string; updatedAt: string;
 };
 type WorkerRecord = {
@@ -151,6 +152,7 @@ const workforceExpenseLabels: Record<string, string> = {
 };
 const paymentMethodLabels: Record<string, string> = { bank_transfer: "تحويل بنكي", cash: "نقدي", cheque: "شيك", payroll_file: "ملف حماية الأجور", other: "أخرى" };
 const legalLabels: Record<string, string> = { contract: "عقد", case: "قضية", license: "ترخيص", compliance: "امتثال" };
+function legalFileSummary(value:string|null){if(!value)return null;try{const file=JSON.parse(value)as{documents?:unknown[];payments?:unknown[];finances?:unknown[];workers?:unknown[];contract?:{referenceCode?:string}};return{documents:file.documents?.length||0,payments:file.payments?.length||0,finances:file.finances?.length||0,workers:file.workers?.length||0,referenceCode:file.contract?.referenceCode||""}}catch{return null}}
 const documentCategoryLabels: Record<string, string> = { license: "ترخيص", contract: "عقد", certificate: "شهادة", finance: "مالي", legal: "قانوني", hr: "موارد بشرية", other: "أخرى" };
 const issuedTypeLabels: Record<string, string> = { workforce_contract: "عقد توفير عمالة", quotation: "عرض سعر", progress_claim: "مستخلص أعمال", invoice: "فاتورة", receipt: "سند قبض", payment_voucher: "سند صرف" };
 
@@ -1412,7 +1414,7 @@ function FinanceTable({ records, workers, contracts, query, canWrite, busy, onSt
 }
 function LegalTable({ records, query, canWrite, busy, onStatus }: { records: LegalRecord[]; query: string; canWrite: boolean; busy: string | null; onStatus: (id: number, status: string) => void }) {
   const rows = filterRecords(records, query); if (!rows.length) return <EmptyRows label="أضف أول عقد أو ملف قانوني ليظهر هنا."/>;
-  return <div className="management-table-wrap"><table className="management-table"><thead><tr><th>المرجع</th><th>النوع</th><th>العنوان</th><th>الطرف الآخر</th><th>الانتهاء/التجديد</th><th>الحالة</th></tr></thead><tbody>{rows.map((item) => <tr key={item.id}><td dir="ltr">{item.referenceCode}</td><td>{legalLabels[item.category] ?? item.category}</td><td><strong>{item.title}</strong></td><td>{item.counterparty}</td><td className={daysUntil(item.expiryDate) <= 45 ? "date-alert" : ""}>{formatDate(item.expiryDate)}</td><td><StatusControl entity="legal" id={item.id} value={item.status} canWrite={canWrite} busy={busy} onStatus={onStatus}/></td></tr>)}</tbody></table></div>;
+  return <div className="management-table-wrap"><table className="management-table"><thead><tr><th>المرجع</th><th>النوع</th><th>العنوان</th><th>الطرف الآخر</th><th>ملف العميل المحال</th><th>الانتهاء/التجديد</th><th>الحالة</th></tr></thead><tbody>{rows.map((item) => {const summary=legalFileSummary(item.fileSnapshotJson);return <tr key={item.id}><td dir="ltr">{item.referenceCode}</td><td>{legalLabels[item.category] ?? item.category}</td><td><strong>{item.title}</strong>{item.referralReason&&<small>سبب الإحالة: {item.referralReason}</small>}</td><td>{item.counterparty}</td><td>{summary?<details className="legal-case-file"><summary>فتح الملف الكامل</summary><p><b>{summary.referenceCode}</b><span>{summary.documents} مستندات · {summary.payments} دفعات · {summary.finances} حركات مالية · {summary.workers} عمال</span><small>أحيل بواسطة {item.referredBy||"النظام"} في {formatDate(item.referredAt,true)}</small></p></details>:"—"}</td><td className={daysUntil(item.expiryDate) <= 45 ? "date-alert" : ""}>{formatDate(item.expiryDate)}</td><td><StatusControl entity="legal" id={item.id} value={item.status} canWrite={canWrite} busy={busy} onStatus={onStatus}/></td></tr>})}</tbody></table></div>;
 }
 
 function WorkforceOperations({ workers, attachments }: { workers: WorkerRecord[]; attachments: WorkerAttachment[] }) {

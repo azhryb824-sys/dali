@@ -445,6 +445,12 @@ export const legalRecords = pgTable(
     category: text("category").notNull(),
     title: text("title").notNull(),
     counterparty: text("counterparty").notNull(),
+    clientId: integer("client_id"),
+    contractId: integer("contract_id"),
+    referralReason: text("referral_reason"),
+    referredBy: text("referred_by"),
+    referredAt: text("referred_at"),
+    fileSnapshotJson: text("file_snapshot_json"),
     expiryDate: text("expiry_date"),
     status: text("status").notNull().default("active"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
@@ -453,6 +459,8 @@ export const legalRecords = pgTable(
   (table) => [
     index("legal_records_status_idx").on(table.status),
     index("legal_records_expiry_date_idx").on(table.expiryDate),
+    index("legal_records_client_id_idx").on(table.clientId),
+    index("legal_records_contract_id_idx").on(table.contractId),
   ],
 );
 

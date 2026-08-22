@@ -69,8 +69,16 @@ test("contract and quotation edit delete and cancellation actions preserve finan
   for(const label of ["تعديل","حذف","إلغاء عرض السعر"])assert.match(quotesUi,new RegExp(label));
   assert.match(contractsApi,/لا يمكن حذف عقد ساري ومعتمد/);assert.match(contractsApi,/workforce-contract-deleted/);
   assert.match(quotesApi,/QUOTE_DELETE_BLOCKED/);assert.match(operations,/إلغاء عرض السعر متاح للمالك أو مشرف النظام فقط/);
-  assert.match(statusApi,/contract-cancellation-referred-legal/);assert.match(statusApi,/category: "contract_cancellation"/);
+  assert.match(statusApi,/contract-cancellation-referred-legal/);assert.match(statusApi,/category: "case"/);
   assert.match(statusApi,/inArray\(contractPaymentSchedules\.status, \["scheduled", "due", "referred"\]\)/);
   assert.doesNotMatch(statusApi,/inArray\(contractPaymentSchedules\.status, \["invoiced", "paid"\]\)/);
   assert.match(schema,/superseded', 'cancelled'/);assert.match(migration,/quote_versions_status_check/);
+});
+
+test("contract cancellation transfers a complete immutable client case snapshot to legal",async()=>{
+  const[status,schema,migration,portal]=await Promise.all([source("app/api/portal/contracts/[id]/status/route.ts"),source("db/schema.ts"),source("drizzle-pg/0024_legal_client_case_file.sql"),source("app/portal/PortalDashboard.tsx")]);
+  for(const section of ["documents","payments","finances","professions","assignments","workers"])assert.match(status,new RegExp(section));
+  assert.match(status,/fileSnapshotJson: JSON\.stringify\(caseSnapshot\)/);assert.match(status,/ملف عميل كامل محال للشؤون القانونية/);
+  assert.match(schema,/referralReason/);assert.match(schema,/referredBy/);assert.match(schema,/fileSnapshotJson/);
+  assert.match(migration,/legal_records_contract_id_idx/);assert.match(portal,/فتح الملف الكامل/);assert.match(portal,/سبب الإحالة/);
 });

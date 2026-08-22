@@ -1,6 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { contractPaymentSchedules, contractWorkerAssignments, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { clients, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -68,12 +68,24 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         await db.update(contractWorkerAssignments).set({ status: "released", releasedAt: now }).where(eq(contractWorkerAssignments.id, assignment.id));
         await db.update(workers).set({ status: "available", beneficiaryName: null, clientSite: "غير مسند", assignmentStartDate: null, updatedAt: now }).where(eq(workers.id, assignment.workerId));
       }
+      const [client, documents, payments, finances, professions, allAssignments] = await Promise.all([
+        contract.clientId ? db.query.clients.findFirst({ where: eq(clients.id, contract.clientId) }) : Promise.resolve(null),
+        db.select().from(companyDocuments).where(or(eq(companyDocuments.id, contract.documentId), eq(companyDocuments.counterparty, contract.clientName))),
+        db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id)),
+        db.select().from(financialRecords).where(eq(financialRecords.contractId, id)),
+        db.select().from(contractProfessions).where(eq(contractProfessions.contractId, id)),
+        db.select().from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, id)),
+      ]);
+      const assignedWorkerIds = [...new Set(allAssignments.map((item) => item.workerId))];
+      const linkedWorkers = assignedWorkerIds.length ? await db.select().from(workers).where(inArray(workers.id, assignedWorkerIds)) : [];
+      const caseSnapshot = { capturedAt: now, cancellation: { status, reason, referredBy: access.user.email }, client, contract: updated, documents, payments, finances, professions, assignments: allAssignments, workers: linkedWorkers };
       const legalReference = `LGL-CAN-${contract.referenceCode}`.slice(0, 120);
-      const [createdLegal] = await db.insert(legalRecords).values({ referenceCode: legalReference, category: "contract_cancellation", title: `${status === "terminated" ? "إنهاء" : "إلغاء"} العقد ${contract.referenceCode}`, counterparty: contract.clientName, expiryDate: null, status: "reviewing" }).onConflictDoNothing().returning();
-      const legal = createdLegal || await db.query.legalRecords.findFirst({ where: eq(legalRecords.referenceCode, legalReference) });
+      const [createdLegal] = await db.insert(legalRecords).values({ referenceCode: legalReference, category: "case", title: `${status === "terminated" ? "إنهاء" : "إلغاء"} العقد ${contract.referenceCode}`, counterparty: contract.clientName, clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), expiryDate: null, status: "reviewing" }).onConflictDoNothing().returning();
+      let legal = createdLegal || await db.query.legalRecords.findFirst({ where: eq(legalRecords.referenceCode, legalReference) });
+      if (legal && !createdLegal) [legal] = await db.update(legalRecords).set({ clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), status: "reviewing", updatedAt: now }).where(eq(legalRecords.id, legal.id)).returning();
       if (legal) {
-        await auditPortalAction({ actorEmail: access.user.email, action: "contract-cancellation-referred-legal", entityType: "legal-record", entityId: legal.id, after: { ...legal, contractId: id, reason }, reason });
-        await emitPortalNotification({ eventType: "contract-cancellation-referred-legal", title: "عقد ملغى محال للشؤون القانونية", message: `${contract.referenceCode} — ${contract.clientName} — ${reason}`, severity: "critical", module: "legal", entityType: "legal-record", entityId: legal.id, actionView: "legal", targetDepartment: "legal" }).catch(() => undefined);
+        await auditPortalAction({ actorEmail: access.user.email, action: "contract-cancellation-referred-legal", entityType: "legal-record", entityId: legal.id, after: { ...legal, snapshotCounts: { documents: documents.length, payments: payments.length, finances: finances.length, workers: linkedWorkers.length } }, reason });
+        await emitPortalNotification({ eventType: "contract-cancellation-referred-legal", title: "ملف عميل كامل محال للشؤون القانونية", message: `${contract.referenceCode} — ${contract.clientName} — ${documents.length} مستندات، ${finances.length} سجلات مالية، ${payments.length} دفعات.`, severity: "critical", module: "legal", entityType: "legal-record", entityId: legal.id, actionView: "legal", targetDepartment: "legal" }).catch(() => undefined);
       }
     }
     if (status === "active") {
