@@ -888,6 +888,7 @@ export const salesRepresentatives = pgTable(
     nationalId: text("national_id").unique(),
     region: text("region").notNull().default("مكة المكرمة"),
     commissionBps: integer("commission_bps").notNull().default(0),
+    representativeType: text("representative_type").notNull().default("sales"),
     status: text("status").notNull().default("active"),
     createdBy: text("created_by").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
@@ -898,8 +899,12 @@ export const salesRepresentatives = pgTable(
     index("sales_representatives_name_idx").on(table.fullName),
     check("sales_representatives_commission_check", sql`${table.commissionBps} between 0 and 10000`),
     check("sales_representatives_status_check", sql`${table.status} in ('active','inactive','suspended')`),
+    check("sales_representatives_type_check", sql`${table.representativeType} in ('sales','purchasing')`),
   ],
 );
+
+export const representativeRequests = pgTable("representative_requests",{
+  id:serial("id").primaryKey(),requestCode:text("request_code").notNull().unique(),representativeId:integer("representative_id").notNull().references(()=>salesRepresentatives.id,{onDelete:"restrict"}),requestType:text("request_type").notNull(),clientName:text("client_name"),clientMobile:text("client_mobile"),workSite:text("work_site"),title:text("title").notNull(),details:text("details").notNull(),itemsJson:text("items_json"),estimatedAmountHalalas:integer("estimated_amount_halalas").notNull().default(0),status:text("status").notNull().default("submitted"),decisionReason:text("decision_reason"),decidedBy:text("decided_by"),decidedAt:text("decided_at"),quoteVersionId:integer("quote_version_id").references(()=>quoteVersions.id,{onDelete:"set null"}),createdBy:text("created_by").notNull(),createdAt:text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),updatedAt:text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`)},table=>[index("representative_requests_rep_idx").on(table.representativeId),index("representative_requests_status_idx").on(table.status),index("representative_requests_type_idx").on(table.requestType),check("representative_requests_type_check",sql`${table.requestType} in ('sales','purchase')`),check("representative_requests_status_check",sql`${table.status} in ('submitted','changes_requested','approved','rejected','converted')`)]);
 
 export const suppliers = pgTable(
   "suppliers",
@@ -983,7 +988,7 @@ export const clientContacts = pgTable(
   (table) => [
     index("client_contacts_client_idx").on(table.clientId),
     index("client_contacts_email_idx").on(table.email),
-    check("client_contacts_channel_check", sql`${table.preferredChannel} in ('phone', 'email', 'either')`),
+    check("client_contacts_channel_check", sql`${table.preferredChannel} in ('phone', 'email', 'either', 'whatsapp')`),
   ],
 );
 

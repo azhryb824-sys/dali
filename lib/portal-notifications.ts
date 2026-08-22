@@ -32,7 +32,7 @@ import { requirementsForProfession } from "@/lib/workforce-requirements";
 import { issueDueContractInvoice } from "@/lib/contract-payment-invoicing";
 
 export type NotificationSeverity = "info" | "success" | "warning" | "critical";
-export type NotificationModule = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "construction" | "conversations" | "documents" | "users" | "sales" | "operations" | "privacy" | "capacity" | "website";
+export type NotificationModule = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "construction" | "conversations" | "documents" | "users" | "sales" | "operations" | "representatives" | "privacy" | "capacity" | "website";
 
 export type PortalNotificationInput = {
   eventType: string;

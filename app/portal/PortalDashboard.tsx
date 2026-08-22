@@ -276,6 +276,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const [operationsTab, setOperationsTab] = useState<OperationsTab>("crm");
   const [operationsQuery, setOperationsQuery] = useState("");
   const [issuePreset, setIssuePreset] = useState("workforce_contract");
+  const [issueQuoteId,setIssueQuoteId]=useState<number|null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -712,8 +713,9 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     finally { setBusy(null); }
   }
 
-  function openIssueDocument(type: string) {
+  function openIssueDocument(type: string,quoteId?:number) {
     setIssuePreset(type);
+    setIssueQuoteId(quoteId||null);
     setDocumentModal("issue");
   }
 
@@ -968,7 +970,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
           <section className="panel request-panel workforce-requests"><div className="panel-head"><div><h2>طلبات القوى العاملة من الموقع</h2><p>الطلبات الواردة مباشرة من العملاء</p></div><span className="panel-count">{requestCounts.new} جديد</span></div><div className="table-tools"><label className="search-box"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بالاسم أو رقم الطلب" /></label><div className="filter-tabs" role="group" aria-label="تصفية الطلبات">{(["all", "new", "reviewing", "contacted", "closed"] as const).map((value) => <button key={value} className={requestFilter === value ? "active" : ""} onClick={() => setRequestFilter(value)}>{value === "all" ? "الكل" : requestStatuses[value].label}</button>)}</div></div><RequestTable requests={visibleRequests} onSelect={setSelectedId}/></section>
         </ModuleSection>}
 
-        {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={() => openIssueDocument("workforce_contract")}/>}
+        {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract",quoteId)}/>}
         {view === "representatives" && canAccess("workforce") && <SalesRepresentativesWorkspace canWrite={canWrite}/>}
         {view === "construction" && canAccessConstruction && <ConstructionWorkspace/>}
 
@@ -1009,7 +1011,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     {modal === "workforce" && <WorkerModal busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker}/>}
     {documentModal === "upload" && <UploadDocumentModal busy={busy === "upload-document"} onClose={() => setDocumentModal(null)} onSubmit={uploadDocument}/>}
     {documentModal === "issue" && issuePreset === "quotation" && <QuotationIssueModal onClose={() => setDocumentModal(null)} onCreated={(message) => { notify(message); setOperationsTab("quotes"); changeView("operations"); }}/>}
-    {documentModal === "issue" && issuePreset !== "quotation" && <IssueDocumentModal initialType={issuePreset} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} requests={requests} onClose={() => setDocumentModal(null)} onSubmit={issueDocument}/>}
+    {documentModal === "issue" && issuePreset !== "quotation" && <IssueDocumentModal initialType={issuePreset} initialQuoteId={issueQuoteId} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} requests={requests} onClose={() => setDocumentModal(null)} onSubmit={issueDocument}/>}
     {userModal && <CreateUserModal busy={busy === "create-user"} onClose={() => setUserModal(false)} onSubmit={createUser}/>}
     {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours}/>}
     {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus}/>}
@@ -1279,11 +1281,11 @@ function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { b
   </form></section></div>;
 }
 
-function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { initialType: string; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { initialType: string; initialQuoteId:number|null; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [representatives,setRepresentatives]=useState<Array<{id:number;representativeCode:string;fullName:string;status:string}>>([]);
   type ConvertibleQuote={id:number;quoteCode:string;quantityMode:"fixed"|"open";vatRateBps:number;subtotalHalalas:number;clientName:string;title:string;items:Array<{profession:string;quantity:number;unitPriceHalalas?:number}>};
   const [convertibleQuotes,setConvertibleQuotes]=useState<ConvertibleQuote[]>([]);
-  const [selectedQuoteId,setSelectedQuoteId]=useState("");
+  const [selectedQuoteId,setSelectedQuoteId]=useState(initialQuoteId?String(initialQuoteId):"");
   const [quantityMode,setQuantityMode]=useState<"fixed"|"open">("fixed");
   const [seasonType,setSeasonType]=useState<"regular"|"ramadan"|"hajj">("regular");
   const [firstPaymentDueDate,setFirstPaymentDueDate]=useState(new Date().toISOString().slice(0,10));
@@ -1291,7 +1293,7 @@ function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts
   const [contractVatEnabled,setContractVatEnabled]=useState(true);
   const [contractVatRate,setContractVatRate]=useState("15");
   useEffect(()=>{if(initialType!=="workforce_contract")return;void fetch("/api/portal/sales-representatives",{cache:"no-store"}).then(response=>response.ok?response.json():Promise.reject()).then((data:unknown)=>setRepresentatives(((data as {representatives?:Array<{id:number;representativeCode:string;fullName:string;status:string}>}).representatives||[]).filter(item=>item.status==="active"))).catch(()=>setRepresentatives([]));},[initialType]);
-  useEffect(()=>{if(initialType!=="workforce_contract")return;void fetch("/api/portal/operations?limit=100",{cache:"no-store"}).then(response=>response.ok?response.json():Promise.reject()).then((raw:unknown)=>{const data=raw as {quotes?:Array<{id:number;quoteCode:string;opportunityId:number;status:string;quantityMode:"fixed"|"open";vatRateBps:number;subtotalHalalas:number}>;quoteItems?:Array<{quoteVersionId:number;profession:string;quantity:number;unitPriceHalalas:number}>;opportunities?:Array<{id:number;clientId:number|null;title:string}>;clients?:Array<{id:number;legalName:string}>};setConvertibleQuotes((data.quotes||[]).filter(quote=>quote.status==="accepted").map(quote=>{const opportunity=(data.opportunities||[]).find(item=>item.id===quote.opportunityId);const client=(data.clients||[]).find(item=>item.id===opportunity?.clientId);return{id:quote.id,quoteCode:quote.quoteCode,quantityMode:quote.quantityMode||"fixed",vatRateBps:quote.vatRateBps||0,subtotalHalalas:quote.subtotalHalalas||0,clientName:client?.legalName||"",title:opportunity?.title||quote.quoteCode,items:(data.quoteItems||[]).filter(item=>item.quoteVersionId===quote.id).map(item=>({profession:item.profession,quantity:item.quantity,unitPriceHalalas:item.unitPriceHalalas}))};}));}).catch(()=>setConvertibleQuotes([]));},[initialType]);
+  useEffect(()=>{if(initialType!=="workforce_contract")return;void fetch("/api/portal/operations?limit=100",{cache:"no-store"}).then(response=>response.ok?response.json():Promise.reject()).then((raw:unknown)=>{const data=raw as {quotes?:Array<{id:number;quoteCode:string;opportunityId:number;status:string;quantityMode:"fixed"|"open";vatRateBps:number;subtotalHalalas:number}>;quoteItems?:Array<{quoteVersionId:number;profession:string;quantity:number;unitPriceHalalas:number}>;opportunities?:Array<{id:number;clientId:number|null;title:string}>;clients?:Array<{id:number;legalName:string}>};setConvertibleQuotes((data.quotes||[]).filter(quote=>["approved","sent","accepted"].includes(quote.status)).map(quote=>{const opportunity=(data.opportunities||[]).find(item=>item.id===quote.opportunityId);const client=(data.clients||[]).find(item=>item.id===opportunity?.clientId);return{id:quote.id,quoteCode:quote.quoteCode,quantityMode:quote.quantityMode||"fixed",vatRateBps:quote.vatRateBps||0,subtotalHalalas:quote.subtotalHalalas||0,clientName:client?.legalName||"",title:opportunity?.title||quote.quoteCode,items:(data.quoteItems||[]).filter(item=>item.quoteVersionId===quote.id).map(item=>({profession:item.profession,quantity:item.quantity,unitPriceHalalas:item.unitPriceHalalas}))};}));}).catch(()=>setConvertibleQuotes([]));},[initialType]);
   type DraftProfession = { key: string; profession: string; customProfession?: string; requiredCount: number; unitSalary?: number };
   type DraftPayment = { key: string; title: string; dueDate: string; percentage: number };
   const [documentType, setDocumentType] = useState(initialType);
@@ -1306,6 +1308,7 @@ function IssueDocumentModal({ initialType, busy, assetsReady, workers, contracts
   },[selectedSourceRequest]);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [professions, setProfessions] = useState<DraftProfession[]>([{ key: "profession-1", profession: workforceProfessions[0].label, customProfession: "", requiredCount: 1, unitSalary: 0 }]);
+  useEffect(()=>{if(!initialQuoteId||!convertibleQuotes.length)return;const quote=convertibleQuotes.find(item=>item.id===initialQuoteId);if(!quote)return;setSelectedQuoteId(String(quote.id));setQuantityMode(quote.quantityMode);setContractAmount(String(quote.subtotalHalalas/100));setContractVatEnabled(quote.vatRateBps>0);setContractVatRate(String(quote.vatRateBps/100));if(quote.items.length)setProfessions(quote.items.map((item,index)=>({key:`quote-profession-${index}`,profession:item.profession,requiredCount:quote.quantityMode==="open"?0:Math.max(1,item.quantity),unitSalary:(item.unitPriceHalalas||0)/100})));window.setTimeout(()=>{const form=document.querySelector<HTMLFormElement>(".issue-modal form");const field=form?.elements.namedItem("clientName");if(field instanceof HTMLInputElement)field.value=quote.clientName},0)},[initialQuoteId,convertibleQuotes]);
   const [selectedWorkers, setSelectedWorkers] = useState<Record<string, number[]>>({});
   const [payments,setPayments]=useState<DraftPayment[]>([{key:"payment-1",title:"الدفعة الأولى",dueDate:"",percentage:100}]);
   const isContract = documentType === "workforce_contract";

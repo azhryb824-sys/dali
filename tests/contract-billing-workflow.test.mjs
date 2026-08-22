@@ -91,3 +91,12 @@ test("due installments auto invoice once, support secure WhatsApp sharing, and f
   assert.match(legalApi,/legal-case-activity-created/);assert.match(legalUi,/لوحة القضايا والإجراءات والمواعيد/);assert.match(schema,/legalCaseActivities/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);
   assert.match(notifications,/contract-payment-overdue/);assert.match(notifications,/legal-activity-overdue/);assert.match(notifications,/issueDueContractInvoice/);
 });
+
+test("sales and purchasing representatives follow owner-controlled request workflows",async()=>{
+  const[schema,migration,api,workspace,operations,share,contractRoute]=await Promise.all([source("db/schema.ts"),source("drizzle-pg/0026_representative_workflows.sql"),source("app/api/portal/representative-requests/route.ts"),source("app/portal/SalesRepresentativesWorkspace.tsx"),source("app/portal/OperationsWorkspace.tsx"),source("app/api/portal/operations/quotes/[id]/share/route.ts"),source("app/api/portal/documents/generate/route.ts")]);
+  assert.match(schema,/representativeType/);assert.match(schema,/representativeRequests/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);
+  assert.match(api,/قرار الطلب متاح للمالك أو مشرف النظام فقط/);assert.match(api,/changes_requested/);assert.match(api,/status:"draft"/);assert.match(api,/requestType!=="sales"/);
+  for(const label of ["اعتماد","طلب تعديل","رفض نهائي","إنشاء عرض سعر"])assert.match(workspace,new RegExp(label));
+  assert.match(operations,/اعتماد عرض السعر/);assert.match(operations,/مشاركة واتساب/);assert.match(operations,/تحويل إلى عقد/);
+  assert.match(share,/documentShareLinks/);assert.match(share,/shareUrl/);assert.match(contractRoute,/\["approved", "sent", "accepted"\]/);
+});

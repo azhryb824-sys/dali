@@ -220,7 +220,7 @@ export async function POST(request: Request) {
     ]);
     if (sourceRequestId && !sourceRequest) return Response.json({ error: "طلب الموقع المحدد غير موجود" }, { status: 404 });
     if (salesRepresentativeId && (!salesRepresentative || salesRepresentative.status !== "active")) return Response.json({ error: "المندوب المحدد غير موجود أو غير نشط" }, { status: 409 });
-    if (quoteVersionId && (!sourceQuote || sourceQuote.status !== "accepted")) return Response.json({ error: "لا يمكن إنشاء عقد إلا من عرض سعر مقبول" }, { status: 409 });
+    if (quoteVersionId && (!sourceQuote || !["approved", "sent", "accepted"].includes(sourceQuote.status))) return Response.json({ error: "لا يمكن إنشاء عقد إلا من عرض سعر معتمد" }, { status: 409 });
     if (existingQuoteContract) return Response.json({ error: "تم تحويل عرض السعر إلى عقد سابقًا" }, { status: 409 });
     if (sourceQuote && sourceQuote.quantityMode !== quantityMode) return Response.json({ error: "نوع العدد في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
     const sourceOpportunity = sourceQuote ? await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, sourceQuote.opportunityId) }) : null;
