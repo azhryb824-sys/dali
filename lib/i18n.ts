@@ -1,3 +1,6 @@
+import { adminUiTranslations } from "@/lib/i18n-admin-catalog";
+import { publicUiTranslations } from "@/lib/i18n-public-catalog";
+
 export const supportedLocales = ["ar", "en", "ur"] as const;
 export type AppLocale = typeof supportedLocales[number];
 export const localeCookieName = "dali_locale";
@@ -32,6 +35,7 @@ Object.assign(uiTranslations,{
   "ملفات الموظفين وسلم الوظائف وبيانات التعيين":{en:"Employee files, job grades, and appointment data",ur:"ملازمین کی فائلیں، ملازمت کے درجات اور تقرری کا ڈیٹا"},"الفواتير والمصروفات والرواتب والأرصدة المالية":{en:"Invoices, expenses, payroll, and financial balances",ur:"انوائس، اخراجات، تنخواہیں اور مالی بیلنس"},"العقود والقضايا والتراخيص ومواعيد التجديد":{en:"Contracts, cases, licenses, and renewal dates",ur:"معاہدے، مقدمات، لائسنس اور تجدید کی تاریخیں"},"بيانات العمال والتوزيع على المواقع وطلبات العملاء":{en:"Worker data, site allocation, and client requests",ur:"کارکنوں کا ڈیٹا، سائٹ تقسیم اور گاہک کی درخواستیں"},
   "مالك النظام":{en:"System owner",ur:"نظام کا مالک"},"مشرف النظام":{en:"System administrator",ur:"سسٹم ایڈمنسٹریٹر"},"صلاحية عامة":{en:"Full access",ur:"مکمل رسائی"},"البحث في جميع أقسام النظام...":{en:"Search across all system sections...",ur:"نظام کے تمام حصوں میں تلاش کریں..."},"لا يوجد نشاط مسجّل بعد.":{en:"No activity has been recorded yet.",ur:"ابھی کوئی سرگرمی ریکارڈ نہیں ہوئی۔"},"الحساب مفعّل":{en:"Account active",ur:"اکاؤنٹ فعال"},"لم يُحدَّد قسمك بعد":{en:"Your department has not been assigned yet",ur:"آپ کا شعبہ ابھی مقرر نہیں ہوا"},"الصلاحية الحالية":{en:"Current permission",ur:"موجودہ اجازت"}
 });
+Object.assign(uiTranslations,publicUiTranslations,adminUiTranslations);
 const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>string;ur:(match:RegExpMatchArray)=>string}>=[
   {pattern:/^مساحة عمل مهيأة لصلاحيات:\s*(.+)\.$/,en:m=>`Workspace configured for role: ${translateUi(m[1],"en")}.`,ur:m=>`کردار کے مطابق ورک اسپیس: ${translateUi(m[1],"ur")}۔`},
   {pattern:/^مساحة عملك في قسم\s+(.+)\.$/,en:m=>`Your workspace in the ${translateUi(m[1],"en")} department.`,ur:m=>`${translateUi(m[1],"ur")} شعبے میں آپ کا ورک اسپیس۔`},

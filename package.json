@@ -17,6 +17,8 @@
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit --pretty false",
+    "i18n:audit": "node scripts/audit-translations.mjs",
+    "i18n:generate": "node scripts/audit-translations.mjs --write-runtime-catalog",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
   },
   "dependencies": {

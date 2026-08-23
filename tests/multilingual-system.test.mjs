@@ -5,9 +5,9 @@ import test from "node:test";
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("Arabic, English and Urdu share a persistent direction-aware translation runtime", async () => {
-  const [i18n, runtime, layout, publicApi] = await Promise.all([
+  const [i18n, runtime, authoredCatalog, layout, publicApi] = await Promise.all([
     source("lib/i18n.ts"), source("app/components/LocaleRuntime.tsx"),
-    source("app/layout.tsx"), source("app/api/locale/route.ts")
+    source("lib/i18n-authored-strings.ts"), source("app/layout.tsx"), source("app/api/locale/route.ts")
   ]);
   assert.match(i18n, /supportedLocales = \["ar", "en", "ur"\]/);
   assert.match(i18n, /locale === "en" \? "ltr" : "rtl"/);
@@ -16,6 +16,11 @@ test("Arabic, English and Urdu share a persistent direction-aware translation ru
   assert.match(runtime, /document\.documentElement\.dir/);
   assert.match(runtime, /document\.cookie/);
   assert.match(runtime, /originalText/);
+  assert.match(runtime, /getBrowserTranslator/);
+  assert.match(runtime, /authoredUiStrings\.has\(value\)/);
+  assert.match(runtime, /data-no-translate/);
+  assert.match(authoredCatalog, /إدارة الموظفين/);
+  assert.match(authoredCatalog, /طلب عرض سعر/);
   assert.match(runtime, /\/api\/locale/);
   assert.match(layout, /localeCookieName/);
   assert.match(layout, /<html lang=\{locale\} dir=\{localeDirection\(locale\)\}>/);
