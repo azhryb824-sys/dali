@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { desc, eq, isNull } from "drizzle-orm";
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { requireChatGPTUser } from "@/app/chatgpt-auth";
 import { getDb } from "@/db";
 import { companyAssets, companyDocuments, contractProfessions, contractWorkerAssignments, employees, financialRecords, legalRecords, portalActivity, portalUsers, visitorConversations, visitorMessages, workerAttachments, workers, workforceContracts, workforceRequestReplies, workforceRequests } from "@/db/schema";
@@ -15,6 +16,7 @@ import { portalSessionEndPath, portalSessionStartPath, verifyPortalSession } fro
 import PortalDashboard from "./PortalDashboard";
 import PortalAccessRequestForm from "./PortalAccessRequestForm";
 import { canReadConstruction, getActivePortalScopes } from "@/lib/access-policy";
+import { isAppLocale, localeCookieName } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,8 @@ function boundedPortalLoad<T>(promise: Promise<T>, label: string, timeoutMs = 12
 }
 
 async function ProtectedPortal() {
+  const storedLocale = (await cookies()).get(localeCookieName)?.value;
+  const cookieLocale = isAppLocale(storedLocale) ? storedLocale : null;
   const user = await requireChatGPTUser("/portal");
   const session = await verifyPortalSession(user.email);
   if (session.status === "missing") redirect(portalSessionStartPath("/portal"));
@@ -76,7 +80,7 @@ async function ProtectedPortal() {
     );
   }
 
-  if (access.role !== "admin" && !access.preferredLanguage) redirect("/portal/language");
+  if (access.role !== "admin" && !cookieLocale && !access.preferredLanguage) redirect("/portal/language");
 
   const db = getDb();
   const canManageRequests = access.role === "admin" || access.role === "manager" || canAccessPortalDepartment(access, "workforce", true);
@@ -224,7 +228,7 @@ async function ProtectedPortal() {
         role: access.role,
         department: access.department,
         functionalRoles: access.functionalRoles,
-        preferredLanguage: access.preferredLanguage || "ar",
+        preferredLanguage: cookieLocale || access.preferredLanguage || "ar",
       }}
       initialRequests={requests}
       initialRequestReplies={replies}

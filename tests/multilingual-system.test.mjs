@@ -14,6 +14,8 @@ test("Arabic, English and Urdu share a persistent direction-aware translation ru
   assert.match(i18n, /ur:"ڈیش بورڈ"/);
   assert.match(runtime, /MutationObserver/);
   assert.match(runtime, /document\.documentElement\.dir/);
+  assert.match(runtime, /document\.cookie/);
+  assert.match(runtime, /originalText/);
   assert.match(runtime, /\/api\/locale/);
   assert.match(layout, /localeCookieName/);
   assert.match(layout, /<html lang=\{locale\} dir=\{localeDirection\(locale\)\}>/);
@@ -26,11 +28,12 @@ test("non-admin portal users choose a saved language on first login while superv
     source("app/api/portal/language/route.ts"), source("lib/portal-access.ts"),
     source("db/schema.ts"), source("drizzle-pg/0027_multilingual_preferences.sql")
   ]);
-  assert.match(portal, /access\.role !== "admin" && !access\.preferredLanguage/);
+  assert.match(portal, /access\.role !== "admin" && !cookieLocale && !access\.preferredLanguage/);
   assert.match(portal, /redirect\("\/portal\/language"\)/);
   assert.match(onboarding, /access\.role==="admin"/);
   assert.match(api, /preferredLanguage:locale/);
-  assert.match(api, /languageSelectedAt:now/);
+  assert.match(api, /language_selected_at = \$2/);
+  assert.match(api, /code!=="42703"/);
   assert.match(access, /preferredLanguage/);
   assert.match(schema, /languageSelectedAt/);
   assert.match(migration, /preferred_language/);

@@ -191,8 +191,8 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
 
   if (getPortalAdminConfig().emails.has(email)) {
     await upsertLegacyCompatibleAdminUser(email, user.displayName, now, Boolean(options.markLogin));
-
-    return { authorized: true, role: "admin", department: "general", status: "active", user: { ...user, email }, functionalRoles: ["system_owner"], functionalPermissions: ["*"], preferredLanguage: "ar" };
+    const preferredLanguage = await readPreferredLanguage(email);
+    return { authorized: true, role: "admin", department: "general", status: "active", user: { ...user, email }, functionalRoles: ["system_owner"], functionalPermissions: ["*"], preferredLanguage };
   }
 
   if (!existing) {
