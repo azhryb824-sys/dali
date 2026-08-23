@@ -39,6 +39,9 @@ test("portal authorization uses trusted configuration", async () => {
   assert.doesNotMatch(access, /authorizedUserIdentifiers|userIdentifier/);
   assert.doesNotMatch(`${access}\n${notes}`, /1000000001/);
   assert.match(access, /getPortalAdminConfig\(\)\.emails\.has\(email\)/);
+  assert.match(access, /upsertLegacyCompatibleAdminUser/);
+  assert.match(access, /insertLegacyCompatiblePendingUser/);
+  assert.doesNotMatch(access, /\.insert\(portalUsers\)/);
   assert.match(login, /PORTAL_ADMIN_BOOTSTRAP_CONFLICT/);
   assert.match(config, /PORTAL_ADMIN_EMAIL/);
 });

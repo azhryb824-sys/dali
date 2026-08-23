@@ -151,6 +151,33 @@ async function readPreferredLanguage(email: string): Promise<PortalAccess["prefe
   }
 }
 
+async function upsertLegacyCompatibleAdminUser(email: string, displayName: string, now: string, markLogin: boolean) {
+  await getSqlClient().unsafe(
+    `insert into portal_users
+      (email, display_name, role, department, status, updated_at, last_login_at, last_activity_at)
+     values ($1, $2, 'admin', 'general', 'active', $3, $4, $3)
+     on conflict (email) do update set
+       display_name = excluded.display_name,
+       role = 'admin',
+       department = 'general',
+       status = 'active',
+       updated_at = excluded.updated_at,
+       last_login_at = coalesce(excluded.last_login_at, portal_users.last_login_at),
+       last_activity_at = excluded.last_activity_at`,
+    [email, displayName, now, markLogin ? now : null],
+  );
+}
+
+async function insertLegacyCompatiblePendingUser(email: string, displayName: string, now: string) {
+  await getSqlClient().unsafe(
+    `insert into portal_users
+      (email, display_name, role, department, status, updated_at, last_login_at, last_activity_at)
+     values ($1, $2, 'employee', 'general', 'pending', $3, $3, $3)
+     on conflict (email) do nothing`,
+    [email, displayName, now],
+  );
+}
+
 export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogin?: boolean } = {}): Promise<PortalAccess> {
   const db = getDb();
   const email = normalizePortalEmail(user.email);
@@ -163,44 +190,13 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
   const activityDue = !existing?.lastActivityAt || Date.now() - new Date(existing.lastActivityAt).getTime() >= 15 * 60 * 1000;
 
   if (getPortalAdminConfig().emails.has(email)) {
-    await db
-      .insert(portalUsers)
-      .values({
-        email,
-        displayName: user.displayName,
-        role: "admin",
-        department: "general",
-        status: "active",
-        lastLoginAt: options.markLogin ? now : null,
-        lastActivityAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: portalUsers.email,
-        set: {
-          displayName: user.displayName,
-          role: "admin",
-          department: "general",
-          status: "active",
-          ...(options.markLogin ? { lastLoginAt: now } : {}),
-          ...(activityDue ? { lastActivityAt: now } : {}),
-        },
-      });
+    await upsertLegacyCompatibleAdminUser(email, user.displayName, now, Boolean(options.markLogin));
 
     return { authorized: true, role: "admin", department: "general", status: "active", user: { ...user, email }, functionalRoles: ["system_owner"], functionalPermissions: ["*"], preferredLanguage: "ar" };
   }
 
   if (!existing) {
-    await db.insert(portalUsers).values({
-      email,
-      displayName: user.displayName,
-      role: "employee",
-      department: "general",
-      status: "pending",
-      lastLoginAt: now,
-      lastActivityAt: now,
-      updatedAt: now,
-    });
+    await insertLegacyCompatiblePendingUser(email, user.displayName, now);
     await emitPortalNotification({
       eventType: "portal-user-pending",
       title: "حساب جديد ينتظر الاعتماد",
