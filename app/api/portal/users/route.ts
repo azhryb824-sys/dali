@@ -1,16 +1,26 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { portalAccessScopes, portalAuthCredentials, portalUsers } from "@/db/schema";
+import { portalAccessScopes, portalAuthCredentials, portalRoles, portalUserPermissions, portalUsers } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { hashPassword } from "@/lib/credential-auth";
 import { canAdministerPortalUsers, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
+import { permissionsForProfile, parseRolePermissions, type PermissionProfile } from "@/lib/portal-permissions";
 import { revokePortalSessionsForUser } from "@/lib/portal-session";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId, requestSourceHash } from "@/lib/security";
 
 const allowedRoles = new Set(["admin", "manager", "employee"]);
 const allowedStatuses = new Set(["active", "pending", "suspended"]);
 const allowedDepartments = new Set(["general", "employees", "finance", "legal", "workforce", "construction"]);
+const permissionProfiles = new Set<PermissionProfile>(["read_only", "operator", "role_default"]);
+const roleDepartments: Record<string, string> = {
+  accountant: "finance", legal_affairs: "legal", sales_representative: "workforce",
+  purchasing_representative: "finance", administrative_assistant: "employees",
+  finance_director: "finance", project_accountant: "finance", contracts_manager: "legal",
+  procurement_officer: "finance", hr_officer: "employees", workforce_operations_manager: "workforce",
+  regional_manager: "workforce", construction_director: "construction", project_manager: "construction",
+  site_engineer: "construction", planning_engineer: "construction", cost_engineer: "construction",
+};
 
 async function requireUserAdministrator() {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
@@ -29,14 +39,20 @@ export async function POST(request: Request) {
     const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
     const displayName = typeof payload.displayName === "string" ? payload.displayName.trim().slice(0, 160) : "";
     const password = typeof payload.password === "string" ? payload.password : "";
-    const functionalRole = payload.functionalRole === "system_owner" || payload.functionalRole === "system_admin" ? payload.functionalRole : null;
-    if (functionalRole && !(access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin"))) return jsonNoStore({ error: "إنشاء مالك النظام متاح لمشرف النظام أو مالك قائم فقط" }, { status: 403 });
-    const role = functionalRole ? "admin" : typeof payload.role === "string" ? payload.role : "employee";
-    const department = functionalRole ? "general" : typeof payload.department === "string" ? payload.department : "general";
+    const functionalRole = typeof payload.functionalRole === "string" ? payload.functionalRole.trim() : "";
+    const requestedProfile = typeof payload.permissionProfile === "string" ? payload.permissionProfile as PermissionProfile : "role_default";
+    const permissionProfile: PermissionProfile = permissionProfiles.has(requestedProfile) ? requestedProfile : "role_default";
+    const db = getDb();
+    const roleDefinition = functionalRole ? await db.query.portalRoles.findFirst({ where: eq(portalRoles.roleKey, functionalRole) }) : null;
+    if (!roleDefinition?.active) return jsonNoStore({ error: "اختر دوراً وظيفياً نشطاً للمستخدم" }, { status: 400 });
+    const isRootRole = functionalRole === "system_owner" || functionalRole === "system_admin";
+    if (isRootRole && !(access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin"))) return jsonNoStore({ error: "إنشاء مالك النظام أو مشرفه متاح للمالك أو مشرف قائم فقط" }, { status: 403 });
+    const role = isRootRole ? "admin" : "employee";
+    const submittedDepartment = typeof payload.department === "string" ? payload.department : "general";
+    const department = isRootRole ? "general" : roleDepartments[functionalRole] || submittedDepartment;
     if (!/^\d{10}$/.test(identifier) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || displayName.length < 3 || !allowedRoles.has(role) || !allowedDepartments.has(department) || password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
       return jsonNoStore({ error: "أكمل البيانات: هوية من 10 أرقام، بريد صحيح، وكلمة مرور من 12 خانة تشمل حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا" }, { status: 400 });
     }
-    const db = getDb();
     const [credentialExists, userExists] = await Promise.all([
       db.query.portalAuthCredentials.findFirst({ where: eq(portalAuthCredentials.identifier, identifier) }),
       db.query.portalUsers.findFirst({ where: eq(portalUsers.email, email) }),
@@ -47,11 +63,18 @@ export async function POST(request: Request) {
     const user = await db.transaction(async (tx) => {
       await tx.insert(portalAuthCredentials).values({ identifier, email, displayName, passwordHash, mustChangePassword: true, passwordChangedAt: null, createdAt: now, updatedAt: now });
       const [created] = await tx.insert(portalUsers).values({ email, displayName, role, department, status: "active", requestedDepartment: department, requestedJobTitle: "أُضيف بواسطة الإدارة", requestReason: "إنشاء مباشر بواسطة المالك أو مشرف النظام", requestSubmittedAt: now, termsAcceptedAt: now, approvedBy: access.user.email, approvedAt: now, createdAt: now, updatedAt: now }).returning();
-      if (functionalRole) await tx.insert(portalAccessScopes).values({ userEmail: email, functionalRole, active: true, canApproveOwn: false, createdBy: access.user.email, createdAt: now, updatedAt: now });
+      await tx.insert(portalAccessScopes).values({ userEmail: email, functionalRole, active: true, canApproveOwn: false, createdBy: access.user.email, createdAt: now, updatedAt: now });
+      if (!isRootRole) {
+        const explicitRules = permissionsForProfile(parseRolePermissions(roleDefinition.permissionsJson), permissionProfile);
+        await tx.insert(portalUserPermissions).values(explicitRules.map((rule) => ({
+          userEmail: email, resource: rule.resource, action: rule.action, allowed: rule.allowed,
+          scope: department === "general" ? "all" : "department", createdBy: access.user.email, createdAt: now,
+        })));
+      }
       return created;
     });
-    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRole }, reason: functionalRole ? `إنشاء ${functionalRole === "system_owner" ? "مالك نظام" : "مشرف نظام"} بصلاحيات كاملة` : "إنشاء حساب مباشر من إدارة المستخدمين", source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
-    await emitPortalNotification({ eventType: "portal-user-created", title: "أُضيف مستخدم جديد", message: `${displayName} — ${role} — ${department}.`, severity: "warning", module: "users", entityType: "portal-user", entityId: email, actionView: "users", targetRole: "admin" }).catch(() => undefined);
+    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRole }, reason: isRootRole ? `إنشاء ${functionalRole === "system_owner" ? "مالك نظام" : "مشرف نظام"} بصلاحيات كاملة` : `إنشاء حساب بدور ${roleDefinition.labelAr} وحزمة ${permissionProfile}`, source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
+    await emitPortalNotification({ eventType: "portal-user-created", title: "أُضيف مستخدم جديد", message: `${displayName} — ${roleDefinition.labelAr} — ${department}.`, severity: "warning", module: "users", entityType: "portal-user", entityId: email, actionView: "users", targetRole: "admin" }).catch(() => undefined);
     return jsonNoStore({ user }, { status: 201 });
   } catch (error) {
     console.error("portal-user-create-failed", error);

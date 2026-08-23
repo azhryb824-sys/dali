@@ -44,6 +44,11 @@ const functionalDepartmentAccess: Record<string, { read: Exclude<PortalDepartmen
   regional_manager: { read: ["construction", "workforce"], write: ["construction", "workforce"] },
   client_consultant: { read: ["construction"], write: [] },
   subcontractor: { read: ["construction"], write: [] },
+  accountant: { read: ["finance"], write: ["finance"] },
+  legal_affairs: { read: ["legal"], write: ["legal"] },
+  sales_representative: { read: ["workforce"], write: ["workforce"] },
+  purchasing_representative: { read: ["finance", "construction"], write: ["finance"] },
+  administrative_assistant: { read: ["employees"], write: [] },
 };
 const functionalApprovals: Record<string, string[]> = {
   finance: ["finance_director"], employees: ["hr_officer"], legal: ["contracts_manager"], workforce: ["workforce_operations_manager", "regional_manager"], construction: ["construction_director", "project_manager"],
@@ -98,6 +103,17 @@ async function activeFunctionalPermissions(roles: string[]) {
     } catch { /* An invalid role definition grants nothing. */ }
   }
   return [...permissions];
+}
+
+async function applyExplicitUserPermissions(email: string, permissions: string[]) {
+  const effective = new Set(permissions);
+  const rules = await getDb().select().from(portalUserPermissions).where(eq(portalUserPermissions.userEmail, normalizePortalEmail(email)));
+  for (const rule of rules) {
+    const permission = `${rule.resource}.${rule.action}`;
+    if (rule.allowed) effective.add(permission);
+    else effective.delete(permission);
+  }
+  return [...effective];
 }
 
 function isPortalRole(value: string): value is PortalRole {
@@ -227,7 +243,8 @@ export async function resolvePortalAccess(user: ChatGPTUser, options: { markLogi
   const department = isPortalDepartment(existing.department) ? existing.department : "general";
   const status = isPortalStatus(existing.status) ? existing.status : "pending";
   const functionalRoles = status === "active" ? await activeFunctionalRoles(email) : [];
-  const functionalPermissions = status === "active" ? await activeFunctionalPermissions(functionalRoles) : [];
+  const rolePermissions = status === "active" ? await activeFunctionalPermissions(functionalRoles) : [];
+  const functionalPermissions = status === "active" ? await applyExplicitUserPermissions(email, rolePermissions) : [];
   const preferredLanguage = await readPreferredLanguage(email);
   return { authorized: status === "active", role, department, status, user: { ...user, email }, functionalRoles, functionalPermissions, preferredLanguage };
 }

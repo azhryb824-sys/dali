@@ -151,5 +151,16 @@ export const publicUiTranslations = {
   "تعذّر إرسال الطلب": { en: "Could not submit the request", ur: "درخواست جمع نہیں ہو سکی" },
   "تعذّر إرسال الطلب حالياً.": { en: "The request could not be submitted right now.", ur: "درخواست ابھی جمع نہیں ہو سکی۔" },
   "جارٍ التسجيل...": { en: "Submitting...", ur: "جمع ہو رہا ہے..." },
-  "جارٍ التحقق": { en: "Verifying...", ur: "تصدیق ہو رہی ہے..." }
+  "جارٍ التحقق": { en: "Verifying...", ur: "تصدیق ہو رہی ہے..." },
+  "مقابلة مرئية مع فريق دالي": { en: "Video interview with the Dally team", ur: "ڈالی ٹیم کے ساتھ ویڈیو انٹرویو" },
+  "متاحة الآن خلال ساعات العمل": { en: "Available now during business hours", ur: "کام کے اوقات میں ابھی دستیاب" },
+  "تتاح فقط خلال ساعات العمل": { en: "Available during business hours only", ur: "صرف کام کے اوقات میں دستیاب" },
+  "طلب مقابلة مرئية": { en: "Request a video interview", ur: "ویڈیو انٹرویو کی درخواست کریں" },
+  "جارٍ الطلب...": { en: "Requesting...", ur: "درخواست بھیجی جا رہی ہے..." },
+  "طلب المقابلة قيد المتابعة": { en: "Interview request in progress", ur: "انٹرویو کی درخواست زیر کارروائی ہے" },
+  "الموظف جاهز للمقابلة": { en: "The employee is ready for the interview", ur: "ملازم انٹرویو کے لیے تیار ہے" },
+  "جارٍ البحث عن موظف متاح": { en: "Finding an available employee", ur: "دستیاب ملازم تلاش کیا جا رہا ہے" },
+  "بانتظار قبول الموظف": { en: "Waiting for an employee to accept", ur: "ملازم کی قبولیت کا انتظار ہے" },
+  "دخول المقابلة المرئية": { en: "Join video interview", ur: "ویڈیو انٹرویو میں شامل ہوں" },
+  "باستخدام المقابلة توافق على تشغيل الكاميرا والميكروفون. النظام لا يسجل الصوت أو الصورة.": { en: "By joining, you consent to camera and microphone access. The system does not record audio or video.", ur: "شامل ہو کر آپ کیمرہ اور مائیکروفون کی اجازت دیتے ہیں۔ نظام آڈیو یا ویڈیو ریکارڈ نہیں کرتا۔" }
 } as const;

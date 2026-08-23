@@ -1,19 +1,11 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { portalAccessScopes, portalRoles } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
+import { availableRolePermissions } from "@/lib/portal-permissions";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
-
-export const availableRolePermissions = [
-  "overview.read", "employees.read", "employees.write", "employees.approve",
-  "finance.read", "finance.write", "finance.approve", "finance.post", "finance.pay",
-  "legal.read", "legal.write", "legal.approve", "workforce.read", "workforce.write", "workforce.approve",
-  "construction.read", "construction.write", "construction.approve", "documents.read", "documents.write", "documents.share",
-  "conversations.read", "conversations.write", "website.read", "website.write", "reports.read", "reports.export",
-  "assets.administer", "users.administer", "integrations.administer",
-] as const;
 
 const allowed = new Set<string>(availableRolePermissions);
 const keyPattern = /^[a-z][a-z0-9_]{2,63}$/;
@@ -82,4 +74,27 @@ export async function PATCH(request: Request) {
   await auditPortalAction({ actorEmail: access.user.email, action: "portal-role-updated", entityType: "portal-role", entityId: roleKey, before: existing, after: updated, reason, correlationId: requestCorrelationId(request), source: "security" });
   await emitPortalNotification({ eventType: "portal-role-updated", title: "عُدّل تعريف دور وظيفي", message: `${labelAr}: ${reason}`, severity: active ? "info" : "warning", module: "users", entityType: "portal-role", entityId: roleKey, actionView: "users", targetRole: "admin" }).catch(() => undefined);
   return jsonNoStore({ role: updated });
+}
+
+export async function DELETE(request: Request) {
+  if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
+  const access = await requireRoleAdmin();
+  if (!access) return jsonNoStore({ error: "غير مصرح بإدارة الأدوار" }, { status: 403 });
+  const parsed = await readLimitedJson(request, 4_000);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.value as Record<string, unknown>;
+  const roleKey = clean(body.roleKey, 64).toLowerCase();
+  const reason = clean(body.reason, 1000);
+  if (!keyPattern.test(roleKey) || reason.length < 10) return jsonNoStore({ error: "اكتب سبب حذف واضحاً لا يقل عن 10 أحرف" }, { status: 400 });
+  const db = getDb();
+  const existing = await db.query.portalRoles.findFirst({ where: eq(portalRoles.roleKey, roleKey) });
+  if (!existing) return jsonNoStore({ error: "الدور غير موجود" }, { status: 404 });
+  if (existing.protected) return jsonNoStore({ error: "لا يمكن حذف دور المالك أو مشرف النظام" }, { status: 409 });
+  const assigned = await db.select({ id: portalAccessScopes.id }).from(portalAccessScopes).where(and(eq(portalAccessScopes.functionalRole, roleKey), eq(portalAccessScopes.active, true))).limit(1);
+  if (assigned.length) return jsonNoStore({ error: "لا يمكن حذف الدور قبل نقله من المستخدمين المرتبطين به؛ يمكن إيقافه مؤقتاً" }, { status: 409 });
+  await db.delete(portalAccessScopes).where(eq(portalAccessScopes.functionalRole, roleKey));
+  await db.delete(portalRoles).where(eq(portalRoles.roleKey, roleKey));
+  await auditPortalAction({ actorEmail: access.user.email, action: "portal-role-deleted", entityType: "portal-role", entityId: roleKey, before: existing, reason, correlationId: requestCorrelationId(request), source: "security" });
+  await emitPortalNotification({ eventType: "portal-role-deleted", title: "حُذف دور وظيفي", message: `${existing.labelAr}: ${reason}`, severity: "warning", module: "users", entityType: "portal-role", entityId: roleKey, actionView: "users", targetRole: "admin" }).catch(() => undefined);
+  return jsonNoStore({ deleted: true });
 }

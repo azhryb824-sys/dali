@@ -28,6 +28,7 @@ type BusinessHours = {
   timezone: string;
   nextOpenLabel?: string;
 };
+type PublicVideoInterview={id:string;referenceCode:string;status:string;assignedName:string|null;requestedAt:string;expiresAt:string;joinUrl:string|null};
 
 function chatTime(value: string) {
   return new Intl.DateTimeFormat("ar-SA", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -38,6 +39,8 @@ export default function LiveChatWidget() {
   const [conversation, setConversation] = useState<PublicConversation | null>(null);
   const [messages, setMessages] = useState<PublicChatMessage[]>([]);
   const [businessHours, setBusinessHours] = useState<BusinessHours | null>(null);
+  const [videoInterview, setVideoInterview] = useState<PublicVideoInterview | null>(null);
+  const [videoBusy, setVideoBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -69,6 +72,8 @@ export default function LiveChatWidget() {
     }
   }, []);
 
+  const loadVideoInterview=useCallback(async()=>{try{const response=await fetch("/api/video-interviews",{cache:"no-store"});const result=await response.json()as{interview?:PublicVideoInterview|null;businessHours?:BusinessHours};if(response.ok){setVideoInterview(result.interview||null);if(result.businessHours)setBusinessHours(result.businessHours)}}catch{/* Chat remains usable if video status refresh fails. */}},[]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadConversation(); }, 0);
     return () => window.clearTimeout(timer);
@@ -76,10 +81,11 @@ export default function LiveChatWidget() {
   useEffect(() => {
     if (!conversation || !open) return;
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadConversation(true);
+      if (document.visibilityState === "visible") { void loadConversation(true); void loadVideoInterview(); }
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [conversation, open, loadConversation]);
+  }, [conversation, open, loadConversation, loadVideoInterview]);
+  useEffect(()=>{if(!conversation)return;const timer=window.setTimeout(()=>void loadVideoInterview(),0);return()=>window.clearTimeout(timer)},[conversation,loadVideoInterview]);
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, open]);
@@ -143,6 +149,8 @@ export default function LiveChatWidget() {
     } finally { setSending(false); }
   }
 
+  async function requestVideoInterview(){setVideoBusy(true);setError("");try{const response=await fetch("/api/video-interviews",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});const result=await response.json()as{interview?:PublicVideoInterview;businessHours?:BusinessHours;error?:string};if(!response.ok||!result.interview)throw new Error(result.error||"تعذّر طلب المقابلة المرئية");setVideoInterview(result.interview);if(result.businessHours)setBusinessHours(result.businessHours)}catch(videoError){setError(videoError instanceof Error?videoError.message:"تعذّر طلب المقابلة المرئية")}finally{setVideoBusy(false)}}
+
   return <div className={`live-chat ${open ? "open" : ""}`}>
     {open && <section ref={dialogRef} className="chat-window" role="dialog" aria-modal="false" aria-label="محادثة مباشرة مع شركة دالي">
       <header className="chat-header">
@@ -152,6 +160,7 @@ export default function LiveChatWidget() {
       {businessHours && <div className={`chat-hours ${businessHours.isOpen ? "open" : "closed"}`}><span>{businessHours.isOpen ? "فريقنا جاهز لخدمتك الآن" : `موعد العودة: ${businessHours.nextOpenLabel || "خلال ساعات العمل القادمة"}`}</span><b>{businessHours.opensAt} — {businessHours.closesAt} · بتوقيت مكة</b></div>}
       {loading ? <div className="chat-loading"><span/><p>جارٍ تحميل المحادثة...</p></div> : conversation ? <>
         <div className="chat-conversation-meta"><span>{conversation.trackingCode}</span><strong>{conversation.subject}</strong></div>
+        <section className={`public-video-card ${videoInterview?.status||"idle"}`}><div><span>▣</span><p><strong>{videoInterview?videoInterview.status==="active"?"الموظف جاهز للمقابلة":"طلب المقابلة قيد المتابعة":"مقابلة مرئية مع فريق دالي"}</strong><small>{videoInterview?`${videoInterview.referenceCode}${videoInterview.assignedName?` · ${videoInterview.assignedName}`:" · جارٍ البحث عن موظف متاح"}`:businessHours?.isOpen?"متاحة الآن خلال ساعات العمل":"تتاح فقط خلال ساعات العمل"}</small></p></div>{videoInterview?.joinUrl?<a href={videoInterview.joinUrl} target="_blank" rel="noopener noreferrer">دخول المقابلة المرئية</a>:videoInterview?<button disabled>بانتظار قبول الموظف</button>:<button disabled={!businessHours?.isOpen||videoBusy} onClick={()=>void requestVideoInterview()}>{videoBusy?"جارٍ الطلب...":"طلب مقابلة مرئية"}</button>}<p className="video-consent">باستخدام المقابلة توافق على تشغيل الكاميرا والميكروفون. النظام لا يسجل الصوت أو الصورة.</p></section>
         <div className="chat-messages" ref={messagesRef} aria-live="polite">
           <div className="chat-welcome"><strong>أهلاً {conversation.visitorName}</strong><span>شاركنا تفاصيل احتياجك، وسيصل حديثك إلى المختص الأنسب في فريق دالي.</span></div>
           {messages.map((message) => <article key={message.id} className={message.senderType}>

@@ -255,6 +255,64 @@ export const portalSessions = pgTable(
   ],
 );
 
+export const portalUserPresence = pgTable(
+  "portal_user_presence",
+  {
+    userEmail: text("user_email").primaryKey().references(() => portalUsers.email, { onDelete: "cascade" }),
+    availability: text("availability").notNull().default("online"),
+    currentInterviewId: text("current_interview_id"),
+    lastSeenAt: text("last_seen_at").notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("portal_user_presence_availability_idx").on(table.availability, table.lastSeenAt),
+    check("portal_user_presence_availability_check", sql`${table.availability} in ('online','busy','away','offline')`),
+  ],
+);
+
+export const videoInterviews = pgTable(
+  "video_interviews",
+  {
+    id: text("id").primaryKey(),
+    referenceCode: text("reference_code").notNull().unique(),
+    conversationId: text("conversation_id").notNull().references(() => visitorConversations.id, { onDelete: "cascade" }),
+    roomName: text("room_name").notNull().unique(),
+    provider: text("provider").notNull().default("jitsi"),
+    status: text("status").notNull().default("requested"),
+    assignedTo: text("assigned_to").references(() => portalUsers.email, { onDelete: "set null" }),
+    requestedAt: text("requested_at").notNull(),
+    acceptedAt: text("accepted_at"),
+    startedAt: text("started_at"),
+    endedAt: text("ended_at"),
+    expiresAt: text("expires_at").notNull(),
+    transferCount: integer("transfer_count").notNull().default(0),
+    lastTransferredBy: text("last_transferred_by"),
+    transferReason: text("transfer_reason"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("video_interviews_conversation_idx").on(table.conversationId, table.createdAt),
+    index("video_interviews_assignee_status_idx").on(table.assignedTo, table.status),
+    index("video_interviews_status_requested_idx").on(table.status, table.requestedAt),
+    check("video_interviews_status_check", sql`${table.status} in ('requested','ringing','active','transferred','completed','cancelled','expired')`),
+  ],
+);
+
+export const videoInterviewTransfers = pgTable(
+  "video_interview_transfers",
+  {
+    id: serial("id").primaryKey(),
+    interviewId: text("interview_id").notNull().references(() => videoInterviews.id, { onDelete: "cascade" }),
+    fromEmail: text("from_email"),
+    toEmail: text("to_email").notNull(),
+    transferredBy: text("transferred_by").notNull(),
+    reason: text("reason"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [index("video_interview_transfers_interview_idx").on(table.interviewId, table.createdAt)],
+);
+
 export const employees = pgTable(
   "employees",
   {
@@ -317,6 +375,110 @@ export const employeeAttendance = pgTable("employee_attendance", {
   checkInAt: text("check_in_at"), checkOutAt: text("check_out_at"), status: text("status").notNull().default("present"), lateMinutes: integer("late_minutes").notNull().default(0), overtimeMinutes: integer("overtime_minutes").notNull().default(0), notes: text("notes"),
   createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
 }, table => [uniqueIndex("employee_attendance_day_unique").on(table.employeeId, table.attendanceDate), index("employee_attendance_date_idx").on(table.attendanceDate), check("employee_attendance_status_check", sql`${table.status} in ('present','absent','leave','sick','remote','holiday')`)]);
+
+export const portalAttendancePolicies = pgTable("portal_attendance_policies", {
+  userEmail: text("user_email").primaryKey().references(() => portalUsers.email, { onDelete: "cascade" }),
+  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
+  trackingEnabled: boolean("tracking_enabled").notNull().default(false),
+  timezone: text("timezone").notNull().default("Asia/Riyadh"),
+  workdaysJson: text("workdays_json").notNull().default("[0,1,2,3,4]"),
+  shiftStart: text("shift_start").notNull().default("08:00"),
+  shiftEnd: text("shift_end").notNull().default("17:00"),
+  requiredMinutes: integer("required_minutes").notNull().default(480),
+  graceMinutes: integer("grace_minutes").notNull().default(10),
+  activatedBy: text("activated_by").notNull(),
+  activationReason: text("activation_reason").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [
+  index("portal_attendance_policies_enabled_idx").on(table.trackingEnabled),
+  uniqueIndex("portal_attendance_policies_employee_idx").on(table.employeeId),
+  check("portal_attendance_required_minutes_check", sql`${table.requiredMinutes} between 1 and 720`),
+  check("portal_attendance_grace_minutes_check", sql`${table.graceMinutes} between 0 and 120`),
+]);
+
+export const portalAttendanceSessions = pgTable("portal_attendance_sessions", {
+  sessionId: text("session_id").primaryKey().references(() => portalSessions.id, { onDelete: "cascade" }),
+  userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
+  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
+  workDate: text("work_date").notNull(),
+  loginAt: text("login_at").notNull(),
+  lastActivityAt: text("last_activity_at").notNull(),
+  logoutAt: text("logout_at"),
+  durationMinutes: integer("duration_minutes").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  closeReason: text("close_reason"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [
+  index("portal_attendance_sessions_user_date_idx").on(table.userEmail, table.workDate),
+  index("portal_attendance_sessions_employee_date_idx").on(table.employeeId, table.workDate),
+  index("portal_attendance_sessions_status_idx").on(table.status, table.lastActivityAt),
+  check("portal_attendance_sessions_status_check", sql`${table.status} in ('active','closed','auto_closed')`),
+  check("portal_attendance_duration_check", sql`${table.durationMinutes} >= 0`),
+]);
+
+export const attendanceDeductionProposals = pgTable("attendance_deduction_proposals", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  periodMonth: text("period_month").notNull(),
+  requiredMinutes: integer("required_minutes").notNull(),
+  workedMinutes: integer("worked_minutes").notNull(),
+  excusedMinutes: integer("excused_minutes").notNull().default(0),
+  missingMinutes: integer("missing_minutes").notNull(),
+  grossSalaryHalalas: integer("gross_salary_halalas").notNull(),
+  calculatedAmountHalalas: integer("calculated_amount_halalas").notNull(),
+  cappedAmountHalalas: integer("capped_amount_halalas").notNull(),
+  status: text("status").notNull().default("draft"),
+  writtenConsentConfirmed: boolean("written_consent_confirmed").notNull().default(false),
+  legalBasis: text("legal_basis"),
+  calculationJson: text("calculation_json").notNull(),
+  createdBy: text("created_by").notNull(),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: text("reviewed_at"),
+  approvedBy: text("approved_by"),
+  approvedAt: text("approved_at"),
+  movementId: integer("movement_id"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [
+  uniqueIndex("attendance_deduction_employee_month_unique").on(table.employeeId, table.periodMonth),
+  index("attendance_deduction_status_idx").on(table.status),
+  check("attendance_deduction_status_check", sql`${table.status} in ('draft','hr_review','finance_approved','rejected','posted')`),
+  check("attendance_deduction_amounts_check", sql`${table.requiredMinutes} >= 0 and ${table.workedMinutes} >= 0 and ${table.excusedMinutes} >= 0 and ${table.missingMinutes} >= 0 and ${table.calculatedAmountHalalas} >= 0 and ${table.cappedAmountHalalas} >= 0`),
+]);
+
+export const employeePerformanceReviews = pgTable("employee_performance_reviews", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  roleKey: text("role_key").notNull(),
+  status: text("status").notNull().default("draft"),
+  goalsScore: integer("goals_score").notNull(),
+  qualityScore: integer("quality_score").notNull(),
+  timelinessScore: integer("timeliness_score").notNull(),
+  collaborationScore: integer("collaboration_score").notNull(),
+  complianceScore: integer("compliance_score").notNull(),
+  attendanceScore: integer("attendance_score"),
+  overallScore: integer("overall_score").notNull(),
+  weightsJson: text("weights_json").notNull(),
+  evidenceJson: text("evidence_json").notNull(),
+  managerComment: text("manager_comment"),
+  employeeComment: text("employee_comment"),
+  reviewerEmail: text("reviewer_email").notNull(),
+  calibratedBy: text("calibrated_by"),
+  calibratedAt: text("calibrated_at"),
+  acknowledgedAt: text("acknowledged_at"),
+  appealText: text("appeal_text"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [
+  index("employee_performance_period_idx").on(table.employeeId, table.periodEnd),
+  index("employee_performance_status_idx").on(table.status),
+  check("employee_performance_status_check", sql`${table.status} in ('draft','manager_review','hr_calibration','final','appealed')`),
+  check("employee_performance_scores_check", sql`${table.goalsScore} between 0 and 100 and ${table.qualityScore} between 0 and 100 and ${table.timelinessScore} between 0 and 100 and ${table.collaborationScore} between 0 and 100 and ${table.complianceScore} between 0 and 100 and (${table.attendanceScore} is null or ${table.attendanceScore} between 0 and 100) and ${table.overallScore} between 0 and 100`),
+]);
 
 export const employeeMovements = pgTable(
   "employee_movements",

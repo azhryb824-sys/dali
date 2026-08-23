@@ -228,6 +228,7 @@ async function ProtectedPortal() {
         role: access.role,
         department: access.department,
         functionalRoles: access.functionalRoles,
+        functionalPermissions: access.functionalPermissions,
         preferredLanguage: cookieLocale || access.preferredLanguage || "ar",
       }}
       initialRequests={requests}

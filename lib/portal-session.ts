@@ -4,6 +4,7 @@ import type { ChatGPTUser } from "@/app/chatgpt-auth";
 import { getDb } from "@/db";
 import { portalSessions } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
+import { closeAttendanceSession, enforceNightlyAttendanceCutoff, startAttendanceSession, touchAttendanceSession } from "@/lib/attendance-governance";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { isSecureExternalRequest } from "@/lib/request-origin";
 import { requestSourceHash, sha256 } from "@/lib/security";
@@ -110,6 +111,7 @@ export async function issuePortalSession(user: ChatGPTUser, request: Request) {
     idleExpiresAt: new Date(now.getTime() + PORTAL_IDLE_TIMEOUT_MINUTES * 60_000).toISOString(),
     absoluteExpiresAt: new Date(now.getTime() + PORTAL_ABSOLUTE_TIMEOUT_HOURS * 3_600_000).toISOString(),
   });
+  await startAttendanceSession(id, email, nowIso).catch((error) => console.warn("attendance-session-start-failed", error instanceof Error ? error.message : String(error)));
   await auditPortalAction({
     actorEmail: email,
     action: "portal-session-started",
@@ -137,6 +139,7 @@ export async function verifyPortalSession(userEmail: string, options: { touch?: 
   const token = cookieFromHeader(requestHeaders.get("cookie"));
   if (!token) return { status: "missing" };
   const db = getDb();
+  await enforceNightlyAttendanceCutoff().catch((error) => console.warn("attendance-nightly-cutoff-failed", error instanceof Error ? error.message : String(error)));
   const tokenHash = await sha256(token);
   const session = await db.query.portalSessions.findFirst({ where: eq(portalSessions.tokenHash, tokenHash) });
   if (!session || session.userEmail !== userEmail.trim().toLowerCase() || session.status !== "active") {
@@ -159,6 +162,7 @@ export async function verifyPortalSession(userEmail: string, options: { touch?: 
       reason: session.absoluteExpiresAt <= nowIso ? "absolute-timeout" : "idle-timeout",
       source: "security",
     });
+    await closeAttendanceSession(session.id, nowIso, session.absoluteExpiresAt <= nowIso ? "absolute-timeout" : "idle-timeout", true).catch(() => undefined);
     return { status: "expired" };
   }
 
@@ -197,6 +201,7 @@ export async function verifyPortalSession(userEmail: string, options: { touch?: 
       lastActivityAt: nowIso,
       idleExpiresAt: new Date(now.getTime() + PORTAL_IDLE_TIMEOUT_MINUTES * 60_000).toISOString(),
     }).where(and(eq(portalSessions.id, session.id), eq(portalSessions.status, "active")));
+    await touchAttendanceSession(session.id, nowIso).catch(() => undefined);
   }
   return { status: "valid", sessionId: session.id, absoluteExpiresAt: session.absoluteExpiresAt };
 }
@@ -211,6 +216,7 @@ export async function revokeCurrentPortalSession(request: Request, reason: strin
   const now = new Date().toISOString();
   await db.update(portalSessions).set({ status: "revoked", revokedAt: now, revocationReason: reason.slice(0, 120) })
     .where(eq(portalSessions.id, session.id));
+  await closeAttendanceSession(session.id, now, reason, false).catch(() => undefined);
   await auditPortalAction({
     actorEmail: session.userEmail,
     action: "portal-session-ended",
@@ -225,9 +231,12 @@ export async function revokeCurrentPortalSession(request: Request, reason: strin
 
 export async function revokePortalSessionsForUser(userEmail: string, reason: string) {
   const now = new Date().toISOString();
-  await getDb().update(portalSessions).set({
+  const db = getDb();
+  const active = await db.select({ id: portalSessions.id }).from(portalSessions).where(and(eq(portalSessions.userEmail, userEmail.trim().toLowerCase()), eq(portalSessions.status, "active")));
+  await db.update(portalSessions).set({
     status: "revoked",
     revokedAt: now,
     revocationReason: reason.slice(0, 120),
   }).where(and(eq(portalSessions.userEmail, userEmail.trim().toLowerCase()), eq(portalSessions.status, "active")));
+  for (const session of active) await closeAttendanceSession(session.id, now, reason, false).catch(() => undefined);
 }
