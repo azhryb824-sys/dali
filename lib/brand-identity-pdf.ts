@@ -1,16 +1,12 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
-import cairoBoldDataUrl from "@fontsource/cairo/files/cairo-arabic-700-normal.woff?inline";
 import { brandIdentityAssets, type BrandIdentityAssetId } from "@/lib/brand-identity";
 import { getRuntimeEnv } from "@/lib/runtime-env";
+import { cairoFontBytes } from "@/lib/cairo-font-bytes";
 
 const PAGE = { width: 595.28, height: 841.89, margin: 48 };
 const C = { navy: rgb(0, .114, .176), red: rgb(.886, .11, .145), text: rgb(.12, .17, .2), muted: rgb(.42, .48, .52), pale: rgb(.96, .97, .975) };
 
-function dataBytes(value: string) {
-  const binary = atob(value.slice(value.indexOf(",") + 1));
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
 function width(font: PDFFont, value: string, size: number) { return font.widthOfTextAtSize(value || " ", size); }
 function right(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = C.text, edge = PAGE.width - PAGE.margin) {
   page.drawText(value, { x: edge - width(font, value, size), y, font, size, color });
@@ -74,9 +70,10 @@ export async function generateBrandIdentityPdf(id: BrandIdentityAssetId) {
   const asset = brandIdentityAssets.find((item) => item.id === id)!;
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
+  const cairoBold = await cairoFontBytes("arabicBold");
   const [regular, bold] = await Promise.all([
-    pdf.embedFont(dataBytes(cairoBoldDataUrl), { subset: true }),
-    pdf.embedFont(dataBytes(cairoBoldDataUrl), { subset: true }),
+    pdf.embedFont(cairoBold, { subset: true }),
+    pdf.embedFont(cairoBold, { subset: true }),
   ]);
   const logoResponse = await getRuntimeEnv().ASSETS.fetch(new Request("https://assets.local/dally-logo.jpg"));
   const logo = logoResponse.ok ? await pdf.embedJpg(new Uint8Array(await logoResponse.arrayBuffer())) : null;

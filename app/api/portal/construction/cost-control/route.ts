@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const crossSite = rejectCrossSiteRequest(request); if (crossSite) return crossSite;
+  const crossSite = rejectCrossSiteRequest(request); if (crossSite) return jsonNoStore({ error: "طلب صادر من موقع غير مسموح" }, { status: 403 });
   const authorization = await authorize("write");
   if (!authorization) return jsonNoStore({ error: "غير مصرح بتعديل رقابة التكاليف" }, { status: 403 });
   const parsed = await readLimitedJson(request, 16_000); if (!parsed.ok) return parsed.response;
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const crossSite = rejectCrossSiteRequest(request); if (crossSite) return crossSite;
+  const crossSite = rejectCrossSiteRequest(request); if (crossSite) return jsonNoStore({ error: "طلب صادر من موقع غير مسموح" }, { status: 403 });
   const authorization = await authorize("write");
   if (!authorization) return jsonNoStore({ error: "غير مصرح بتعديل رقابة التكاليف" }, { status: 403 });
   const parsed = await readLimitedJson(request, 4000); if (!parsed.ok) return parsed.response;

@@ -1,9 +1,8 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
-import cairoArabicBoldDataUrl from "@fontsource/cairo/files/cairo-arabic-700-normal.woff?inline";
-import cairoLatinBoldDataUrl from "@fontsource/cairo/files/cairo-latin-700-normal.woff?inline";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { halalasToArabicWords } from "@/lib/arabic-money";
+import { cairoFontBytes } from "@/lib/cairo-font-bytes";
 
 export const issuedDocumentLabels = {
   workforce_contract: "عقد توريد وتشغيل قوى عاملة",
@@ -93,12 +92,6 @@ const COLORS = {
   pale: rgb(0.965, 0.972, 0.976),
 };
 
-function dataUrlBytes(value: string) {
-  const encoded = value.slice(value.indexOf(",") + 1);
-  const binary = atob(encoded);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
-
 async function embedImage(pdf: PDFDocument, bytes: Uint8Array, contentType: string) {
   if (contentType === "image/png") return pdf.embedPng(bytes);
   if (contentType === "image/jpeg" || contentType === "image/jpg") return pdf.embedJpg(bytes);
@@ -107,11 +100,15 @@ async function embedImage(pdf: PDFDocument, bytes: Uint8Array, contentType: stri
 
 async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<PdfResources> {
   pdf.registerFontkit(fontkit);
+  const [arabicBold, latinBoldBytes] = await Promise.all([
+    cairoFontBytes("arabicBold"),
+    cairoFontBytes("latinBold"),
+  ]);
   const [regular, bold, latinRegular, latinBold] = await Promise.all([
-    pdf.embedFont(dataUrlBytes(cairoArabicBoldDataUrl), { subset: true }),
-    pdf.embedFont(dataUrlBytes(cairoArabicBoldDataUrl), { subset: true }),
-    pdf.embedFont(dataUrlBytes(cairoLatinBoldDataUrl), { subset: true }),
-    pdf.embedFont(dataUrlBytes(cairoLatinBoldDataUrl), { subset: true }),
+    pdf.embedFont(arabicBold, { subset: true }),
+    pdf.embedFont(arabicBold, { subset: true }),
+    pdf.embedFont(latinBoldBytes, { subset: true }),
+    pdf.embedFont(latinBoldBytes, { subset: true }),
   ]);
 
   const runtime = getRuntimeEnv();

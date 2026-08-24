@@ -73,7 +73,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const crossSite = rejectCrossSiteRequest(request);
-  if (crossSite) return crossSite;
+  if (crossSite) return jsonNoStore({ error: "طلب صادر من موقع غير مسموح" }, { status: 403 });
   const authorization = await requireConstructionAccess("write");
   if (!authorization) return jsonNoStore({ error: "غير مصرح بالتعديل في قطاع المقاولات" }, { status: 403 });
   const { access, scopes } = authorization;
