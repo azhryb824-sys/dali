@@ -162,10 +162,9 @@ npm_ci_args=(ci --cache "${expected_cache}")
 if [[ "${use_seeded_cache}" == "1" ]]; then
   npm_ci_args+=(--prefer-offline)
 fi
-timeout \
-  --signal=TERM \
-  --kill-after="${SITES_INSTALL_KILL_AFTER:-15s}" \
+"${script_dir}/run-with-timeout.sh" \
   "${SITES_INSTALL_TIMEOUT:-8m}" \
+  "${SITES_INSTALL_KILL_AFTER:-15s}" \
   npm "${npm_ci_args[@]}"
 
 vinext="${SITES_PROJECT_ROOT}/node_modules/.bin/vinext"
