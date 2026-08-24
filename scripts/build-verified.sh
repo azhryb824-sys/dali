@@ -8,7 +8,7 @@ if [[ "${SITES_ENV_READY:-}" != "1" ]]; then
 fi
 
 command -v timeout || {
-  echo "build-verified.sh requires GNU timeout." >&2
+  echo "build-verified.sh requires timeout (GNU coreutils or BusyBox)." >&2
   exit 69
 }
 
@@ -19,10 +19,9 @@ if [[ ! -x "${vinext}" ]]; then
 fi
 
 echo "Running bounded vinext build..."
-timeout \
-  --signal=TERM \
-  --kill-after="${SITES_BUILD_KILL_AFTER:-10s}" \
+"${script_dir}/run-with-timeout.sh" \
   "${SITES_BUILD_TIMEOUT:-3m}" \
+  "${SITES_BUILD_KILL_AFTER:-10s}" \
   "${vinext}" build
 
 "${script_dir}/validate-artifact.sh"
