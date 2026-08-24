@@ -53,7 +53,7 @@ export function getConfiguredAuthMode() {
   const env = nodeEnvironment();
   const configured = firstConfiguredValue(runtime.AUTH_MODE, env.AUTH_MODE);
   if (configured) return configured;
-  return isRenderEnvironment(env) ? "credentials" : "chatgpt";
+  return isRenderEnvironment(env) || Boolean(env.DATABASE_URL?.trim()) ? "credentials" : "chatgpt";
 }
 
 export function getPortalAdminConfig() {
