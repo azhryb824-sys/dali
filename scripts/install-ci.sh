@@ -162,7 +162,7 @@ npm_ci_args=(ci --cache "${expected_cache}")
 if [[ "${use_seeded_cache}" == "1" ]]; then
   npm_ci_args+=(--prefer-offline)
 fi
-"${script_dir}/run-with-timeout.sh" \
+bash "${script_dir}/run-with-timeout.sh" \
   "${SITES_INSTALL_TIMEOUT:-8m}" \
   "${SITES_INSTALL_KILL_AFTER:-15s}" \
   npm "${npm_ci_args[@]}"
