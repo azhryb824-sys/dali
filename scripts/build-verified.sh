@@ -19,7 +19,7 @@ if [[ ! -x "${vinext}" ]]; then
 fi
 
 echo "Running bounded vinext build..."
-"${script_dir}/run-with-timeout.sh" \
+bash "${script_dir}/run-with-timeout.sh" \
   "${SITES_BUILD_TIMEOUT:-3m}" \
   "${SITES_BUILD_KILL_AFTER:-10s}" \
   "${vinext}" build
