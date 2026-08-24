@@ -18,7 +18,11 @@ function safeHttpUrl(value: string | undefined) {
 
 function configuredExternalUrl() {
   const env = nodeEnvironment();
-  const explicit = safeHttpUrl(env.RENDER_EXTERNAL_URL?.trim());
+  const explicit = safeHttpUrl(
+    env.APP_URL?.trim()
+    || env.PUBLIC_APP_URL?.trim()
+    || env.RENDER_EXTERNAL_URL?.trim(),
+  );
   if (explicit) return explicit;
   const hostname = env.RENDER_EXTERNAL_HOSTNAME?.trim();
   return hostname ? safeHttpUrl(`https://${hostname}`) : null;
