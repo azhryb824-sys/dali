@@ -9,7 +9,7 @@
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
-    "start": "bash scripts/start-godaddy.sh",
+        "start": "next start -H 0.0.0.0",
     "start:render": "node scripts/render-start.mjs",
     "auth:hash": "node scripts/hash-password.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
