@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { requirementsForProfession, workforceNationalities, workforceProfessions } from "@/lib/workforce-requirements";
-import { saudiBanks } from "@/lib/saudi-banks";
+import { bankNameFromSaudiIban, formatSaudiIban, saudiBanks } from "@/lib/saudi-banks";
 import OperationsWorkspace, { QuotationIssueModal, type OperationsTab } from "./OperationsWorkspace";
 import DocumentShareManager from "./DocumentShareManager";
 import WebsiteManager from "./WebsiteManager";
@@ -290,6 +290,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const [query, setQuery] = useState("");
   const [globalQuery, setGlobalQuery] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationShellRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [modal, setModal] = useState<RecordEntity | null>(null);
   const [documentModal, setDocumentModal] = useState<"upload" | "issue" | null>(null);
@@ -311,6 +312,23 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!) : currentUser.role === "admin" || currentUser.role === "manager" || functionalAdmin;
   const canAccessDocuments = currentUser.role !== "employee" || currentUser.department === "legal" || currentUser.department === "finance" || currentUser.functionalPermissions.includes("*") || currentUser.functionalPermissions.includes("documents.read");
   const activeRoleLabel = currentUser.functionalRoles.map((role) => functionalRoleLabels[role] || role).join("، ") || roleLabels[currentUser.role];
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !notificationShellRef.current?.contains(target)) setNotificationsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNotificationsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [notificationsOpen]);
 
   useEffect(() => {
     let idleTimer = 0;
@@ -611,6 +629,19 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     finally { setBusy(null); }
   }
 
+  async function createEmployee(form: HTMLFormElement) {
+    setBusy("create-employees");
+    try {
+      const response = await fetch("/api/portal/employees", { method: "POST", body: new FormData(form) });
+      const result = await response.json() as { employee?: EmployeeRecord; error?: string };
+      if (!response.ok || !result.employee) throw new Error(result.error || "تعذّر إنشاء ملف الموظف");
+      setEmployees(items => [result.employee!, ...items]);
+      setModal(null); notify("تم إنشاء ملف الموظف وربطه بالمستخدم والموارد البشرية والرواتب.");
+      void refreshNotifications(true);
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إنشاء ملف الموظف"); }
+    finally { setBusy(null); }
+  }
+
   async function createWorker(form: HTMLFormElement) {
     setBusy("create-workforce");
     const createdWorkers: WorkerRecord[]=[]; const createdAttachments: WorkerAttachment[]=[];
@@ -908,7 +939,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
           }}
         />
         <div className="topbar-actions">
-          <div className="notification-shell">
+          <div className="notification-shell" ref={notificationShellRef}>
             <button className="notification" aria-label="فتح مركز الإشعارات" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Icon name="bell" />{unreadNotifications > 0 && <b>{unreadNotifications > 99 ? "99+" : unreadNotifications}</b>}</button>
             {notificationsOpen && (
               <NotificationPopover notifications={notifications} onOpen={openNotification} onReadAll={() => void updateNotificationState("read-all")} onViewAll={() => { setNotificationsOpen(false); changeView("notifications"); }}/>
@@ -1052,7 +1083,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
       </div>
     </section>
 
-    {modal && modal !== "workforce" && modal !== "finance" && <RecordModal entity={modal} busy={busy === `create-${modal}`} onClose={() => setModal(null)} onSubmit={createRecord}/>}
+    {modal && modal !== "workforce" && modal !== "finance" && <RecordModal entity={modal} users={initialUsers} busy={busy === `create-${modal}`} onClose={() => setModal(null)} onSubmit={modal === "employees" ? (_entity, form) => createEmployee(form) : createRecord}/>}
     {modal === "finance" && <FinanceRecordModal busy={busy === "create-finance"} workers={workers} contracts={contracts} onClose={() => setModal(null)} onSubmit={(form) => createRecord("finance", form)}/>}
     {modal === "workforce" && <WorkerModal busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker}/>}
     {documentModal === "upload" && <UploadDocumentModal busy={busy === "upload-document"} onClose={() => setDocumentModal(null)} onSubmit={uploadDocument}/>}
@@ -1558,11 +1589,13 @@ function WorkerTable({ records, attachments, query, onSelect }: { records: Worke
   return <div className="management-table-wrap"><table className="management-table workforce-table"><thead><tr><th>العامل</th><th>المهنة</th><th>الجهة المستفيدة</th><th>موقع العمل</th><th>انتهاء الإقامة</th><th>اكتمال الملف</th><th>الحالة</th><th><span className="sr-only">عرض</span></th></tr></thead><tbody>{rows.map((item) => { const profile = workerRequirementStatus(item, attachments); const photo = profile.files.find((file) => file.documentType === "photo"); return <tr key={item.id}><td><div className="worker-identity">{photo ? <Image unoptimized src={`/api/portal/workers/attachments/${photo.id}?inline=1`} alt={`صورة ${item.fullName}`} width={56} height={56}/> : <span>{initials(item.fullName)}</span>}<p><strong>{item.fullName}</strong><small dir="ltr">{item.iqamaNumber || "رقم الإقامة غير مسجل"}</small></p></div></td><td><strong>{item.profession}</strong><small>{item.nationality}</small></td><td><strong>{item.beneficiaryName || "غير مسند"}</strong><small>{item.status === "assigned" ? "مستفيد حالي" : "متاح للإسناد"}</small></td><td>{item.clientSite}</td><td className={daysUntil(item.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(item.iqamaExpiry)}</td><td><div className="file-completion"><span><i style={{ width: `${profile.percent}%` }}/></span><small>{profile.percent}% · {profile.missing.length ? `${profile.missing.length} ناقص` : "مكتمل"}</small></div></td><td><span className={`status-pill ${statusClass(item.status)}`}>{recordStatus.workforce[item.status] || item.status}</span></td><td><button className="worker-view" onClick={() => onSelect(item.id)}>عرض الملف ←</button></td></tr>; })}</tbody></table></div>;
 }
 
-function RecordModal({ entity, busy, onClose, onSubmit }: { entity: Exclude<RecordEntity, "finance" | "workforce">; busy: boolean; onClose: () => void; onSubmit: (entity: RecordEntity, form: HTMLFormElement) => Promise<void> }) {
+function RecordModal({ entity, users, busy, onClose, onSubmit }: { entity: Exclude<RecordEntity, "finance" | "workforce">; users: PortalUser[]; busy: boolean; onClose: () => void; onSubmit: (entity: RecordEntity, form: HTMLFormElement) => Promise<void> }) {
   const titles = { employees: "إضافة موظف", legal: "إضافة ملف قانوني" };
+  const [iban,setIban]=useState("SA");
+  const detectedBank=bankNameFromSaudiIban(iban)||"";
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(entity, event.currentTarget); }
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق النافذة" onClick={onClose}/><section className="record-modal" role="dialog" aria-modal="true" aria-label={titles[entity]}><div className="drawer-head"><div><span>سجل جديد</span><h2>{titles[entity]}</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}>
-    {entity === "employees" && <><label>الرقم الوظيفي<input name="employeeNumber" required maxLength={30} placeholder="EMP-001" dir="ltr"/></label><label>الاسم الكامل<input name="fullName" required maxLength={120}/></label><label>رقم الهوية أو الإقامة<input name="nationalId" inputMode="numeric" pattern="[0-9]{10}" maxLength={10} dir="ltr"/></label><label>الجنسية<input name="nationality" maxLength={80}/></label><label>المسمى الوظيفي<input name="jobTitle" required maxLength={100}/></label><label>الإدارة أو القسم<input name="department" required maxLength={100}/></label><label>رقم الجوال<input name="mobile" required type="tel" maxLength={20} dir="ltr"/></label><label>البريد الوظيفي<input name="email" type="email" maxLength={160} dir="ltr"/></label><label>تاريخ الالتحاق<input name="hireDate" required type="date"/></label><label>الراتب الأساسي<input name="baseSalary" required type="number" min="0" step="0.01" defaultValue="0" dir="ltr"/></label><label>اسم البنك<input name="bankName" maxLength={120}/></label><label>رقم الآيبان<input name="iban" pattern="SA[0-9 ]{22,28}" maxLength={30} placeholder="SA00 0000 0000 0000 0000 0000" dir="ltr"/></label></>}
+    {entity === "employees" && <><label className="span-two">مستخدم الموظف<select name="portalUserEmail" required defaultValue=""><option value="" disabled>اختر مستخدمًا نشطًا غير مرتبط بموظف</option>{users.filter(user=>user.status==="active").map(user=><option key={user.email} value={user.email}>{user.displayName} · {user.email}</option>)}</select></label><label>الرقم الوظيفي<input name="employeeNumber" required maxLength={30} placeholder="EMP-001" dir="ltr"/></label><label>الاسم الكامل<input name="fullName" required maxLength={120}/></label><label>رقم الهوية أو الإقامة<input name="nationalId" required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} dir="ltr"/></label><label>الجنسية<input name="nationality" maxLength={80}/></label><label>المسمى الوظيفي<input name="jobTitle" required maxLength={100}/></label><label>الإدارة أو القسم<input name="department" required maxLength={100}/></label><label>رقم الجوال<input name="mobile" required type="tel" maxLength={20} dir="ltr"/></label><label>البريد الوظيفي<input name="email" type="email" maxLength={160} dir="ltr"/></label><label>تاريخ الالتحاق<input name="hireDate" required type="date"/></label><label>تاريخ انتهاء الإقامة<input name="iqamaExpiry" required type="date"/></label><label>الراتب الأساسي<input name="baseSalary" required type="number" min="0" step="0.01" defaultValue="0" dir="ltr"/></label><label>بدل السكن<input name="housingAllowance" type="number" min="0" step="0.01" defaultValue="0" dir="ltr"/></label><label>بدل النقل<input name="transportAllowance" type="number" min="0" step="0.01" defaultValue="0" dir="ltr"/></label><label>بدلات أخرى<input name="otherAllowance" type="number" min="0" step="0.01" defaultValue="0" dir="ltr"/></label><label>رقم الآيبان — اختياري<input name="iban" value={iban} onChange={event=>setIban(formatSaudiIban(event.target.value))} inputMode="numeric" maxLength={29} placeholder="SA00 0000 0000 0000 0000 0000" dir="ltr"/><small>يبقى SA ثابتًا، وتضاف مسافة تلقائيًا بعد كل أربع خانات.</small></label><label>اسم البنك — تلقائي<input name="bankName" value={detectedBank} readOnly placeholder={iban.length>2?"سيظهر بعد اكتمال رمز البنك":"يُعبأ من الآيبان"}/></label><label className="file-drop">صورة شخصية — اختيارية<input name="photo" type="file" accept="image/png,image/jpeg"/></label><label className="file-drop">صورة الإقامة — إلزامية<input name="iqamaDocument" type="file" required accept="application/pdf,image/png,image/jpeg"/></label></>}
     {entity === "legal" && <><label>نوع الملف<select name="category" required defaultValue=""><option value="" disabled>اختر النوع</option><option value="contract">عقد</option><option value="case">قضية</option><option value="license">ترخيص</option><option value="compliance">امتثال</option></select></label><label>العنوان<input name="title" required maxLength={180}/></label><label>الطرف الآخر أو الجهة<input name="counterparty" required maxLength={160}/></label><label>تاريخ الانتهاء أو التجديد<input name="expiryDate" type="date"/></label></>}
     <div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ السجل"}</button></div>
   </form></section></div>;
