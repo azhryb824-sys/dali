@@ -23,6 +23,17 @@ test("video ratings require a completed call and the migration constrains values
   assert.match(migration,/video_interviews_rated_at_idx/);
 });
 
+test("ratings migration repairs a missing video schema before altering it",async()=>{
+  const migration=await readFile("drizzle-pg/0044_conversation_video_ratings.sql","utf8");
+  const createTable=migration.indexOf('CREATE TABLE IF NOT EXISTS "video_interviews"');
+  const alterTable=migration.indexOf('ALTER TABLE "video_interviews"\n  ADD COLUMN IF NOT EXISTS "employee_rating"');
+  assert.ok(createTable>=0,"video_interviews prerequisite must be created");
+  assert.ok(alterTable>createTable,"video_interviews must exist before rating columns are altered");
+  assert.match(migration,/CREATE TABLE IF NOT EXISTS "video_interview_transfers"/);
+  assert.match(migration,/ALTER TABLE public\.video_interviews ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration,/pg_roles WHERE rolname = 'dali_app'/);
+});
+
 test("incoming call desk opens in-app and exposes camera and microphone permissions",async()=>{
   const source=await readFile("app/portal/VideoInterviewDesk.tsx","utf8");
   assert.match(source,/setOpen\(true\)/);
