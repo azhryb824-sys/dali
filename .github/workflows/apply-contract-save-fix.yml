@@ -75,6 +75,21 @@ jobs:
           path.write_text(source.replace(old, new, 1), encoding="utf-8")
           PY
 
+      - name: Align legacy annual schedule assertion
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("tests/contract-billing-workflow.test.mjs")
+          source = path.read_text(encoding="utf-8")
+          old = '''  assert.match(route,/unitSalaryHalalas/);assert.match(route,/monthlyDueDates/);assert.match(route,/monthly_salary/);assert.match(route,/seasonal_percentage/);
+          '''
+          new = '''  assert.match(route,/unitSalaryHalalas/);assert.match(route,/ANNUAL_CONTRACT_MONTHS/);assert.match(route,/Array\\.from\\(\\{ length: ANNUAL_CONTRACT_MONTHS \\}/);assert.match(route,/annualInstallmentPercentages/);assert.match(route,/monthly_salary/);assert.match(route,/seasonal_percentage/);
+          '''
+          if old not in source:
+              raise SystemExit("legacy monthly schedule assertion was not found")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
