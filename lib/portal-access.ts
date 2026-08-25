@@ -41,6 +41,7 @@ const functionalDepartmentAccess: Record<string, { read: Exclude<PortalDepartmen
   quality_officer: { read: ["construction"], write: ["construction"] },
   safety_officer: { read: ["construction"], write: ["construction"] },
   hr_officer: { read: ["employees", "workforce"], write: ["employees"] },
+  government_relations_officer: { read: ["legal", "employees", "workforce", "finance"], write: ["legal"] },
   regional_manager: { read: ["construction", "workforce"], write: ["construction", "workforce"] },
   client_consultant: { read: ["construction"], write: [] },
   subcontractor: { read: ["construction"], write: [] },

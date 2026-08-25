@@ -28,11 +28,15 @@ import PaymentManagementDashboard from "./PaymentManagementDashboard";
 import VideoInterviewDesk from "./VideoInterviewDesk";
 import ExecutivePeopleCommandCenter from "./ExecutivePeopleCommandCenter";
 import LocaleRuntime from "@/app/components/LocaleRuntime";
+import GovernmentAffairsWorkspace from "./GovernmentAffairsWorkspace";
+import TaskCenter, { GlobalTaskReminder } from "./TaskCenter";
+import ContractualDocumentsWorkspace from "./ContractualDocumentsWorkspace";
+import LetterPdfLibrary from "./LetterPdfLibrary";
 
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
 type RequestStatus = "new" | "reviewing" | "contacted" | "closed";
-type View = "overview" | "notifications" | "employees" | "finance" | "legal" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "documents" | "brand" | "website" | "users";
+type View = "overview" | "notifications" | "tasks" | "employees" | "finance" | "legal" | "government" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "contractual-documents" | "documents" | "brand" | "website" | "users";
 type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 type WorkforceRequest = {
@@ -140,7 +144,7 @@ const functionalRoleLabels: Record<string, string> = {
   construction_director: "مدير قطاع المقاولات", workforce_operations_manager: "مدير تشغيل العمالة", finance_director: "المدير المالي",
   project_manager: "مدير مشروع", site_engineer: "مهندس موقع", planning_engineer: "مهندس تخطيط", cost_engineer: "مهندس تكاليف",
   contracts_manager: "مدير العقود", procurement_officer: "مسؤول المشتريات", project_accountant: "محاسب مشروع", document_controller: "مراقب وثائق",
-  quality_officer: "مسؤول الجودة", safety_officer: "مسؤول السلامة", hr_officer: "مسؤول الموارد البشرية", regional_manager: "مدير منطقة",
+  quality_officer: "مسؤول الجودة", safety_officer: "مسؤول السلامة", hr_officer: "مسؤول الموارد البشرية", government_relations_officer: "مسؤول العلاقات الحكومية والامتثال", regional_manager: "مدير منطقة",
   client_consultant: "ممثل العميل أو الاستشاري", subcontractor: "مقاول باطن",
   accountant: "المحاسب", legal_affairs: "شؤون قانونية", sales_representative: "مندوب مبيعات",
   purchasing_representative: "مندوب مشتريات", administrative_assistant: "مساعد إداري",
@@ -558,7 +562,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setNotificationsOpen(false);
     setOperationsQuery("");
     const actionView = item.actionView as View | null;
-    if (actionView && ["overview", "notifications", "employees", "finance", "legal", "workforce", "operations", "construction", "conversations", "documents", "website", "users"].includes(actionView)) changeView(actionView);
+    if (actionView && ["overview", "notifications", "tasks", "employees", "finance", "legal", "government", "workforce", "operations", "construction", "conversations", "contractual-documents", "documents", "website", "users"].includes(actionView)) changeView(actionView);
     if (item.entityType === "workforce-request" && item.entityId) setSelectedId(Number(item.entityId));
     if (item.entityType === "worker" && item.entityId) setSelectedWorkerId(Number(item.entityId));
     if (item.entityType === "workforce-contract" && item.entityId) setSelectedContractId(Number(item.entityId));
@@ -849,7 +853,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     finally { setBusy(null); }
   }
 
-  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", representatives: "إدارة المناديب", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", documents: "مركز المستندات", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
+  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", tasks: "المهام والتذكيرات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", government: "العلاقات الحكومية والامتثال", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", representatives: "إدارة المناديب", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", "contractual-documents": "العقود والعروض والخطابات", documents: "مستندات الشركة", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
   const visibleRequests = requests.filter((item) => {
     const matchesStatus = requestFilter === "all" || safeRequestStatus(item.status) === requestFilter;
     const haystack = `${item.fullName} ${item.mobile} ${item.email} ${item.trackingCode} ${item.specialization}`.toLowerCase();
@@ -863,15 +867,18 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
       <nav aria-label="أقسام النظام">
         <button className={view === "overview" ? "active" : ""} onClick={() => changeView("overview")}><Icon name="home" /><span>نظرة عامة</span></button>
         <button className={view === "notifications" ? "active" : ""} onClick={() => changeView("notifications")}><Icon name="bell" /><span>مركز الإشعارات</span>{unreadNotifications > 0 && <b>{unreadNotifications > 99 ? "99+" : unreadNotifications}</b>}</button>
+        <button className={view === "tasks" ? "active" : ""} onClick={() => changeView("tasks")}><Icon name="check" /><span>المهام والتذكيرات</span></button>
         {canAccess("workforce") && <button className={view === "conversations" ? "active" : ""} onClick={() => changeView("conversations")}><Icon name="conversations"/><span>المحادثات المباشرة</span>{(unreadConversationMessages > 0 || waitingConversations > 0) && <b>{Math.min(99, unreadConversationMessages || waitingConversations)}</b>}</button>}
         {canAccess("employees") && <button className={view === "employees" ? "active" : ""} onClick={() => changeView("employees")}><Icon name="employees" /><span>إدارة الموظفين</span><small>{employees.length}</small></button>}
         {canAccess("finance") && <button className={view === "finance" ? "active" : ""} onClick={() => changeView("finance")}><Icon name="finance" /><span>الإدارة المالية</span></button>}
         {canAccess("legal") && <button className={view === "legal" ? "active" : ""} onClick={() => changeView("legal")}><Icon name="legal" /><span>الشؤون القانونية</span>{legalAlerts > 0 && <b>{legalAlerts}</b>}</button>}
+        {canAccess("legal") && <button className={view === "government" ? "active" : ""} onClick={() => changeView("government")}><Icon name="website" /><span>العلاقات الحكومية</span></button>}
         {canAccess("workforce") && <button className={view === "workforce" ? "active" : ""} onClick={() => changeView("workforce")}><Icon name="workforce" /><span>شؤون العمالة</span>{(requestCounts.new + workerAlerts + incompleteWorkerFiles) > 0 && <b>{requestCounts.new + workerAlerts + incompleteWorkerFiles}</b>}</button>}
         {canAccess("workforce") && <button className={view === "operations" ? "active" : ""} onClick={() => changeView("operations")}><Icon name="finance" /><span>المبيعات والتشغيل</span></button>}
         {canAccess("workforce") && <button className={view === "representatives" ? "active" : ""} onClick={() => changeView("representatives")}><Icon name="users"/><span>إدارة المناديب</span></button>}
         {canAccessConstruction && <button className={view === "construction" ? "active" : ""} onClick={() => changeView("construction")}><Icon name="legal" /><span>المقاولات والمشروعات</span></button>}
-        {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مركز المستندات</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
+        {canAccessDocuments && <button className={view === "contractual-documents" ? "active" : ""} onClick={() => changeView("contractual-documents")}><Icon name="documents" /><span>العقود والعروض والخطابات</span></button>}
+        {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مستندات الشركة</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
         {canAccessDocuments && <button className={view === "brand" ? "active" : ""} onClick={() => changeView("brand")}><Icon name="brand" /><span>الهوية البصرية</span></button>}
         {canAccessWebsite && <button className={view === "website" ? "active" : ""} onClick={() => changeView("website")}><Icon name="website"/><span>إدارة الموقع</span></button>}
         {(currentUser.role === "admin" || functionalAdmin) && <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}><Icon name="users" /><span>المستخدمون والصلاحيات</span>{users.some((item) => item.status === "pending") && <i />}</button>}
@@ -910,6 +917,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         </div>
       </header>
       {notice && <div className="portal-notice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="إغلاق"><Icon name="close" /></button></div>}
+      <GlobalTaskReminder/>
 
       <div className="admin-content">
         {view === "overview" && <>
@@ -921,6 +929,8 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
             {canAccess("workforce") && <button onClick={() => changeView("workforce")}><span className="metric-icon green"><Icon name="workforce" /></span><p>العمالة<strong>{workers.length}</strong></p><small>{workers.filter((item) => item.status === "available").length} متاح · {activeBeneficiaries} جهة مستفيدة</small></button>}
             {canAccess("workforce") && <button onClick={() => changeView("conversations")}><span className="metric-icon red"><Icon name="conversations"/></span><p>المحادثات<strong>{conversations.length}</strong></p><small>{waitingConversations} تنتظر الرد · {unreadConversationMessages} رسالة غير مقروءة</small></button>}
             {canAccessDocuments && <button onClick={() => changeView("documents")}><span className="metric-icon navy"><Icon name="documents" /></span><p>مستندات الشركة<strong>{documents.length}</strong></p><small>{documentAlerts} تنبيه انتهاء خلال 30 يوماً أو مستند منتهٍ</small></button>}
+            <button onClick={() => changeView("tasks")}><span className="metric-icon green"><Icon name="check" /></span><p>المهام<strong>✓</strong></p><small>مهامك وتذكيراتك في مكان واحد</small></button>
+            {canAccess("legal") && <button onClick={() => changeView("government")}><span className="metric-icon sand"><Icon name="website" /></span><p>العلاقات الحكومية<strong>↗</strong></p><small>التجديدات والمنصات وطلبات السداد</small></button>}
           </section>
           {(currentUser.role === "admin" || functionalAdmin) && (
             <ExecutivePeopleCommandCenter isOwner={isSystemOwner || (currentUser.role === "admin" && !isSystemAdmin)} isSystemAdmin={isSystemAdmin}/>
@@ -936,6 +946,8 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
               {canAccessConstruction && <DepartmentCard icon="legal" title="المقاولات والمشروعات" text="الفرص والمناقصات والمشروعات ومراكز التكلفة والتغطية التشغيلية." count="قطاع أعمال مستقل" onClick={() => changeView("construction")} />}
               {canAccess("workforce") && <DepartmentCard icon="conversations" title="المحادثات المباشرة" text="الرد الفوري على زوار الموقع ومتابعة الرسائل غير المقروءة." count={`${waitingConversations} تنتظر الرد`} onClick={() => changeView("conversations")} />}
               {canAccessDocuments && <DepartmentCard icon="documents" title="مركز المستندات" text="المرفقات والعقود والإصدارات الرسمية والتنبيهات." count={`${documents.length} مستند`} onClick={() => changeView("documents")} />}
+              {canAccessDocuments && <DepartmentCard icon="documents" title="العقود والعروض والخطابات" text="دورات التحرير والاعتماد والإلغاء للمحررات الرسمية." count="مركز مستقل" onClick={() => changeView("contractual-documents")} />}
+              {canAccess("legal") && <DepartmentCard icon="website" title="العلاقات الحكومية والامتثال" text="الإقامات والتراخيص والمنصات الحكومية وطلبات سدادها." count="خزنة مشفّرة" onClick={() => changeView("government")} />}
               {canAccessWebsite && <DepartmentCard icon="website" title="إدارة الموقع الإلكتروني" text="الأقسام والمحتوى والنشر وإعدادات الظهور في محركات البحث." count={`الإصدار ${initialWebsiteContent.version}`} onClick={() => changeView("website")} />}
             </div></article>
             {currentUser.role !== "employee" && <article className="panel activity-panel"><div className="panel-head"><div><h2>سجل النشاط</h2><p>آخر التحديثات الإدارية</p></div></div><div className="activity-list">{initialActivity.length === 0 ? <div className="empty-small">لا يوجد نشاط مسجّل بعد.</div> : initialActivity.map((item) => <div key={item.id}><span>✓</span><p><strong>{activityLabel(item.action)}</strong><small>{item.actorEmail}</small></p><time>{formatDate(item.createdAt, true)}</time></div>)}</div></article>}
@@ -950,6 +962,9 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
           onReadAll={() => void updateNotificationState("read-all")}
           onRefresh={() => void refreshNotifications()}
         />}
+
+        {view === "tasks" && <TaskCenter/>}
+        {view === "government" && canAccess("legal") && <GovernmentAffairsWorkspace/>}
 
         {view === "conversations" && canAccess("workforce") && <ConversationCenter
           conversations={conversations}
@@ -1002,8 +1017,10 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "representatives" && canAccess("workforce") && <SalesRepresentativesWorkspace canWrite={canWrite}/>}
         {view === "construction" && canAccessConstruction && <ConstructionWorkspace/>}
 
+        {view === "contractual-documents" && canAccessDocuments && <><ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={canManageDocuments} onOpenQuotes={() => { setOperationsTab("quotes"); changeView("operations"); }} onOpenContracts={() => changeView("workforce")}/><LetterPdfLibrary/></>}
+
         {view === "documents" && canAccessDocuments && <DocumentCenter
-          documents={documents}
+          documents={documents.filter((item) => !["quotation","workforce_contract","contract","letter"].includes(item.documentType || ""))}
           contracts={contracts}
           assets={assets}
           query={query}

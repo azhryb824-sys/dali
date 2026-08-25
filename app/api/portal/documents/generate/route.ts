@@ -33,6 +33,7 @@ const prefixes: Record<IssuedDocumentType, string> = {
   receipt: "RCP",
   payment_voucher: "PAY",
   construction_record: "CST",
+  official_letter: "LTR",
 };
 
 type ProfessionInput = { profession: string; requiredCount: number; unitSalaryHalalas: number; sponsorshipType: "dali" | "other"; sponsorName: string | null; ajirContractStatus: "not_applicable" | "with_ajir" | "without_ajir"; workerIds: number[] };

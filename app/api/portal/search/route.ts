@@ -1,6 +1,6 @@
 import { desc, like, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clients, companyDocuments, constructionOpportunities, constructionProjects, constructionRecords, contractPaymentSchedules, employees, financialRecords, legalRecords, quoteVersions, salesOpportunities, timesheets, visitorConversations, videoInterviews, workers, workforceContracts, workforceRequests, workOrders, capacityPlans, dataSubjectRequests, portalUsers } from "@/db/schema";
+import { clients, companyDocuments, constructionOpportunities, constructionProjects, constructionRecords, contractPaymentSchedules, employees, financialRecords, governmentPaymentRequests, governmentSites, legalRecords, officialLetters, portalTasks, quoteVersions, salesOpportunities, timesheets, visitorConversations, videoInterviews, workers, workforceContracts, workforceRequests, workOrders, capacityPlans, dataSubjectRequests, portalUsers } from "@/db/schema";
 import { canAccessPortalDepartment, canAccessPortalDocuments, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore } from "@/lib/security";
 import { getWebsiteContent } from "@/lib/website-content";
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const pattern = `%${query}%`;
   const db = getDb();
   try {
-    const [requestRows, workerRows, contractRows, paymentRows, conversationRows, interviewRows, employeeRows, financeRows, legalRows, documentRows, clientRows, opportunityRows, quoteRows, orderRows, sheetRows, planRows, privacyRows, userRows, constructionOpportunityRows, constructionProjectRows, constructionRecordRows] = await Promise.all([
+    const [requestRows, workerRows, contractRows, paymentRows, conversationRows, interviewRows, employeeRows, financeRows, legalRows, documentRows, clientRows, opportunityRows, quoteRows, orderRows, sheetRows, planRows, privacyRows, userRows, constructionOpportunityRows, constructionProjectRows, constructionRecordRows, governmentSiteRows, governmentPaymentRows, taskRows, letterRows] = await Promise.all([
       canAccessPortalDepartment(access, "workforce") ? db.select().from(workforceRequests).where(or(like(workforceRequests.trackingCode, pattern), like(workforceRequests.fullName, pattern), like(workforceRequests.companyName, pattern), like(workforceRequests.mobile, pattern))).orderBy(desc(workforceRequests.updatedAt)).limit(6) : Promise.resolve([]),
       canAccessPortalDepartment(access, "workforce") ? db.select().from(workers).where(or(like(workers.fullName, pattern), like(workers.workerNumber, pattern), like(workers.iqamaNumber, pattern), like(workers.profession, pattern), like(workers.nationality, pattern))).orderBy(desc(workers.updatedAt)).limit(6) : Promise.resolve([]),
       canAccessPortalDepartment(access, "workforce") || canAccessPortalDepartment(access, "finance") ? db.select().from(workforceContracts).where(or(like(workforceContracts.referenceCode, pattern), like(workforceContracts.clientName, pattern), like(workforceContracts.title, pattern), like(workforceContracts.workSite, pattern))).orderBy(desc(workforceContracts.updatedAt)).limit(6) : Promise.resolve([]),
@@ -37,6 +37,10 @@ export async function GET(request: Request) {
       hasPortalPermission(access, "construction", "read").then((allowed) => allowed ? db.select().from(constructionOpportunities).where(or(like(constructionOpportunities.opportunityCode, pattern), like(constructionOpportunities.title, pattern), like(constructionOpportunities.clientName, pattern), like(constructionOpportunities.projectType, pattern))).orderBy(desc(constructionOpportunities.updatedAt)).limit(6) : []),
       hasPortalPermission(access, "construction", "read").then((allowed) => allowed ? db.select().from(constructionProjects).where(or(like(constructionProjects.projectCode, pattern), like(constructionProjects.title, pattern), like(constructionProjects.clientName, pattern), like(constructionProjects.projectType, pattern), like(constructionProjects.costCenterCode, pattern))).orderBy(desc(constructionProjects.updatedAt)).limit(6) : []),
       hasPortalPermission(access, "construction", "read").then((allowed) => allowed ? db.select().from(constructionRecords).where(or(like(constructionRecords.recordCode, pattern), like(constructionRecords.title, pattern), like(constructionRecords.description, pattern), like(constructionRecords.responsibleEmail, pattern))).orderBy(desc(constructionRecords.updatedAt)).limit(8) : []),
+      canAccessPortalDepartment(access, "legal") ? db.select().from(governmentSites).where(or(like(governmentSites.name, pattern), like(governmentSites.accountReference, pattern))).orderBy(desc(governmentSites.updatedAt)).limit(6) : Promise.resolve([]),
+      canAccessPortalDepartment(access, "legal") ? db.select().from(governmentPaymentRequests).where(or(like(governmentPaymentRequests.referenceCode, pattern), like(governmentPaymentRequests.serviceName, pattern), like(governmentPaymentRequests.sadadNumber, pattern), like(governmentPaymentRequests.billerNumber, pattern))).orderBy(desc(governmentPaymentRequests.updatedAt)).limit(6) : Promise.resolve([]),
+      db.select().from(portalTasks).where(or(like(portalTasks.title, pattern), like(portalTasks.description, pattern))).orderBy(desc(portalTasks.updatedAt)).limit(8),
+      canAccessPortalDocuments(access) ? db.select().from(officialLetters).where(or(like(officialLetters.referenceCode, pattern), like(officialLetters.subject, pattern), like(officialLetters.recipient, pattern))).orderBy(desc(officialLetters.updatedAt)).limit(6) : Promise.resolve([]),
     ]);
     const websiteResults: Result[] = [];
     if (await hasPortalPermission(access, "website", "read")) {
@@ -61,7 +65,7 @@ export async function GET(request: Request) {
       ...employeeRows.map((item) => ({ key: `employee-${item.id}`, kind: "employee", id: item.id, view: "employees", title: item.fullName, meta: `موظف · ${item.jobTitle}`, searchValue: item.fullName })),
       ...financeRows.map((item) => ({ key: `finance-${item.id}`, kind: "finance", id: item.id, view: "finance", title: item.referenceCode, meta: `مالي · ${item.description}`, searchValue: item.referenceCode })),
       ...legalRows.map((item) => ({ key: `legal-${item.id}`, kind: "legal", id: item.id, view: "legal", title: item.title, meta: `قانوني · ${item.referenceCode}`, searchValue: item.referenceCode })),
-      ...documentRows.map((item) => ({ key: `document-${item.id}`, kind: "document", id: item.id, view: "documents", title: item.title, meta: `مستند · ${item.referenceCode}`, searchValue: item.referenceCode })),
+      ...documentRows.map((item) => ({ key: `document-${item.id}`, kind: "document", id: item.id, view: ["quotation","workforce_contract","contract","letter"].includes(item.documentType||"") ? "contractual-documents" : "documents", title: item.title, meta: `مستند · ${item.referenceCode}`, searchValue: item.referenceCode })),
       ...clientRows.map((item) => ({ key: `client-${item.id}`, kind: "client", id: item.id, view: "operations", title: item.legalName, meta: `عميل · ${item.clientCode}`, searchValue: item.legalName })),
       ...opportunityRows.map((item) => ({ key: `opportunity-${item.id}`, kind: "opportunity", id: item.id, view: "operations", title: item.title, meta: `فرصة · ${item.opportunityCode}`, searchValue: item.opportunityCode })),
       ...quoteRows.map((item) => ({ key: `quote-${item.id}`, kind: "quote", id: item.id, view: "operations", title: item.quoteCode, meta: `عرض سعر · ${item.status}`, searchValue: item.quoteCode })),
@@ -73,6 +77,10 @@ export async function GET(request: Request) {
       ...constructionOpportunityRows.map((item) => ({ key: `construction-opportunity-${item.id}`, kind: "construction-opportunity", id: item.id, view: "construction", title: item.title, meta: `فرصة مقاولات · ${item.opportunityCode} · ${item.clientName}`, searchValue: item.opportunityCode })),
       ...constructionProjectRows.map((item) => ({ key: `construction-project-${item.id}`, kind: "construction-project", id: item.id, view: "construction", title: item.title, meta: `مشروع مقاولات · ${item.projectCode} · ${item.costCenterCode}`, searchValue: item.projectCode })),
       ...constructionRecordRows.map((item) => ({ key: `construction-record-${item.id}`, kind: `construction-${item.recordType}`, id: item.id, view: "construction", title: item.title, meta: `سجل مقاولات · ${item.recordCode} · ${item.status}`, searchValue: item.recordCode })),
+      ...governmentSiteRows.map((item) => ({ key: `government-site-${item.id}`, kind: "government-site", id: item.id, view: "government", title: item.name, meta: `منصة حكومية · ${item.accountReference||"دون مرجع"}`, searchValue: item.name })),
+      ...governmentPaymentRows.map((item) => ({ key: `government-payment-${item.id}`, kind: "government-payment", id: item.id, view: "government", title: item.serviceName, meta: `سداد حكومي · ${item.referenceCode} · ${item.status}`, searchValue: item.referenceCode })),
+      ...taskRows.filter((item) => item.createdBy === access.user.email).map((item) => ({ key: `task-${item.id}`, kind: "task", id: item.id, view: "tasks", title: item.title, meta: `مهمة · ${item.status}`, searchValue: item.title })),
+      ...letterRows.map((item) => ({ key: `letter-${item.id}`, kind: "official-letter", id: item.id, view: "contractual-documents", title: item.subject, meta: `خطاب · ${item.referenceCode} · ${item.status}`, searchValue: item.referenceCode })),
     ];
     return jsonNoStore({ results: results.slice(0, 24) });
   } catch (error) {

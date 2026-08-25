@@ -22,6 +22,7 @@ export const functionalRoleLabels = {
   quality_officer: "مسؤول الجودة",
   safety_officer: "مسؤول السلامة",
   hr_officer: "مسؤول الموارد البشرية",
+  government_relations_officer: "مسؤول العلاقات الحكومية والامتثال",
   regional_manager: "مسؤول المنطقة أو المدينة",
   client_consultant: "عميل أو استشاري",
   subcontractor: "مقاول باطن",

@@ -30,12 +30,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const id = Number((await context.params).id);
     const payload = await request.json() as Record<string, unknown>;
     const status = clean(payload.status, 30);
-    const reason = clean(payload.reason, 1000);
+    let reason = clean(payload.reason, 1000);
+    const reasonCode = clean(payload.reasonCode, 40);
     if (!Number.isSafeInteger(id) || id < 1) return jsonNoStore({ error: "رقم العقد غير صحيح" }, { status: 400 });
     const db = getDb();
     const contract = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.id, id) });
     if (!contract) return jsonNoStore({ error: "العقد غير موجود" }, { status: 404 });
     if (!transitions[contract.status]?.includes(status)) return jsonNoStore({ error: "انتقال حالة العقد غير مسموح" }, { status: 409 });
+    if (["cancelled", "terminated"].includes(status) && reasonCode === "late_payment") {
+      const overdue = await db.select().from(contractPaymentSchedules).where(and(eq(contractPaymentSchedules.contractId, id), inArray(contractPaymentSchedules.status, ["due","referred","invoiced"]))).orderBy(contractPaymentSchedules.dueDate);
+      const oldest = overdue.find((payment) => payment.dueDate < new Date().toISOString().slice(0, 10));
+      if (!oldest) return jsonNoStore({ error: "لا توجد دفعة متأخرة مثبتة على العقد لاحتساب سبب الإلغاء آليًا" }, { status: 409 });
+      reason = `إلغاء بسبب تأخر سداد الدفعة رقم ${oldest.installmentNumber} (${oldest.title}) المستحقة بتاريخ ${oldest.dueDate}، وعدم تسجيل سدادها حتى تاريخ القرار.`;
+    }
     if (["cancelled", "terminated", "suspended"].includes(status) && reason.length < 10) return jsonNoStore({ error: "اكتب سببًا واضحًا لا يقل عن 10 أحرف" }, { status: 400 });
     const canApprove = access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
     if (status === "approved" && !canApprove) return jsonNoStore({ error: "اعتماد العقد متاح للمالك أو مشرف النظام فقط" }, { status: 403 });
@@ -79,6 +86,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     if (["cancelled", "terminated"].includes(status)) {
       await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), inArray(contractPaymentSchedules.status, ["scheduled", "due", "referred"])));
+      if (reasonCode !== "late_payment") {
+        await db.update(financialRecords).set({ status: "cancelled", postingStatus: "not_applicable", notes: `أُلغي تبعًا لإلغاء العقد ${contract.referenceCode}: ${reason}`.slice(0,1000), updatedAt: now }).where(and(eq(financialRecords.contractId, id), eq(financialRecords.postingStatus, "unposted"), inArray(financialRecords.status, ["pending","due"])));
+      }
       const assignments = await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), inArray(contractWorkerAssignments.status, ["planned", "active"])));
       for (const assignment of assignments) {
         await db.update(contractWorkerAssignments).set({ status: "released", releasedAt: now }).where(eq(contractWorkerAssignments.id, assignment.id));
@@ -104,6 +114,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         await auditPortalAction({ actorEmail: access.user.email, action: "contract-cancellation-referred-legal", entityType: "legal-record", entityId: legal.id, after: { ...legal, snapshotCounts: { documents: documents.length, payments: payments.length, finances: finances.length, workers: linkedWorkers.length } }, reason });
         await emitPortalNotification({ eventType: "contract-cancellation-referred-legal", title: "ملف عميل كامل محال للشؤون القانونية", message: `${contract.referenceCode} — ${contract.clientName} — ${documents.length} مستندات، ${finances.length} سجلات مالية، ${payments.length} دفعات.`, severity: "critical", module: "legal", entityType: "legal-record", entityId: legal.id, actionView: "legal", targetDepartment: "legal" }).catch(() => undefined);
       }
+      const accountingReviewCount = finances.filter((item) => item.postingStatus === "draft" || item.postingStatus === "posted").length;
+      if (accountingReviewCount) await emitPortalNotification({ eventType: "contract-cancellation-accounting-review", title: "مراجعة محاسبية لازمة لإلغاء عقد", message: `${contract.referenceCode} — يوجد ${accountingReviewCount} سجل مالي بقيد مسودة أو مرحّل؛ يلزم إصدار عكس أو تسوية دون حذف الأثر التاريخي.`, severity: "critical", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
     }
     if (status === "active") {
       try {

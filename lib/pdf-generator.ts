@@ -12,6 +12,7 @@ export const issuedDocumentLabels = {
   receipt: "سند قبض",
   payment_voucher: "سند صرف",
   construction_record: "سجل مشروع مقاولات",
+  official_letter: "خطاب رسمي",
 } as const;
 
 export type IssuedDocumentType = keyof typeof issuedDocumentLabels;
@@ -80,6 +81,7 @@ const englishDocumentLabels: Record<IssuedDocumentType, string> = {
   receipt: "Receipt Voucher",
   payment_voucher: "Payment Voucher",
   construction_record: "Construction Project Record",
+  official_letter: "Official Letter",
 };
 
 function englishText(value?: string | null) {

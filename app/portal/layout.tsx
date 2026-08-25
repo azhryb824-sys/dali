@@ -11,6 +11,7 @@ import "./purchasing-workspace.css";
 import "./reports-workspace.css";
 import "./report-pdf-action.css";
 import "./bank-reconciliation.css";
+import "./management-enhancements.css";
 
 export const metadata: Metadata = {
   title: { absolute: "النظام الإداري | شركة دالي للتشغيل والصيانة" },

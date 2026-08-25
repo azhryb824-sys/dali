@@ -742,6 +742,121 @@ export const complianceReviews = pgTable(
   ],
 );
 
+export const governmentSites = pgTable(
+  "government_sites",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    portalUrl: text("portal_url").notNull(),
+    usernameEnvelope: text("username_envelope"),
+    passwordEnvelope: text("password_envelope"),
+    accountReference: text("account_reference"),
+    notes: text("notes"),
+    status: text("status").notNull().default("active"),
+    createdBy: text("created_by").notNull(),
+    updatedBy: text("updated_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("government_sites_status_name_idx").on(table.status, table.name),
+    check("government_sites_status_check", sql`${table.status} in ('active','inactive','archived')`),
+  ],
+);
+
+export const governmentPaymentRequests = pgTable(
+  "government_payment_requests",
+  {
+    id: serial("id").primaryKey(),
+    referenceCode: text("reference_code").notNull().unique(),
+    governmentSiteId: integer("government_site_id").references(() => governmentSites.id, { onDelete: "set null" }),
+    serviceName: text("service_name").notNull(),
+    amountHalalas: integer("amount_halalas").notNull(),
+    sadadNumber: text("sadad_number").notNull(),
+    billerNumber: text("biller_number").notNull(),
+    dueDate: text("due_date").notNull(),
+    status: text("status").notNull().default("pending"),
+    notes: text("notes"),
+    requestedBy: text("requested_by").notNull(),
+    paidBy: text("paid_by"),
+    paidAt: text("paid_at"),
+    financialRecordId: integer("financial_record_id").references(() => financialRecords.id, { onDelete: "restrict" }),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("government_payments_status_due_idx").on(table.status, table.dueDate),
+    uniqueIndex("government_payments_financial_unique").on(table.financialRecordId),
+    check("government_payments_amount_check", sql`${table.amountHalalas} > 0`),
+    check("government_payments_status_check", sql`${table.status} in ('pending','paid','cancelled')`),
+  ],
+);
+
+export const portalTasks = pgTable(
+  "portal_tasks",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull(),
+    description: text("description"),
+    dueAt: text("due_at").notNull(),
+    priority: text("priority").notNull().default("normal"),
+    visibility: text("visibility").notNull().default("private"),
+    status: text("status").notNull().default("open"),
+    createdBy: text("created_by").notNull(),
+    completedBy: text("completed_by"),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("portal_tasks_creator_status_idx").on(table.createdBy, table.status),
+    index("portal_tasks_due_status_idx").on(table.dueAt, table.status),
+    check("portal_tasks_priority_check", sql`${table.priority} in ('low','normal','high','urgent')`),
+    check("portal_tasks_visibility_check", sql`${table.visibility} in ('private','assigned')`),
+    check("portal_tasks_status_check", sql`${table.status} in ('open','completed','cancelled')`),
+  ],
+);
+
+export const portalTaskAssignees = pgTable(
+  "portal_task_assignees",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id").notNull().references(() => portalTasks.id, { onDelete: "cascade" }),
+    userEmail: text("user_email").notNull(),
+    status: text("status").notNull().default("open"),
+    reminderAcknowledgedAt: text("reminder_acknowledged_at"),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    uniqueIndex("portal_task_assignees_unique").on(table.taskId, table.userEmail),
+    index("portal_task_assignees_user_status_idx").on(table.userEmail, table.status),
+    check("portal_task_assignees_status_check", sql`${table.status} in ('open','completed')`),
+  ],
+);
+
+export const officialLetters = pgTable(
+  "official_letters",
+  {
+    id: serial("id").primaryKey(),
+    referenceCode: text("reference_code").notNull().unique(),
+    subject: text("subject").notNull(),
+    recipient: text("recipient").notNull(),
+    body: text("body").notNull(),
+    status: text("status").notNull().default("draft"),
+    cancellationReason: text("cancellation_reason"),
+    documentId: integer("document_id"),
+    createdBy: text("created_by").notNull(),
+    cancelledBy: text("cancelled_by"),
+    cancelledAt: text("cancelled_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("official_letters_status_updated_idx").on(table.status, table.updatedAt),
+    check("official_letters_status_check", sql`${table.status} in ('draft','approved','sent','cancelled')`),
+  ],
+);
+
 export const workers = pgTable(
   "workers",
   {

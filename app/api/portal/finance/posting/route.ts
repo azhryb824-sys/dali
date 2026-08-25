@@ -30,7 +30,7 @@ export async function POST(request:Request){
     if(!record)return jsonNoStore({error:"السجل غير موجود أو سبق إنشاء قيده"},{status:409});
     const accounts=await db.select().from(chartOfAccounts).where(and(eq(chartOfAccounts.isPosting,true),eq(chartOfAccounts.status,"active")));
     const account=(code:string)=>accounts.find(item=>item.code===code);let debitCode="";let creditCode="";let description=record.description;
-    const isRevenue=["workforce_invoice","invoice","progress_claim"].includes(record.category);const isExpense=["payment_voucher","worker_expense","expense"].includes(record.category);
+    const isRevenue=["workforce_invoice","invoice","progress_claim"].includes(record.category);const isExpense=["payment_voucher","worker_expense","expense","government_fee"].includes(record.category);
     if(isRevenue){debitCode="1300";creditCode=record.contractId?"4000":"4100";description=`إثبات إيراد — ${record.description}`;}
     else if(record.category==="receipt_voucher"){debitCode=record.paymentMethod==="cash"?"1100":"1200";creditCode="1300";description=`تحصيل من عميل — ${record.description}`;}
     else if(isExpense){debitCode=record.category==="worker_expense"?"5100":"5200";creditCode=record.paymentMethod==="cash"?"1100":record.paymentMethod==="bank_transfer"?"1200":"2100";description=`إثبات مصروف — ${record.description}`;}
