@@ -12,6 +12,15 @@ test("government affairs protects credentials and connects paid requests to fina
   assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/REVOKE ALL/);assert.match(ui,/إدارة العلاقات الحكومية والامتثال/);assert.match(ui,/تم السداد/);
 });
 
+test("government affairs compatibility migration restores copied production databases",async()=>{
+  const[migration,api]=await Promise.all([source("drizzle-pg/0041_government_affairs_schema_repair.sql"),source("app/api/portal/government/route.ts")]);
+  assert.match(migration,/CREATE TABLE IF NOT EXISTS "government_sites"/);
+  assert.match(migration,/CREATE TABLE IF NOT EXISTS "government_payment_requests"/);
+  for(const field of ["sponsorship_type","sponsor_name","iqama_expiry","work_permit_expiry","contract_end_date","archived_at"])assert.match(migration,new RegExp(`ADD COLUMN IF NOT EXISTS "${field}"`));
+  assert.doesNotMatch(migration,/DROP TABLE|TRUNCATE|DELETE FROM/);
+  assert.match(api,/government-affairs-load-failed/);
+});
+
 test("tasks enforce private visibility, owner assignment and global five-minute reminders",async()=>{
   const[api,ui,schema,migration,notifications]=await Promise.all([source("app/api/portal/tasks/route.ts"),source("app/portal/TaskCenter.tsx"),source("db/schema.ts"),source("drizzle-pg/0035_government_affairs_tasks_and_letters.sql"),source("lib/portal-notifications.ts")]);
   assert.match(api,/إسناد المهام للمستخدمين متاح للمالك أو مشرف النظام فقط/);assert.match(api,/visibility=requested\.length\?"assigned":"private"/);assert.match(api,/task\.createdBy!==email&&!assignment/);
