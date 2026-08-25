@@ -68,6 +68,17 @@ test("sponsorship and Ajir status remain consistent from worker to quote, contra
   assert.match(migration,/workers_sponsorship_consistency_check/);assert.match(migration,/quote_items_sponsorship_consistency_check/);assert.match(migration,/contract_professions_sponsorship_consistency_check/);
 });
 
+test("public quotation requests use the same structured requirements as quotations and contracts",async()=>{
+  const[form,home,api,crm,portal,schema,migration]=await Promise.all([source("app/components/QuoteRequestForm.tsx"),source("app/page.tsx"),source("app/api/workforce-requests/route.ts"),source("lib/crm.ts"),source("app/portal/PortalDashboard.tsx"),source("db/schema.ts"),source("drizzle-pg/0033_public_quotation_request_alignment.sql")]);
+  for(const activity of ["workforce","construction","maintenance","seasonal"])assert.match(form,new RegExp(activity));
+  for(const field of ["activityType","quantityMode","quotationItems","quotationTerms","clientCr","clientVat","clientAddress","representativeTitle"]){assert.match(form,new RegExp(field));assert.match(api,new RegExp(field));}
+  for(const field of ["quotationItemsJson","quotationTermsJson"]){assert.match(api,new RegExp(field));assert.match(crm,new RegExp(field));assert.match(portal,new RegExp(field));assert.match(schema,new RegExp(field));}
+  for(const label of ["جهة الكفالة","اسم الكفيل","حالة عقد أجير","شروط التشغيل والتعاقد","السجل التجاري","العنوان الوطني"]){assert.match(form,new RegExp(label));}
+  assert.match(home,/QuoteRequestForm embedded/);assert.doesNotMatch(home,/name="requestedCount"/);
+  assert.match(api,/quotationItems\.some/);assert.match(api,/requestedCount = quantityMode === "open"/);
+  assert.match(migration,/workforce_requests_activity_type_check/);assert.match(migration,/workforce_requests_quantity_mode_check/);
+});
+
 test("owner referral, accounting invoice, payment recording and legal escalation are separated",async()=>{
   const[route,ui]=await Promise.all([source("app/api/portal/contract-payments/route.ts"),source("app/portal/ContractBillingWorkspace.tsx")]);
   assert.match(route,/إحالة الدفعة للمحاسبة من صلاحيات المالك فقط/);

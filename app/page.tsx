@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import LiveChatWidget from "./LiveChatWidget";
 import PublicHeader from "./components/PublicHeader";
+import QuoteRequestForm from "./components/QuoteRequestForm";
 import StructuredData from "./components/StructuredData";
 import { useWebsiteContent } from "./components/WebsiteContentProvider";
 import { absoluteUrl, SITE } from "@/lib/site";
@@ -25,34 +25,6 @@ export default function Home() {
   const professions = content.home.professions;
   const steps = content.home.process.map((item, index) => ({ n: String(index + 1).padStart(2, "0"), ...item }));
   const faqs = content.faq.map((item) => ({ q: item.question, a: item.answer }));
-  const [sent, setSent] = useState(false);
-  const [trackingCode, setTrackingCode] = useState("");
-  const [sending, setSending] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-  const requestIdempotencyKey = useRef(crypto.randomUUID());
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSending(true);
-    setSubmitError("");
-    const form = event.currentTarget;
-    try {
-      const response = await fetch("/api/workforce-requests", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...Object.fromEntries(new FormData(form).entries()), idempotencyKey: requestIdempotencyKey.current }),
-      });
-      const result = await response.json().catch(() => ({})) as { error?: string; trackingCode?: string };
-      if (!response.ok) throw new Error(result.error || "تعذّر إرسال الطلب");
-      form.reset();
-      setTrackingCode(result.trackingCode || "");
-      setSent(true);
-      requestIdempotencyKey.current = crypto.randomUUID();
-    } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "تعذّر إرسال الطلب حالياً. يرجى المحاولة مرة أخرى.");
-    } finally { setSending(false); }
-  }
-
   const businessSchema = {
     "@context": "https://schema.org",
     "@graph": [
@@ -138,7 +110,7 @@ export default function Home() {
 
     {content.visibility.faq && <section className="faq section" id="faq"><div className="section-title"><p className="eyebrow"><span/> الأسئلة الشائعة</p><h2>معلومات تساعدك<br/><em>قبل طلب الخدمة.</em></h2></div><div className="faq-list">{faqs.slice(0, 8).map((item, index) => <details key={item.q}><summary><span>{String(index + 1).padStart(2, "0")}</span>{item.q}<b>+</b></summary><p>{item.a}</p></details>)}</div><Link className="text-link" href="/faq">عرض جميع الأسئلة <Arrow/></Link></section>}
 
-    <section className="quote section" id="quote"><div className="quote-intro"><p className="eyebrow light"><span/> طلب عرض سعر</p><h2>{content.home.quoteTitle}</h2><p>{content.home.quoteDescription}</p><div className="quote-address"><span>المقر</span><strong>{content.site.address}</strong></div><div className="quote-response-note"><b>تحتاج إلى مساعدة الآن؟</b><span>استخدم زر المحادثة المباشرة أسفل الصفحة للتحدث مع فريق دالي خلال ساعات العمل.</span></div></div>{sent ? <div className="success"><b>✓</b><h3>تم استلام طلب عرض السعر</h3><p>سيراجع فريق دالي البيانات ويتواصل معك بالطريقة التي اخترتها.</p>{trackingCode && <strong className="success-tracking" dir="ltr">{trackingCode}</strong>}<button onClick={() => { setSent(false); setTrackingCode(""); }}>إرسال طلب آخر</button></div> : <form onSubmit={submit} className="quote-request-form"><input type="hidden" name="requestType" value="quotation"/><label>اسم الشركة أو الجهة<input required name="companyName" maxLength={160} placeholder="اسم المنشأة الطالبة"/></label><label>اسم المسؤول<input required name="fullName" autoComplete="name" maxLength={100} placeholder="الاسم الكامل"/></label><label>رقم الجوال<input required name="mobile" autoComplete="tel" type="tel" inputMode="tel" maxLength={20} placeholder="05xxxxxxxx"/></label><label>البريد الإلكتروني<input required name="email" autoComplete="email" type="email" maxLength={160} placeholder="name@example.com"/></label><label>موقع العمل<input required name="workSite" maxLength={180} placeholder="المدينة والحي أو موقع المشروع"/></label><label>نوع الاحتياج<select required name="specialization" defaultValue=""><option value="" disabled>اختر نوع الاحتياج</option><option>جاهزية موسم رمضان</option><option>جاهزية موسم الحج</option><option>جاهزية موسمي رمضان والحج</option><option>عمالة إنشائية</option><option>فنيون متخصصون</option><option>تشغيل وصيانة</option><option>فريق متكامل</option></select></label><label>العدد التقريبي<input required name="requestedCount" type="number" min="1" max="100000" inputMode="numeric" placeholder="مثال: 25"/></label><label>تاريخ البدء المتوقع<input name="requiredStartDate" type="date"/></label><label>مدة التعاقد<select required name="duration" defaultValue=""><option value="" disabled>اختر المدة</option><option>أقل من شهر</option><option>من شهر إلى 3 أشهر</option><option>من 3 إلى 6 أشهر</option><option>من 6 إلى 12 شهراً</option><option>أكثر من سنة</option><option>غير محدد</option></select></label><label>طريقة التواصل المفضلة<select required name="preferredContact" defaultValue="either"><option value="either">الجوال أو البريد</option><option value="phone">الاتصال الهاتفي</option><option value="email">البريد الإلكتروني</option></select></label><label className="full">تفاصيل المهن ونطاق العمل<textarea required name="details" minLength={10} maxLength={2000} placeholder="اذكر المهن المطلوبة وعدد كل مهنة وساعات العمل وأي متطلبات خاصة..."/></label><label className="website-field" aria-hidden="true">الموقع الإلكتروني<input name="website" tabIndex={-1} autoComplete="off"/></label><p className="form-consent full">بإرسال الطلب تقر باطلاعك على <a href="/privacy">سياسة الخصوصية</a> واستخدام البيانات لمراجعة الاحتياج والتواصل وإعداد العرض.</p>{submitError && <p className="form-error full" role="alert">{submitError}</p>}<button className="btn primary full" type="submit" disabled={sending}>{sending ? "جارٍ إرسال الطلب..." : "إرسال طلب عرض السعر"} {!sending && <Arrow/>}</button></form>}</section>
+    <section className="quote section" id="quote"><div className="quote-intro"><p className="eyebrow light"><span/> طلب عرض سعر</p><h2>{content.home.quoteTitle}</h2><p>{content.home.quoteDescription}</p><div className="quote-address"><span>المقر</span><strong>{content.site.address}</strong></div><div className="quote-response-note"><b>بيانات منظمة من البداية</b><span>أدخل بنود الخدمة وشروط التشغيل لتصل إلى فريق دالي جاهزة لإعداد عرض السعر والعقد.</span></div></div><QuoteRequestForm embedded/></section>
 
     <LiveChatWidget/>
 

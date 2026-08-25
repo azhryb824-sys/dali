@@ -19,13 +19,17 @@ export async function createOpportunityFromPublicRequest(requestId: number) {
   if (existingOpportunity) return existingOpportunity;
 
   const legalName = request.companyName?.trim() || request.fullName;
+  let quotationItems: Array<{ description?: string; quantity?: number; durationMonths?: number; unit?: string; sponsorshipType?: string; sponsorName?: string; ajirContractStatus?: string }> = [];
+  let quotationTerms: Record<string, string | null> = {};
+  try { quotationItems = JSON.parse(request.quotationItemsJson || "[]") as typeof quotationItems; } catch {}
+  try { quotationTerms = JSON.parse(request.quotationTermsJson || "{}") as typeof quotationTerms; } catch {}
   let client = await db.query.clients.findFirst({ where: eq(clients.legalName, legalName) });
   if (!client) {
     [client] = await db.insert(clients).values({
       clientCode: code("CLI"),
       legalName,
       tradeName: request.companyName || null,
-      city: request.workSite?.includes("مكة") ? "مكة المكرمة" : "مكة المكرمة",
+      city: request.workSite?.split(/[،,]/)[0]?.trim() || "غير محددة",
       status: "prospect",
       createdBy: "public-website",
     }).returning();
@@ -62,7 +66,15 @@ export async function createOpportunityFromPublicRequest(requestId: number) {
     stage: "new",
     probability: 10,
     ownerEmail: request.assignedTo || "workforce-queue",
-    notes: [request.details, request.workSite ? `موقع العمل: ${request.workSite}` : "", request.duration ? `المدة: ${request.duration}` : ""].filter(Boolean).join("\n"),
+    notes: [
+      request.details,
+      request.workSite ? `موقع العمل: ${request.workSite}` : "",
+      request.duration ? `المدة: ${request.duration}` : "",
+      request.quantityMode ? `نطاق العدد: ${request.quantityMode === "open" ? "مفتوح" : "محدد"}` : "",
+      ...quotationItems.map((item, index) => `البند ${index + 1}: ${item.description || "غير محدد"} — ${request.quantityMode === "open" ? "عدد مفتوح" : `${item.quantity || 0} ${item.unit || "وحدة"}`} — ${item.durationMonths || 0} شهر${item.sponsorshipType === "dali" ? " — كفالة دالي" : item.sponsorshipType === "other" ? ` — الكفيل ${item.sponsorName || "غير محدد"} — ${item.ajirContractStatus === "with_ajir" ? "بعقد أجير" : "بدون عقد أجير"}` : ""}`),
+      quotationTerms.workingHours ? `ساعات العمل: ${quotationTerms.workingHours}` : "",
+      quotationTerms.paymentTerms ? `شروط الدفع: ${quotationTerms.paymentTerms}` : "",
+    ].filter(Boolean).join("\n"),
     createdBy: "public-website",
   }).returning();
 
