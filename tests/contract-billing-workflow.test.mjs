@@ -21,7 +21,7 @@ test("contract professions include hospitality and trades with enforced custom p
   for(const profession of ["سباك","كهربائي","ويتر","لحام","عامل تنظيف فندقي","أخرى"])assert.match(requirements,new RegExp(profession));
   assert.match(route,/item\.profession === "أخرى"/);assert.match(route,/اسم المهنة الفعلي/);
   assert.match(requirements,/label: "حداد"/);assert.match(requirements,/label: "لحام"/);assert.doesNotMatch(requirements,/حداد \/ لحام/);
-  assert.match(route,/unitSalaryHalalas/);assert.match(route,/monthlyDueDates/);assert.match(route,/monthly_salary/);assert.match(route,/seasonal_percentage/);
+  assert.match(route,/unitSalaryHalalas/);assert.match(route,/ANNUAL_CONTRACT_MONTHS/);assert.match(route,/Array\.from\(\{ length: ANNUAL_CONTRACT_MONTHS \}/);assert.match(route,/annualInstallmentPercentages/);assert.match(route,/monthly_salary/);assert.match(route,/seasonal_percentage/);
   assert.match(ui,/اكتب المهنة يدوياً/);assert.match(ui,/راتب العامل الشهري/);assert.match(ui,/العدد المطلوب/);
   assert.match(ui,/commercialRegistrationFile/);assert.match(ui,/vatCertificateFile/);assert.match(ui,/nationalAddressFile/);
 });

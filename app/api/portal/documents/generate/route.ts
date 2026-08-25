@@ -26,7 +26,7 @@ import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-acc
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
-import { addUtcMonths, parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
+import { ANNUAL_CONTRACT_MONTHS, addUtcMonths, annualContractEndDate, annualInstallmentPercentages, parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
 import { parseWorkforceContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 const prefixes: Record<IssuedDocumentType, string> = {
@@ -99,20 +99,6 @@ function parsePayments(value: unknown, contractSubtotalHalalas: number, vatRateB
   return payments;
 }
 
-function monthlyDueDates(firstDueDate: string, endDate: string) {
-  const dates: string[] = [];
-  const [year, month, day] = firstDueDate.split("-").map(Number);
-  if (!year || !month || !day) return dates;
-  for (let offset = 0; offset < 240; offset += 1) {
-    const base = new Date(Date.UTC(year, month - 1 + offset, 1));
-    const lastDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
-    const value = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
-    if (value > endDate) break;
-    dates.push(value);
-  }
-  return dates;
-}
-
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
@@ -122,6 +108,8 @@ export async function POST(request: Request) {
   let savedDocumentId: number | null = null;
   let savedContractId: number | null = null;
   let createdClientId: number | null = null;
+  let createdSupplierId: number | null = null;
+  let convertedRepresentativeRequestId: number | null = null;
   const auxiliaryStorageKeys: string[] = [];
   const auxiliaryDocumentIds: number[] = [];
   try {
@@ -149,7 +137,7 @@ export async function POST(request: Request) {
     const specialTerms = cleanText(payload.specialTerms, 2000);
     const legacyProfession = cleanText(payload.profession, 120);
     const startDate = cleanDate(payload.startDate, true);
-    const endDate = cleanDate(payload.endDate, true);
+    let endDate = cleanDate(payload.endDate, true);
     const legacyWorkerCount = Number(payload.workerCount || 0);
     const amount = Number(payload.amount || 0);
     const vatEnabled = payload.vatEnabled === true || payload.vatEnabled === "on" || payload.vatEnabled === "true";
@@ -162,6 +150,7 @@ export async function POST(request: Request) {
     const quantityMode = payload.quantityMode === "open" ? "open" : "fixed";
     const contractDirection: WorkforceContractDirection = payload.contractDirection === "dali_purchaser" ? "dali_purchaser" : "dali_supplier";
     const seasonType = payload.seasonType === "ramadan" || payload.seasonType === "hajj" ? payload.seasonType : "regular";
+    if (documentType === "workforce_contract" && seasonType === "regular" && startDate) endDate = annualContractEndDate(startDate);
     const billingMode = quantityMode === "open" ? "actual_usage" : seasonType === "regular" ? "monthly" : "seasonal_installments";
     const firstPaymentDueDate = cleanDate(payload.firstPaymentDueDate, true);
     let contractAmountHalalas = Math.round(amount * 100);
@@ -197,12 +186,25 @@ export async function POST(request: Request) {
       const vatRateBpsForSchedule = vatEnabled ? Math.round(vatRate * 100) : 0;
       if (quantityMode === "fixed" && seasonType === "regular") {
         const provisionalFirstDueDate = firstPaymentDueDate || addUtcMonths(issueDate, 1);
-        if (!provisionalFirstDueDate || !endDate || provisionalFirstDueDate > endDate) return Response.json({ error: "مدة العقد لا تسمح بإنشاء الدفعة الشهرية الأولى بعد شهر من الاعتماد" }, { status: 400 });
+        if (!provisionalFirstDueDate || !endDate) return Response.json({ error: "تعذر حساب مدة العقد السنوي وجدول دفعاته" }, { status: 400 });
         const monthlySubtotal = professionInputs.reduce((sum, item) => sum + item.requiredCount * item.unitSalaryHalalas, 0);
-        const dueDates = monthlyDueDates(provisionalFirstDueDate, endDate);
-        if (!dueDates.length) return Response.json({ error: "تعذر إنشاء جدول الدفعات الشهرية من التاريخ المحدد" }, { status: 400 });
-        paymentSchedule = dueDates.map((dueDate) => { const vatHalalas = Math.round(monthlySubtotal * vatRateBpsForSchedule / 10000); return { title: `استحقاق رواتب شهر ${dueDate.slice(0,7)}`, dueDate, percentageBps: Math.round(10000 / dueDates.length), subtotalHalalas: monthlySubtotal, vatHalalas, amountHalalas: monthlySubtotal + vatHalalas, billingBasis: "monthly_salary", servicePeriod: dueDate.slice(0,7) }; });
-        contractAmountHalalas = monthlySubtotal * dueDates.length;
+        const dueDates = Array.from({ length: ANNUAL_CONTRACT_MONTHS }, (_, index) => addUtcMonths(provisionalFirstDueDate, index));
+        if (dueDates.some((dueDate) => !dueDate)) return Response.json({ error: "تعذر إنشاء الدفعات الشهرية الاثنتي عشرة" }, { status: 400 });
+        const percentages = annualInstallmentPercentages(dueDates.length);
+        paymentSchedule = dueDates.map((dueDate, index) => {
+          const vatHalalas = Math.round(monthlySubtotal * vatRateBpsForSchedule / 10000);
+          return {
+            title: `الدفعة الشهرية ${index + 1} من ${dueDates.length} — ${dueDate.slice(0, 7)}`,
+            dueDate,
+            percentageBps: percentages[index],
+            subtotalHalalas: monthlySubtotal,
+            vatHalalas,
+            amountHalalas: monthlySubtotal + vatHalalas,
+            billingBasis: "monthly_salary",
+            servicePeriod: dueDate.slice(0, 7),
+          };
+        });
+        contractAmountHalalas = monthlySubtotal * ANNUAL_CONTRACT_MONTHS;
       } else if (quantityMode === "fixed") {
         paymentSchedule = parsePayments(payload.paymentSchedule, contractAmountHalalas, vatRateBpsForSchedule);
       }
@@ -354,7 +356,7 @@ export async function POST(request: Request) {
       if (contractDirection === "dali_purchaser") {
         const existingSupplier = await db.query.suppliers.findFirst({ where: eq(suppliers.commercialRegistration, clientCr) });
         if (existingSupplier) [supplier] = await db.update(suppliers).set({ legalName: clientName, vatNumber: clientVat, address: clientAddress, status: "active", updatedAt: new Date().toISOString() }).where(eq(suppliers.id, existingSupplier.id)).returning();
-        else [supplier] = await db.insert(suppliers).values({ supplierCode: makeReference("SUP"), legalName: clientName, commercialRegistration: clientCr, vatNumber: clientVat, address: clientAddress, status: "active", createdBy: access.user.email }).returning();
+        else { [supplier] = await db.insert(suppliers).values({ supplierCode: makeReference("SUP"), legalName: clientName, commercialRegistration: clientCr, vatNumber: clientVat, address: clientAddress, status: "active", createdBy: access.user.email }).returning(); createdSupplierId = supplier.id; }
       } else {
         const existingClient = await db.query.clients.findFirst({ where: eq(clients.commercialRegistration, clientCr) });
         if (existingClient) [client] = await db.update(clients).set({ legalName: clientName, vatNumber: clientVat, address: clientAddress, status: "active", sourceRequestId, salesRepresentativeId, updatedAt: new Date().toISOString(), version: existingClient.version + 1 }).where(eq(clients.id, existingClient.id)).returning();
@@ -424,7 +426,7 @@ export async function POST(request: Request) {
         createdBy: access.user.email,
       }).returning();
       savedContractId = contract.id;
-      if (representativeRequestId) await db.update(representativeRequests).set({ status: "converted", updatedAt: new Date().toISOString() }).where(eq(representativeRequests.id, representativeRequestId));
+      if (representativeRequestId) { await db.update(representativeRequests).set({ status: "converted", updatedAt: new Date().toISOString() }).where(eq(representativeRequests.id, representativeRequestId)); convertedRepresentativeRequestId = representativeRequestId; }
       await db.insert(contractClauses).values(clauseInputs.map((clause, index) => ({ contractId: contract!.id, clauseNumber: index + 1, section: clause.section, sectionEn: clause.sectionEn || null, title: clause.title, titleEn: clause.titleEn || null, body: clause.body, bodyEn: clause.bodyEn || null, isOptional: false, isIncluded: clause.included })));
       if (paymentSchedule.length) await db.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, subtotalHalalas: payment.subtotalHalalas, vatHalalas: payment.vatHalalas, vatRateBps, amountHalalas: payment.amountHalalas, billingBasis: payment.billingBasis, servicePeriod: payment.servicePeriod, status: payment.dueDate <= new Date().toISOString().slice(0, 10) ? "due" : "scheduled", createdBy: access.user.email })));
       for (const { file, kind, label, bytes, validationDetails } of validatedClientFiles) {
@@ -525,15 +527,29 @@ export async function POST(request: Request) {
     if (savedContractId) {
       await db.delete(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, savedContractId)).catch(() => undefined);
       await db.delete(contractProfessions).where(eq(contractProfessions.contractId, savedContractId)).catch(() => undefined);
+      await db.delete(contractClauses).where(eq(contractClauses.contractId, savedContractId)).catch(() => undefined);
       await db.delete(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, savedContractId)).catch(() => undefined);
       await db.delete(workforceContracts).where(eq(workforceContracts.id, savedContractId)).catch(() => undefined);
     }
     if (savedDocumentId) await db.delete(companyDocuments).where(eq(companyDocuments.id, savedDocumentId)).catch(() => undefined);
     for (const id of auxiliaryDocumentIds) await db.delete(companyDocuments).where(eq(companyDocuments.id,id)).catch(()=>undefined);
     if (createdClientId) await db.delete(clients).where(eq(clients.id, createdClientId)).catch(() => undefined);
+    if (createdSupplierId) await db.delete(suppliers).where(eq(suppliers.id, createdSupplierId)).catch(() => undefined);
+    if (convertedRepresentativeRequestId) await db.update(representativeRequests).set({ status: "approved", updatedAt: new Date().toISOString() }).where(eq(representativeRequests.id, convertedRepresentativeRequestId)).catch(() => undefined);
     if (storageKey) await getRuntimeEnv().BUCKET.delete(storageKey).catch(() => undefined);
     for (const key of auxiliaryStorageKeys) await getRuntimeEnv().BUCKET.delete(key).catch(() => undefined);
-    const message = error instanceof Error ? error.message : "";
-    return Response.json({ error: message || "تعذّر إصدار ملف PDF حالياً" }, { status: 500 });
+    const rawMessage = error instanceof Error ? error.message : "";
+    const databaseCode = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code || "") : "";
+    console.error("issued-document-save-failed", { databaseCode, error });
+    const safeMessage = rawMessage && /^[\u0600-\u06FF]/.test(rawMessage)
+      ? rawMessage
+      : databaseCode === "23505"
+        ? "تعذر الحفظ لوجود سجل آخر بالقيمة المرجعية نفسها. حدّث الصفحة ثم أعد المحاولة."
+        : databaseCode === "23503"
+          ? "تعذر الحفظ لأن أحد السجلات المرتبطة تغير أو لم يعد موجودًا. حدّث البيانات ثم أعد المحاولة."
+          : databaseCode === "42P01" || databaseCode === "42703"
+            ? "تعذر حفظ العقد بسبب عدم اكتمال بنية قاعدة البيانات على الخادم."
+            : "تعذر إتمام حفظ العقد ومرفقاته. لم يعتمد النظام عملية جزئية. أعد المحاولة بعد تحديث الصفحة.";
+    return Response.json({ error: safeMessage }, { status: 500 });
   }
 }

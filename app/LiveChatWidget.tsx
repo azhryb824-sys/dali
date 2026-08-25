@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
@@ -59,7 +62,7 @@ export default function LiveChatWidget() {
     try {
       const after = silent ? latestMessageId.current : 0;
       const response = await fetch(`/api/chat${after ? `?after=${after}` : ""}`, { cache: "no-store" });
-      const result = await response.json() as { conversation?: PublicConversation | null; messages?: PublicChatMessage[]; businessHours?: BusinessHours; delta?: boolean; error?: string };
+      const result = await readApiJson(response) as { conversation?: PublicConversation | null; messages?: PublicChatMessage[]; businessHours?: BusinessHours; delta?: boolean; error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر تحميل المحادثة");
       setConversation(result.conversation || null);
       const incoming = result.messages || [];
@@ -76,7 +79,7 @@ export default function LiveChatWidget() {
     }
   }, []);
 
-  const loadVideoInterview=useCallback(async()=>{try{const response=await fetch("/api/video-interviews",{cache:"no-store"});const result=await response.json()as{interview?:PublicVideoInterview|null;businessHours?:BusinessHours};if(response.ok){setVideoInterview(result.interview||null);if(result.businessHours)setBusinessHours(result.businessHours)}}catch{/* Chat remains usable if video status refresh fails. */}},[]);
+  const loadVideoInterview=useCallback(async()=>{try{const response=await fetch("/api/video-interviews",{cache:"no-store"});const result=await readApiJson(response)as{interview?:PublicVideoInterview|null;businessHours?:BusinessHours};if(response.ok){setVideoInterview(result.interview||null);if(result.businessHours)setBusinessHours(result.businessHours)}}catch{/* Chat remains usable if video status refresh fails. */}},[]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadConversation(); }, 0);
@@ -115,7 +118,7 @@ export default function LiveChatWidget() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "start", clientMessageId: pendingMessageId.current, ...Object.fromEntries(new FormData(event.currentTarget).entries()) }),
       });
-      const result = await response.json() as { conversation?: PublicConversation; messages?: PublicChatMessage[]; businessHours?: BusinessHours; error?: string };
+      const result = await readApiJson(response) as { conversation?: PublicConversation; messages?: PublicChatMessage[]; businessHours?: BusinessHours; error?: string };
       if (!response.ok || !result.conversation) throw new Error(result.error || "تعذّر بدء المحادثة");
       setConversation(result.conversation);
       setMessages(result.messages || []);
@@ -140,7 +143,7 @@ export default function LiveChatWidget() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "send", message, clientMessageId: pendingMessageId.current }),
       });
-      const result = await response.json() as { message?: PublicChatMessage; autoReply?: PublicChatMessage | null; autoReplies?: PublicChatMessage[]; businessHours?: BusinessHours; error?: string };
+      const result = await readApiJson(response) as { message?: PublicChatMessage; autoReply?: PublicChatMessage | null; autoReplies?: PublicChatMessage[]; businessHours?: BusinessHours; error?: string };
       if (!response.ok || !result.message) throw new Error(result.error || "تعذّر إرسال الرسالة");
       const automated = result.autoReplies ?? (result.autoReply ? [result.autoReply] : []);
       setMessages((items) => [...items, result.message!, ...automated.filter((reply) => !items.some((item) => item.id === reply.id))]);
@@ -153,11 +156,11 @@ export default function LiveChatWidget() {
     } finally { setSending(false); }
   }
 
-  async function requestVideoInterview(){setVideoBusy(true);setError("");try{const response=await fetch("/api/video-interviews",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});const result=await response.json()as{interview?:PublicVideoInterview;businessHours?:BusinessHours;error?:string};if(!response.ok||!result.interview)throw new Error(result.error||"تعذّر طلب المقابلة المرئية");setVideoInterview(result.interview);if(result.businessHours)setBusinessHours(result.businessHours)}catch(videoError){setError(videoError instanceof Error?videoError.message:"تعذّر طلب المقابلة المرئية")}finally{setVideoBusy(false)}}
+  async function requestVideoInterview(){setVideoBusy(true);setError("");try{const response=await fetch("/api/video-interviews",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});const result=await readApiJson(response)as{interview?:PublicVideoInterview;businessHours?:BusinessHours;error?:string};if(!response.ok||!result.interview)throw new Error(result.error||"تعذّر طلب المقابلة المرئية");setVideoInterview(result.interview);if(result.businessHours)setBusinessHours(result.businessHours)}catch(videoError){setError(videoError instanceof Error?videoError.message:"تعذّر طلب المقابلة المرئية")}finally{setVideoBusy(false)}}
 
-  async function endConversation(){if(!window.confirm("هل تريد إنهاء المحادثة والانتقال إلى التقييم؟"))return;setSending(true);setError("");try{const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"end"})});const result=await response.json()as{conversation?:PublicConversation;error?:string};if(!response.ok||!result.conversation)throw new Error(result.error||"تعذّر إنهاء المحادثة");setConversation(current=>current?{...current,...result.conversation}:current)}catch(endError){setError(endError instanceof Error?endError.message:"تعذّر إنهاء المحادثة")}finally{setSending(false)}}
+  async function endConversation(){if(!window.confirm("هل تريد إنهاء المحادثة والانتقال إلى التقييم؟"))return;setSending(true);setError("");try{const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"end"})});const result=await readApiJson(response)as{conversation?:PublicConversation;error?:string};if(!response.ok||!result.conversation)throw new Error(result.error||"تعذّر إنهاء المحادثة");setConversation(current=>current?{...current,...result.conversation}:current)}catch(endError){setError(endError instanceof Error?endError.message:"تعذّر إنهاء المحادثة")}finally{setSending(false)}}
 
-  async function submitRating(event:FormEvent<HTMLFormElement>,channel:"chat"|"video"){event.preventDefault();setRatingBusy(true);setError("");try{const values=Object.fromEntries(new FormData(event.currentTarget));const endpoint=channel==="chat"?"/api/chat":"/api/video-interviews";const response=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"rate",...(channel==="video"?{interviewId:videoInterview?.id}:{}),...values})});const result=await response.json()as{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر إرسال التقييم");if(channel==="chat")setConversation(current=>current?{...current,ratingSubmitted:true}:current);else setVideoInterview(null)}catch(ratingError){setError(ratingError instanceof Error?ratingError.message:"تعذّر إرسال التقييم")}finally{setRatingBusy(false)}}
+  async function submitRating(event:FormEvent<HTMLFormElement>,channel:"chat"|"video"){event.preventDefault();setRatingBusy(true);setError("");try{const values=Object.fromEntries(new FormData(event.currentTarget));const endpoint=channel==="chat"?"/api/chat":"/api/video-interviews";const response=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"rate",...(channel==="video"?{interviewId:videoInterview?.id}:{}),...values})});const result=await readApiJson(response)as{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر إرسال التقييم");if(channel==="chat")setConversation(current=>current?{...current,ratingSubmitted:true}:current);else setVideoInterview(null)}catch(ratingError){setError(ratingError instanceof Error?ratingError.message:"تعذّر إرسال التقييم")}finally{setRatingBusy(false)}}
 
   return <div className={`live-chat ${open ? "open" : ""}`}>
     {open && <section ref={dialogRef} className="chat-window" role="dialog" aria-modal="false" aria-label="محادثة مباشرة مع شركة دالي">

@@ -34,6 +34,8 @@ import TaskCenter, { GlobalTaskReminder } from "./TaskCenter";
 import ContractualDocumentsWorkspace from "./ContractualDocumentsWorkspace";
 import LetterPdfLibrary from "./LetterPdfLibrary";
 import { defaultWorkforceContractClauses, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
+import { ANNUAL_CONTRACT_MONTHS, annualContractEndDate, annualInstallmentPercentages } from "@/lib/payment-schedules";
+import { readApiJson } from "@/lib/client-api";
 
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
@@ -425,7 +427,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const refreshNotifications = useCallback(async (silent = false) => {
     try {
       const response = await fetch("/api/portal/notifications", { cache: "no-store" });
-      const result = await response.json() as { notifications?: PortalNotification[]; error?: string };
+      const result = await readApiJson(response) as { notifications?: PortalNotification[]; error?: string };
       if (!response.ok || !result.notifications) throw new Error(result.error || "تعذّر تحديث الإشعارات");
       setNotifications(result.notifications);
     } catch (error) {
@@ -447,7 +449,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     try {
       const params = full ? "" : `?afterMessageId=${latestConversationMessageId.current}&updatedAfter=${encodeURIComponent(latestConversationUpdatedAt.current)}`;
       const response = await fetch(`/api/portal/conversations${params}`, { cache: "no-store" });
-      const result = await response.json() as { conversations?: VisitorConversation[]; messages?: VisitorMessage[]; businessHours?: BusinessHours; chatAutomation?: ChatAutomationConfig; delta?: boolean; error?: string };
+      const result = await readApiJson(response) as { conversations?: VisitorConversation[]; messages?: VisitorMessage[]; businessHours?: BusinessHours; chatAutomation?: ChatAutomationConfig; delta?: boolean; error?: string };
       if (!response.ok || !result.conversations || !result.messages || !result.businessHours) throw new Error(result.error || "تعذّر تحديث المحادثات");
       setConversations((current) => result.delta ? [...result.conversations!, ...current.filter((item) => !result.conversations!.some((changed) => changed.id === item.id))].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 100) : result.conversations!);
       setConversationMessages((current) => result.delta ? [...current, ...result.messages!.filter((item) => !current.some((existing) => existing.id === item.id))].slice(-1600) : result.messages!);
@@ -472,7 +474,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setSelectedConversationId(id);
     try {
       const response = await fetch(`/api/portal/conversations?conversationId=${encodeURIComponent(id)}`, { cache: "no-store" });
-      const result = await response.json() as { messages?: VisitorMessage[] };
+      const result = await readApiJson(response) as { messages?: VisitorMessage[] };
       if (response.ok && result.messages) {
         setConversationMessages((items) => [...items.filter((item) => item.conversationId !== id), ...result.messages!]);
         if (result.messages.length) latestConversationMessageId.current = Math.max(latestConversationMessageId.current, ...result.messages.map((item) => item.id));
@@ -498,7 +500,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ conversationId, body }),
       });
-      const result = await response.json() as { conversation?: VisitorConversation; message?: VisitorMessage; error?: string };
+      const result = await readApiJson(response) as { conversation?: VisitorConversation; message?: VisitorMessage; error?: string };
       if (!response.ok || !result.conversation || !result.message) throw new Error(result.error || "تعذّر إرسال الرد");
       setConversations((items) => items.map((item) => item.id === conversationId ? { ...item, ...result.conversation } : item));
       setConversationMessages((items) => [...items, result.message as VisitorMessage]);
@@ -517,7 +519,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "status", conversationId, status }),
       });
-      const result = await response.json() as { conversation?: VisitorConversation; error?: string };
+      const result = await readApiJson(response) as { conversation?: VisitorConversation; error?: string };
       if (!response.ok || !result.conversation) throw new Error(result.error || "تعذّر تحديث المحادثة");
       setConversations((items) => items.map((item) => item.id === conversationId ? { ...item, ...result.conversation } : item));
       notify(status === "closed" ? "تم إغلاق المحادثة." : "تم تحديث حالة المحادثة.");
@@ -555,7 +557,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "settings", config, automation }),
       });
-      const result = await response.json() as { businessHours?: BusinessHours; chatAutomation?: ChatAutomationConfig; error?: string };
+      const result = await readApiJson(response) as { businessHours?: BusinessHours; chatAutomation?: ChatAutomationConfig; error?: string };
       if (!response.ok || !result.businessHours || !result.chatAutomation) throw new Error(result.error || "تعذّر حفظ إعدادات المحادثة");
       setBusinessHours(result.businessHours);
       setChatAutomation(result.chatAutomation);
@@ -573,7 +575,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, ids }),
       });
-      const result = await response.json() as { notifications?: PortalNotification[]; error?: string };
+      const result = await readApiJson(response) as { notifications?: PortalNotification[]; error?: string };
       if (!response.ok || !result.notifications) throw new Error(result.error || "تعذّر تحديث الإشعارات");
       setNotifications(result.notifications);
     } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تحديث الإشعارات."); }
@@ -605,7 +607,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const result = await response.json() as { reply?: WorkforceRequestReply | null; request?: WorkforceRequest; error?: string };
+      const result = await readApiJson(response) as { reply?: WorkforceRequestReply | null; request?: WorkforceRequest; error?: string };
       if (result.reply) setRequestReplies((items) => [result.reply as WorkforceRequestReply, ...items.filter((item) => item.id !== result.reply!.id)]);
       if (!response.ok || !result.reply || !result.request) throw new Error(result.error || "تعذّر إرسال الرد");
       setRequests((items) => items.map((item) => item.id === requestId ? result.request as WorkforceRequest : item));
@@ -621,7 +623,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     const data = Object.fromEntries(new FormData(form).entries());
     try {
       const response = await fetch("/api/portal/records", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entity, data }) });
-      const result = await response.json() as { record?: EmployeeRecord | FinanceRecord | LegalRecord | WorkerRecord; error?: string };
+      const result = await readApiJson(response) as { record?: EmployeeRecord | FinanceRecord | LegalRecord | WorkerRecord; error?: string };
       if (!response.ok || !result.record) throw new Error(result.error || "تعذّر حفظ السجل");
       if (entity === "employees") setEmployees((items) => [result.record as EmployeeRecord, ...items]);
       if (entity === "finance") setFinance((items) => [result.record as FinanceRecord, ...items]);
@@ -636,7 +638,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy("create-employees");
     try {
       const response = await fetch("/api/portal/employees", { method: "POST", body: new FormData(form) });
-      const result = await response.json() as { employee?: EmployeeRecord; error?: string };
+      const result = await readApiJson(response) as { employee?: EmployeeRecord; error?: string };
       if (!response.ok || !result.employee) throw new Error(result.error || "تعذّر إنشاء ملف الموظف");
       setEmployees(items => [result.employee!, ...items]);
       setModal(null); notify("تم إنشاء ملف الموظف وربطه بالمستخدم والموارد البشرية والرواتب.");
@@ -649,7 +651,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy(`employee-update-${id}`);
     try {
       const response = await fetch("/api/portal/employees", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...data }) });
-      const result = await response.json() as { employee?: EmployeeRecord; error?: string };
+      const result = await readApiJson(response) as { employee?: EmployeeRecord; error?: string };
       if (!response.ok || !result.employee) throw new Error(result.error || "تعذر تحديث الموظف");
       setEmployees(items => items.map(item => item.id === id ? result.employee! : item));
       notify("تم تحديث الكفالة والاستحقاقات النظامية للموظف.");
@@ -663,7 +665,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy(`employee-delete-${id}`);
     try {
       const response = await fetch(`/api/portal/employees?id=${id}`, { method: "DELETE" });
-      const result = await response.json() as { success?: boolean; error?: string };
+      const result = await readApiJson(response) as { success?: boolean; error?: string };
       if (!response.ok || !result.success) throw new Error(result.error || "تعذر حذف الموظف");
       setEmployees(items => items.filter(item => item.id !== id));
       notify("حُذف الموظف من السجل النشط مع حفظ تاريخه المالي والوظيفي.");
@@ -685,7 +687,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         for(const requirement of requirementsForProfession(String(source.get("profession")||"")))payload.set(`requirement:${requirement.code}`,source.get(`requirement:${requirement.code}:${index}`) as FormDataEntryValue);
         for(const file of source.getAll(`extraCertificates:${index}`))payload.append("extraCertificates",file);
         const response = await fetch("/api/portal/workers", { method: "POST", body: payload });
-        const result = await response.json() as { worker?: WorkerRecord; attachments?: WorkerAttachment[]; error?: string };
+        const result = await readApiJson(response) as { worker?: WorkerRecord; attachments?: WorkerAttachment[]; error?: string };
         if (!response.ok || !result.worker || !result.attachments) throw new Error(`العامل ${index+1}: ${result.error || "تعذّر إنشاء الملف"}`);
         createdWorkers.push(result.worker);createdAttachments.push(...result.attachments);
         setWorkers((items)=>[result.worker as WorkerRecord,...items]);setWorkerAttachments((items)=>[...(result.attachments as WorkerAttachment[]),...items]);
@@ -700,7 +702,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     const data = new FormData(form); data.set("workerId", String(workerId));
     try {
       const response = await fetch("/api/portal/workers/attachments", { method: "POST", body: data });
-      const result = await response.json() as { attachment?: WorkerAttachment; error?: string };
+      const result = await readApiJson(response) as { attachment?: WorkerAttachment; error?: string };
       if (!response.ok || !result.attachment) throw new Error(result.error || "تعذّر رفع الشهادة");
       setWorkerAttachments((items) => [result.attachment as WorkerAttachment, ...items]);
       form.reset(); notify("تمت إضافة الشهادة إلى ملف العامل.");
@@ -712,7 +714,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy(`${entity}-${id}`);
     try {
       const response = await fetch("/api/portal/records", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ entity, id, status }) });
-      const result = await response.json() as { record?: EmployeeRecord | FinanceRecord | LegalRecord | WorkerRecord; error?: string };
+      const result = await readApiJson(response) as { record?: EmployeeRecord | FinanceRecord | LegalRecord | WorkerRecord; error?: string };
       if (!response.ok || !result.record) throw new Error(result.error || "تعذّر تحديث السجل");
       if (entity === "employees") setEmployees((items) => items.map((item) => item.id === id ? result.record as EmployeeRecord : item));
       if (entity === "finance") setFinance((items) => items.map((item) => item.id === id ? result.record as FinanceRecord : item));
@@ -728,7 +730,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     try {
       const current = requests.find((item) => item.id === id);
       const response = await fetch("/api/portal/requests", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, status, version: current?.version }) });
-      const data = await response.json() as { request?: WorkforceRequest };
+      const data = await readApiJson(response) as { request?: WorkforceRequest };
       if (!response.ok || !data.request) throw new Error();
       setRequests((items) => items.map((item) => item.id === id ? data.request as WorkforceRequest : item));
       notify("تم تحديث حالة الطلب.");
@@ -739,7 +741,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy(`user-${email}`);
     try {
       const response = await fetch("/api/portal/users", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, role, department, status, reason }) });
-      const data = await response.json() as { user?: PortalUser; error?: string };
+      const data = await readApiJson(response) as { user?: PortalUser; error?: string };
       if (!response.ok || !data.user) throw new Error(data.error || "تعذّر تحديث صلاحية المستخدم.");
       setUsers((items) => items.map((item) => item.email === email ? data.user as PortalUser : item));
       notify("تم تحديث الصلاحية وإبطال الجلسات السابقة للمستخدم.");
@@ -751,7 +753,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     try {
       const payload = Object.fromEntries(new FormData(form).entries());
       const response = await fetch("/api/portal/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-      const data = await response.json() as { user?: PortalUser; error?: string };
+      const data = await readApiJson(response) as { user?: PortalUser; error?: string };
       if (!response.ok || !data.user) throw new Error(data.error || "تعذّرت إضافة المستخدم.");
       setUsers((items) => [data.user as PortalUser, ...items]);
       setUserModal(false);
@@ -764,7 +766,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy("upload-document");
     try {
       const response = await fetch("/api/portal/documents", { method: "POST", body: new FormData(form) });
-      const result = await response.json() as { document?: CompanyDocument; error?: string };
+      const result = await readApiJson(response) as { document?: CompanyDocument; error?: string };
       if (!response.ok || !result.document) throw new Error(result.error || "تعذّر رفع المستند");
       setDocuments((items) => [result.document as CompanyDocument, ...items]);
       setDocumentModal(null); notify("تم رفع المستند وحفظه في مركز المستندات.");
@@ -778,7 +780,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     if (data.get("documentType") === "workforce_contract" && data.get("endDate")) data.set("expiryDate", String(data.get("endDate")));
     try {
       const response = await fetch("/api/portal/documents/generate", { method: "POST", body: data });
-      const result = await response.json() as {
+      const result = await readApiJson(response) as {
         document?: CompanyDocument; contract?: WorkforceContract | null; professions?: ContractProfession[]; assignments?: ContractAssignment[];
         workers?: WorkerRecord[]; financialRecord?: FinanceRecord | null;
         capacity?: Array<{ profession: string; requiredCount: number; selectedCount: number; registeredCount: number; availableCount: number; registeredShortage: number; availableShortage: number; unassignedCount: number }> | null;
@@ -815,7 +817,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
       const response = await fetch(`/api/portal/contracts/${contractId}/workers`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contractProfessionId, workerId }),
       });
-      const result = await response.json() as { assignment?: ContractAssignment; worker?: WorkerRecord; error?: string };
+      const result = await readApiJson(response) as { assignment?: ContractAssignment; worker?: WorkerRecord; error?: string };
       if (!response.ok || !result.assignment || !result.worker) throw new Error(result.error || "تعذّر إسناد العامل");
       setContractAssignments((items) => [result.assignment as ContractAssignment, ...items]);
       setWorkers((items) => items.map((item) => item.id === result.worker!.id ? result.worker as WorkerRecord : item));
@@ -830,7 +832,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
       const response = await fetch(`/api/portal/contracts/${contractId}/workers`, {
         method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ assignmentId }),
       });
-      const result = await response.json() as { assignment?: ContractAssignment; worker?: WorkerRecord; error?: string };
+      const result = await readApiJson(response) as { assignment?: ContractAssignment; worker?: WorkerRecord; error?: string };
       if (!response.ok || !result.assignment || !result.worker) throw new Error(result.error || "تعذّر إنهاء الإسناد");
       setContractAssignments((items) => items.map((item) => item.id === result.assignment!.id ? result.assignment as ContractAssignment : item));
       setWorkers((items) => items.map((item) => item.id === result.worker!.id ? result.worker as WorkerRecord : item));
@@ -843,7 +845,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy(`contract-status-${contractId}`);
     try {
       const response = await fetch(`/api/portal/contracts/${contractId}/status`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, reason }) });
-      const result = await response.json() as { contract?: WorkforceContract; error?: string };
+      const result = await readApiJson(response) as { contract?: WorkforceContract; error?: string };
       if (!response.ok || !result.contract) throw new Error(result.error || "تعذّر تحديث حالة العقد");
       setContracts((items) => items.map((item) => item.id === contractId ? result.contract as WorkforceContract : item));
       router.refresh();
@@ -861,7 +863,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy(`contract-edit-${contract.id}`);
     try {
       const response = await fetch(`/api/portal/contracts/${contract.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ clientName, title, workSite, startDate, endDate }) });
-      const result = await response.json() as { contract?: WorkforceContract; error?: string };
+      const result = await readApiJson(response) as { contract?: WorkforceContract; error?: string };
       if (!response.ok || !result.contract) throw new Error(result.error || "تعذّر تعديل العقد");
       setContracts(items => items.map(item => item.id === contract.id ? result.contract as WorkforceContract : item));
       notify("تم تعديل العقد وإعادته للمسودة؛ يلزم اعتماد المالك مجددًا.");
@@ -874,7 +876,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy(`contract-delete-${contract.id}`);
     try {
       const response = await fetch(`/api/portal/contracts/${contract.id}`, { method: "DELETE" });
-      const result = await response.json() as { deleted?: boolean; error?: string };
+      const result = await readApiJson(response) as { deleted?: boolean; error?: string };
       if (!response.ok || !result.deleted) throw new Error(result.error || "تعذّر حذف العقد");
       setContracts(items => items.filter(item => item.id !== contract.id));
       setContractProfessions(items => items.filter(item => item.contractId !== contract.id));
@@ -895,7 +897,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     const data = new FormData(form); data.set("slot", slot);
     try {
       const response = await fetch("/api/portal/company-assets", { method: "POST", body: data });
-      const result = await response.json() as { asset?: CompanyAsset; error?: string };
+      const result = await readApiJson(response) as { asset?: CompanyAsset; error?: string };
       if (!response.ok || !result.asset) throw new Error(result.error || "تعذّر حفظ الملف");
       setAssets((items) => [result.asset as CompanyAsset, ...items.filter((item) => item.slot !== slot)]);
       form.reset(); notify(slot === "stamp" ? "تم اعتماد ختم الشركة." : "تم اعتماد توقيع الشركة.");
@@ -907,7 +909,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     setBusy(`share-${id}`);
     try {
       const response = await fetch("/api/portal/documents/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ documentId: id }) });
-      const result = await response.json() as { shareUrl?: string; error?: string };
+      const result = await readApiJson(response) as { shareUrl?: string; error?: string };
       if (!response.ok || !result.shareUrl) throw new Error(result.error || "تعذّر إنشاء الرابط");
       try { await navigator.clipboard.writeText(result.shareUrl); notify("تم نسخ رابط مشاركة صالح لمدة 7 أيام."); }
       catch { window.prompt("انسخ رابط المشاركة — صالح لمدة 7 أيام", result.shareUrl); }
@@ -1166,7 +1168,7 @@ function CreateUserModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: 
   const [roles,setRoles]=useState<Array<{roleKey:string;labelAr:string;description:string|null;active:boolean}>>([]);
   const [roleKey,setRoleKey]=useState("administrative_assistant");
   const [loadError,setLoadError]=useState("");
-  useEffect(()=>{let active=true;void fetch("/api/portal/role-definitions",{cache:"no-store"}).then(async response=>{const data=await response.json()as{roles?:Array<{roleKey:string;labelAr:string;description:string|null;active:boolean}>;error?:string};if(!response.ok)throw new Error(data.error||"تعذر تحميل الأدوار");if(active){const available=(data.roles||[]).filter(role=>role.active);setRoles(available);setRoleKey(current=>available.some(role=>role.roleKey===current)?current:available[0]?.roleKey||"")}}).catch(error=>{if(active)setLoadError(error instanceof Error?error.message:"تعذر تحميل الأدوار")});return()=>{active=false}},[]);
+  useEffect(()=>{let active=true;void fetch("/api/portal/role-definitions",{cache:"no-store"}).then(async response=>{const data=await readApiJson(response)as{roles?:Array<{roleKey:string;labelAr:string;description:string|null;active:boolean}>;error?:string};if(!response.ok)throw new Error(data.error||"تعذر تحميل الأدوار");if(active){const available=(data.roles||[]).filter(role=>role.active);setRoles(available);setRoleKey(current=>available.some(role=>role.roleKey===current)?current:available[0]?.roleKey||"")}}).catch(error=>{if(active)setLoadError(error instanceof Error?error.message:"تعذر تحميل الأدوار")});return()=>{active=false}},[]);
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إضافة مستخدم" onClick={onClose}/><section className="record-modal create-user-modal" role="dialog" aria-modal="true" aria-label="إضافة مستخدم"><div className="drawer-head"><div><span>إدارة المستخدمين</span><h2>إضافة مستخدم جديد</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}>
     <label>الاسم الكامل<input name="displayName" required minLength={3} maxLength={160} autoComplete="name"/></label>
@@ -1220,7 +1222,7 @@ function GlobalPortalSearch({ value, setValue, onSelect }: { value: string; setV
       setLoading(true);
       try {
         const response = await fetch(`/api/portal/search?q=${encodeURIComponent(query)}`, { cache: "no-store", signal: controller.signal });
-        const result = await response.json() as { results?: GlobalSearchResult[] };
+        const result = await readApiJson(response) as { results?: GlobalSearchResult[] };
         if (response.ok) setResults(result.results || []);
       } catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) setResults([]); }
       finally { setLoading(false); }
@@ -1353,7 +1355,7 @@ function PdfDownloadButton({ href, title, label, icon, inline = false }: { href:
       }
       const response = await fetch(requestUrl, { credentials: "same-origin" });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({})) as { error?: string };
+        const data = await readApiJson(response).catch(() => ({})) as { error?: string };
         throw new Error(data.error || "تعذّر تجهيز الملف حاليًا");
       }
       const url = URL.createObjectURL(await response.blob());
@@ -1412,7 +1414,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
   const [selectedQuoteId,setSelectedQuoteId]=useState(initialQuoteId?String(initialQuoteId):"");
   const [quantityMode,setQuantityMode]=useState<"fixed"|"open">("fixed");
   const [seasonType,setSeasonType]=useState<"regular"|"ramadan"|"hajj">("regular");
-  const [firstPaymentDueDate]=useState("");
+  const [contractStartDate,setContractStartDate]=useState("");
   const [contractAmount,setContractAmount]=useState("");
   const [contractVatEnabled,setContractVatEnabled]=useState(true);
   const [contractVatRate,setContractVatRate]=useState("15");
@@ -1481,32 +1483,52 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
     });
   }
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+  function validateAndSetStep(target: 1 | 2 | 3 | 4) {
+    if (target <= step) { setStep(target); return; }
+    if (target > step + 1) return;
+    const form = document.querySelector<HTMLFormElement>(".issue-modal form");
+    const requiredFields = form ? Array.from(form.querySelectorAll("input[required], select[required], textarea[required]")).filter((field) => field instanceof HTMLElement && (!(field instanceof HTMLInputElement) || field.type !== "hidden") && field.offsetParent !== null) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> : [];
+    const invalid = requiredFields.find((field) => !field.checkValidity());
+    if (invalid) { invalid.reportValidity(); invalid.focus(); return; }
+    if (step === 1 && seasonType === "regular" && !annualEndDate) {
+      const start = form?.elements.namedItem("startDate");
+      if (start instanceof HTMLInputElement) { start.setCustomValidity("حدد تاريخ بداية العقد ليحسب النظام تاريخ النهاية السنوي."); start.reportValidity(); start.setCustomValidity(""); start.focus(); }
+      return;
+    }
+    setStep(target);
+  }
 
   function changeContractDirection(value:WorkforceContractDirection){setContractDirection(value);setContractClauses(defaultWorkforceContractClauses(value).map((item,index)=>({...item,key:`clause-${Date.now()}-${index}`})));}
   function updateContractClause(key:string,field:keyof WorkforceContractClause,value:string|boolean){setContractClauses(items=>items.map(item=>item.key===key?{...item,[field]:value}:item));}
   function addContractClause(){setContractClauses(items=>[...items,{key:`clause-${Date.now()}`,section:"بنود إضافية",sectionEn:"Additional Terms",title:"",titleEn:"",body:"",bodyEn:"",included:true}]);}
-  async function translateContractClauses(){const active=contractClauses.filter(item=>item.included);if(!active.length)return;setTranslatingClauses(true);try{const values=active.flatMap(item=>[item.section,item.title,item.body]);const response=await fetch("/api/portal/translate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({values})});const result=await response.json() as {translated?:string[];error?:string};if(!response.ok||!result.translated)throw new Error(result.error||"تعذرت الترجمة");let cursor=0;const translatedByKey=new Map(active.map(item=>[item.key,{sectionEn:result.translated![cursor++],titleEn:result.translated![cursor++],bodyEn:result.translated![cursor++]}]));setContractClauses(items=>items.map(item=>({...item,...translatedByKey.get(item.key)})));}catch(error){window.alert(error instanceof Error?error.message:"تعذرت الترجمة")}finally{setTranslatingClauses(false)}}
+  async function translateContractClauses(){const active=contractClauses.filter(item=>item.included);if(!active.length)return;setTranslatingClauses(true);try{const values=active.flatMap(item=>[item.section,item.title,item.body]);const response=await fetch("/api/portal/translate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({values})});const result=await readApiJson(response) as {translated?:string[];error?:string};if(!response.ok||!result.translated)throw new Error(result.error||"تعذرت الترجمة");let cursor=0;const translatedByKey=new Map(active.map(item=>[item.key,{sectionEn:result.translated![cursor++],titleEn:result.translated![cursor++],bodyEn:result.translated![cursor++]}]));setContractClauses(items=>items.map(item=>({...item,...translatedByKey.get(item.key)})));}catch(error){window.alert(error instanceof Error?error.message:"تعذرت الترجمة")}finally{setTranslatingClauses(false)}}
 
   function applyQuote(event: React.ChangeEvent<HTMLSelectElement>){const id=event.target.value;setSelectedQuoteId(id);const quote=convertibleQuotes.find(item=>String(item.id)===id);if(!quote)return;setQuantityMode(quote.quantityMode);setSeasonType(quote.seasonType);if(quote.paymentScheduleJson){try{const rows=JSON.parse(quote.paymentScheduleJson) as Array<{title:string;dueDate:string;percentageBps:number}>;setPayments(rows.map((row,index)=>({key:`quote-payment-${index}`,title:row.title,dueDate:row.dueDate,percentage:row.percentageBps/100})))}catch{setPayments([])}}else setPayments([]);setContractAmount(String(quote.subtotalHalalas/100));setContractVatEnabled(quote.vatRateBps>0);setContractVatRate(String(quote.vatRateBps/100));if(quote.items.length)setProfessions(quote.items.map((item,index)=>({key:`quote-profession-${index}`,profession:item.profession,requiredCount:quote.quantityMode==="open"?0:Math.max(1,item.quantity),unitSalary:(item.unitPriceHalalas||0)/100,sponsorshipType:item.sponsorshipType||"dali",sponsorName:item.sponsorName||"",ajirContractStatus:item.ajirContractStatus||"not_applicable"})));window.setTimeout(()=>{const form=event.target.form;if(!form)return;const client=form.elements.namedItem("clientName");if(client instanceof HTMLInputElement)client.value=quote.clientName;},0);}
+  const annualEndDate = seasonType === "regular" ? annualContractEndDate(contractStartDate) : "";
+  const annualMonthlySubtotalHalalas = professions.reduce((sum, item) => sum + (quantityMode === "fixed" ? item.requiredCount : 0) * Math.round((item.unitSalary || 0) * 100), 0);
+  const annualVatRateBps = contractVatEnabled ? Math.round((Number(contractVatRate) || 0) * 100) : 0;
+  const annualMonthlyVatHalalas = Math.round(annualMonthlySubtotalHalalas * annualVatRateBps / 10000);
+  const annualPercentages = annualInstallmentPercentages(ANNUAL_CONTRACT_MONTHS);
+  const annualInstallments = Array.from({ length: ANNUAL_CONTRACT_MONTHS }, (_, index) => ({ number: index + 1, percentageBps: annualPercentages[index], subtotalHalalas: annualMonthlySubtotalHalalas, vatHalalas: annualMonthlyVatHalalas, amountHalalas: annualMonthlySubtotalHalalas + annualMonthlyVatHalalas }));
   const serializedProfessions = JSON.stringify(professions.map((item) => ({ profession: item.profession === "أخرى" ? (item.customProfession || "").trim() : item.profession, requiredCount: quantityMode==="open"?0:item.requiredCount, unitSalary:item.unitSalary || 0, sponsorshipType:item.sponsorshipType, sponsorName:item.sponsorshipType==="other"?item.sponsorName:null, ajirContractStatus:item.sponsorshipType==="dali"?"not_applicable":item.ajirContractStatus, workerIds: quantityMode==="open"?[]:(selectedWorkers[item.key] || []) })));
   const serializedPayments=JSON.stringify(quantityMode==="open"?[]:payments.map(({title,dueDate,percentage})=>({title,dueDate,percentage})));
   const serializedClauses=JSON.stringify(contractClauses.map(({section,sectionEn,title,titleEn,body,bodyEn,included})=>({section,sectionEn,title,titleEn,body,bodyEn,included})));
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إصدار المستند" onClick={onClose}/><section className="record-modal document-modal issue-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف PDF رسمي"><div className="drawer-head"><div><span>الإصدار الرسمي</span><h2>{isContract ? "إنشاء عقد توفير عمالة" : "إنشاء ملف PDF"}</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div>
     {!assetsReady && <div className="asset-required"><Icon name="stamp"/><p><strong>الختم والتوقيع غير مكتملين</strong><span>يجب أن يرفع مدير النظام الأصلين المعتمدين قبل الإصدار.</span></p></div>}
-    {isContract && <div className="contract-wizard-steps"><button type="button" className={step === 1 ? "active" : "done"} onClick={() => setStep(1)}>1 بيانات العقد</button><button type="button" className={step === 2 ? "active" : step > 2 ? "done" : ""} onClick={() => setStep(2)}>2 المهن والأعداد</button><button type="button" className={step === 3 ? "active" : step > 3 ? "done" : ""} onClick={() => setStep(3)}>3 اختيار العمالة</button><button type="button" className={step === 4 ? "active" : ""} onClick={() => setStep(4)}>4 الدفعات والمرفقات</button></div>}
+    {isContract && <div className="contract-wizard-steps"><button type="button" className={step === 1 ? "active" : "done"} onClick={() => validateAndSetStep(1)}>1 بيانات العقد</button><button type="button" className={step === 2 ? "active" : step > 2 ? "done" : ""} onClick={() => validateAndSetStep(2)}>2 المهن والأعداد</button><button type="button" className={step === 3 ? "active" : step > 3 ? "done" : ""} onClick={() => validateAndSetStep(3)}>3 اختيار العمالة</button><button type="button" className={step === 4 ? "active" : ""} onClick={() => validateAndSetStep(4)}>4 الدفعات والمرفقات</button></div>}
     <form className={`contract-quantity-${quantityMode}`} onSubmit={submit}>
       <input type="hidden" name="professions" value={serializedProfessions}/>
       <input type="hidden" name="paymentSchedule" value={serializedPayments}/>
       <input type="hidden" name="quantityMode" value={quantityMode}/>
       <input type="hidden" name="quoteVersionId" value={selectedQuoteId}/>
       {isContract&&<><input type="hidden" name="contractDirection" value={contractDirection}/><input type="hidden" name="contractClauses" value={serializedClauses}/></>}
-      {isContract&&<><input type="hidden" name="seasonType" value={seasonType}/><input type="hidden" name="firstPaymentDueDate" value={seasonType==="regular"?firstPaymentDueDate:""}/></>}
+      {isContract&&<><input type="hidden" name="seasonType" value={seasonType}/><input type="hidden" name="firstPaymentDueDate" value=""/></>}
       {isContract&&step===1&&<div className="contract-billing-controls span-two"><label>نوع التعاقد<select value={seasonType} onChange={event=>setSeasonType(event.target.value as "regular"|"ramadan"|"hajj")}><option value="regular">عقود سنوية بدفعات شهرية</option><option value="ramadan">موسم رمضان — دفعات بالنسب</option><option value="hajj">موسم الحج — دفعات بالنسب</option></select></label>{seasonType==="regular"&&<div className="billing-mode-summary success"><b>موعد أول دفعة تلقائي</b><span>تستحق بعد شهر كامل من اعتماد العقد، ثم تتكرر الدفعات شهريًا. يمكن للمالية تعديل المواعيد قبل إصدار الفاتورة.</span></div>}<p className="form-hint span-two">في العقود السنوية تُنشأ الدفعات شهرياً من رواتب المهن وتبدأ بعد شهر من الاعتماد. في الحج ورمضان تُستخدم نسب جدول الدفعات ويجب أن يكون مجموعها 100٪.</p></div>}
       <div className={`issue-form-step span-two ${!isContract || step === 1 ? "visible" : ""}`}>
         <label>نوع المستند<select name="documentType" value={documentType} onChange={(event) => { setDocumentType(event.target.value); setStep(1); }}><option value="workforce_contract">عقد مقاولات لتوفير العمالة</option><option value="progress_claim">مستخلص أعمال</option><option value="invoice">فاتورة</option><option value="receipt">سند قبض</option><option value="payment_voucher">سند صرف</option></select></label>
         {isContract&&<><label className="span-two">اتجاه عقد العمالة<select value={contractDirection} onChange={event=>changeContractDirection(event.target.value as WorkforceContractDirection)} disabled={Boolean(selectedQuoteId)}><option value="dali_supplier">دالي مورّد العمالة — عقد إيراد مع عميل</option><option value="dali_purchaser">دالي مشتري العمالة — عقد تكلفة مع مورّد</option></select><small>يغير صفات الأطراف والبنود ومسار الدفعات والمحاسبة تلقائياً.</small></label>{contractDirection==="dali_supplier"&&<label className="span-two">عرض السعر المرتبط<select value={selectedQuoteId} onChange={applyQuote}><option value="">عقد مباشر — دون عرض سعر</option>{convertibleQuotes.map(quote=><option key={quote.id} value={quote.id}>{quote.quoteCode} — {quote.title} — {quote.quantityMode==="open"?"عدد مفتوح":"عدد محدد"}</option>)}</select></label>}{contractDirection==="dali_purchaser"&&<label className="span-two">طلب مندوب المشتريات المعتمد<select name="representativeRequestId" defaultValue=""><option value="">عقد شراء مباشر</option>{representativeRequests.filter(item=>item.requestType==="purchase").map(item=><option value={item.id} key={item.id}>{item.requestCode} — {item.title}</option>)}</select></label>}<label className="span-two">نطاق العدد<select value={quantityMode} onChange={event=>setQuantityMode(event.target.value as "fixed"|"open")} disabled={Boolean(selectedQuoteId)}><option value="fixed">عدد محدد — قيمة وجدول دفعات وضريبة</option><option value="open">عدد مفتوح — دون قيمة إجمالية، والضريبة عند الفوترة</option></select></label><label>مصدر العميل<select name="sourceRequestId" value={selectedSourceRequestId} onChange={event=>setSelectedSourceRequestId(event.target.value)} disabled={contractDirection==="dali_purchaser"}><option value="">{contractDirection==="dali_purchaser"?"مورّد مباشر أو طلب مندوب مشتريات":"عميل مباشر — غير قادم من الموقع"}</option>{requests.map(request=><option key={request.id} value={request.id}>{request.trackingCode} — {request.companyName||request.fullName}</option>)}</select><small>تُعبأ بيانات الطلب تلقائياً ويمكن تعديلها.</small></label><label>{contractDirection==="dali_purchaser"?"مندوب المشتريات المسؤول":"مندوب المبيعات المسؤول"}<select name="salesRepresentativeId" defaultValue=""><option value="">دون مندوب</option>{representatives.filter(item=>item.representativeType===(contractDirection==="dali_purchaser"?"purchasing":"sales")).map(item=><option key={item.id} value={item.id}>{item.representativeCode} — {item.fullName}</option>)}</select></label></>}
         <label>تاريخ الإصدار<input name="issueDate" required type="date" defaultValue={new Date().toISOString().slice(0, 10)}/></label><label>{isContract&&contractDirection==="dali_purchaser"?"اسم مورّد العمالة":"اسم العميل أو الجهة"}<input name="clientName" required maxLength={160}/></label><label>{isContract&&contractDirection==="dali_purchaser"?"السجل التجاري للمورّد":"السجل التجاري للعميل"}<input name="clientCr" required={isContract} maxLength={30} dir="ltr" placeholder={isContract ? "إلزامي للعقد" : "اختياري"}/></label><label>{isContract&&contractDirection==="dali_purchaser"?"الرقم الضريبي للمورّد":"الرقم الضريبي للعميل"}<input name="clientVat" required={isContract} maxLength={30} dir="ltr" placeholder={isContract ? "إلزامي للعقد" : "مطلوب عند تفعيل الضريبة"}/></label>{isContract&&<label className="span-two">{contractDirection==="dali_purchaser"?"العنوان الوطني للمورّد":"العنوان الوطني للعميل"}<input name="clientAddress" required maxLength={240} placeholder="العنوان الوطني المسجل للجهة المتعاقدة"/></label>}{!isContract&&<>{quantityMode==="fixed"&&<label>قيمة الخدمة قبل الضريبة<input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr"/></label>}<label>تطبيق ضريبة القيمة المضافة<select name="vatEnabled" defaultValue="true"><option value="false">بدون ضريبة</option><option value="true">تطبيق الضريبة</option></select></label><label>نسبة الضريبة %<input name="vatRate" type="number" min="0" max="100" step="0.01" defaultValue="15" dir="ltr"/></label></>}
-        {isContract ? <><label>موقع العمل<input name="workSite" required maxLength={180}/></label><label>بداية العقد<input name="startDate" required type="date"/></label><label>نهاية العقد<input name="endDate" required type="date"/></label></> : <><label>{documentType === "quotation" ? "صلاحية العرض حتى" : "تاريخ الاستحقاق / الانتهاء"}<input name="expiryDate" type="date" required={documentType === "quotation"}/></label>{["invoice", "receipt", "payment_voucher", "progress_claim"].includes(documentType) && <label className="span-two">العقد المرتبط<select name="linkedContractId" defaultValue=""><option value="">دون عقد محدد</option>{contracts.map((contract) => <option value={contract.id} key={contract.id}>{contract.referenceCode} — {contract.clientName}</option>)}</select></label>}</>}
+        {isContract ? <><label>موقع العمل<input name="workSite" required maxLength={180}/></label><label>بداية العقد<input name="startDate" required type="date" value={contractStartDate} onChange={event=>setContractStartDate(event.target.value)}/></label>{seasonType==="regular"?<><input name="endDate" type="hidden" value={annualEndDate}/><div className="annual-contract-period"><span>مدة العقد السنوي</span><strong>{annualEndDate?formatDate(annualEndDate):"تُحسب بعد تحديد تاريخ البداية"}</strong><small>يحسب النظام تاريخ النهاية تلقائيًا بعد 12 شهرًا ويظهره في العقد وملف PDF.</small></div></>:<label>نهاية العقد<input name="endDate" required type="date"/></label>}</> : <><label>{documentType === "quotation" ? "صلاحية العرض حتى" : "تاريخ الاستحقاق / الانتهاء"}<input name="expiryDate" type="date" required={documentType === "quotation"}/></label>{["invoice", "receipt", "payment_voucher", "progress_claim"].includes(documentType) && <label className="span-two">العقد المرتبط<select name="linkedContractId" defaultValue=""><option value="">دون عقد محدد</option>{contracts.map((contract) => <option value={contract.id} key={contract.id}>{contract.referenceCode} — {contract.clientName}</option>)}</select></label>}</>}
         <label className="span-two">التفاصيل والشروط<textarea name="details" required minLength={5} maxLength={4000} rows={6} placeholder={isContract ? "اكتب نطاق العمل، ساعات العمل، الالتزامات، وآلية الدفع..." : "اكتب بنود المستند وتفاصيل المبلغ والخدمة..."}/></label>
       </div>
 
@@ -1518,15 +1540,15 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
 
       {isContract&&<div className={`issue-form-step contract-final-step span-two ${step===4?"visible":""}`}>
         <section className="contract-final-card payment-plan-card">
-          <header className="contract-final-heading"><span><Icon name="finance"/></span><div><strong>خطة الفوترة والدفعات</strong><p>{quantityMode==="open"?"تُحسب القيمة والضريبة عند إصدار كل فاتورة حسب العمالة الفعلية.":seasonType==="regular"?"ينشئ النظام دفعات شهرية تلقائياً من رواتب المهن وتاريخ الاستحقاق المحدد.":"وزّع قيمة العقد على دفعات موسمية؛ يجب أن يكون مجموع النسب 100% قبل الإصدار."}</p></div></header>
+          <header className="contract-final-heading"><span><Icon name="finance"/></span><div><strong>خطة الفوترة والدفعات</strong><p>{quantityMode==="open"?"تُحسب القيمة والضريبة عند إصدار كل فاتورة حسب العمالة الفعلية.":seasonType==="regular"?"ينشئ النظام الدفعات الشهرية الاثنتي عشرة تلقائياً من رواتب المهن، وتُثبت مواعيدها عند اعتماد العقد.":"وزّع قيمة العقد على دفعات موسمية؛ يجب أن يكون مجموع النسب 100% قبل الإصدار."}</p></div></header>
           <div className="contract-tax-fields">
             {quantityMode==="fixed"&&seasonType!=="regular"&&<label>قيمة العقد قبل الضريبة<input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr" value={contractAmount} onChange={event=>setContractAmount(event.target.value)} readOnly={Boolean(selectedQuoteId)}/><small>{selectedQuoteId?"القيمة مطابقة لعرض السعر المرتبط":"تُوزّع هذه القيمة على الدفعات أدناه"}</small></label>}
             {selectedQuoteId&&<input type="hidden" name="vatEnabled" value={contractVatEnabled?"true":"false"}/>}<label>{quantityMode==="open"?"الضريبة عند الفوترة الفعلية":"تطبيق ضريبة القيمة المضافة"}<select name={selectedQuoteId?undefined:"vatEnabled"} value={contractVatEnabled?"true":"false"} onChange={event=>setContractVatEnabled(event.target.value==="true")} disabled={Boolean(selectedQuoteId)}><option value="false">بدون ضريبة</option><option value="true">تطبيق الضريبة</option></select></label>
             {contractVatEnabled&&<label>نسبة الضريبة %<input name="vatRate" required type="number" min="0.01" max="100" step="0.01" dir="ltr" value={contractVatRate} onChange={event=>setContractVatRate(event.target.value)} readOnly={Boolean(selectedQuoteId)}/></label>}
             {!contractVatEnabled&&<input type="hidden" name="vatRate" value="0"/>}
-            {quantityMode==="fixed"&&seasonType==="regular"&&<div className="calculated-contract-value"><strong>قيمة محسوبة تلقائياً</strong><span>عدد العمال × راتب العامل × أشهر العقد، وتبدأ الدفعة الأولى بعد شهر من الاعتماد.</span></div>}
+            {quantityMode==="fixed"&&seasonType==="regular"&&<div className="calculated-contract-value"><strong>قيمة محسوبة تلقائياً</strong><span>عدد العمال × راتب العامل × 12 شهرًا، وتبدأ الدفعة الأولى بعد شهر من اعتماد العقد.</span></div>}
           </div>
-          {quantityMode==="open"?<div className="billing-mode-summary neutral"><b>عقد بعدد مفتوح</b><span>لا تُطلب قيمة إجمالية أو نسب دفعات عند الإنشاء.</span></div>:seasonType==="regular"?<div className="billing-mode-summary success"><b>فوترة شهرية آلية</b><span>ستُربط كل دفعة برواتب العمالة والضريبة والنظام المالي وفق تاريخ أول استحقاق.</span></div>:<>
+          {quantityMode==="open"?<div className="billing-mode-summary neutral"><b>عقد بعدد مفتوح</b><span>لا تُطلب قيمة إجمالية أو نسب دفعات عند الإنشاء.</span></div>:seasonType==="regular"?<div className="annual-payment-plan"><div className="annual-payment-summary"><div><span>قيمة الدفعة الشهرية</span><strong>{formatMoney(annualMonthlySubtotalHalalas+annualMonthlyVatHalalas)}</strong><small>{contractVatEnabled?`تشمل ضريبة ${Number(contractVatRate)||0}%` : "بدون ضريبة"}</small></div><div><span>إجمالي السنة</span><strong>{formatMoney((annualMonthlySubtotalHalalas+annualMonthlyVatHalalas)*ANNUAL_CONTRACT_MONTHS)}</strong><small>{ANNUAL_CONTRACT_MONTHS} دفعة شهرية متساوية</small></div></div><div className="annual-payment-installments">{annualInstallments.map(installment=><article key={installment.number}><span>{installment.number}</span><div><strong>الدفعة الشهرية {installment.number}</strong><small>بعد {installment.number} شهر من اعتماد العقد</small></div><b>{formatMoney(installment.amountHalalas)}</b></article>)}</div><p>يحدد النظام تاريخ كل دفعة تلقائيًا عند اعتماد العقد، ثم يعكس الدفعات كاملة في المالية وملف PDF.</p></div>:<>
             <div className="payment-total-bar"><div><span>إجمالي التوزيع</span><strong>{payments.reduce((sum,item)=>sum+item.percentage,0).toFixed(2)}%</strong></div><meter min="0" max="100" value={Math.min(100,payments.reduce((sum,item)=>sum+item.percentage,0))}/><span className={Math.abs(payments.reduce((sum,item)=>sum+item.percentage,0)-100)<.01?"complete":"incomplete"}>{Math.abs(payments.reduce((sum,item)=>sum+item.percentage,0)-100)<.01?"مكتمل وجاهز":"يجب إكمال المجموع إلى 100٪"}</span></div>
             <div className="contract-payment-builder">{payments.map((payment,index)=><article key={payment.key}><span className="payment-index">{index+1}</span><label>اسم الدفعة<input required value={payment.title} onChange={event=>setPayments(items=>items.map(item=>item.key===payment.key?{...item,title:event.target.value}:item))} placeholder="مثال: الدفعة المقدمة"/></label><label>تاريخ الاستحقاق<input required type="date" value={payment.dueDate} onChange={event=>setPayments(items=>items.map(item=>item.key===payment.key?{...item,dueDate:event.target.value}:item))}/></label><label>النسبة من العقد<input required type="number" min="0.01" max="100" step="0.01" value={payment.percentage} onChange={event=>setPayments(items=>items.map(item=>item.key===payment.key?{...item,percentage:Number(event.target.value)}:item))}/><i>%</i></label>{payments.length>1&&<button className="remove-payment" type="button" onClick={()=>setPayments(items=>items.filter(item=>item.key!==payment.key))} aria-label={`حذف الدفعة ${index+1}`}>حذف</button>}</article>)}</div>
             <button className="add-payment-button" type="button" onClick={()=>setPayments(items=>[...items,{key:`payment-${Date.now()}`,title:`الدفعة ${items.length+1}`,dueDate:new Date().toISOString().slice(0,10),percentage:0}])}><Icon name="plus"/> إضافة دفعة جديدة</button>
@@ -1544,7 +1566,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
         </section>
       </div>}
 
-      <p className="form-hint span-two">سيُنشأ رقم مرجعي تلقائي، ويُحفظ الملف في المركز، ويُدرج الختم والتوقيع المعتمدان في النسخة الصادرة.</p><div className="modal-actions span-two">{isContract && step > 1 ? <button type="button" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>السابق</button> : <button type="button" onClick={onClose}>إلغاء</button>}{isContract && step < 4 ? <button className="admin-primary" type="button" onClick={() => setStep((step + 1) as 2 | 3 | 4)}>التالي</button> : <button className="admin-primary" type="submit" disabled={busy || !assetsReady || (isContract&&quantityMode==="fixed"&&seasonType!=="regular"&&Math.abs(payments.reduce((sum,item)=>sum+item.percentage,0)-100)>0.001)}>{busy ? "جارٍ الإصدار..." : isContract && totalShortage ? "إصدار العقد رغم العجز" : "إصدار واعتماد PDF"}</button>}</div>
+      <p className="form-hint span-two">سيُنشأ رقم مرجعي تلقائي، ويُحفظ الملف في المركز، ويُدرج الختم والتوقيع المعتمدان في النسخة الصادرة.</p><div className="modal-actions span-two">{isContract && step > 1 ? <button type="button" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>السابق</button> : <button type="button" onClick={onClose}>إلغاء</button>}{isContract && step < 4 ? <button className="admin-primary" type="button" onClick={() => validateAndSetStep((step + 1) as 2 | 3 | 4)}>التالي</button> : <button className="admin-primary" type="submit" disabled={busy || !assetsReady || (isContract&&quantityMode==="fixed"&&seasonType!=="regular"&&Math.abs(payments.reduce((sum,item)=>sum+item.percentage,0)-100)>0.001)}>{busy ? "جارٍ الإصدار..." : isContract && totalShortage ? "إصدار العقد رغم العجز" : "إصدار واعتماد PDF"}</button>}</div>
     </form>
   </section></div>;
 }
@@ -1672,7 +1694,7 @@ function WorkerDrawer({ worker, attachments, contracts, contractAssignments, can
   const activeAssignment = contractAssignments.find((item) => item.workerId === worker.id && item.status === "active");
   const activeContract = contracts.find((item) => item.id === activeAssignment?.contractId);
   function submitAttachment(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onUploadAttachment(worker.id, event.currentTarget); }
-  async function archiveWorker() { const reason=window.prompt("اكتب سبب حذف/أرشفة العامل (10 أحرف على الأقل)");if(!reason||reason.trim().length<10)return;const response=await fetch("/api/portal/workers",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:worker.id,reason})});const result=await response.json() as {error?:string};if(!response.ok){window.alert(result.error||"تعذر حذف العامل");return;}window.location.reload(); }
+  async function archiveWorker() { const reason=window.prompt("اكتب سبب حذف/أرشفة العامل (10 أحرف على الأقل)");if(!reason||reason.trim().length<10)return;const response=await fetch("/api/portal/workers",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:worker.id,reason})});const result=await readApiJson(response) as {error?:string};if(!response.ok){window.alert(result.error||"تعذر حذف العامل");return;}window.location.reload(); }
   return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="إغلاق ملف العامل" onClick={onClose}/><aside className="request-drawer worker-drawer" role="dialog" aria-modal="true" aria-label={`ملف العامل ${worker.fullName}`}><div className="drawer-head"><div><span>{worker.workerNumber}</span><h2>ملف العامل</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><div className="worker-profile-head">{photo ? <Image unoptimized src={`/api/portal/workers/attachments/${photo.id}?inline=1`} alt={`صورة ${worker.fullName}`} width={96} height={96}/> : <span>{initials(worker.fullName)}</span>}<div><h3>{worker.fullName}</h3><p>{worker.profession} · {worker.nationality}</p><p>{sponsorshipLabel(worker)}</p><small dir="ltr">إقامة: {worker.iqamaNumber || "غير مسجل"}</small></div><b className={`status-pill ${statusClass(worker.status)}`}>{recordStatus.workforce[worker.status] || worker.status}</b></div><div className="profile-completion"><div><strong>اكتمال الملف</strong><span>{profile.percent}%</span></div><p><i style={{ width: `${profile.percent}%` }}/></p><small>{profile.missing.length ? `متبقٍ ${profile.missing.length} مستند مهني` : "جميع متطلبات المهنة مكتملة"}</small></div>
     <div className="drawer-section worker-facts"><h3>البيانات التشغيلية والبنكية</h3><dl><div><dt>الجوال</dt><dd dir="ltr">{worker.mobile || "غير مسجل"}</dd></div><div><dt>البنك</dt><dd>{worker.bankName || "غير مسجل"}</dd></div><div><dt>رقم الآيبان</dt><dd dir="ltr">{worker.iban || "غير مسجل"}</dd></div><div><dt>انتهاء الإقامة</dt><dd className={daysUntil(worker.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(worker.iqamaExpiry)}</dd></div><div><dt>انتهاء التأمين الطبي</dt><dd className={daysUntil(worker.medicalInsuranceExpiry) <= 30 ? "date-alert" : ""}>{formatDate(worker.medicalInsuranceExpiry)}</dd></div><div><dt>الجهة المستفيدة</dt><dd>{activeContract?.clientName || worker.beneficiaryName || "غير مسند"}</dd></div><div><dt>العقد النشط</dt><dd>{activeContract?.referenceCode || "لا يوجد عقد نشط"}</dd></div><div><dt>موقع العمل</dt><dd>{activeContract?.workSite || worker.clientSite}</dd></div><div><dt>بداية الإسناد</dt><dd>{formatDate(activeAssignment?.assignedAt || worker.assignmentStartDate)}</dd></div></dl></div>
     <div className="drawer-section"><h3>الصورة والمستندات</h3><div className="worker-file-list">{attachments.map((item) => <a key={item.id} href={`/api/portal/workers/attachments/${item.id}?inline=1`} target="_blank" rel="noreferrer"><span><Icon name={item.documentType === "photo" ? "employees" : "documents"}/></span><p><strong>{item.title}</strong><small>{item.fileName} · {formatBytes(item.sizeBytes)}{item.expiryDate?` · ينتهي ${formatDate(item.expiryDate)}`:" · دون انتهاء"}</small></p><span>معاينة</span></a>)}</div>{!attachments.length && <div className="empty-operational">لا توجد مرفقات في هذا الملف.</div>}{canWrite && <form className="attachment-upload" onSubmit={submitAttachment}><strong>إضافة مرفق إلى ملف العامل</strong><label>نوع المستند<select name="requirementCode" defaultValue=""><option value="">مرفق إضافي</option>{profile.requirements.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>اسم المرفق<input name="title" required maxLength={160} placeholder="مثال: بطاقة صحية"/></label><label>تاريخ انتهاء المرفق<input name="expiryDate" type="date"/></label><label>الملف<input name="file" type="file" required accept="application/pdf,image/png,image/jpeg"/></label><button className="admin-primary" disabled={busy === `worker-attachment-${worker.id}`}>{busy === `worker-attachment-${worker.id}` ? "جارٍ الرفع..." : "رفع المرفق"}</button></form>}</div>

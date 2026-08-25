@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type Employee = { id: number; employeeNumber: string; fullName: string; jobTitle: string; status: string; department:string; email:string|null; portalUserEmail:string|null; managerId:number|null; workLocation:string|null; employmentType:string; contractType:string; gosiNumber:string|null; sponsorshipType:string;sponsorName:string|null;iqamaExpiry:string|null;contractEndDate:string|null;workPermitExpiry:string|null;bankName: string | null; iban: string | null; baseSalaryHalalas: number; housingAllowanceHalalas: number; transportAllowanceHalalas: number; otherAllowanceHalalas: number; leaveBalanceDays: number };
@@ -18,7 +21,7 @@ export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; 
   const [notice, setNotice] = useState("");
   const load = useCallback(async () => {
     const response = await fetch("/api/portal/hr", { cache: "no-store" });
-    const result = await response.json() as HrData & { error?: string };
+    const result = await readApiJson(response) as HrData & { error?: string };
     if (!response.ok) throw new Error(result.error || "تعذّر تحميل الموارد البشرية");
     setData(result);
   }, []);
@@ -26,7 +29,7 @@ export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; 
     const controller = new AbortController();
     void fetch("/api/portal/hr", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
-        const result = await response.json() as HrData & { error?: string };
+        const result = await readApiJson(response) as HrData & { error?: string };
         if (!response.ok) throw new Error(result.error || "تعذّر تحميل الموارد البشرية");
         setData(result);
       })
@@ -41,7 +44,7 @@ export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; 
     setBusy(key); setNotice("");
     try {
       const response = await fetch("/api/portal/hr", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر تنفيذ العملية");
       await load(); setNotice("تم حفظ العملية وتوثيقها في سجل التدقيق.");
     } catch (error) { setNotice(error instanceof Error ? error.message : "تعذّر تنفيذ العملية"); }

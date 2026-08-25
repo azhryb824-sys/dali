@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useRef, useState } from "react";
 
 const cities = [
@@ -8,7 +11,7 @@ const cities = [
 
 export default function ConstructionRequestForm() {
   const [sending,setSending]=useState(false); const [error,setError]=useState(""); const [tracking,setTracking]=useState(""); const formRef=useRef<HTMLFormElement>(null);
-  async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setSending(true);setError("");try{const response=await fetch("/api/construction-requests",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(event.currentTarget).entries()))});const result=await response.json() as {error?:string;trackingCode?:string};if(!response.ok)throw new Error(result.error||"تعذر إرسال الطلب");setTracking(result.trackingCode||"");formRef.current?.reset()}catch(e){setError(e instanceof Error?e.message:"تعذر إرسال الطلب") }finally{setSending(false)}}
+  async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setSending(true);setError("");try{const response=await fetch("/api/construction-requests",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(event.currentTarget).entries()))});const result=await readApiJson(response) as {error?:string;trackingCode?:string};if(!response.ok)throw new Error(result.error||"تعذر إرسال الطلب");setTracking(result.trackingCode||"");formRef.current?.reset()}catch(e){setError(e instanceof Error?e.message:"تعذر إرسال الطلب") }finally{setSending(false)}}
   if(tracking)return <div className="public-form-success"><span>✓</span><h3>وصل طلب المشروع إلى فريق المقاولات</h3><p>رقم المتابعة: <strong>{tracking}</strong>. سيُراجع المختص النطاق والموقع قبل التواصل، ولا يُعد الإرسال قبولاً أو عرضاً ملزماً.</p><button onClick={()=>setTracking("")}>إرسال طلب آخر</button></div>;
   return <form ref={formRef} className="public-quote-form construction-request-form" onSubmit={submit}>
     <label>اسم جهة الاتصال<input name="contactName" required minLength={2} autoComplete="name"/></label><label>الشركة أو الجهة<input name="clientName" required minLength={2} autoComplete="organization"/></label>

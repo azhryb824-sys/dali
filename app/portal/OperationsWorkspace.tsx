@@ -1,4 +1,7 @@
 "use client";
+
+import { readApiJson } from "@/lib/client-api";
+
 /* eslint-disable @next/next/no-img-element -- authenticated stamp previews use a protected API route */
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -44,7 +47,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
 
   const load = useCallback(async () => {
     const [response, stampResponse] = await Promise.all([fetch("/api/portal/operations?limit=100", { cache: "no-store" }), fetch("/api/portal/document-stamps", { cache: "no-store" })]);
-    const result = await response.json() as OperationsData & { error?: string };
+    const result = await readApiJson(response) as OperationsData & { error?: string };
     if (!response.ok) throw new Error(result.error || "تعذّر تحميل مساحة التشغيل");
     setData(result);
     if (stampResponse.ok) setStamps(((await stampResponse.json()) as { stamps: DocumentStamp[] }).stamps);
@@ -63,7 +66,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
     try {
       const payload = { action, idempotencyKey: crypto.randomUUID(), ...Object.fromEntries(new FormData(form).entries()), ...extra };
       const response = await fetch("/api/portal/operations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر إنشاء السجل");
       form.reset();
       setNotice("تم حفظ السجل وربطه بسير العمل والإشعارات.");
@@ -79,7 +82,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
       const today = new Date();
       const validUntil = new Date(today.getTime() + 14 * 86400000);
       const response = await fetch("/api/portal/operations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "create-quote-revision", idempotencyKey: crypto.randomUUID(), sourceQuoteId: quote.id, issueDate: today.toISOString().slice(0, 10), validUntil: validUntil.toISOString().slice(0, 10) }) });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر إنشاء إصدار العرض");
       setNotice("أُنشئ إصدار جديد وحُفظ الإصدار السابق كسجل متجاوز.");
       await load();
@@ -95,7 +98,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
     setBusy(`edit-quote-${quote.id}`); setNotice("");
     try {
       const response = await fetch(`/api/portal/operations/quotes/${quote.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ issueDate, validUntil }) });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر تعديل عرض السعر");
       setNotice("تم تعديل عرض السعر وإعادته للمسودة لاعتماده مجددًا."); await load();
     } catch (error) { setNotice(error instanceof Error ? error.message : "تعذّر تعديل العرض"); }
@@ -107,14 +110,14 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
     setBusy(`delete-quote-${quote.id}`); setNotice("");
     try {
       const response = await fetch(`/api/portal/operations/quotes/${quote.id}`, { method: "DELETE" });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر حذف عرض السعر");
       setNotice("تم حذف عرض السعر وتحديث سجل العمليات."); await load();
     } catch (error) { setNotice(error instanceof Error ? error.message : "تعذّر حذف العرض"); }
     finally { setBusy(""); }
   }
 
-  async function shareQuoteWhatsApp(quote:Quote){setBusy(`share-quote-${quote.id}`);setNotice("");try{const response=await fetch(`/api/portal/operations/quotes/${quote.id}/share`,{method:"POST"});const result=await response.json()as{shareUrl?:string;mobile?:string;clientName?:string;error?:string};if(!response.ok||!result.shareUrl||!result.mobile)throw new Error(result.error||"تعذر تجهيز رابط العرض");const message=`السلام عليكم ${result.clientName||""}، نرفق لكم عرض السعر ${quote.quoteCode}. رابط PDF الآمن: ${result.shareUrl}`;const whatsappUrl=createWhatsAppUrl(result.mobile,message);if(!whatsappUrl)throw new Error("رقم جوال العميل غير صحيح");const opened=window.open(whatsappUrl,"_blank","noopener,noreferrer");if(!opened)window.location.assign(whatsappUrl);setNotice("فُتحت محادثة العميل مباشرة في واتساب مع رابط عرض السعر الآمن.")}catch(error){setNotice(error instanceof Error?error.message:"تعذر مشاركة العرض")}finally{setBusy("")}}
+  async function shareQuoteWhatsApp(quote:Quote){setBusy(`share-quote-${quote.id}`);setNotice("");try{const response=await fetch(`/api/portal/operations/quotes/${quote.id}/share`,{method:"POST"});const result=await readApiJson(response)as{shareUrl?:string;mobile?:string;clientName?:string;error?:string};if(!response.ok||!result.shareUrl||!result.mobile)throw new Error(result.error||"تعذر تجهيز رابط العرض");const message=`السلام عليكم ${result.clientName||""}، نرفق لكم عرض السعر ${quote.quoteCode}. رابط PDF الآمن: ${result.shareUrl}`;const whatsappUrl=createWhatsAppUrl(result.mobile,message);if(!whatsappUrl)throw new Error("رقم جوال العميل غير صحيح");const opened=window.open(whatsappUrl,"_blank","noopener,noreferrer");if(!opened)window.location.assign(whatsappUrl);setNotice("فُتحت محادثة العميل مباشرة في واتساب مع رابط عرض السعر الآمن.")}catch(error){setNotice(error instanceof Error?error.message:"تعذر مشاركة العرض")}finally{setBusy("")}}
 
   async function transition(action: string, item: { id: number; version?: number; recordVersion?: number }, status: string, stampId?: number) {
     if (!status) return;
@@ -125,7 +128,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
       const reason = ["lost", "rejected", "cancelled"].includes(status) ? window.prompt("اكتب سبب القرار (10 أحرف على الأقل)") || "" : "";
       if (["lost", "rejected", "cancelled"].includes(status) && reason.trim().length < 10) { setNotice("سبب القرار يجب ألا يقل عن 10 أحرف."); return; }
       const response = await fetch("/api/portal/operations", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, id: item.id, status, version: item.recordVersion ?? item.version, reason, stampId }) });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر تحديث الحالة");
       setNotice("تم تحديث الحالة وتسجيل القرار.");
       setPendingQuoteApproval(null); await load();
@@ -137,7 +140,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
     setBusy(`portal-access-${email}`); setNotice("");
     try {
       const response = await fetch("/api/portal/operations", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: `update-${kind}-portal-user`, email, status }) });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر تحديث الوصول");
       setNotice("تم تحديث وصول البوابة وتسجيل التغيير.");
       await load();
@@ -255,8 +258,8 @@ function QuoteForm({ data, busy, onCreate, embedded = false }: { data: Operation
 
 export function QuotationIssueModal({ onClose, onCreated }: { onClose: () => void; onCreated: (message: string) => void }) {
   const [data,setData]=useState<OperationsData|null>(null);const [busy,setBusy]=useState("");const [error,setError]=useState("");
-  useEffect(()=>{void fetch("/api/portal/operations?limit=100",{cache:"no-store"}).then(async response=>{const result=await response.json() as OperationsData&{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر تحميل بيانات عرض السعر");setData(result);}).catch(problem=>setError(problem instanceof Error?problem.message:"تعذّر تحميل بيانات عرض السعر"));},[]);
-  const create:CreateOperation=async(action,form,extra={})=>{setBusy(action);setError("");try{const payload={action,idempotencyKey:crypto.randomUUID(),...Object.fromEntries(new FormData(form).entries()),...extra};const response=await fetch("/api/portal/operations",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const result=await response.json() as {error?:string};if(!response.ok)throw new Error(result.error||"تعذّر حفظ عرض السعر");onCreated("تم حفظ مسودة عرض السعر. يظهر الاعتماد للمالك أو مشرف النظام، ويتاح PDF بعد الاعتماد فقط.");onClose();}catch(problem){setError(problem instanceof Error?problem.message:"تعذّر حفظ عرض السعر");}finally{setBusy("");}};
+  useEffect(()=>{void fetch("/api/portal/operations?limit=100",{cache:"no-store"}).then(async response=>{const result=await readApiJson(response) as OperationsData&{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر تحميل بيانات عرض السعر");setData(result);}).catch(problem=>setError(problem instanceof Error?problem.message:"تعذّر تحميل بيانات عرض السعر"));},[]);
+  const create:CreateOperation=async(action,form,extra={})=>{setBusy(action);setError("");try{const payload={action,idempotencyKey:crypto.randomUUID(),...Object.fromEntries(new FormData(form).entries()),...extra};const response=await fetch("/api/portal/operations",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const result=await readApiJson(response) as {error?:string};if(!response.ok)throw new Error(result.error||"تعذّر حفظ عرض السعر");onCreated("تم حفظ مسودة عرض السعر. يظهر الاعتماد للمالك أو مشرف النظام، ويتاح PDF بعد الاعتماد فقط.");onClose();}catch(problem){setError(problem instanceof Error?problem.message:"تعذّر حفظ عرض السعر");}finally{setBusy("");}};
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نموذج عرض السعر" onClick={onClose}/><section className="record-modal quotation-document-modal" role="dialog" aria-modal="true" aria-label="إنشاء عرض سعر"><div className="drawer-head"><div><span>نموذج المستندات المعتمد</span><h2>إنشاء عرض سعر احترافي</h2></div><button onClick={onClose} aria-label="إغلاق"><span aria-hidden>×</span></button></div>{error&&<div className="contract-form-error">{error}</div>}{data?<QuoteForm data={data} busy={busy} onCreate={create} embedded/>:<div className="operations-loading"><span/><p>جارٍ تجهيز نموذج عرض السعر...</p></div>}</section></div>;
 }
 function WorkOrderForms({ data, busy, onCreate }: { data: OperationsData; busy: string; onCreate: CreateOperation }) {

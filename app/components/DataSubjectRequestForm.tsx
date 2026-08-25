@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useState } from "react";
 
 export default function DataSubjectRequestForm() {
@@ -14,7 +17,7 @@ export default function DataSubjectRequestForm() {
     const form = event.currentTarget;
     try {
       const response = await fetch("/api/privacy-requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form).entries())) });
-      const data = await response.json() as { trackingCode?: string; error?: string };
+      const data = await readApiJson(response) as { trackingCode?: string; error?: string };
       if (!response.ok) throw new Error(data.error || "تعذّر إرسال الطلب");
       setResult(data.trackingCode || "");
       form.reset();

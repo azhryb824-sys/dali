@@ -5,7 +5,7 @@ import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
-import { annualApprovalSchedule } from "@/lib/payment-schedules";
+import { annualApprovalSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
 
 const transitions: Record<string, string[]> = {
   draft: ["internal_review", "approved", "cancelled"],
@@ -84,8 +84,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed") {
       const editable = approvalInstallments.sort((a, b) => a.installmentNumber - b.installmentNumber);
       const dueDates = annualApprovalSchedule(now, editable.length);
+      const percentages = annualInstallmentPercentages(editable.length);
       for (const [index, payment] of editable.entries()) {
-        await db.update(contractPaymentSchedules).set({ dueDate: dueDates[index], servicePeriod: dueDates[index].slice(0, 7), status: "scheduled", updatedAt: now }).where(eq(contractPaymentSchedules.id, payment.id));
+        await db.update(contractPaymentSchedules).set({
+          title: `الدفعة الشهرية ${index + 1} من ${editable.length} — ${dueDates[index].slice(0, 7)}`,
+          dueDate: dueDates[index],
+          percentageBps: percentages[index],
+          servicePeriod: dueDates[index].slice(0, 7),
+          status: "scheduled",
+          updatedAt: now,
+        }).where(eq(contractPaymentSchedules.id, payment.id));
       }
       if (dueDates[0]) await db.update(workforceContracts).set({ firstPaymentDueDate: dueDates[0], updatedAt: now }).where(eq(workforceContracts.id, id));
       await emitPortalNotification({ eventType: "annual-contract-payments-scheduled", title: "جُدولت دفعات العقد السنوي", message: `${contract.referenceCode} — تبدأ الدفعة الأولى بعد شهر من الاعتماد في ${dueDates[0]}.`, severity: "info", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);

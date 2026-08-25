@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useRef, useState } from "react";
 
 export default function PublicRequestForm({ specialization, submitLabel, detailsLabel, detailsPlaceholder }: {
@@ -24,7 +27,7 @@ export default function PublicRequestForm({ specialization, submitLabel, details
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...Object.fromEntries(new FormData(form).entries()), requestType: "general", specialization, idempotencyKey: idempotencyKey.current }),
       });
-      const result = await response.json() as { error?: string; trackingCode?: string };
+      const result = await readApiJson(response) as { error?: string; trackingCode?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر إرسال الطلب");
       setTrackingCode(result.trackingCode || "");
       form.reset();

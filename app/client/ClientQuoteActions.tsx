@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { useState } from "react";
 
 export default function ClientQuoteActions({ id, status, canApprove }: { id: number; status: string; canApprove: boolean }) {
@@ -20,7 +23,7 @@ export default function ClientQuoteActions({ id, status, canApprove }: { id: num
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id, decision, reason }),
       });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر حفظ قرار العرض");
       setCurrent(decision);
       setNotice(decision === "accepted" ? "تم قبول العرض" : "تم رفض العرض");

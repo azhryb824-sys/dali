@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { useMemo, useState } from "react";
 import type { ManagedBlock, ManagedEntry, ManagedFaq, WebsiteCollectionKey, WebsiteContent } from "@/lib/website-content";
 import { collectWebsiteArabicStrings, completeWebsiteTranslations } from "@/lib/website-translation-audit";
@@ -64,7 +67,7 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
     setBusy(true); setNotice(""); setError("");
     try {
       const response = await fetch("/api/portal/website", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ content, expectedVersion: content.version }) });
-      const result = await response.json() as { content?: WebsiteContent; error?: string };
+      const result = await readApiJson(response) as { content?: WebsiteContent; error?: string };
       if (!response.ok || !result.content) throw new Error(result.error || "تعذّر حفظ الموقع");
       setContent(result.content);
       setNotice(`تم حفظ ونشر الإصدار ${result.content.version} بنجاح.`);
@@ -82,7 +85,7 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
       for (let offset = 0; offset < pending.length; offset += 100) {
         const values = pending.slice(offset, offset + 100);
         const response = await fetch("/api/portal/translate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ values, target: translationTarget }) });
-        const result = await response.json() as { translated?: string[]; error?: string };
+        const result = await readApiJson(response) as { translated?: string[]; error?: string };
         if (!response.ok || !result.translated || result.translated.length !== values.length) throw new Error(result.error || "تعذّر إنشاء الترجمة");
         values.forEach((value, index) => { translatedMap[value] = result.translated![index]; });
       }
@@ -127,7 +130,7 @@ function CollectionEditor({ collectionKey, entries, canManage, onChange }: { col
     try {
       const body = new FormData(); body.set("file", file);
       const response = await fetch("/api/portal/website/assets", { method: "POST", body });
-      const result = await response.json() as { url?: string; error?: string };
+      const result = await readApiJson(response) as { url?: string; error?: string };
       if (!response.ok || !result.url) throw new Error(result.error || "تعذّر رفع الشعار");
       update(index, (item) => { item.image = result.url!; item.imageAlt = `شعار ${item.shortTitle || item.title}`; item.updatedAt = dateOnly(); });
     } catch (error) { window.alert(error instanceof Error ? error.message : "تعذّر رفع الشعار"); }

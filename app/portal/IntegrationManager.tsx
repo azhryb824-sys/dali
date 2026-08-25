@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { useCallback, useEffect, useState } from "react";
 
 type IntegrationEvent = { id: string; eventType: string; aggregateType: string; aggregateId: string; status: string; attempts: number; availableAt: string; processedAt: string | null; lastError: string | null; createdAt: string };
@@ -13,7 +16,7 @@ export default function IntegrationManager() {
 
   const load = useCallback(async () => {
     const response = await fetch("/api/portal/integrations", { cache: "no-store" });
-    const result = await response.json() as { events?: IntegrationEvent[]; configured?: boolean; error?: string };
+    const result = await readApiJson(response) as { events?: IntegrationEvent[]; configured?: boolean; error?: string };
     if (!response.ok || !result.events) throw new Error(result.error || "تعذّر تحميل حالة التكامل");
     setEvents(result.events);
     setConfigured(Boolean(result.configured));
@@ -29,7 +32,7 @@ export default function IntegrationManager() {
     setBusy(id || name); setNotice("");
     try {
       const response = await fetch("/api/portal/integrations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: name, id }) });
-      const result = await response.json() as { error?: string; processed?: number; failed?: number; cleaned?: Record<string, number> };
+      const result = await readApiJson(response) as { error?: string; processed?: number; failed?: number; cleaned?: Record<string, number> };
       if (!response.ok) throw new Error(result.error || "تعذّر تنفيذ العملية");
       setNotice(name === "dispatch" ? `عولج ${result.processed || 0} حدث، وتعذّر ${result.failed || 0}.` : name === "retry" ? "أُعيد الحدث إلى طابور المعالجة." : "اكتملت صيانة البيانات المؤقتة.");
       await load();

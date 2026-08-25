@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Obligation = { id: number; obligationCode: string; title: string; category: string; authority: string; ownerDepartment: string; issueDate: string | null; expiryDate: string; reminderDays: number; riskLevel: string; status: string; notes: string | null; reviewedAt: string | null };
@@ -10,9 +13,9 @@ const daysUntil = (date: string) => Math.ceil((new Date(`${date}T23:59:59Z`).get
 
 export default function ComplianceWorkspace({ canWrite }: { canWrite: boolean }) {
   const [data,setData] = useState<Data>({obligations:[],reviews:[]}); const [busy,setBusy] = useState(""); const [notice,setNotice] = useState("");
-  const load = useCallback(async()=>{const response=await fetch("/api/portal/compliance",{cache:"no-store"});const result=await response.json() as Data&{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر تحميل الامتثال");setData(result);},[]);
-  useEffect(()=>{const controller=new AbortController();void fetch("/api/portal/compliance",{cache:"no-store",signal:controller.signal}).then(async response=>{const result=await response.json() as Data&{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر تحميل الامتثال");setData(result);}).catch(error=>{if(error instanceof Error&&error.name!=="AbortError")setNotice(error.message);});return()=>controller.abort();},[]);
-  async function action(method:"POST"|"PATCH",payload:Record<string,unknown>,key:string){setBusy(key);setNotice("");try{const response=await fetch("/api/portal/compliance",{method,headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const result=await response.json() as {error?:string};if(!response.ok)throw new Error(result.error||"تعذّر تنفيذ العملية");await load();setNotice("تم حفظ الإجراء وتوثيقه.");}catch(error){setNotice(error instanceof Error?error.message:"تعذّر تنفيذ العملية");}finally{setBusy("");}}
+  const load = useCallback(async()=>{const response=await fetch("/api/portal/compliance",{cache:"no-store"});const result=await readApiJson(response) as Data&{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر تحميل الامتثال");setData(result);},[]);
+  useEffect(()=>{const controller=new AbortController();void fetch("/api/portal/compliance",{cache:"no-store",signal:controller.signal}).then(async response=>{const result=await readApiJson(response) as Data&{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر تحميل الامتثال");setData(result);}).catch(error=>{if(error instanceof Error&&error.name!=="AbortError")setNotice(error.message);});return()=>controller.abort();},[]);
+  async function action(method:"POST"|"PATCH",payload:Record<string,unknown>,key:string){setBusy(key);setNotice("");try{const response=await fetch("/api/portal/compliance",{method,headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const result=await readApiJson(response) as {error?:string};if(!response.ok)throw new Error(result.error||"تعذّر تنفيذ العملية");await load();setNotice("تم حفظ الإجراء وتوثيقه.");}catch(error){setNotice(error instanceof Error?error.message:"تعذّر تنفيذ العملية");}finally{setBusy("");}}
   function submitCreate(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);void action("POST",{action:"create",title:fd.get("title"),category:fd.get("category"),authority:fd.get("authority"),ownerDepartment:fd.get("ownerDepartment"),issueDate:fd.get("issueDate"),expiryDate:fd.get("expiryDate"),reminderDays:fd.get("reminderDays"),riskLevel:fd.get("riskLevel"),notes:fd.get("notes")},"create").then(()=>form.reset());}
   function submitReview(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=event.currentTarget;const fd=new FormData(form);void action("POST",{action:"review",obligationId:fd.get("obligationId"),reviewDate:fd.get("reviewDate"),outcome:fd.get("outcome"),nextReviewDate:fd.get("nextReviewDate"),notes:fd.get("notes")},"review").then(()=>form.reset());}
   const urgent=data.obligations.filter(item=>item.status!=="closed"&&daysUntil(item.expiryDate)<=item.reminderDays); const expired=data.obligations.filter(item=>daysUntil(item.expiryDate)<0&&item.status!=="closed");

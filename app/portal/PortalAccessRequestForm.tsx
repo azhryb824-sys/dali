@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useState } from "react";
 
 type AccessRequest = {
@@ -42,7 +45,7 @@ export default function PortalAccessRequestForm({ initialRequest }: { initialReq
           termsAccepted: data.get("termsAccepted") === "on",
         }),
       });
-      const result = await response.json() as { request?: AccessRequest; error?: string };
+      const result = await readApiJson(response) as { request?: AccessRequest; error?: string };
       if (!response.ok || !result.request) throw new Error(result.error || "تعذّر إرسال الطلب.");
       setRequestData(result.request);
       setSaved(true);

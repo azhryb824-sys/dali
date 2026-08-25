@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useState } from "react";
 
 type StatusResult = { trackingCode: string; requestType: string; status: string; dueAt: string; completedAt: string | null; createdAt: string };
@@ -15,7 +18,7 @@ export default function PrivacyStatusLookup() {
     const form = new FormData(event.currentTarget);
     try {
       const response = await fetch(`/api/privacy-requests?trackingCode=${encodeURIComponent(String(form.get("trackingCode") || ""))}&email=${encodeURIComponent(String(form.get("email") || ""))}`, { cache: "no-store" });
-      const data = await response.json() as { request?: StatusResult; error?: string };
+      const data = await readApiJson(response) as { request?: StatusResult; error?: string };
       if (!response.ok || !data.request) throw new Error(data.error || "تعذّر التحقق");
       setResult(data.request);
     } catch (submitError) { setError(submitError instanceof Error ? submitError.message : "تعذّر التحقق"); }

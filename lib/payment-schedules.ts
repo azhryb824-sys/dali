@@ -6,6 +6,8 @@ export type PaymentScheduleDraft = {
 
 export type SeasonType = "regular" | "ramadan" | "hajj";
 
+export const ANNUAL_CONTRACT_MONTHS = 12;
+
 export function parsePaymentSchedule(value: unknown): PaymentScheduleDraft[] {
   let raw = value;
   if (typeof raw === "string") {
@@ -38,7 +40,17 @@ export function addUtcMonths(value: string, months: number) {
   return target.toISOString().slice(0, 10);
 }
 
-export function annualApprovalSchedule(approvedAt: string, installments: number) {
+export function annualContractEndDate(startDate: string) {
+  return addUtcMonths(startDate, ANNUAL_CONTRACT_MONTHS);
+}
+
+export function annualInstallmentPercentages(installments = ANNUAL_CONTRACT_MONTHS) {
+  const count = Math.max(1, Math.floor(installments));
+  const base = Math.floor(10000 / count);
+  return Array.from({ length: count }, (_, index) => index === count - 1 ? 10000 - base * (count - 1) : base);
+}
+
+export function annualApprovalSchedule(approvedAt: string, installments = ANNUAL_CONTRACT_MONTHS) {
   const approvalDate = approvedAt.slice(0, 10);
   return Array.from({ length: Math.max(0, installments) }, (_, index) => addUtcMonths(approvalDate, index + 1));
 }

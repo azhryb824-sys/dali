@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Account = { id: number; code: string; nameAr: string; accountType: string; isPosting: boolean; status: string };
@@ -20,7 +23,7 @@ export default function AccountingWorkspace({ canWrite, isAdmin }: { canWrite: b
 
   const load = useCallback(async () => {
     const response = await fetch("/api/portal/accounting", { cache: "no-store" });
-    const result = await response.json() as Data & { error?: string };
+    const result = await readApiJson(response) as Data & { error?: string };
     if (!response.ok) throw new Error(result.error || "تعذّر تحميل المحاسبة");
     setData(result);
   }, []);
@@ -29,7 +32,7 @@ export default function AccountingWorkspace({ canWrite, isAdmin }: { canWrite: b
     const controller = new AbortController();
     void fetch("/api/portal/accounting", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
-        const result = await response.json() as Data & { error?: string };
+        const result = await readApiJson(response) as Data & { error?: string };
         if (!response.ok) throw new Error(result.error || "تعذّر تحميل المحاسبة");
         setData(result);
       })
@@ -43,7 +46,7 @@ export default function AccountingWorkspace({ canWrite, isAdmin }: { canWrite: b
     setBusy(key); setNotice("");
     try {
       const response = await fetch("/api/portal/accounting", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر تنفيذ العملية");
       await load();
       setNotice("تمت العملية بنجاح وسُجلت في سجل التدقيق.");

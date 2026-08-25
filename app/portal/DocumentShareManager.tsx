@@ -1,5 +1,8 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
+
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type DocumentOption = { id: number; referenceCode: string; title: string };
@@ -14,7 +17,7 @@ export default function DocumentShareManager({ documents }: { documents: Documen
 
   const load = useCallback(async () => {
     const response = await fetch("/api/portal/documents/share", { cache: "no-store" });
-    const result = await response.json() as { links?: ShareLink[]; error?: string };
+    const result = await readApiJson(response) as { links?: ShareLink[]; error?: string };
     if (!response.ok || !result.links) throw new Error(result.error || "تعذّر تحميل روابط المشاركة");
     setLinks(result.links);
   }, []);
@@ -31,7 +34,7 @@ export default function DocumentShareManager({ documents }: { documents: Documen
     try {
       const data = Object.fromEntries(new FormData(form).entries());
       const response = await fetch("/api/portal/documents/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(data) });
-      const result = await response.json() as { shareUrl?: string; error?: string };
+      const result = await readApiJson(response) as { shareUrl?: string; error?: string };
       if (!response.ok || !result.shareUrl) throw new Error(result.error || "تعذّر إنشاء الرابط");
       try { await navigator.clipboard.writeText(result.shareUrl); setNotice("أُنشئ الرابط ونُسخ. لن يظهر رمزه السري مرة أخرى."); }
       catch { window.prompt("انسخ الرابط؛ لن يظهر رمزه السري مرة أخرى", result.shareUrl); setNotice("أُنشئ الرابط بنجاح."); }
@@ -46,7 +49,7 @@ export default function DocumentShareManager({ documents }: { documents: Documen
     setBusy(link.id); setNotice("");
     try {
       const response = await fetch("/api/portal/documents/share", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ shareId: link.id, reason }) });
-      const result = await response.json() as { error?: string };
+      const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر إبطال الرابط");
       setNotice("أُبطل الرابط وسُجل السبب في سجل التدقيق.");
       await load();
