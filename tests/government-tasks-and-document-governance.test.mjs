@@ -28,6 +28,14 @@ test("contractual records are separated and lifecycle actions preserve accountin
   assert.match(migration,/official_letters_status_check/);
 });
 
+test("official letter compatibility migration preserves records and repairs governance columns",async()=>{
+  const[migration,letters]=await Promise.all([source("drizzle-pg/0040_official_letters_schema_repair.sql"),source("app/api/portal/letters/route.ts")]);
+  for(const field of ["stamp_id","cancellation_reason","document_id","cancelled_by","cancelled_at"])assert.match(migration,new RegExp(`ADD COLUMN IF NOT EXISTS "${field}"`));
+  assert.doesNotMatch(migration,/DROP TABLE|TRUNCATE|DELETE FROM/);
+  assert.match(letters,/official-letter-create-failed/);
+  assert.match(letters,/official-letter-created/);
+});
+
 test("the full sidebar remains viewport-fitted and dashboards stay permission-aware",async()=>{
   const[css,portal]=await Promise.all([source("app/portal/management-enhancements.css"),source("app/portal/PortalDashboard.tsx")]);
   assert.match(css,/@media\(min-width:861px\)/);assert.match(css,/\.admin-sidebar nav\{padding-top:11px;gap:3px;overflow:visible\}/);assert.match(css,/@media\(max-height:760px\)/);
