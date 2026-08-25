@@ -39,6 +39,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (!profession || profession.contractId !== contract.id) return Response.json({ error: "المهنة ليست ضمن هذا العقد" }, { status: 400 });
     if (!worker || worker.profession !== profession.profession) return Response.json({ error: "مهنة العامل لا تطابق المهنة المطلوبة في العقد" }, { status: 400 });
     if (worker.status !== "available") return Response.json({ error: "العامل غير متاح لأنه مرتبط بجهة أخرى أو موقوف حالياً" }, { status: 409 });
+    const sponsorshipMismatch = profession.sponsorshipType && (
+      worker.sponsorshipType !== profession.sponsorshipType
+      || (profession.sponsorshipType === "other" && (
+        worker.sponsorName !== profession.sponsorName
+        || worker.ajirContractStatus !== profession.ajirContractStatus
+      ))
+    );
+    if (sponsorshipMismatch) {
+      return Response.json({ error: "بيانات كفالة العامل وحالة عقد أجير لا تطابق البند المطلوب في العقد" }, { status: 409 });
+    }
 
     const activeAssignments = await db.select().from(contractWorkerAssignments).where(and(
       eq(contractWorkerAssignments.contractProfessionId, profession.id),

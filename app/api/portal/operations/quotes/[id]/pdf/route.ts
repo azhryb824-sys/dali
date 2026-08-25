@@ -61,7 +61,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     paymentTerms: quote.terms || undefined,
     assumptions: details.assumptions || undefined,
     terms: "الأسعار خاصة بنطاق العمل والكميات والمدة المحددة. أي أعمال أو كميات إضافية تستلزم عرضًا أو ملحقًا مستقلًا. يخضع بدء الخدمة لتوفر الموارد واعتماد العميل والمتطلبات النظامية.",
-    quotationItems: items.map((item) => ({ description: item.profession, quantity: item.quantity, durationMonths: item.durationMonths, unitPriceHalalas: item.unitPriceHalalas, lineTotalHalalas: item.lineTotalHalalas, notes: item.notes })),
+    quotationItems: items.map((item) => ({ description: item.profession, quantity: item.quantity, durationMonths: item.durationMonths, unitPriceHalalas: item.unitPriceHalalas, lineTotalHalalas: item.lineTotalHalalas, notes: item.notes, sponsorshipType: item.sponsorshipType as "dali" | "other" | null, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus as "not_applicable" | "with_ajir" | "without_ajir" | null })),
   }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
   return new Response(new Uint8Array(bytes).buffer, { headers: attachmentHeaders(`${quote.quoteCode}-V${quote.versionNumber}.pdf`, "application/pdf") });
 }

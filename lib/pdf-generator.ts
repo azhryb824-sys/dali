@@ -45,6 +45,9 @@ export type IssuedDocumentInput = {
   professions?: Array<{
     profession: string;
     requiredCount: number;
+    sponsorshipType?: "dali" | "other" | null;
+    sponsorName?: string | null;
+    ajirContractStatus?: "not_applicable" | "with_ajir" | "without_ajir" | null;
     assignedWorkers?: Array<{ fullName: string; iqamaNumber: string | null }>;
   }>;
   paymentSchedule?: Array<{ title: string; dueDate: string; percentageBps: number; amountHalalas: number }>;
@@ -62,6 +65,9 @@ export type IssuedDocumentInput = {
     unitPriceHalalas: number;
     lineTotalHalalas: number;
     notes?: string | null;
+    sponsorshipType?: "dali" | "other" | null;
+    sponsorName?: string | null;
+    ajirContractStatus?: "not_applicable" | "with_ajir" | "without_ajir" | null;
   }>;
 };
 
@@ -376,7 +382,8 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     };
     header();
     items.forEach((item, index) => {
-      const description = item.notes ? `${item.description} - ${item.notes}` : item.description;
+      const sponsorship = item.sponsorshipType === "dali" ? "الكفالة: شركة دالي" : item.sponsorshipType === "other" ? `الكفالة: ${item.sponsorName || "جهة أخرى"} — ${item.ajirContractStatus === "with_ajir" ? "بعقد أجير" : "بدون عقد أجير"}` : "";
+      const description = [item.description, sponsorship, item.notes].filter(Boolean).join(" - ");
       const lines = wrapWords(resources.regular, description, 8, 175);
       const height = Math.max(31, 14 + lines.length * 12);
       ensure(height + 4);
@@ -427,7 +434,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       ? input.professions
       : [{ profession: input.profession || "عمالة فنية وإنشائية", requiredCount: input.workerCount || 0, assignedWorkers: [] }];
     const professionSummary = professions
-      .map((item) => input.quantityMode === "open" ? `${item.profession}: العدد مفتوح بحسب طلبات الإسناد` : `${item.profession}: ${item.requiredCount} عامل/فني`)
+      .map((item) => { const sponsorship = item.sponsorshipType === "dali" ? "على كفالة شركة دالي" : item.sponsorshipType === "other" ? `على كفالة ${item.sponsorName || "جهة أخرى"} — ${item.ajirContractStatus === "with_ajir" ? "بعقد أجير" : "بدون عقد أجير"}` : "الكفالة تحدد عند الإسناد"; return input.quantityMode === "open" ? `${item.profession}: العدد مفتوح بحسب طلبات الإسناد — ${sponsorship}` : `${item.profession}: ${item.requiredCount} عامل/فني — ${sponsorship}`; })
       .join("\n");
     const assignedSummary = professions
       .flatMap((item) => (item.assignedWorkers || []).map((worker) => `${item.profession} — ${worker.fullName}${worker.iqamaNumber ? ` — إقامة ${worker.iqamaNumber}` : ""}`))

@@ -166,9 +166,13 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
       const quantity = integer(item.quantity, quantityMode === "open" ? 0 : 1, 100000);
       const durationMonths = integer(item.durationMonths, 1, 120);
       const unitPriceHalalas = Math.round((Number(item.unitPrice) || 0) * 100);
+      const sponsorshipType = item.sponsorshipType === "dali" ? "dali" : item.sponsorshipType === "other" ? "other" : null;
+      const sponsorName = sponsorshipType === "other" ? text(item.sponsorName, 160) : null;
+      const ajirContractStatus = sponsorshipType === "dali" ? "not_applicable" : item.ajirContractStatus === "with_ajir" ? "with_ajir" : item.ajirContractStatus === "without_ajir" ? "without_ajir" : null;
       if (!profession || quantity === null || (quantityMode === "fixed" && quantity < 1) || !durationMonths || unitPriceHalalas < 1) throw new Error(`بيانات البند ${index + 1} غير صحيحة`);
+      if (sponsorshipType === "other" && (!sponsorName || !ajirContractStatus)) throw new Error(`أكمل اسم الكفيل وحالة عقد أجير في البند ${index + 1}`);
       const normalizedQuantity = quantityMode === "open" ? 0 : quantity;
-      return { profession, quantity: normalizedQuantity, durationMonths, unitPriceHalalas, lineTotalHalalas: normalizedQuantity * durationMonths * unitPriceHalalas, notes: text(item.notes, 500) || null, sortOrder: index };
+      return { profession, quantity: normalizedQuantity, durationMonths, unitPriceHalalas, lineTotalHalalas: normalizedQuantity * durationMonths * unitPriceHalalas, notes: text(item.notes, 500) || null, sponsorshipType, sponsorName, ajirContractStatus, sortOrder: index };
     });
     const subtotalHalalas = normalizedItems.reduce((sum, item) => sum + item.lineTotalHalalas, 0);
     const discountHalalas = Math.min(subtotalHalalas, Math.max(0, Math.round((Number(payload.discount) || 0) * 100)));
@@ -205,7 +209,7 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     const versionNumber = Math.max(...existingVersions.map((item) => item.versionNumber), source.versionNumber) + 1;
     const [quote] = await db.insert(quoteVersions).values({ quoteCode: source.quoteCode, opportunityId: source.opportunityId, versionNumber, status: "draft", issueDate, validUntil, quantityMode: source.quantityMode, vatRateBps: source.vatRateBps, subtotalHalalas: source.subtotalHalalas, discountHalalas: source.discountHalalas, totalHalalas: source.totalHalalas, assumptions: source.assumptions, terms: source.terms, createdBy: actor }).returning();
     try {
-      await db.insert(quoteItems).values(sourceItems.map((item) => ({ quoteVersionId: quote.id, profession: item.profession, quantity: item.quantity, durationMonths: item.durationMonths, unitPriceHalalas: item.unitPriceHalalas, lineTotalHalalas: item.lineTotalHalalas, notes: item.notes, sortOrder: item.sortOrder })));
+      await db.insert(quoteItems).values(sourceItems.map((item) => ({ quoteVersionId: quote.id, profession: item.profession, quantity: item.quantity, durationMonths: item.durationMonths, unitPriceHalalas: item.unitPriceHalalas, lineTotalHalalas: item.lineTotalHalalas, notes: item.notes, sponsorshipType: item.sponsorshipType, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus, sortOrder: item.sortOrder })));
       await db.update(quoteVersions).set({ status: "superseded", updatedAt: new Date().toISOString(), recordVersion: source.recordVersion + 1 }).where(and(eq(quoteVersions.id, source.id), eq(quoteVersions.recordVersion, source.recordVersion)));
     } catch (error) {
       await db.delete(quoteVersions).where(eq(quoteVersions.id, quote.id));

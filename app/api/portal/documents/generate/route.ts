@@ -34,7 +34,7 @@ const prefixes: Record<IssuedDocumentType, string> = {
   construction_record: "CST",
 };
 
-type ProfessionInput = { profession: string; requiredCount: number; unitSalaryHalalas: number; workerIds: number[] };
+type ProfessionInput = { profession: string; requiredCount: number; unitSalaryHalalas: number; sponsorshipType: "dali" | "other"; sponsorName: string | null; ajirContractStatus: "not_applicable" | "with_ajir" | "without_ajir"; workerIds: number[] };
 type PaymentInput = { title: string; dueDate: string; percentageBps: number; subtotalHalalas: number; vatHalalas: number; amountHalalas: number; billingBasis: "monthly_salary" | "seasonal_percentage"; servicePeriod: string | null };
 
 function isDocumentType(value: string): value is IssuedDocumentType {
@@ -65,6 +65,9 @@ function parseProfessions(value: unknown, legacyProfession: string, legacyCount:
       profession: cleanText(record.profession, 120),
       requiredCount: Number(record.requiredCount ?? record.count ?? 0),
       unitSalaryHalalas: Math.round(Number(record.unitSalary || 0) * 100),
+      sponsorshipType: record.sponsorshipType === "other" ? "other" : "dali",
+      sponsorName: record.sponsorshipType === "other" ? cleanText(record.sponsorName, 160) || null : null,
+      ajirContractStatus: record.sponsorshipType === "other" ? (record.ajirContractStatus === "without_ajir" ? "without_ajir" : "with_ajir") : "not_applicable",
       workerIds,
     };
   });
@@ -182,6 +185,7 @@ export async function POST(request: Request) {
       if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || !Number.isInteger(item.unitSalaryHalalas) || item.unitSalaryHalalas <= 0 || item.unitSalaryHalalas > 100000000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
         return Response.json({ error: "اختر المهنة أو اكتب اسم المهنة الفعلي يدوياً عند اختيار «أخرى»، وأدخل عدد العمالة وراتب العامل الصحيح لكل مهنة" }, { status: 400 });
       }
+      if (professionInputs.some((item) => item.sponsorshipType === "other" && (!item.sponsorName || !["with_ajir", "without_ajir"].includes(item.ajirContractStatus)))) return Response.json({ error: "أكمل اسم الكفيل وحالة عقد أجير لكل مهنة على كفالة جهة أخرى" }, { status: 400 });
       const vatRateBpsForSchedule = vatEnabled ? Math.round(vatRate * 100) : 0;
       if (quantityMode === "fixed" && seasonType === "regular") {
         if (!firstPaymentDueDate || firstPaymentDueDate === "" || !endDate || firstPaymentDueDate > endDate) return Response.json({ error: "أدخل تاريخ استحقاق أول دفعة شهرية على ألا يتجاوز نهاية العقد" }, { status: 400 });
@@ -227,6 +231,12 @@ export async function POST(request: Request) {
     const sourceQuoteItems = sourceQuote ? await db.select().from(quoteItems).where(eq(quoteItems.quoteVersionId, sourceQuote.id)) : [];
     if (sourceQuote && (!sourceOpportunity || !sourceQuoteItems.length)) return Response.json({ error: "بيانات عرض السعر المرتبط غير مكتملة" }, { status: 409 });
     if (sourceQuote && (sourceQuote.quantityMode === "open" ? professionInputs.some(item => item.requiredCount !== 0) : sourceQuoteItems.some(item => !professionInputs.some(profession => profession.profession === item.profession && profession.requiredCount === item.quantity)))) return Response.json({ error: "مهن وأعداد العقد لا تطابق عرض السعر المقبول" }, { status: 409 });
+    if (sourceQuote && sourceQuoteItems.some((quoteItem) => !professionInputs.some((profession) =>
+      profession.profession === quoteItem.profession
+      && profession.sponsorshipType === quoteItem.sponsorshipType
+      && profession.sponsorName === quoteItem.sponsorName
+      && profession.ajirContractStatus === quoteItem.ajirContractStatus
+    ))) return Response.json({ error: "بيانات الكفالة وأجير في العقد يجب أن تطابق عرض السعر المقبول" }, { status: 409 });
     if (sourceQuote && quantityMode === "fixed" && contractAmountHalalas !== sourceQuote.subtotalHalalas) return Response.json({ error: "قيمة العقد يجب أن تطابق قيمة عرض السعر قبل الضريبة" }, { status: 409 });
     if (sourceQuote && Math.round(vatRate * 100) !== sourceQuote.vatRateBps) return Response.json({ error: "نسبة ضريبة العقد يجب أن تطابق عرض السعر" }, { status: 409 });
     const assets = await db.select().from(companyAssets);
@@ -246,14 +256,18 @@ export async function POST(request: Request) {
     }
     for (const item of professionInputs) {
       const selectedForProfession = selectedWorkers.filter((worker) => item.workerIds.includes(worker.id));
-      if (selectedForProfession.some((worker) => worker.profession !== item.profession || worker.status !== "available")) {
-        return Response.json({ error: `يجب أن تكون العمالة المختارة لمهنة ${item.profession} متاحة ومطابقة للمهنة` }, { status: 409 });
+      if (selectedForProfession.some((worker) => worker.profession !== item.profession || worker.status !== "available"
+        || worker.sponsorshipType !== item.sponsorshipType
+        || (item.sponsorshipType === "other" && (worker.sponsorName !== item.sponsorName || worker.ajirContractStatus !== item.ajirContractStatus)))) {
+        return Response.json({ error: `يجب أن تكون العمالة المختارة لمهنة ${item.profession} متاحة ومطابقة للمهنة والكفالة وحالة أجير` }, { status: 409 });
       }
     }
 
     const capacity = professionInputs.map((item) => {
-      const registeredCount = relevantWorkers.filter((worker) => worker.profession === item.profession).length;
-      const availableCount = relevantWorkers.filter((worker) => worker.profession === item.profession && worker.status === "available").length;
+      const sponsorshipMatch = (worker: typeof workers.$inferSelect) => worker.sponsorshipType === item.sponsorshipType
+        && (item.sponsorshipType !== "other" || (worker.sponsorName === item.sponsorName && worker.ajirContractStatus === item.ajirContractStatus));
+      const registeredCount = relevantWorkers.filter((worker) => worker.profession === item.profession && sponsorshipMatch(worker)).length;
+      const availableCount = relevantWorkers.filter((worker) => worker.profession === item.profession && worker.status === "available" && sponsorshipMatch(worker)).length;
       return {
         profession: item.profession,
         requiredCount: item.requiredCount,
@@ -301,6 +315,9 @@ export async function POST(request: Request) {
       professions: professionInputs.map((item) => ({
         profession: item.profession,
         requiredCount: item.requiredCount,
+        sponsorshipType: item.sponsorshipType,
+        sponsorName: item.sponsorName,
+        ajirContractStatus: item.ajirContractStatus,
         assignedWorkers: selectedWorkers
           .filter((worker) => item.workerIds.includes(worker.id))
           .map((worker) => ({ fullName: worker.fullName, iqamaNumber: worker.iqamaNumber })),
@@ -390,6 +407,9 @@ export async function POST(request: Request) {
         profession: item.profession,
         requiredCount: item.requiredCount,
         unitSalaryHalalas: item.unitSalaryHalalas,
+        sponsorshipType: item.sponsorshipType,
+        sponsorName: item.sponsorName,
+        ajirContractStatus: item.ajirContractStatus,
       }))).returning();
 
       for (const professionRecord of professionRecords) {

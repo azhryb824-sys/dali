@@ -62,6 +62,9 @@ export async function regenerateWorkforceContractPdf(documentId: number) {
     professions: professions.map((profession) => ({
       profession: profession.profession,
       requiredCount: profession.requiredCount,
+      sponsorshipType: profession.sponsorshipType as "dali" | "other" | null,
+      sponsorName: profession.sponsorName,
+      ajirContractStatus: profession.ajirContractStatus as "not_applicable" | "with_ajir" | "without_ajir" | null,
       assignedWorkers: activeAssignments
         .filter((assignment) => assignment.contractProfessionId === profession.id)
         .map((assignment) => workerById.get(assignment.workerId))

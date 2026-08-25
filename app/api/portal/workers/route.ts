@@ -46,7 +46,10 @@ export async function POST(request: Request) {
     const iban = cleanText(form.get("iban"), 40).replace(/\s+/g, "").toUpperCase();
     const bankName = cleanText(form.get("bankName"), 120);
     const monthlySalary = Number(form.get("monthlySalary") || 0);
-    const isCompanySponsored = form.get("isCompanySponsored") === "true";
+    const sponsorshipType = form.get("sponsorshipType") === "dali" ? "dali" : form.get("sponsorshipType") === "other" ? "other" : "";
+    const sponsorName = cleanText(form.get("sponsorName"), 160);
+    const ajirContractStatus = sponsorshipType === "dali" ? "not_applicable" : form.get("ajirContractStatus") === "with_ajir" ? "with_ajir" : form.get("ajirContractStatus") === "without_ajir" ? "without_ajir" : "";
+    const isCompanySponsored = sponsorshipType === "dali";
     const iqamaExpiry = cleanDate(form.get("iqamaExpiry"));
     const medicalInsuranceExpiry = cleanDate(form.get("medicalInsuranceExpiry"));
     const photo = form.get("photo");
@@ -56,6 +59,9 @@ export async function POST(request: Request) {
 
     if (!workerNumber || !/^\d{10}$/.test(iqamaNumber) || !/^SA\d{22}$/.test(iban) || !isSaudiBank(bankName) || !Number.isFinite(monthlySalary) || monthlySalary <= 0 || monthlySalary > 1000000 || fullName.length < 2 || !workforceNationalities.includes(nationality as (typeof workforceNationalities)[number]) || !workforceProfessions.some((item) => item.label === profession) || !validMobile(mobile) || !iqamaExpiry || !medicalInsuranceExpiry) {
       return Response.json({ error: "بيانات العامل غير مكتملة؛ رقم الإقامة 10 أرقام والآيبان السعودي يبدأ SA ويتبعه 22 رقماً" }, { status: 400 });
+    }
+    if (!sponsorshipType || (sponsorshipType === "other" && (sponsorName.length < 2 || !ajirContractStatus))) {
+      return Response.json({ error: "حدد جهة كفالة العامل، واكتب اسم الكفيل وحالة عقد أجير عندما تكون الكفالة على جهة أخرى" }, { status: 400 });
     }
     if (!(photo instanceof File)) {
       return Response.json({ error: "صورة العامل مطلوبة بصيغة PNG أو JPG وبحجم لا يتجاوز 5 ميجابايت" }, { status: 400 });
@@ -107,6 +113,9 @@ export async function POST(request: Request) {
       bankName,
       monthlySalaryHalalas: Math.round(monthlySalary * 100),
       isCompanySponsored,
+      sponsorshipType,
+      sponsorName: sponsorshipType === "other" ? sponsorName : null,
+      ajirContractStatus,
       beneficiaryName: null,
       clientSite: "غير مسند",
       assignmentStartDate: null,
@@ -134,6 +143,7 @@ export async function POST(request: Request) {
 
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-profile-created", entityType: "worker", entityId: String(worker.id) });
     await emitPortalNotification({ eventType: "worker-profile-created", title: "ملف عامل جديد جاهز للمراجعة", message: `${worker.fullName} — ${worker.profession} — ${worker.workerNumber}.`, severity: "success", module: "workforce", entityType: "worker", entityId: worker.id, actionView: "workforce", targetDepartment: "workforce" }).catch(() => undefined);
+    if (sponsorshipType === "other" && ajirContractStatus === "without_ajir") await emitPortalNotification({ eventType: "worker-without-ajir", title: "عامل على كفالة أخرى بدون عقد أجير", message: `${worker.workerNumber} — ${worker.fullName} — الكفيل: ${sponsorName}.`, severity: "warning", module: "workforce", entityType: "worker", entityId: worker.id, actionView: "workforce", targetRole: "admin", dedupeKey: `worker-without-ajir:${worker.id}` }).catch(() => undefined);
     return Response.json({ worker, attachments }, { status: 201 });
   } catch (error) {
     await Promise.all(storedKeys.map((key) => getRuntimeEnv().BUCKET.delete(key).catch(() => undefined)));

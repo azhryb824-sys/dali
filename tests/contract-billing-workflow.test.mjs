@@ -49,8 +49,23 @@ test("worker sponsorship, work contracts, salary accounting and safe deletion st
   assert.match(workersRoute,/isCompanySponsored/);assert.match(workersRoute,/workContract/);assert.match(workersRoute,/عقد العمل إلزامي/);
   assert.match(workersRoute,/export async function DELETE/);assert.match(workersRoute,/activeAssignment/);assert.match(workersRoute,/preservedFinancialRecords/);assert.doesNotMatch(workersRoute,/db\.delete\(workerAttachments\)/);
   assert.match(financeRoute,/العامل غير مسند فعليًا إلى العقد/);assert.match(financeRoute,/monthlySalaryHalalas/);assert.match(financeRoute,/يجب ربط راتب العامل بالعقد المستفيد/);
-  assert.match(portal,/هل العامل على كفالة الشركة/);assert.match(portal,/عقد العمل — إلزامي/);assert.match(portal,/حذف العامل من النظام/);
+  assert.match(portal,/جهة الكفالة/);assert.match(portal,/على كفالة شركة دالي/);assert.match(portal,/على كفالة جهة أخرى/);assert.match(portal,/عقد العمل — إلزامي/);assert.match(portal,/حذف العامل من النظام/);
   assert.match(schema,/archivedAt/);assert.match(migration,/financial_records_worker_salary_period_unique/);
+});
+
+test("sponsorship and Ajir status remain consistent from worker to quote, contract, assignment and PDF",async()=>{
+  const[workersRoute,operationsRoute,assignmentRoute,contractRoute,portal,operations,pdf,schema,migration]=await Promise.all([
+    source("app/api/portal/workers/route.ts"),source("app/api/portal/operations/route.ts"),source("app/api/portal/contracts/[id]/workers/route.ts"),source("app/api/portal/documents/generate/route.ts"),source("app/portal/PortalDashboard.tsx"),source("app/portal/OperationsWorkspace.tsx"),source("lib/pdf-generator.ts"),source("db/schema.ts"),source("drizzle-pg/0032_sponsorship_and_ajir_consistency.sql")
+  ]);
+  for(const field of ["sponsorshipType","sponsorName","ajirContractStatus"]){
+    for(const code of [workersRoute,operationsRoute,contractRoute,portal,operations,pdf,schema])assert.match(code,new RegExp(field));
+  }
+  assert.match(workersRoute,/اسم الكفيل وحالة عقد أجير/);assert.match(workersRoute,/worker-without-ajir/);
+  assert.match(operationsRoute,/أكمل اسم الكفيل وحالة عقد أجير/);assert.match(contractRoute,/تطابق عرض السعر المقبول/);
+  assert.match(assignmentRoute,/بيانات كفالة العامل وحالة عقد أجير لا تطابق/);assert.match(portal,/sponsorshipMatches/);
+  for(const label of ["بعقد أجير","بدون عقد أجير"]){assert.match(portal,new RegExp(label));assert.match(operations,new RegExp(label));assert.match(pdf,new RegExp(label));}
+  assert.match(portal,/اسم الكفيل/);assert.match(operations,/اسم الكفيل/);
+  assert.match(migration,/workers_sponsorship_consistency_check/);assert.match(migration,/quote_items_sponsorship_consistency_check/);assert.match(migration,/contract_professions_sponsorship_consistency_check/);
 });
 
 test("owner referral, accounting invoice, payment recording and legal escalation are separated",async()=>{
