@@ -25,9 +25,11 @@ export function translationCoverage(content: WebsiteContent, target: Translation
   const memory = content.translations[target];
   const missing = sources.filter((source) => {
     const explicit = memory[source]?.trim();
-    if (explicit && explicit !== source && !/[\u0600-\u06ff]/.test(explicit)) return false;
+    const validScript = target === "en" ? /[A-Za-z]/.test(explicit || "") : /[\u0980-\u09ff]/.test(explicit || "");
+    if (explicit && explicit !== source && !/[\u0600-\u06ff]/.test(explicit) && validScript) return false;
     const catalog = translateUi(source, target).trim();
-    return !catalog || catalog === source || /[\u0600-\u06ff]/.test(catalog);
+    const validCatalogScript = target === "en" ? /[A-Za-z]/.test(catalog) : /[\u0980-\u09ff]/.test(catalog);
+    return !catalog || catalog === source || /[\u0600-\u06ff]/.test(catalog) || !validCatalogScript;
   });
   return { total: sources.length, translated: sources.length - missing.length, missing, complete: missing.length === 0 };
 }

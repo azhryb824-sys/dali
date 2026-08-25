@@ -35,6 +35,7 @@ test("translation governance inventories every authored Arabic string and blocks
   assert.match(audit, /\[\\u0600-\\u06ff\]/);
   assert.match(audit, /memory\[source\]/);
   assert.match(audit, /translateUi\(source, target\)/);
+  assert.match(audit, /\\u0980-\\u09ff/);
   assert.match(audit, /complete: missing\.length === 0/);
   assert.match(manager, /translationAudit\.complete/);
   assert.match(api, /لا يمكن نشر الموقع قبل اكتمال الترجمة/);
