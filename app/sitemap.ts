@@ -24,12 +24,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...(content.visibility.hajj ? [{ path: "/seasons", updatedAt: lastModified }, { path: "/ramadan", updatedAt: lastModified }, { path: "/hajj", updatedAt: lastModified }] : []),
     ...(content.visibility.partners ? [{ path: "/partners", updatedAt: lastModified }] : []),
   ];
-  const keys: WebsiteCollectionKey[] = ["services", "sectors", "locations", "projects", "credentials", "articles", "jobs"];
+  const keys: WebsiteCollectionKey[] = ["services", "sectors", "locations", "projects", "credentials", "articles", "jobs", "pages"];
   const collections = keys.flatMap((key) => {
     const entries = publishedEntries(content, key);
     if (!entries.length) return [];
     return [
-      { url: absoluteUrl(collectionBasePath(key)), lastModified },
+      ...(key === "pages" ? [] : [{ url: absoluteUrl(collectionBasePath(key)), lastModified }]),
       ...entries.filter(() => key !== "credentials").map((entry) => ({ url: absoluteUrl(entryPath(key, entry)), lastModified: entry.updatedAt })),
     ];
   });

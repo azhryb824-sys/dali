@@ -17,7 +17,8 @@ test("website translations are reviewable, language-specific and published witho
   assert.match(content, /sanitizeTranslationMap/);
   assert.match(manager, /الترجمة قبل النشر/);
   assert.match(manager, /generateWebsiteTranslations/);
-  assert.match(manager, /new Set<string>\(authoredUiStrings\)/);
+  assert.match(manager, /completeWebsiteTranslations/);
+  assert.match(manager, /النشر متوقف حتى اكتمال الترجمة/);
   assert.match(manager, /draft\.translations\[translationTarget\]/);
   assert.match(endpoint, /requestedTarget==="bn"\?"bn":"en"/);
   assert.match(runtime, /websiteTranslations\[trimmed\]\|\|translateUi/);
@@ -25,6 +26,8 @@ test("website translations are reviewable, language-specific and published witho
   assert.match(layout, /content\.translations\[locale\]/);
   assert.match(websiteApi, /website-content-published/);
   assert.match(websiteApi, /emitPortalNotification/);
+  assert.match(websiteApi, /completeWebsiteTranslations/);
+  assert.match(websiteApi, /status: 422/);
 });
 
 test("published translation memory is also applied to the administrative portal", async () => {

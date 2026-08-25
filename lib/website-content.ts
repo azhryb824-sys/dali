@@ -5,7 +5,7 @@ import { insights } from "@/lib/insights";
 import { serviceCatalog } from "@/lib/service-catalog";
 
 export type PublicationStatus = "draft" | "published";
-export type WebsiteCollectionKey = "services" | "sectors" | "locations" | "projects" | "credentials" | "articles" | "jobs" | "partners";
+export type WebsiteCollectionKey = "services" | "sectors" | "locations" | "projects" | "credentials" | "articles" | "jobs" | "partners" | "pages";
 
 export type ManagedFaq = { question: string; answer: string };
 export type ManagedBlock = { title: string; text: string; checklist: string[] };
@@ -86,6 +86,7 @@ export type WebsiteContent = {
     articles: boolean;
     jobs: boolean;
     partners: boolean;
+    pages: boolean;
     faq: boolean;
   };
   collections: Record<WebsiteCollectionKey, ManagedEntry[]>;
@@ -272,7 +273,7 @@ export const DEFAULT_WEBSITE_CONTENT: WebsiteContent = {
       { title: "نبقى إلى جانبك", text: "نتابع مستوى الخدمة ونستجيب للمتغيرات طوال مدة التعاون." },
     ],
   },
-  visibility: { hajj: true, services: true, sectors: true, locations: true, projects: true, credentials: true, articles: true, jobs: true, partners: true, faq: true },
+  visibility: { hajj: true, services: true, sectors: true, locations: true, projects: true, credentials: true, articles: true, jobs: true, partners: true, pages: true, faq: true },
   collections: {
     services: defaultServiceEntries(),
     sectors,
@@ -282,6 +283,7 @@ export const DEFAULT_WEBSITE_CONTENT: WebsiteContent = {
     articles: defaultArticleEntries(),
     jobs: [],
     partners: [],
+    pages: [],
   },
   faq: [
     { question: "كيف أطلب عمالة في مكة المكرمة؟", answer: "أرسل تفاصيل الاحتياج عبر نموذج طلب عرض السعر، متضمنًا المهن والأعداد وموقع العمل والمدة والورديات، ثم يراجع فريق دالي الطلب." },
@@ -461,6 +463,7 @@ export function sanitizeWebsiteContent(value: unknown, fallback = DEFAULT_WEBSIT
       articles: typeof visibility.articles === "boolean" ? visibility.articles : fallback.visibility.articles,
       jobs: typeof visibility.jobs === "boolean" ? visibility.jobs : fallback.visibility.jobs,
       partners: typeof visibility.partners === "boolean" ? visibility.partners : fallback.visibility.partners,
+      pages: typeof visibility.pages === "boolean" ? visibility.pages : fallback.visibility.pages,
       faq: typeof visibility.faq === "boolean" ? visibility.faq : fallback.visibility.faq,
     },
     collections: {
@@ -472,6 +475,7 @@ export function sanitizeWebsiteContent(value: unknown, fallback = DEFAULT_WEBSIT
       articles: sanitizeCollection(collections.articles, fallback.collections.articles, "articles"),
       jobs: sanitizeCollection(collections.jobs, fallback.collections.jobs, "jobs"),
       partners: sanitizeCollection(collections.partners, fallback.collections.partners, "partners"),
+      pages: sanitizeCollection(collections.pages, fallback.collections.pages, "pages"),
     },
     faq: sanitizeFaqs(root.faq, fallback.faq),
   };
@@ -636,6 +640,7 @@ export function collectionBasePath(key: WebsiteCollectionKey) {
     articles: "/insights",
     jobs: "/careers",
     partners: "/partners",
+    pages: "/pages",
   };
   return paths[key];
 }

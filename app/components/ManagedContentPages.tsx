@@ -13,6 +13,7 @@ const collectionLabels: Record<WebsiteCollectionKey, { eyebrow: string; singular
   articles: { eyebrow: "مركز المعرفة", singular: "الدليل" },
   jobs: { eyebrow: "الوظائف", singular: "الفرصة" },
   partners: { eyebrow: "الموردون والشركاء", singular: "الشريك" },
+  pages: { eyebrow: "صفحات الشركة", singular: "الصفحة" },
 };
 
 export function ManagedCollectionIndex({ content, collectionKey, title, description, entries, emptyTitle, emptyText }: {

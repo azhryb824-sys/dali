@@ -6,6 +6,7 @@ import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest } from "@/lib/security";
 import { DEFAULT_WEBSITE_CONTENT, sanitizeWebsiteContent, WEBSITE_CONTENT_KEY } from "@/lib/website-content";
+import { completeWebsiteTranslations } from "@/lib/website-translation-audit";
 
 function safeHttpsUrl(value: string) {
   if (!value) return true;
@@ -47,6 +48,11 @@ export async function PUT(request: Request) {
     if (expectedVersion !== previous.version) return jsonNoStore({ error: "عدّل مستخدم آخر محتوى الموقع. حدّث الصفحة قبل الحفظ.", currentVersion: previous.version }, { status: 409 });
 
     const next = sanitizeWebsiteContent(payload.content, previous);
+    const translationAudit = completeWebsiteTranslations(next);
+    if (!translationAudit.complete) return jsonNoStore({
+      error: `لا يمكن نشر الموقع قبل اكتمال الترجمة: ${translationAudit.en.missing.length} نص إنجليزي و${translationAudit.bn.missing.length} نص بنغالي غير مكتمل.`,
+      translationAudit: { en: translationAudit.en.missing.length, bn: translationAudit.bn.missing.length },
+    }, { status: 422 });
     next.version = previous.version + 1;
     next.updatedAt = new Date().toISOString();
     next.updatedBy = access.user.email.trim().toLowerCase();

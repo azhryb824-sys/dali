@@ -25,7 +25,7 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
       { title: "طلب عرض سعر", text: "شاركنا احتياجك ليقترح فريق دالي الحل المناسب", href: "/contact", keywords: "تواصل استفسار سعر طلب شراكة" },
       ...(content.visibility.faq ? [{ title: "الأسئلة الشائعة", text: "إجابات عن الخدمات والتعاقد والعمالة", href: "/faq", keywords: "معلومات أسئلة" }] : []),
     ];
-    const paths = { services: "/services", sectors: "/sectors", locations: "/locations", projects: "/projects", credentials: "/credentials", articles: "/insights", jobs: "/careers", partners: "/partners" } as const;
+    const paths = { services: "/services", sectors: "/sectors", locations: "/locations", projects: "/projects", credentials: "/credentials", articles: "/insights", jobs: "/careers", partners: "/partners", pages: "/pages" } as const;
     const managed = Object.entries(content.collections).flatMap(([key, entries]) => entries
       .filter((item) => item.status === "published")
       .map((item) => ({
@@ -55,6 +55,7 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
         {content.visibility.locations && <Link href="/locations">مناطق الخدمة</Link>}
         {content.visibility.hajj && <Link href="/seasons">رمضان والحج</Link>}
         {content.visibility.articles && <Link href="/insights">المعرفة</Link>}
+        {content.visibility.pages && content.collections.pages.filter((item) => item.status === "published" && item.featured).slice(0, 2).map((item) => <Link href={`/pages/${item.slug}`} key={item.id}>{item.shortTitle || item.title}</Link>)}
       </nav>
       <div className="site-search">
         <label><span aria-hidden="true">⌕</span><input value={query} role="combobox" aria-controls="site-search-results" aria-autocomplete="list" onFocus={() => setSearchOpen(true)} onBlur={() => window.setTimeout(() => setSearchOpen(false), 120)} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") setSearchOpen(false); if (event.key === "Enter" && results[0]) { event.preventDefault(); window.location.href = results[0].href; } }} placeholder="ابحث في الموقع" aria-label="البحث في جميع أقسام الموقع" aria-expanded={searchOpen && query.trim().length >= 2}/></label>

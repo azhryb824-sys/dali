@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ManagedBlock, ManagedEntry, ManagedFaq, WebsiteCollectionKey, WebsiteContent } from "@/lib/website-content";
-import { authoredUiStrings } from "@/lib/i18n-authored-strings";
+import { collectWebsiteArabicStrings, completeWebsiteTranslations } from "@/lib/website-translation-audit";
 
 type Tab = "overview" | "identity" | "home" | "seo" | "translations" | WebsiteCollectionKey | "faq" | "visibility";
 
@@ -10,6 +10,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "overview", label: "نظرة عامة" }, { id: "identity", label: "بيانات الشركة" }, { id: "home", label: "الصفحة الرئيسية" }, { id: "seo", label: "تحسين البحث" },
   { id: "services", label: "الخدمات" }, { id: "sectors", label: "القطاعات" }, { id: "locations", label: "مناطق الخدمة" }, { id: "projects", label: "المشروعات" },
   { id: "credentials", label: "التراخيص" }, { id: "articles", label: "المعرفة" }, { id: "jobs", label: "الوظائف" }, { id: "partners", label: "الشركاء" },
+  { id: "pages", label: "الصفحات الإضافية" },
   { id: "faq", label: "الأسئلة الشائعة" }, { id: "translations", label: "الترجمة قبل النشر" }, { id: "visibility", label: "ظهور الأقسام" },
 ];
 
@@ -22,6 +23,7 @@ const collectionHelp: Record<WebsiteCollectionKey, { title: string; description:
   articles: { title: "مركز المعرفة", description: "أنشئ أدلة تجيب عن أسئلة العملاء وتضيف خبرة أصلية، لا صفحات حشو للكلمات.", path: "/insights" },
   jobs: { title: "الوظائف", description: "حوّل الإعلان إلى مسودة أو احذفه من النشر فور إغلاق الفرصة.", path: "/careers" },
   partners: { title: "الموردون والشركاء", description: "انشر الجهات أو برامج الشراكة المعتمدة فقط.", path: "/partners" },
+  pages: { title: "إدارة الصفحات الإضافية", description: "أنشئ صفحات الشركة دون تدخل برمجي. ينشئ النظام رابطًا ثابتًا وآمنًا تلقائيًا ولا يعرض حقله للمستخدم.", path: "/pages" },
 };
 
 const keywordClusters = [
@@ -41,18 +43,6 @@ function parseBlocks(value: string): ManagedBlock[] { return lines(value).map((l
 function faqsText(value: ManagedFaq[]) { return value.map((item) => `${item.question}|${item.answer}`).join("\n"); }
 function parseFaqs(value: string): ManagedFaq[] { return lines(value).map((line) => { const separator = line.indexOf("|"); return separator < 0 ? { question: line, answer: "" } : { question: line.slice(0, separator).trim(), answer: line.slice(separator + 1).trim() }; }).filter((item) => item.question && item.answer); }
 function dateOnly() { return new Date().toISOString().slice(0, 10); }
-function websiteArabicStrings(content: WebsiteContent) {
-  const values = new Set<string>(authoredUiStrings);
-  function visit(value: unknown, key = "") {
-    if (key === "translations") return;
-    if (typeof value === "string" && /[\u0600-\u06ff]/.test(value) && value.length <= 6000) values.add(value.trim());
-    else if (Array.isArray(value)) value.forEach((item) => visit(item));
-    else if (value && typeof value === "object") Object.entries(value).forEach(([childKey, child]) => visit(child, childKey));
-  }
-  visit(content);
-  return [...values].filter(Boolean);
-}
-
 export default function WebsiteManager({ initialContent, canManage }: { initialContent: WebsiteContent; canManage: boolean }) {
   const [content, setContent] = useState(initialContent);
   const [tab, setTab] = useState<Tab>("overview");
@@ -63,6 +53,7 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
   const [translating, setTranslating] = useState(false);
   const publishedCount = useMemo(() => Object.values(content.collections).flat().filter((item) => item.status === "published").length, [content]);
   const draftCount = useMemo(() => Object.values(content.collections).flat().filter((item) => item.status === "draft").length, [content]);
+  const translationAudit = useMemo(() => completeWebsiteTranslations(content), [content]);
 
   function mutate(updater: (draft: WebsiteContent) => void) {
     setContent((current) => { const draft = structuredClone(current); updater(draft); return draft; });
@@ -83,7 +74,7 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
 
   async function generateWebsiteTranslations() {
     if (!canManage || translating) return;
-    const source = websiteArabicStrings(content);
+    const source = collectWebsiteArabicStrings(content);
     setTranslating(true); setNotice(""); setError("");
     try {
       const translatedMap = { ...content.translations[translationTarget] };
@@ -102,7 +93,7 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
   }
 
   return <section className="website-manager">
-    <header className="website-manager-head"><div><p className="section-kicker">إدارة الموقع الإلكتروني</p><h2>المحتوى والظهور في محركات البحث</h2><p>تغييرات الأقسام المنشورة تظهر مباشرة في الموقع العام. النصوص تُعرض كنص آمن دون قبول شيفرات HTML.</p></div><div className="website-publish-actions"><a href="/" target="_blank" rel="noreferrer">فتح الموقع العام</a><button type="button" onClick={save} disabled={!canManage || busy}>{busy ? "جارٍ الحفظ..." : "حفظ ونشر التغييرات"}</button></div></header>
+    <header className="website-manager-head"><div><p className="section-kicker">إدارة الموقع الإلكتروني</p><h2>المحتوى والظهور في محركات البحث</h2><p>تغييرات الأقسام المنشورة تظهر مباشرة في الموقع العام. لا يسمح النظام بالنشر النهائي قبل اكتمال الإنجليزية والبنغالية لكل نص عربي.</p></div><div className="website-publish-actions"><a href="/" target="_blank" rel="noreferrer">فتح الموقع العام</a><button type="button" onClick={save} disabled={!canManage || busy || !translationAudit.complete} title={translationAudit.complete ? "" : "أكمل ترجمة جميع النصوص قبل النشر"}>{busy ? "جارٍ الحفظ..." : translationAudit.complete ? "حفظ ونشر التغييرات" : "النشر متوقف حتى اكتمال الترجمة"}</button></div></header>
     {(notice || error) && <div className={error ? "website-message error" : "website-message success"} role={error ? "alert" : "status"}>{error || notice}</div>}
     {!canManage && <div className="website-message warning">يمكنك الاطلاع على المحتوى، لكن حسابك لا يملك صلاحية النشر.</div>}
     <div className="website-manager-layout"><nav className="website-tabs" aria-label="أقسام إدارة الموقع">{tabs.map((item) => <button type="button" key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}{item.id in content.collections && <small>{content.collections[item.id as WebsiteCollectionKey].length}</small>}</button>)}</nav>
@@ -113,8 +104,8 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
         {tab === "seo" && <EditorPanel title="إعدادات تحسين محركات البحث" description="تُستخدم الكلمات المستهدفة لتوجيه المحتوى، وليست بديلًا عن صفحات مفيدة أو سمعة محلية حقيقية."><div className="website-form-grid"><Field wide label="عنوان الصفحة الرئيسية لمحركات البحث" value={content.seo.homeTitle} onChange={(value) => mutate((draft) => { draft.seo.homeTitle = value; })} disabled={!canManage}/><Field wide label="وصف نتيجة البحث" value={content.seo.homeDescription} onChange={(value) => mutate((draft) => { draft.seo.homeDescription = value; })} disabled={!canManage} multiline/><Field wide label="وصف المنشأة في البيانات المنظمة" value={content.seo.organizationDescription} onChange={(value) => mutate((draft) => { draft.seo.organizationDescription = value; })} disabled={!canManage} multiline/><Field wide label="الكلمات والموضوعات الأساسية" value={content.seo.focusKeywords} onChange={(value) => mutate((draft) => { draft.seo.focusKeywords = value; })} disabled={!canManage} multiline/></div><div className="keyword-clusters"><h3>خريطة الكلمات ذات الأولوية</h3>{keywordClusters.map((cluster) => <article key={cluster.intent}><strong>{cluster.intent}</strong><p>{cluster.terms}</p></article>)}</div><p className="website-editor-note">لا يمكن ضمان المركز الأول تقنيًا. الترتيب المحلي يعتمد كذلك على الصلة والمسافة والشهرة، وملف النشاط التجاري والمراجعات والروابط ورضا المستخدمين.</p></EditorPanel>}
         {(Object.keys(content.collections) as WebsiteCollectionKey[]).includes(tab as WebsiteCollectionKey) && <CollectionEditor collectionKey={tab as WebsiteCollectionKey} entries={content.collections[tab as WebsiteCollectionKey]} canManage={canManage} onChange={(entries) => mutate((draft) => { draft.collections[tab as WebsiteCollectionKey] = entries; })}/>}
         {tab === "faq" && <EditorPanel title="الأسئلة الشائعة العامة" description="تظهر في الصفحة الرئيسية وصفحة مستقلة، وتُضاف إلى البيانات المنظمة فقط عندما تكون الإجابة ظاهرة للزائر."><FaqEditor faqs={content.faq} disabled={!canManage} onChange={(faq) => mutate((draft) => { draft.faq = faq; })}/></EditorPanel>}
-        {tab === "translations" && <EditorPanel title="ترجمة الموقع والنظام القابلة للمراجعة قبل النشر" description="العربية هي المصدر. تشمل القائمة محتوى الموقع وكل نصوص واجهة النظام المؤلفة. أنشئ مسودة لغة واحدة، راجعها وعدّلها، ثم استخدم زر حفظ ونشر أعلى الصفحة."><div className="collection-toolbar"><label>لغة المسودة<select value={translationTarget} disabled={!canManage || translating} onChange={(event) => setTranslationTarget(event.target.value === "bn" ? "bn" : "en")}><option value="en">English</option><option value="bn">বাংলা</option></select></label><button type="button" disabled={!canManage || translating} onClick={() => void generateWebsiteTranslations()}>{translating ? "جارٍ إنشاء المسودة..." : "إنشاء/استكمال الترجمة آليًا"}</button><span>{Object.keys(content.translations[translationTarget]).length} نص مترجم</span></div><div className="faq-editor">{websiteArabicStrings(content).map((source) => <article key={`${translationTarget}-${source}`}><p dir="rtl">{source}</p><Field label={translationTarget === "en" ? "English" : "বাংলা"} value={content.translations[translationTarget][source] || ""} onChange={(value) => mutate((draft) => { if (value.trim()) draft.translations[translationTarget][source] = value; else delete draft.translations[translationTarget][source]; })} disabled={!canManage} multiline dir="ltr"/></article>)}</div></EditorPanel>}
-        {tab === "visibility" && <EditorPanel title="ظهور الأقسام" description="إخفاء القسم يزيل رابطه من التنقل، بينما تتحكم حالة كل عنصر في نشر صفحته."><div className="visibility-grid">{Object.entries(content.visibility).map(([key, value]) => <label key={key}><input type="checkbox" checked={value} disabled={!canManage} onChange={(event) => mutate((draft) => { draft.visibility[key as keyof WebsiteContent["visibility"]] = event.target.checked; })}/><span>{({ hajj: "موسما رمضان والحج", services: "الخدمات", sectors: "القطاعات", locations: "مناطق الخدمة", projects: "المشروعات", credentials: "التراخيص", articles: "مركز المعرفة", jobs: "الوظائف", partners: "الموردون والشركاء", faq: "الأسئلة الشائعة" } as Record<string, string>)[key]}</span></label>)}</div></EditorPanel>}
+        {tab === "translations" && <EditorPanel title="ترجمة الموقع والنظام القابلة للمراجعة قبل النشر" description="العربية هي المصدر. يجرد النظام نصوص الموقع والبوابة فعليًا، ويعدّ أي نص عربي باقٍ داخل الترجمة نصًا غير مكتمل."><div className="website-stats"><article><span>الإنجليزية</span><strong>{translationAudit.en.translated}/{translationAudit.en.total}</strong><small>{translationAudit.en.complete ? "مكتملة" : `${translationAudit.en.missing.length} نص ناقص`}</small></article><article><span>البنغالية</span><strong>{translationAudit.bn.translated}/{translationAudit.bn.total}</strong><small>{translationAudit.bn.complete ? "مكتملة" : `${translationAudit.bn.missing.length} نص ناقص`}</small></article></div><div className="collection-toolbar"><label>لغة المسودة<select value={translationTarget} disabled={!canManage || translating} onChange={(event) => setTranslationTarget(event.target.value === "bn" ? "bn" : "en")}><option value="en">English</option><option value="bn">বাংলা</option></select></label><button type="button" disabled={!canManage || translating} onClick={() => void generateWebsiteTranslations()}>{translating ? "جارٍ إنشاء المسودة..." : "إنشاء/استكمال الترجمة آليًا"}</button><span>{translationTarget === "en" ? translationAudit.en.missing.length : translationAudit.bn.missing.length} نص يحتاج مراجعة</span></div><div className="faq-editor">{collectWebsiteArabicStrings(content).map((source) => <article key={`${translationTarget}-${source}`}><p dir="rtl">{source}</p><Field label={translationTarget === "en" ? "English" : "বাংলা"} value={content.translations[translationTarget][source] || ""} onChange={(value) => mutate((draft) => { if (value.trim()) draft.translations[translationTarget][source] = value; else delete draft.translations[translationTarget][source]; })} disabled={!canManage} multiline dir="ltr"/></article>)}</div></EditorPanel>}
+        {tab === "visibility" && <EditorPanel title="ظهور الأقسام" description="إخفاء القسم يزيل رابطه من التنقل، بينما تتحكم حالة كل عنصر في نشر صفحته."><div className="visibility-grid">{Object.entries(content.visibility).map(([key, value]) => <label key={key}><input type="checkbox" checked={value} disabled={!canManage} onChange={(event) => mutate((draft) => { draft.visibility[key as keyof WebsiteContent["visibility"]] = event.target.checked; })}/><span>{({ hajj: "موسما رمضان والحج", services: "الخدمات", sectors: "القطاعات", locations: "مناطق الخدمة", projects: "المشروعات", credentials: "التراخيص", articles: "مركز المعرفة", jobs: "الوظائف", partners: "الموردون والشركاء", pages: "الصفحات الإضافية", faq: "الأسئلة الشائعة" } as Record<string, string>)[key]}</span></label>)}</div></EditorPanel>}
       </div>
     </div>
   </section>;
@@ -122,13 +113,13 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
 
 function EditorPanel({ title, description, children }: { title: string; description: string; children: React.ReactNode }) { return <section className="website-editor-panel"><header><h3>{title}</h3><p>{description}</p></header>{children}</section>; }
 
-function Field({ label, value, onChange, disabled, multiline = false, wide = false, dir }: { label: string; value: string; onChange: (value: string) => void; disabled: boolean; multiline?: boolean; wide?: boolean; dir?: "ltr" | "rtl" }) { return <label className={wide ? "wide" : ""}>{label}{multiline ? <textarea value={value} rows={4} maxLength={8000} disabled={disabled} dir={dir} onChange={(event) => onChange(event.target.value)}/> : <input value={value} maxLength={500} disabled={disabled} dir={dir} onChange={(event) => onChange(event.target.value)}/>}</label>; }
+function Field({ label, value, onChange, disabled, multiline = false, wide = false, dir }: { label: string; value: string; onChange: (value: string) => void; disabled: boolean; multiline?: boolean; wide?: boolean; dir?: "ltr" | "rtl" }) { if (label === "الرابط الإنجليزي") return null; return <label className={wide ? "wide" : ""}>{label}{multiline ? <textarea value={value} rows={4} maxLength={8000} disabled={disabled} dir={dir} onChange={(event) => onChange(event.target.value)}/> : <input value={value} maxLength={500} disabled={disabled} dir={dir} onChange={(event) => onChange(event.target.value)}/>}</label>; }
 
 function CollectionEditor({ collectionKey, entries, canManage, onChange }: { collectionKey: WebsiteCollectionKey; entries: ManagedEntry[]; canManage: boolean; onChange: (entries: ManagedEntry[]) => void }) {
   const help = collectionHelp[collectionKey];
   const [uploading, setUploading] = useState("");
   function update(index: number, updater: (entry: ManagedEntry) => void) { const next = structuredClone(entries); updater(next[index]); onChange(next); }
-  function add() { const stamp = Date.now().toString(36); const entry: ManagedEntry = { id: `${collectionKey}-${crypto.randomUUID()}`, slug: `new-${collectionKey}-${stamp}`, title: "عنصر جديد", shortTitle: "عنصر جديد", summary: "أضف وصفًا موجزًا ومفيدًا للزائر.", body: "اكتب مقدمة واضحة تشرح النطاق والفائدة دون ادعاءات غير موثقة.", image: "/images/dali-capabilities.webp", imageAlt: "صورة توضيحية خالية من الكائنات الحية", status: "draft", featured: false, sortOrder: entries.length + 1, seoTitle: "عنوان صفحة واضح", seoDescription: "وصف دقيق للصفحة وسبب فائدتها للباحث.", focusKeywords: "", tags: [], checklist: [], blocks: [], faqs: [], publishedAt: dateOnly(), updatedAt: dateOnly() }; onChange([...entries, entry]); }
+  function add() { const id = crypto.randomUUID(); const entry: ManagedEntry = { id: `${collectionKey}-${id}`, slug: `${collectionKey.slice(0,-1)||"page"}-${id.slice(0,12)}`, title: "عنصر جديد", shortTitle: "عنصر جديد", summary: "أضف وصفًا موجزًا ومفيدًا للزائر.", body: "اكتب مقدمة واضحة تشرح النطاق والفائدة دون ادعاءات غير موثقة.", image: "/images/dali-capabilities.webp", imageAlt: "صورة توضيحية خالية من الكائنات الحية", status: "draft", featured: false, sortOrder: entries.length + 1, seoTitle: "عنوان صفحة واضح", seoDescription: "وصف دقيق للصفحة وسبب فائدتها للباحث.", focusKeywords: "", tags: [], checklist: [], blocks: [], faqs: [], publishedAt: dateOnly(), updatedAt: dateOnly() }; onChange([...entries, entry]); }
   function remove(index: number) { if (!window.confirm("سيُحذف هذا العنصر من مسودة الإدارة. هل تريد المتابعة؟")) return; onChange(entries.filter((_, itemIndex) => itemIndex !== index)); }
   async function uploadPartnerLogo(index: number, file?: File) {
     if (!file || !canManage) return;
