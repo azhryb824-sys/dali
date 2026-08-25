@@ -339,6 +339,10 @@ export const employees = pgTable(
     gosiNumber: text("gosi_number"),
     nationalId: text("national_id"),
     nationality: text("nationality"),
+    sponsorshipType: text("sponsorship_type").notNull().default("dali"),
+    sponsorName: text("sponsor_name"),
+    iqamaExpiry: text("iqama_expiry"),
+    workPermitExpiry: text("work_permit_expiry"),
     bankName: text("bank_name"),
     iban: text("iban"),
     baseSalaryHalalas: integer("base_salary_halalas").notNull().default(0),
@@ -350,6 +354,7 @@ export const employees = pgTable(
     hireDate: text("hire_date").notNull(),
     probationEndDate: text("probation_end_date"),
     contractEndDate: text("contract_end_date"),
+    archivedAt: text("archived_at"),
     terminationDate: text("termination_date"),
     terminationReason: text("termination_reason"),
     status: text("status").notNull().default("active"),
@@ -361,6 +366,9 @@ export const employees = pgTable(
     index("employees_department_idx").on(table.department),
     uniqueIndex("employees_portal_user_unique").on(table.portalUserEmail),
     index("employees_manager_idx").on(table.managerId),
+    index("employees_compliance_expiry_idx").on(table.iqamaExpiry, table.workPermitExpiry, table.contractEndDate),
+    check("employees_sponsorship_type_check", sql`${table.sponsorshipType} in ('dali','other')`),
+    check("employees_sponsor_consistency_check", sql`(${table.sponsorshipType} = 'dali' and ${table.sponsorName} is null) or (${table.sponsorshipType} = 'other' and length(trim(${table.sponsorName})) >= 2)`),
   ],
 );
 

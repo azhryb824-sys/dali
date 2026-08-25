@@ -110,7 +110,7 @@ async function ProtectedPortal() {
       ? db.select().from(portalActivity).orderBy(desc(portalActivity.createdAt)).limit(12)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "employees")
-      ? db.select().from(employees).orderBy(desc(employees.createdAt)).limit(500)
+      ? db.select().from(employees).where(isNull(employees.archivedAt)).orderBy(desc(employees.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "finance")
       ? db.select().from(financialRecords).orderBy(desc(financialRecords.createdAt)).limit(500)

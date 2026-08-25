@@ -45,3 +45,25 @@ test("notification popover closes outside and with Escape while preserving insid
   assert.match(portal, /event\.key === "Escape"/);
   assert.match(portal, /className="notification-shell" ref=\{notificationShellRef\}/);
 });
+
+test("employee sponsorship and government renewals stay integrated and auditable", () => {
+  const schema = read("db/schema.ts");
+  const migration = read("drizzle-pg/0038_employee_sponsorship_government_compliance.sql");
+  const api = read("app/api/portal/employees/route.ts");
+  const governmentApi = read("app/api/portal/government/route.ts");
+  const governmentUi = read("app/portal/GovernmentAffairsWorkspace.tsx");
+  const notifications = read("lib/portal-notifications.ts");
+  const portal = read("app/portal/PortalDashboard.tsx");
+  for (const token of ["sponsorshipType", "sponsorName", "iqamaExpiry", "workPermitExpiry", "contractEndDate", "archivedAt"]) assert.match(schema, new RegExp(token));
+  assert.match(migration, /employees_sponsor_consistency_check/);
+  assert.match(api, /employee-compliance-updated/);
+  assert.match(api, /حذف آمن مع حفظ التاريخ المالي والوظيفي/);
+  assert.match(governmentApi, /renewalItems/);
+  assert.match(governmentApi, /https:\/\/muqeem\.sa\//);
+  assert.match(governmentApi, /https:\/\/www\.qiwa\.sa\//);
+  assert.match(governmentUi, /أقل من 29 يومًا/);
+  assert.match(notifications, /days >= 29/);
+  assert.match(notifications, /employee-\$\{expiry\.kind\}-expiry/);
+  assert.match(portal, /employeeComplianceAlerts/);
+  assert.match(portal, /employee-compliance-editor/);
+});

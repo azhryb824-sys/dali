@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { chartOfAccounts, employeeAttendance, employeeDocuments, employeeLeaveRequests, employeeMovements, employees, journalEntries, payrollItems, payrollRuns, portalUsers } from "@/db/schema";
 import { createDraftJournal } from "@/lib/accounting";
@@ -28,7 +28,7 @@ export async function GET() {
   if (!access || !(await hasPortalPermission(access, "employees", "read"))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   const db = getDb();
   const [staff, movements, runs, items, documents, leaves, attendance, users] = await Promise.all([
-    db.select().from(employees).orderBy(employees.fullName).limit(1000),
+    db.select().from(employees).where(isNull(employees.archivedAt)).orderBy(employees.fullName).limit(1000),
     db.select().from(employeeMovements).orderBy(desc(employeeMovements.effectiveDate), desc(employeeMovements.id)).limit(1000),
     db.select().from(payrollRuns).orderBy(desc(payrollRuns.periodMonth)).limit(120),
     db.select().from(payrollItems).orderBy(desc(payrollItems.id)).limit(5000),
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       const paymentDate = clean(payload.paymentDate, 10);
       const range = monthRange(periodMonth);
       if (!range || !/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) return jsonNoStore({ error: "الفترة أو تاريخ الصرف غير صحيح" }, { status: 400 });
-      const staff = await db.select().from(employees).where(eq(employees.status, "active")).orderBy(employees.id);
+      const staff = await db.select().from(employees).where(and(eq(employees.status, "active"), isNull(employees.archivedAt))).orderBy(employees.id);
       if (!staff.length) return jsonNoStore({ error: "لا يوجد موظفون نشطون لإنشاء المسير" }, { status: 400 });
       const movements = await db.select().from(employeeMovements).where(and(gte(employeeMovements.effectiveDate, range.start), lte(employeeMovements.effectiveDate, range.end), eq(employeeMovements.status, "approved")));
       const values = staff.map((employee) => {

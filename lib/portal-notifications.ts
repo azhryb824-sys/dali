@@ -8,6 +8,7 @@ import {
   contractWorkerAssignments,
   constructionOpportunities,
   constructionProjects,
+  employees,
   financialRecords,
   dataSubjectRequests,
   integrationOutbox,
@@ -154,7 +155,7 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   if (!options.force && marker && now.getTime() - new Date(marker.updatedAt).getTime() < 5 * 60 * 1000) return;
   await db.insert(portalSettings).values({ key: "operational-notifications-last-refresh", valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() }).onConflictDoUpdate({ target: portalSettings.key, set: { valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() } });
 
-  const [documents, legalItems, legalActivities, paymentItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems] = await Promise.all([
+  const [documents, legalItems, legalActivities, paymentItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems, employeeItems] = await Promise.all([
     db.select().from(companyDocuments).where(eq(companyDocuments.status, "active")).limit(1000),
     db.select().from(legalRecords).where(ne(legalRecords.status, "closed")).limit(1000),
     db.select().from(legalCaseActivities).where(ne(legalCaseActivities.status, "completed")).limit(5000),
@@ -176,12 +177,29 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     db.select().from(capacityPlans).where(ne(capacityPlans.status, "completed")).limit(1000),
     db.select().from(constructionOpportunities).where(ne(constructionOpportunities.stage, "won")).limit(1000),
     db.select().from(constructionProjects).where(ne(constructionProjects.status, "closed")).limit(1000),
+    db.select().from(employees).where(eq(employees.status, "active")).limit(2000),
   ]);
 
   const pendingChecks = new Map<string, PortalNotificationInput & { dedupeKey: string }>();
   const ensure = (input: PortalNotificationInput & { dedupeKey: string }) => {
     pendingChecks.set(input.dedupeKey, input);
   };
+
+  for (const employee of employeeItems) {
+    if (employee.archivedAt) continue;
+    const expiries = [
+      { kind: "iqama", label: "الإقامة", date: employee.iqamaExpiry },
+      ...(employee.sponsorshipType === "dali" ? [
+        { kind: "employment-contract", label: "عقد العمل", date: employee.contractEndDate },
+        { kind: "work-permit", label: "رخصة العمل", date: employee.workPermitExpiry },
+      ] : []),
+    ];
+    for (const expiry of expiries) {
+      const days = daysUntil(expiry.date);
+      if (!Number.isFinite(days) || days >= 29) continue;
+      ensure({ dedupeKey: `employee-${expiry.kind}-expiry:${employee.id}:${expiry.date}`, eventType: days < 0 ? `employee-${expiry.kind}-expired` : `employee-${expiry.kind}-expiring`, title: days < 0 ? `${expiry.label} لموظف منتهية` : `${expiry.label} لموظف تنتهي قريبًا`, message: `${employee.employeeNumber} — ${employee.fullName} — ${formatAlertDate(expiry.date)} — ${days < 0 ? `متأخرة ${Math.abs(days)} يومًا` : `متبقٍ ${days} يومًا`}.`, severity: days < 0 || days <= 7 ? "critical" : "warning", module: "government", entityType: "employee", entityId: employee.id, actionView: "government", targetRole: "admin", source: "system-check" });
+    }
+  }
 
   for(const payment of paymentItems){
     if(["scheduled","due"].includes(payment.status)&&payment.dueDate<=now.toISOString().slice(0,10)){
