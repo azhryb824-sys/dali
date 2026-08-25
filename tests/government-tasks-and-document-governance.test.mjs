@@ -21,6 +21,12 @@ test("government affairs compatibility migration restores copied production data
   assert.match(api,/government-affairs-load-failed/);
 });
 
+test("employee compatibility migration completes columns selected by government affairs",async()=>{
+  const migration=await source("drizzle-pg/0042_employee_profile_schema_repair.sql");
+  for(const field of ["portal_user_email","manager_id","work_location","employment_type","contract_type","gosi_number"])assert.match(migration,new RegExp(`ADD COLUMN IF NOT EXISTS "${field}"`));
+  assert.doesNotMatch(migration,/DROP TABLE|DROP COLUMN|TRUNCATE|DELETE FROM/);
+});
+
 test("tasks enforce private visibility, owner assignment and global five-minute reminders",async()=>{
   const[api,ui,schema,migration,notifications]=await Promise.all([source("app/api/portal/tasks/route.ts"),source("app/portal/TaskCenter.tsx"),source("db/schema.ts"),source("drizzle-pg/0035_government_affairs_tasks_and_letters.sql"),source("lib/portal-notifications.ts")]);
   assert.match(api,/إسناد المهام للمستخدمين متاح للمالك أو مشرف النظام فقط/);assert.match(api,/visibility=requested\.length\?"assigned":"private"/);assert.match(api,/task\.createdBy!==email&&!assignment/);
