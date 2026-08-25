@@ -35,7 +35,6 @@ export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; 
   }, []);
 
   const activeStaff = data.employees.filter((item) => item.status === "active");
-  const currentRun = data.runs[0];
   const totalMonthly = useMemo(() => activeStaff.reduce((sum, item) => sum + item.baseSalaryHalalas + item.housingAllowanceHalalas + item.transportAllowanceHalalas + item.otherAllowanceHalalas, 0), [activeStaff]);
 
   async function action(method: "POST" | "PATCH", payload: Record<string, unknown>, key: string) {

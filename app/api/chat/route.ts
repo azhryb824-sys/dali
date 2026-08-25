@@ -20,7 +20,7 @@ function cookieValue(request: Request) {
 
 function sessionCookie(request: Request, conversationId: string, token: string) {
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-  return `${COOKIE_NAME}=${encodeURIComponent(`${conversationId}.${token}`)}; Path=/api/chat; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`;
+  return `${COOKIE_NAME}=${encodeURIComponent(`${conversationId}.${token}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`;
 }
 
 async function resolveConversation(request: Request) {
@@ -65,6 +65,7 @@ async function conversationPayload(conversation: typeof visitorConversations.$in
       subject: conversation.subject,
       status: conversation.status,
       assigned: Boolean(conversation.assignedTo),
+      ratingSubmitted: Boolean(conversation.ratedAt),
     },
     messages: messages.map(publicMessage),
     delta: afterMessageId > 0,
@@ -132,12 +133,12 @@ export async function POST(request: Request) {
     const action = cleanText(payload.action, 20);
     const body = cleanText(payload.message, 2000);
     const clientMessageId = cleanText(payload.clientMessageId, 80);
-    if (body.length < 2) return Response.json({ error: "اكتب رسالتك قبل الإرسال." }, { status: 400 });
 
     const db = getDb();
     const now = new Date().toISOString();
 
     if (action === "start") {
+      if (body.length < 2) return Response.json({ error: "اكتب رسالتك قبل الإرسال." }, { status: 400 });
       const activeConversation = await resolveConversation(request);
       if (activeConversation) {
         return jsonNoStore({ ...(await conversationPayload(activeConversation)), businessHours: await getBusinessHoursState(), duplicate: true });
@@ -202,6 +203,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "send") {
+      if (body.length < 2) return Response.json({ error: "اكتب رسالتك قبل الإرسال." }, { status: 400 });
       const conversation = await resolveConversation(request);
       if (!conversation) return Response.json({ error: "انتهت جلسة المحادثة. ابدأ محادثة جديدة." }, { status: 401 });
       if (conversation.status === "closed") return jsonNoStore({ error: "هذه المحادثة مغلقة. ابدأ محادثة جديدة." }, { status: 409 });
@@ -251,6 +253,31 @@ export async function POST(request: Request) {
         autoReplies: automation.messages.map(publicMessage),
         businessHours: automation.state,
       }, { status: 201 });
+    }
+
+    if (action === "end") {
+      const conversation = await resolveConversation(request);
+      if (!conversation) return jsonNoStore({ error: "انتهت جلسة المحادثة." }, { status: 401 });
+      if (conversation.status === "closed") return jsonNoStore({ ...(await conversationPayload(conversation)), duplicate: true });
+      const [updated] = await db.update(visitorConversations).set({ status: "closed", closedAt: now, updatedAt: now })
+        .where(eq(visitorConversations.id, conversation.id)).returning();
+      await emitPortalNotification({ eventType: "live-chat-ended-by-visitor", title: "أنهى الزائر المحادثة", message: `${conversation.trackingCode} — ${conversation.visitorName}.`, severity: "info", module: "conversations", entityType: "visitor-conversation", entityId: conversation.id, actionView: "conversations", targetDepartment: "workforce" }).catch(() => undefined);
+      return jsonNoStore(await conversationPayload(updated));
+    }
+
+    if (action === "rate") {
+      const conversation = await resolveConversation(request);
+      if (!conversation) return jsonNoStore({ error: "انتهت جلسة المحادثة." }, { status: 401 });
+      if (conversation.status !== "closed") return jsonNoStore({ error: "يمكن التقييم بعد إنهاء المحادثة." }, { status: 409 });
+      if (conversation.ratedAt) return jsonNoStore({ error: "تم إرسال تقييم هذه المحادثة مسبقًا." }, { status: 409 });
+      const employeeRating = Number(payload.employeeRating);
+      const companyRating = Number(payload.companyRating);
+      if (![employeeRating, companyRating].every((value) => Number.isInteger(value) && value >= 1 && value <= 5)) return jsonNoStore({ error: "اختر تقييم الموظف والشركة من 1 إلى 5." }, { status: 400 });
+      const ratingComment = cleanText(payload.ratingComment, 1000) || null;
+      const [updated] = await db.update(visitorConversations).set({ employeeRating, companyRating, ratingComment, ratedAt: now, updatedAt: now })
+        .where(eq(visitorConversations.id, conversation.id)).returning();
+      await emitPortalNotification({ eventType: "live-chat-rated", title: "تقييم جديد للمحادثة", message: `${conversation.trackingCode} — الموظف ${employeeRating}/5 · الشركة ${companyRating}/5.`, severity: Math.min(employeeRating, companyRating) <= 2 ? "warning" : "success", module: "conversations", entityType: "visitor-conversation", entityId: conversation.id, actionView: "conversations", targetRole: "admin" }).catch(() => undefined);
+      return jsonNoStore({ conversation: { trackingCode: updated.trackingCode, status: updated.status, ratingSubmitted: true }, accepted: true });
     }
 
     return Response.json({ error: "إجراء المحادثة غير صحيح." }, { status: 400 });

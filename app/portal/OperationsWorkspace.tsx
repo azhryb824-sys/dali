@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- authenticated stamp previews use a protected API route */
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { workforceNationalities, workforceProfessions } from "@/lib/workforce-requirements";

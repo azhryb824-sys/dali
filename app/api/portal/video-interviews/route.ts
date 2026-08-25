@@ -22,7 +22,8 @@ async function payload(access: NonNullable<Awaited<ReturnType<typeof interviewAc
     status: videoInterviews.status, assignedTo: videoInterviews.assignedTo, requestedAt: videoInterviews.requestedAt,
     acceptedAt: videoInterviews.acceptedAt, startedAt: videoInterviews.startedAt, expiresAt: videoInterviews.expiresAt,
     transferCount: videoInterviews.transferCount, visitorName: visitorConversations.visitorName, visitorMobile: visitorConversations.visitorMobile,
-    subject: visitorConversations.subject, roomName: videoInterviews.roomName,
+    subject: visitorConversations.subject, roomName: videoInterviews.roomName, employeeRating: videoInterviews.employeeRating,
+    companyRating: videoInterviews.companyRating, ratingComment: videoInterviews.ratingComment, ratedAt: videoInterviews.ratedAt,
   }).from(videoInterviews).innerJoin(visitorConversations, eq(visitorConversations.id, videoInterviews.conversationId))
     .where(root ? inArray(videoInterviews.status, [...liveInterviewStatuses]) : and(eq(videoInterviews.assignedTo, access.user.email), inArray(videoInterviews.status, [...liveInterviewStatuses])))
     .orderBy(desc(videoInterviews.requestedAt)).limit(50);

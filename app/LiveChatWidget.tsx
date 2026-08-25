@@ -18,6 +18,7 @@ type PublicConversation = {
   subject: string;
   status: string;
   assigned: boolean;
+  ratingSubmitted: boolean;
 };
 
 type BusinessHours = {
@@ -28,7 +29,8 @@ type BusinessHours = {
   timezone: string;
   nextOpenLabel?: string;
 };
-type PublicVideoInterview={id:string;referenceCode:string;status:string;assignedName:string|null;requestedAt:string;expiresAt:string;joinUrl:string|null};
+type PublicVideoInterview={id:string;referenceCode:string;status:string;assignedName:string|null;requestedAt:string;expiresAt:string;joinUrl:string|null;ratingSubmitted:boolean};
+// «طلب مقابلة مرئية» هو مسمى السجل المتوافق مع واجهة المكالمات الحالية.
 
 function chatTime(value: string) {
   return new Intl.DateTimeFormat("ar-SA", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -41,6 +43,8 @@ export default function LiveChatWidget() {
   const [businessHours, setBusinessHours] = useState<BusinessHours | null>(null);
   const [videoInterview, setVideoInterview] = useState<PublicVideoInterview | null>(null);
   const [videoBusy, setVideoBusy] = useState(false);
+  const [callOpen,setCallOpen]=useState(false);
+  const [ratingBusy,setRatingBusy]=useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -151,6 +155,10 @@ export default function LiveChatWidget() {
 
   async function requestVideoInterview(){setVideoBusy(true);setError("");try{const response=await fetch("/api/video-interviews",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});const result=await response.json()as{interview?:PublicVideoInterview;businessHours?:BusinessHours;error?:string};if(!response.ok||!result.interview)throw new Error(result.error||"تعذّر طلب المقابلة المرئية");setVideoInterview(result.interview);if(result.businessHours)setBusinessHours(result.businessHours)}catch(videoError){setError(videoError instanceof Error?videoError.message:"تعذّر طلب المقابلة المرئية")}finally{setVideoBusy(false)}}
 
+  async function endConversation(){if(!window.confirm("هل تريد إنهاء المحادثة والانتقال إلى التقييم؟"))return;setSending(true);setError("");try{const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"end"})});const result=await response.json()as{conversation?:PublicConversation;error?:string};if(!response.ok||!result.conversation)throw new Error(result.error||"تعذّر إنهاء المحادثة");setConversation(current=>current?{...current,...result.conversation}:current)}catch(endError){setError(endError instanceof Error?endError.message:"تعذّر إنهاء المحادثة")}finally{setSending(false)}}
+
+  async function submitRating(event:FormEvent<HTMLFormElement>,channel:"chat"|"video"){event.preventDefault();setRatingBusy(true);setError("");try{const values=Object.fromEntries(new FormData(event.currentTarget));const endpoint=channel==="chat"?"/api/chat":"/api/video-interviews";const response=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"rate",...(channel==="video"?{interviewId:videoInterview?.id}:{}),...values})});const result=await response.json()as{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر إرسال التقييم");if(channel==="chat")setConversation(current=>current?{...current,ratingSubmitted:true}:current);else setVideoInterview(null)}catch(ratingError){setError(ratingError instanceof Error?ratingError.message:"تعذّر إرسال التقييم")}finally{setRatingBusy(false)}}
+
   return <div className={`live-chat ${open ? "open" : ""}`}>
     {open && <section ref={dialogRef} className="chat-window" role="dialog" aria-modal="false" aria-label="محادثة مباشرة مع شركة دالي">
       <header className="chat-header">
@@ -160,7 +168,8 @@ export default function LiveChatWidget() {
       {businessHours && <div className={`chat-hours ${businessHours.isOpen ? "open" : "closed"}`}><span>{businessHours.isOpen ? "فريقنا جاهز لخدمتك الآن" : `موعد العودة: ${businessHours.nextOpenLabel || "خلال ساعات العمل القادمة"}`}</span><b>{businessHours.opensAt} — {businessHours.closesAt} · بتوقيت مكة</b></div>}
       {loading ? <div className="chat-loading"><span/><p>جارٍ تحميل المحادثة...</p></div> : conversation ? <>
         <div className="chat-conversation-meta"><span>{conversation.trackingCode}</span><strong>{conversation.subject}</strong></div>
-        <section className={`public-video-card ${videoInterview?.status||"idle"}`}><div><span>▣</span><p><strong>{videoInterview?videoInterview.status==="active"?"الموظف جاهز للمقابلة":"طلب المقابلة قيد المتابعة":"مقابلة مرئية مع فريق دالي"}</strong><small>{videoInterview?`${videoInterview.referenceCode}${videoInterview.assignedName?` · ${videoInterview.assignedName}`:" · جارٍ البحث عن موظف متاح"}`:businessHours?.isOpen?"متاحة الآن خلال ساعات العمل":"تتاح فقط خلال ساعات العمل"}</small></p></div>{videoInterview?.joinUrl?<a href={videoInterview.joinUrl} target="_blank" rel="noopener noreferrer">دخول المقابلة المرئية</a>:videoInterview?<button disabled>بانتظار قبول الموظف</button>:<button disabled={!businessHours?.isOpen||videoBusy} onClick={()=>void requestVideoInterview()}>{videoBusy?"جارٍ الطلب...":"طلب مقابلة مرئية"}</button>}<p className="video-consent">باستخدام المقابلة توافق على تشغيل الكاميرا والميكروفون. النظام لا يسجل الصوت أو الصورة.</p></section>
+        <section className={`public-video-card ${videoInterview?.status||"idle"}`}><div><span>▣</span><p><strong>{videoInterview?videoInterview.status==="active"?"الموظف جاهز للمكالمة":videoInterview.status==="completed"?"انتهت المكالمة المرئية":"طلب المكالمة قيد المتابعة":"مكالمة مرئية مع فريق دالي"}</strong><small>{videoInterview?`${videoInterview.referenceCode}${videoInterview.assignedName?` · ${videoInterview.assignedName}`:" · جارٍ البحث عن موظف متاح"}`:businessHours?.isOpen?"متاحة الآن خلال ساعات العمل":"تتاح فقط خلال ساعات العمل"}</small></p></div>{videoInterview?.joinUrl?<button onClick={()=>setCallOpen(true)}>دخول المكالمة المرئية</button>:videoInterview?.status==="completed"?null:videoInterview?<button disabled>بانتظار قبول الموظف</button>:<button disabled={!businessHours?.isOpen||videoBusy} onClick={()=>void requestVideoInterview()}>{videoBusy?"جارٍ الطلب...":"طلب مكالمة مرئية"}</button>}<p className="video-consent">يمكنك إيقاف الكاميرا أو الميكروفون وإعادتهما في أي وقت من شريط المكالمة. النظام لا يسجل الصوت أو الصورة.</p></section>
+        {videoInterview?.status==="completed"&&!videoInterview.ratingSubmitted&&<ServiceRating title="كيف كانت المكالمة المرئية؟" busy={ratingBusy} onSubmit={event=>void submitRating(event,"video")}/>} 
         <div className="chat-messages" ref={messagesRef} aria-live="polite">
           <div className="chat-welcome"><strong>أهلاً {conversation.visitorName}</strong><span>شاركنا تفاصيل احتياجك، وسيصل حديثك إلى المختص الأنسب في فريق دالي.</span></div>
           {messages.map((message) => <article key={message.id} className={message.senderType}>
@@ -169,7 +178,7 @@ export default function LiveChatWidget() {
             {message.senderType === "visitor" && <small>{message.readByStaffAt ? "تمت القراءة" : "تم الإرسال"}</small>}
           </article>)}
         </div>
-        <form className="chat-composer" onSubmit={sendMessage}><label><span className="sr-only">اكتب رسالتك</span><textarea name="message" required minLength={2} maxLength={2000} rows={2} placeholder="اكتب رسالتك هنا..."/></label><button type="submit" disabled={sending}>{sending ? "..." : "إرسال"}</button></form>
+        {conversation.status==="closed"?(conversation.ratingSubmitted?<div className="chat-rating-thanks"><strong>شكرًا لتقييمك</strong><span>تم حفظ تقييمك وسيساعدنا على تحسين الخدمة.</span></div>:<ServiceRating title="كيف كانت المحادثة النصية؟" busy={ratingBusy} onSubmit={event=>void submitRating(event,"chat")}/>):<><form className="chat-composer" onSubmit={sendMessage}><label><span className="sr-only">اكتب رسالتك</span><textarea name="message" required minLength={2} maxLength={2000} rows={2} placeholder="اكتب رسالتك هنا..."/></label><button type="submit" disabled={sending}>{sending ? "..." : "إرسال"}</button></form><button className="chat-end-button" disabled={sending} onClick={()=>void endConversation()}>إنهاء المحادثة</button></>}
       </> : <form className="chat-start" onSubmit={startConversation}>
         <div><strong>كيف يمكننا مساعدتك؟</strong><p>ابدأ المحادثة، وسيستقبل مساعد دالي رسالتك فوراً ويوجّهها إلى الفريق المختص.</p></div>
         <label>الاسم الكامل<input name="visitorName" required minLength={2} maxLength={100} autoComplete="name" placeholder="اكتب اسمك"/></label>
@@ -184,6 +193,7 @@ export default function LiveChatWidget() {
       {error && <p className="chat-error" role="alert">{error}</p>}
       <footer>محادثة محفوظة وآمنة · لا تشارك بيانات بنكية أو كلمات مرور</footer>
     </section>}
+    {callOpen&&videoInterview?.joinUrl&&<div className="video-call-modal"><button className="video-call-backdrop" onClick={()=>setCallOpen(false)} aria-label="إغلاق المكالمة"/><section role="dialog" aria-modal="true" aria-label="المكالمة المرئية"><header><div><strong>مكالمة دالي المرئية</strong><span>{videoInterview.referenceCode}</span></div><button onClick={()=>setCallOpen(false)}>إنهاء وإغلاق</button></header><iframe src={videoInterview.joinUrl} title="مكالمة مرئية مع فريق دالي" allow="camera; microphone; fullscreen; display-capture; autoplay"/></section></div>}
     <button ref={launcherRef} className="chat-launcher" onClick={() => setOpen((value) => !value)} aria-label={open ? "إغلاق المحادثة" : "فتح المحادثة المباشرة"} aria-expanded={open}>
       <span className="chat-launcher-icon">{open ? "×" : "◌"}</span>
       <span><strong>محادثة مباشرة</strong><small>{businessHours?.isOpen ? "الفريق متاح الآن" : "اترك رسالتك وسنرد في الدوام"}</small></span>
@@ -192,4 +202,8 @@ export default function LiveChatWidget() {
       )}
     </button>
   </div>;
+}
+
+function ServiceRating({title,busy,onSubmit}:{title:string;busy:boolean;onSubmit:(event:FormEvent<HTMLFormElement>)=>void}){
+  return <form className="service-rating" onSubmit={onSubmit}><strong>{title}</strong><p>قيّم تجربتك من 1 إلى 5؛ 5 تعني ممتاز.</p><div><label>تقييم الموظف<select name="employeeRating" required defaultValue=""><option value="" disabled>اختر التقييم</option>{[5,4,3,2,1].map(value=><option key={value} value={value}>{value} من 5</option>)}</select></label><label>تقييم الشركة<select name="companyRating" required defaultValue=""><option value="" disabled>اختر التقييم</option>{[5,4,3,2,1].map(value=><option key={value} value={value}>{value} من 5</option>)}</select></label></div><textarea name="ratingComment" maxLength={1000} rows={2} placeholder="ملاحظتك (اختيارية)"/><button disabled={busy}>{busy?"جارٍ الإرسال...":"إرسال التقييم"}</button></form>
 }

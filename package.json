@@ -20,8 +20,10 @@
     "typecheck": "tsc --noEmit --pretty false",
     "i18n:audit": "node scripts/audit-translations.mjs",
     "i18n:generate": "node scripts/audit-translations.mjs --write-runtime-catalog",
-    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
-    ,"db:apply:postgres": "node scripts/apply-postgres-migration.mjs"
+    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
+    "db:apply:postgres": "node scripts/apply-postgres-migration.mjs",
+    "db:audit:migrations": "node scripts/audit-migrations.mjs",
+    "db:audit:postgres": "node scripts/audit-postgres-schema.mjs"
   },
   "dependencies": {
     "@fontsource/cairo": "^5.3.0",

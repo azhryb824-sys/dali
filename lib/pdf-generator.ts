@@ -160,6 +160,7 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
       ["14. Notices", "Notices sent through the addresses and communication channels registered by the parties are recognized. Each party shall notify the other of any change."],
       ["15. Governing Law and Jurisdiction", "This contract is governed by the laws of the Kingdom of Saudi Arabia. The parties shall first seek amicable settlement; otherwise, jurisdiction lies with the competent judicial authority."],
     ];
+    void fallbackClauses;
     const selectedClauses = input.contractClauses?.length
       ? input.contractClauses.filter((item) => item.included)
       : defaultWorkforceContractClauses(input.contractDirection || "dali_supplier", false);
@@ -616,6 +617,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       ["14. الإشعارات", "تعتمد المراسلات الصادرة من العناوين ووسائل الاتصال المسجلة لدى الطرفين، ويلتزم كل طرف بإبلاغ الآخر بأي تغيير يطرأ عليها."],
       ["15. النظام والاختصاص", "يخضع العقد للأنظمة السارية في المملكة العربية السعودية، ويسعى الطرفان لتسوية النزاع ودياً، فإن تعذر ذلك يكون الاختصاص للجهة القضائية المختصة."],
     ];
+    void fallbackClauses;
     const selectedClauses = input.contractClauses?.length
       ? input.contractClauses.filter((item) => item.included)
       : defaultWorkforceContractClauses(input.contractDirection || "dali_supplier", false);

@@ -37,6 +37,10 @@ async function listConversationData(request: Request) {
       lastStaffMessageAt: visitorConversations.lastStaffMessageAt,
       createdAt: visitorConversations.createdAt,
       updatedAt: visitorConversations.updatedAt,
+      employeeRating: visitorConversations.employeeRating,
+      companyRating: visitorConversations.companyRating,
+      ratingComment: visitorConversations.ratingComment,
+      ratedAt: visitorConversations.ratedAt,
   };
   const messageSelect = {
       id: visitorMessages.id,
@@ -97,6 +101,7 @@ export async function POST(request: Request) {
     const db = getDb();
     const conversation = await db.query.visitorConversations.findFirst({ where: eq(visitorConversations.id, conversationId) });
     if (!conversation) return Response.json({ error: "المحادثة غير موجودة" }, { status: 404 });
+    if (conversation.status === "closed") return Response.json({ error: "المحادثة مغلقة. أعد فتحها قبل إرسال رد جديد." }, { status: 409 });
     const now = new Date().toISOString();
     const [message] = await db.insert(visitorMessages).values({
       conversationId,
