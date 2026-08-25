@@ -47,6 +47,7 @@ async function requireOperationsAccess(write = false) {
 export async function GET(request: Request) {
   const access = await requireOperationsAccess(false);
   if (!access) return jsonNoStore({ error: "غير مصرح بالوصول إلى المبيعات والتشغيل" }, { status: 403 });
+  const correlationId = requestCorrelationId(request);
   try {
     const params = new URL(request.url).searchParams;
     const limit = Math.min(100, Math.max(10, Number(params.get("limit")) || 50));
@@ -90,8 +91,8 @@ export async function GET(request: Request) {
       page: { limit, offset, hasMore: [clientRows, opportunityRows, quoteRows, orderRows, sheetRows].some((rows) => rows.length === limit) },
     });
   } catch (error) {
-    console.error("operations-list-failed", error);
-    return jsonNoStore({ error: "تعذّر تحميل بيانات المبيعات والتشغيل" }, { status: 500 });
+    console.error("operations-list-failed", { correlationId, error });
+    return jsonNoStore({ error: "تعذّر تحميل بيانات المبيعات والتشغيل", correlationId }, { status: 500 });
   }
 }
 
