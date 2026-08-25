@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS "document_stamps" ("id" serial PRIMARY KEY, "name" text NOT NULL, "storage_key" text NOT NULL UNIQUE, "file_name" text NOT NULL, "content_type" text NOT NULL, "size_bytes" integer NOT NULL, "active" boolean NOT NULL DEFAULT true, "created_by" text NOT NULL, "created_at" text NOT NULL DEFAULT CURRENT_TIMESTAMP::text, "updated_at" text NOT NULL DEFAULT CURRENT_TIMESTAMP::text);
+CREATE INDEX IF NOT EXISTS "document_stamps_active_idx" ON "document_stamps" ("active", "updated_at");
+CREATE TABLE IF NOT EXISTS "document_drafts" ("id" serial PRIMARY KEY, "document_type" text NOT NULL, "title" text NOT NULL DEFAULT 'مسودة غير مكتملة', "payload_json" text NOT NULL, "completion_percent" integer NOT NULL DEFAULT 0, "owner_email" text NOT NULL, "created_at" text NOT NULL DEFAULT CURRENT_TIMESTAMP::text, "updated_at" text NOT NULL DEFAULT CURRENT_TIMESTAMP::text, CONSTRAINT "document_drafts_type_check" CHECK ("document_type" IN ('workforce_contract','quotation','official_letter')), CONSTRAINT "document_drafts_completion_check" CHECK ("completion_percent" BETWEEN 0 AND 100));
+CREATE INDEX IF NOT EXISTS "document_drafts_owner_type_idx" ON "document_drafts" ("owner_email", "document_type");
+ALTER TABLE "workforce_contracts" ADD COLUMN IF NOT EXISTS "stamp_id" integer REFERENCES "document_stamps"("id") ON DELETE RESTRICT;
+ALTER TABLE "quote_versions" ADD COLUMN IF NOT EXISTS "stamp_id" integer REFERENCES "document_stamps"("id") ON DELETE RESTRICT;
+ALTER TABLE "official_letters" ADD COLUMN IF NOT EXISTS "stamp_id" integer REFERENCES "document_stamps"("id") ON DELETE RESTRICT;
+ALTER TABLE "document_stamps" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "document_drafts" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE "document_stamps", "document_drafts" FROM PUBLIC;

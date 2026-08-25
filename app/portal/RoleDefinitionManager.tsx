@@ -6,7 +6,7 @@ const permissionLabels:Record<string,string>={
   "overview.read":"عرض لوحة المتابعة","employees.read":"عرض الموظفين","employees.write":"تعديل الموظفين","employees.approve":"اعتماد إجراءات الموظفين",
   "finance.read":"عرض المالية","finance.write":"إنشاء وتعديل المالية","finance.approve":"اعتماد المعاملات المالية","finance.post":"ترحيل القيود","finance.pay":"إطلاق المدفوعات",
   "legal.read":"عرض الشؤون القانونية","legal.write":"تعديل السجلات القانونية","legal.approve":"الاعتماد القانوني","workforce.read":"عرض العمالة","workforce.write":"تعديل العمالة والتشغيل","workforce.approve":"اعتماد التشغيل والساعات",
-  "construction.read":"عرض المقاولات","construction.write":"تعديل المقاولات","construction.approve":"اعتماد المقاولات","documents.read":"عرض المستندات","documents.write":"إصدار وتعديل المستندات","documents.share":"مشاركة المستندات",
+  "construction.read":"عرض المقاولات","construction.write":"تعديل المقاولات","construction.approve":"اعتماد المقاولات","documents.read":"عرض المستندات","documents.preview":"تنزيل معاينات PDF قبل الاعتماد","documents.write":"إصدار وتعديل المستندات","documents.share":"مشاركة المستندات",
   "conversations.read":"عرض المحادثات","conversations.write":"الرد على المحادثات","website.read":"عرض إدارة الموقع","website.write":"تعديل ونشر الموقع","reports.read":"عرض التقارير","reports.export":"تصدير التقارير",
   "video.read":"عرض المقابلات المرئية","video.manage":"استقبال وإدارة المقابلات","video.transfer":"تحويل المقابلات للموظفين",
   "assets.administer":"إدارة الختم والتوقيع والهوية","users.administer":"إدارة المستخدمين والأدوار","integrations.administer":"إدارة التكاملات",

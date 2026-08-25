@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clients, companyAssets, quoteItems, quoteVersions, salesOpportunities } from "@/db/schema";
+import { clients, companyAssets, documentStamps, quoteItems, quoteVersions, salesOpportunities } from "@/db/schema";
 import { attachmentHeaders } from "@/lib/company-documents";
 import { generateIssuedPdf } from "@/lib/pdf-generator";
 import { parsePaymentSchedule } from "@/lib/payment-schedules";
-import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessPortalDepartment, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 
 function metadata(value: string | null) {
   const lines = (value || "").split("\n");
@@ -26,13 +26,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const db = getDb();
   const quote = await db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, id) });
   if (!quote) return Response.json({ error: "عرض السعر غير موجود" }, { status: 404 });
-  if (!quote.approvedBy || !["approved", "sent", "accepted"].includes(quote.status)) return Response.json({ error: "لا يمكن تنزيل عرض السعر قبل اعتماده من المالك" }, { status: 409 });
+  const approved = Boolean(quote.approvedBy && ["approved", "sent", "accepted"].includes(quote.status));
+  if (!approved && !(await hasPortalPermission(access, "documents", "preview"))) return Response.json({ error: "لا تملك صلاحية تنزيل معاينة PDF قبل الاعتماد" }, { status: 403 });
   const opportunity = await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, quote.opportunityId) });
   if (!opportunity) return Response.json({ error: "فرصة المبيعات غير موجودة" }, { status: 404 });
-  const [client, items, assets] = await Promise.all([
+  const [client, items, assets, selectedStamp] = await Promise.all([
     opportunity.clientId ? db.query.clients.findFirst({ where: eq(clients.id, opportunity.clientId) }) : Promise.resolve(undefined),
     db.select().from(quoteItems).where(eq(quoteItems.quoteVersionId, quote.id)).orderBy(quoteItems.sortOrder),
     db.select().from(companyAssets),
+    quote.stampId ? db.query.documentStamps.findFirst({ where: eq(documentStamps.id, quote.stampId) }) : Promise.resolve(undefined),
   ]);
   if (!items.length) return Response.json({ error: "عرض السعر لا يحتوي على بنود" }, { status: 409 });
 
@@ -49,6 +51,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return { ...payment, amountHalalas };
   });
   const bytes = await generateIssuedPdf({
+    approvalState: approved ? "approved" : "draft",
     pdfLanguage,
     documentType: "quotation",
     referenceCode: `${quote.quoteCode}-V${quote.versionNumber}`,
@@ -73,6 +76,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     assumptions: details.assumptions || undefined,
     terms: "الأسعار خاصة بنطاق العمل والكميات والمدة المحددة. أي أعمال أو كميات إضافية تستلزم عرضًا أو ملحقًا مستقلًا. يخضع بدء الخدمة لتوفر الموارد واعتماد العميل والمتطلبات النظامية.",
     quotationItems: items.map((item) => ({ description: item.profession, quantity: item.quantity, durationMonths: item.durationMonths, unitPriceHalalas: item.unitPriceHalalas, lineTotalHalalas: item.lineTotalHalalas, notes: item.notes, sponsorshipType: item.sponsorshipType as "dali" | "other" | null, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus as "not_applicable" | "with_ajir" | "without_ajir" | null })),
-  }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
+  }, assets.filter((asset) => asset.slot !== "stamp").map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })).concat(selectedStamp ? [{ slot: "stamp" as const, storageKey: selectedStamp.storageKey, contentType: selectedStamp.contentType }] : assets.filter((asset) => asset.slot === "stamp").map((asset) => ({ slot: "stamp" as const, storageKey: asset.storageKey, contentType: asset.contentType }))));
   return new Response(new Uint8Array(bytes).buffer, { headers: attachmentHeaders(`${quote.quoteCode}-V${quote.versionNumber}-${pdfLanguage}.pdf`, "application/pdf") });
 }

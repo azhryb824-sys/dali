@@ -6,6 +6,7 @@ import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
+import { parseWorkforceContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 
@@ -24,6 +25,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!contract) return jsonNoStore({ error: "العقد غير موجود" }, { status: 404 });
   if (["active", "suspended", "expired", "terminated", "superseded"].includes(contract.status)) return jsonNoStore({ error: "لا يمكن تعديل عقد بدأت آثاره التشغيلية أو المالية؛ أنشئ ملحقًا أو إصدارًا جديدًا" }, { status: 409 });
   const payload = await request.json() as Record<string, unknown>;
+  const contractDirection:WorkforceContractDirection=payload.contractDirection==="dali_purchaser"?"dali_purchaser":payload.contractDirection==="dali_supplier"?"dali_supplier":contract.contractDirection as WorkforceContractDirection;
+  const professions=await db.select().from(contractProfessions).where(eq(contractProfessions.contractId,id));
+  const allWorkersWithAjir=professions.length>0&&professions.every(item=>item.ajirContractStatus==="with_ajir");
+  const clauses=payload.contractClauses===undefined?null:parseWorkforceContractClauses(payload.contractClauses,contractDirection,allWorkersWithAjir);
+  if(clauses&&!clauses.length)return jsonNoStore({error:"يجب إبقاء بند تعاقدي واحد على الأقل"},{status:400});
   const startDate = clean(payload.startDate, 10) || contract.startDate;
   const endDate = clean(payload.endDate, 10) || contract.endDate;
   if (endDate < startDate) return jsonNoStore({ error: "تاريخ نهاية العقد يسبق بدايته" }, { status: 400 });
@@ -37,10 +43,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     issueDate: clean(payload.issueDate, 10) || contract.issueDate,
     startDate, endDate,
     details: clean(payload.details, 12000) || contract.details,
+    contractDirection,
     status: "draft", approvedBy: null, approvedAt: null, signedAt: null,
     versionNumber: contract.versionNumber + 1, updatedAt: now,
   }).where(and(eq(workforceContracts.id, id), eq(workforceContracts.versionNumber, contract.versionNumber))).returning();
   if (!updated) return jsonNoStore({ error: "تغير العقد قبل حفظ التعديل؛ حدّث الصفحة" }, { status: 409 });
+  if(clauses){await db.delete(contractClauses).where(eq(contractClauses.contractId,id));await db.insert(contractClauses).values(clauses.map((clause,index)=>({contractId:id,clauseNumber:index+1,section:clause.section,sectionEn:clause.sectionEn||null,title:clause.title,titleEn:clause.titleEn||null,body:clause.body,bodyEn:clause.bodyEn||null,isIncluded:clause.included,isOptional:false})))}
   await auditPortalAction({ actorEmail: actor.user.email, action: "workforce-contract-edited", entityType: "workforce-contract", entityId: id, before: contract, after: updated });
   await emitPortalNotification({ eventType: "workforce-contract-edited", title: "عُدّل عقد وأعيد للمسودة", message: `${contract.referenceCode} — يتطلب اعتماد المالك مجددًا.`, severity: "warning", module: "workforce", entityType: "workforce-contract", entityId: id, actionView: "workforce", targetRole: "admin" }).catch(() => undefined);
   return jsonNoStore({ contract: updated });

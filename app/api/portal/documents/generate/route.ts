@@ -4,6 +4,7 @@ import {
   companyAssets,
   companyDocuments,
   clients,
+  contractClauses,
   contractPaymentSchedules,
   contractProfessions,
   contractWorkerAssignments,
@@ -11,8 +12,10 @@ import {
   portalActivity,
   quoteItems,
   quoteVersions,
+  representativeRequests,
   salesOpportunities,
   salesRepresentatives,
+  suppliers,
   workers,
   workforceContracts,
   workforceRequests,
@@ -24,6 +27,7 @@ import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
 import { addUtcMonths, parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
+import { parseWorkforceContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 const prefixes: Record<IssuedDocumentType, string> = {
   workforce_contract: "CTR",
@@ -153,8 +157,10 @@ export async function POST(request: Request) {
     const linkedContractId = parsePositiveId(payload.linkedContractId);
     const sourceRequestId = parsePositiveId(payload.sourceRequestId);
     const salesRepresentativeId = parsePositiveId(payload.salesRepresentativeId);
+    const representativeRequestId = parsePositiveId(payload.representativeRequestId);
     const quoteVersionId = parsePositiveId(payload.quoteVersionId);
     const quantityMode = payload.quantityMode === "open" ? "open" : "fixed";
+    const contractDirection: WorkforceContractDirection = payload.contractDirection === "dali_purchaser" ? "dali_purchaser" : "dali_supplier";
     const seasonType = payload.seasonType === "ramadan" || payload.seasonType === "hajj" ? payload.seasonType : "regular";
     const billingMode = quantityMode === "open" ? "actual_usage" : seasonType === "regular" ? "monthly" : "seasonal_installments";
     const firstPaymentDueDate = cleanDate(payload.firstPaymentDueDate, true);
@@ -217,16 +223,22 @@ export async function POST(request: Request) {
         return Response.json({ error: "لا يمكن اختيار العامل نفسه في أكثر من مهنة داخل العقد" }, { status: 400 });
       }
     }
+    const allWorkersWithAjir = documentType === "workforce_contract" && professionInputs.length > 0 && professionInputs.every((item) => item.ajirContractStatus === "with_ajir");
+    const clauseInputs = documentType === "workforce_contract" ? parseWorkforceContractClauses(payload.contractClauses, contractDirection, allWorkersWithAjir) : [];
+    if (documentType === "workforce_contract" && !clauseInputs.length) return Response.json({ error: "يجب إبقاء بند تعاقدي واحد على الأقل" }, { status: 400 });
 
     const db = getDb();
-    const [sourceRequest, salesRepresentative, sourceQuote, existingQuoteContract] = await Promise.all([
+    const [sourceRequest, salesRepresentative, representativeRequest, sourceQuote, existingQuoteContract] = await Promise.all([
       sourceRequestId ? db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) }) : Promise.resolve(null),
       salesRepresentativeId ? db.query.salesRepresentatives.findFirst({ where: eq(salesRepresentatives.id, salesRepresentativeId) }) : Promise.resolve(null),
+      representativeRequestId ? db.query.representativeRequests.findFirst({ where: eq(representativeRequests.id, representativeRequestId) }) : Promise.resolve(null),
       quoteVersionId ? db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, quoteVersionId) }) : Promise.resolve(null),
       quoteVersionId ? db.query.workforceContracts.findFirst({ where: eq(workforceContracts.quoteVersionId, quoteVersionId) }) : Promise.resolve(null),
     ]);
     if (sourceRequestId && !sourceRequest) return Response.json({ error: "طلب الموقع المحدد غير موجود" }, { status: 404 });
     if (salesRepresentativeId && (!salesRepresentative || salesRepresentative.status !== "active")) return Response.json({ error: "المندوب المحدد غير موجود أو غير نشط" }, { status: 409 });
+    if (salesRepresentative && salesRepresentative.representativeType !== (contractDirection === "dali_purchaser" ? "purchasing" : "sales")) return Response.json({ error: "نوع المندوب لا يطابق اتجاه عقد العمالة" }, { status: 409 });
+    if (representativeRequestId && (!representativeRequest || representativeRequest.status !== "approved" || representativeRequest.requestType !== (contractDirection === "dali_purchaser" ? "purchase" : "sales"))) return Response.json({ error: "طلب المندوب غير معتمد أو لا يطابق اتجاه العقد" }, { status: 409 });
     if (quoteVersionId && (!sourceQuote || !["approved", "sent", "accepted"].includes(sourceQuote.status))) return Response.json({ error: "لا يمكن إنشاء عقد إلا من عرض سعر معتمد" }, { status: 409 });
     if (existingQuoteContract) return Response.json({ error: "تم تحويل عرض السعر إلى عقد سابقًا" }, { status: 409 });
     if (sourceQuote && sourceQuote.quantityMode !== quantityMode) return Response.json({ error: "نوع العدد في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
@@ -308,6 +320,8 @@ export async function POST(request: Request) {
       vatHalalas,
       vatRateBps,
       quantityMode,
+      contractDirection,
+      contractClauses: clauseInputs,
       details,
       workSite: workSite || undefined,
       startDate: startDate || undefined,
@@ -335,13 +349,16 @@ export async function POST(request: Request) {
     }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
 
     let client = null;
+    let supplier = null;
     if (documentType === "workforce_contract") {
-      const existingClient = await db.query.clients.findFirst({ where: eq(clients.commercialRegistration, clientCr) });
-      if (existingClient) {
-        [client] = await db.update(clients).set({ legalName: clientName, vatNumber: clientVat, address: clientAddress, status: "active", sourceRequestId, salesRepresentativeId, updatedAt: new Date().toISOString(), version: existingClient.version + 1 }).where(eq(clients.id, existingClient.id)).returning();
+      if (contractDirection === "dali_purchaser") {
+        const existingSupplier = await db.query.suppliers.findFirst({ where: eq(suppliers.commercialRegistration, clientCr) });
+        if (existingSupplier) [supplier] = await db.update(suppliers).set({ legalName: clientName, vatNumber: clientVat, address: clientAddress, status: "active", updatedAt: new Date().toISOString() }).where(eq(suppliers.id, existingSupplier.id)).returning();
+        else [supplier] = await db.insert(suppliers).values({ supplierCode: makeReference("SUP"), legalName: clientName, commercialRegistration: clientCr, vatNumber: clientVat, address: clientAddress, status: "active", createdBy: access.user.email }).returning();
       } else {
-        [client] = await db.insert(clients).values({ clientCode: makeReference("CLI"), legalName: clientName, commercialRegistration: clientCr, vatNumber: clientVat, address: clientAddress, status: "active", sourceRequestId, salesRepresentativeId, createdBy: access.user.email }).returning();
-        createdClientId = client.id;
+        const existingClient = await db.query.clients.findFirst({ where: eq(clients.commercialRegistration, clientCr) });
+        if (existingClient) [client] = await db.update(clients).set({ legalName: clientName, vatNumber: clientVat, address: clientAddress, status: "active", sourceRequestId, salesRepresentativeId, updatedAt: new Date().toISOString(), version: existingClient.version + 1 }).where(eq(clients.id, existingClient.id)).returning();
+        else { [client] = await db.insert(clients).values({ clientCode: makeReference("CLI"), legalName: clientName, commercialRegistration: clientCr, vatNumber: clientVat, address: clientAddress, status: "active", sourceRequestId, salesRepresentativeId, createdBy: access.user.email }).returning(); createdClientId = client.id; }
       }
     }
 
@@ -367,7 +384,7 @@ export async function POST(request: Request) {
       sizeBytes: pdfBytes.byteLength,
       expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
       source: "generated",
-      metadataJson: JSON.stringify({ clientId: client?.id || null, sourceRequestId, salesRepresentativeId, quoteVersionId, quantityMode, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: "letterhead-v3-unified-quotation" }),
+      metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, sourceRequestId, representativeRequestId, salesRepresentativeId, quoteVersionId, quantityMode, contractDirection, contractClauses: clauseInputs, allWorkersWithAjir, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: "letterhead-v4-directional-contract" }),
       createdBy: access.user.email,
     }).returning();
     savedDocumentId = saved.id;
@@ -384,9 +401,11 @@ export async function POST(request: Request) {
         clientName,
         clientCr: clientCr || null,
         clientVat: clientVat || null,
-        clientId: client!.id,
+        clientId: client?.id || null,
+        supplierId: supplier?.id || null,
         sourceRequestId,
         salesRepresentativeId,
+        representativeRequestId,
         opportunityId: sourceOpportunity?.id || null,
         quoteVersionId,
         title,
@@ -395,6 +414,7 @@ export async function POST(request: Request) {
         startDate: startDate!,
         endDate: endDate!,
         amountHalalas: amountHalalas || 0,
+        contractDirection,
         quantityMode,
         vatRateBps,
         seasonType,
@@ -404,12 +424,14 @@ export async function POST(request: Request) {
         createdBy: access.user.email,
       }).returning();
       savedContractId = contract.id;
+      if (representativeRequestId) await db.update(representativeRequests).set({ status: "converted", updatedAt: new Date().toISOString() }).where(eq(representativeRequests.id, representativeRequestId));
+      await db.insert(contractClauses).values(clauseInputs.map((clause, index) => ({ contractId: contract!.id, clauseNumber: index + 1, section: clause.section, sectionEn: clause.sectionEn || null, title: clause.title, titleEn: clause.titleEn || null, body: clause.body, bodyEn: clause.bodyEn || null, isOptional: false, isIncluded: clause.included })));
       if (paymentSchedule.length) await db.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, subtotalHalalas: payment.subtotalHalalas, vatHalalas: payment.vatHalalas, vatRateBps, amountHalalas: payment.amountHalalas, billingBasis: payment.billingBasis, servicePeriod: payment.servicePeriod, status: payment.dueDate <= new Date().toISOString().slice(0, 10) ? "due" : "scheduled", createdBy: access.user.email })));
       for (const { file, kind, label, bytes, validationDetails } of validatedClientFiles) {
         const fileName=safeFileName(file.name);const clientStorageKey=objectKey("client-documents",fileName);auxiliaryStorageKeys.push(clientStorageKey);
-        await getRuntimeEnv().BUCKET.put(clientStorageKey,bytes,{httpMetadata:{contentType:file.type},customMetadata:{uploadedBy:access.user.email,clientName,clientId:String(client!.id),contractReference:contract.referenceCode,documentKind:kind,validation:validationDetails}});
+        await getRuntimeEnv().BUCKET.put(clientStorageKey,bytes,{httpMetadata:{contentType:file.type},customMetadata:{uploadedBy:access.user.email,clientName,counterpartyId:String(client?.id||supplier?.id||""),contractReference:contract.referenceCode,documentKind:kind,validation:validationDetails}});
         const storedClientFile = await getRuntimeEnv().BUCKET.get(clientStorageKey);if(!storedClientFile||(await storedClientFile.arrayBuffer()).byteLength!==bytes.byteLength)throw new Error(`تعذر التحقق من حفظ ملف ${label}`);
-        const[clientDocument]=await db.insert(companyDocuments).values({referenceCode:makeReference("CLD"),title:`${label} - ${clientName}`,category:"certificate",documentType:kind,counterparty:clientName,fileName,storageKey:clientStorageKey,contentType:file.type,sizeBytes:file.size,source:"uploaded",validationStatus:"signature-validated",validationDetails,metadataJson:JSON.stringify({clientId:client!.id,clientName,contractId:contract.id,contractReference:contract.referenceCode,documentKind:kind}),createdBy:access.user.email}).returning();auxiliaryDocumentIds.push(clientDocument.id);
+        const[clientDocument]=await db.insert(companyDocuments).values({referenceCode:makeReference("CLD"),title:`${label} - ${clientName}`,category:"certificate",documentType:kind,counterparty:clientName,fileName,storageKey:clientStorageKey,contentType:file.type,sizeBytes:file.size,source:"uploaded",validationStatus:"signature-validated",validationDetails,metadataJson:JSON.stringify({clientId:client?.id||null,supplierId:supplier?.id||null,clientName,contractId:contract.id,contractReference:contract.referenceCode,documentKind:kind}),createdBy:access.user.email}).returning();auxiliaryDocumentIds.push(clientDocument.id);
       }
       professionRecords = await db.insert(contractProfessions).values(professionInputs.map((item) => ({
         contractId: contract!.id,

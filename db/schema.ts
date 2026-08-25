@@ -843,6 +843,7 @@ export const officialLetters = pgTable(
     recipient: text("recipient").notNull(),
     body: text("body").notNull(),
     status: text("status").notNull().default("draft"),
+    stampId: integer("stamp_id").references(() => documentStamps.id, { onDelete: "restrict" }),
     cancellationReason: text("cancellation_reason"),
     documentId: integer("document_id"),
     createdBy: text("created_by").notNull(),
@@ -1051,6 +1052,14 @@ export const companyAssets = pgTable(
   (table) => [index("company_assets_updated_at_idx").on(table.updatedAt)],
 );
 
+export const documentStamps = pgTable("document_stamps", {
+  id: serial("id").primaryKey(), name: text("name").notNull(), storageKey: text("storage_key").notNull().unique(), fileName: text("file_name").notNull(), contentType: text("content_type").notNull(), sizeBytes: integer("size_bytes").notNull(), active: boolean("active").notNull().default(true), createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [index("document_stamps_active_idx").on(table.active, table.updatedAt)]);
+
+export const documentDrafts = pgTable("document_drafts", {
+  id: serial("id").primaryKey(), documentType: text("document_type").notNull(), title: text("title").notNull().default("مسودة غير مكتملة"), payloadJson: text("payload_json").notNull(), completionPercent: integer("completion_percent").notNull().default(0), ownerEmail: text("owner_email").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [index("document_drafts_owner_type_idx").on(table.ownerEmail, table.documentType), check("document_drafts_type_check", sql`${table.documentType} in ('workforce_contract','quotation','official_letter')`), check("document_drafts_completion_check", sql`${table.completionPercent} between 0 and 100`)]);
+
 export const workforceContracts = pgTable(
   "workforce_contracts",
   {
@@ -1066,6 +1075,7 @@ export const workforceContracts = pgTable(
     startDate: text("start_date").notNull(),
     endDate: text("end_date").notNull(),
     amountHalalas: integer("amount_halalas").notNull().default(0),
+    contractDirection: text("contract_direction").notNull().default("dali_supplier"),
     quantityMode: text("quantity_mode").notNull().default("fixed"),
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
     seasonType: text("season_type").notNull().default("regular"),
@@ -1078,16 +1088,19 @@ export const workforceContracts = pgTable(
     amendmentType: text("amendment_type"),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
+    stampId: integer("stamp_id").references(() => documentStamps.id, { onDelete: "restrict" }),
     signedAt: text("signed_at"),
     effectiveAt: text("effective_at"),
     suspendedAt: text("suspended_at"),
     terminatedAt: text("terminated_at"),
     cancellationReason: text("cancellation_reason"),
     clientId: integer("client_id"),
+    supplierId: integer("supplier_id"),
     opportunityId: integer("opportunity_id"),
     quoteVersionId: integer("quote_version_id"),
     sourceRequestId: integer("source_request_id").references(() => workforceRequests.id, { onDelete: "set null" }),
     salesRepresentativeId: integer("sales_representative_id"),
+    representativeRequestId: integer("representative_request_id"),
     createdBy: text("created_by").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
@@ -1099,8 +1112,11 @@ export const workforceContracts = pgTable(
     index("workforce_contracts_parent_idx").on(table.parentContractId),
     index("workforce_contracts_source_request_idx").on(table.sourceRequestId),
     index("workforce_contracts_sales_representative_idx").on(table.salesRepresentativeId),
+    index("workforce_contracts_supplier_idx").on(table.supplierId),
+    index("workforce_contracts_representative_request_idx").on(table.representativeRequestId),
     uniqueIndex("workforce_contracts_quote_version_unique").on(table.quoteVersionId),
     check("workforce_contracts_quantity_mode_check", sql`${table.quantityMode} in ('fixed','open')`),
+    check("workforce_contracts_direction_check", sql`${table.contractDirection} in ('dali_supplier','dali_purchaser')`),
     check("workforce_contracts_season_type_check", sql`${table.seasonType} in ('regular','ramadan','hajj')`),
     check("workforce_contracts_billing_mode_check", sql`${table.billingMode} in ('monthly','seasonal_installments','actual_usage')`),
     check("workforce_contracts_status_check", sql`${table.status} in ('draft','internal_review','legal_review','approved','sent','signed','active','suspended','expired','terminated','cancelled','superseded')`),
@@ -1114,7 +1130,11 @@ export const contractClauses = pgTable(
     contractId: integer("contract_id").notNull().references(() => workforceContracts.id, { onDelete: "cascade" }),
     clauseNumber: integer("clause_number").notNull(),
     title: text("title").notNull(),
+    titleEn: text("title_en"),
     body: text("body").notNull(),
+    bodyEn: text("body_en"),
+    section: text("section").notNull().default("بنود إضافية"),
+    sectionEn: text("section_en"),
     isOptional: boolean("is_optional").notNull().default(false),
     isIncluded: boolean("is_included").notNull().default(true),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
@@ -1368,6 +1388,7 @@ export const quoteVersions = pgTable(
     approvalReason: text("approval_reason"),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
+    stampId: integer("stamp_id").references(() => documentStamps.id, { onDelete: "restrict" }),
     acceptedAt: text("accepted_at"),
     clientDecisionBy: text("client_decision_by"),
     clientDecisionReason: text("client_decision_reason"),

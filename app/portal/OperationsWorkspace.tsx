@@ -5,6 +5,7 @@ import { workforceNationalities, workforceProfessions } from "@/lib/workforce-re
 import IntegrationManager from "./IntegrationManager";
 import ContractBillingWorkspace from "./ContractBillingWorkspace";
 import PaymentManagementDashboard from "./PaymentManagementDashboard";
+import { createWhatsAppUrl } from "@/lib/whatsapp";
 
 type Client = { id: number; clientCode: string; legalName: string; tradeName: string | null; city: string; status: string; ownerEmail: string | null; salesRepresentativeId: number | null };
 type Contact = { id: number; clientId: number; fullName: string; email: string | null; mobile: string | null };
@@ -21,6 +22,7 @@ type PrivacyRequest = { id: number; trackingCode: string; requestType: string; f
 type ClientUser = { email: string; clientId: number; displayName: string; status: string; canApproveQuotes: boolean; canApproveTimesheets: boolean };
 type WorkerUser = { email: string; workerId: number; displayName: string; status: string };
 type Worker = { id: number; fullName: string; workerNumber: string; profession: string; status: string; clientId: number | null; workOrderId: number | null };
+type DocumentStamp = { id: number; name: string; fileName: string; updatedAt: string };
 type OperationsData = { clients: Client[]; contacts: Contact[]; opportunities: Opportunity[]; representatives: Representative[]; quotes: Quote[]; quoteItems: QuoteItem[]; workOrders: WorkOrder[]; requirements: Requirement[]; timesheets: Timesheet[]; timeEntries: unknown[]; workers: Worker[]; capacityPlans: CapacityPlan[]; approvals: Approval[]; privacyRequests: PrivacyRequest[]; clientUsers: ClientUser[]; workerUsers: WorkerUser[] };
 export type OperationsTab = "crm" | "quotes" | "contracts" | "orders" | "timesheets" | "capacity" | "privacy" | "clients" | "integrations";
 type Tab = OperationsTab;
@@ -35,13 +37,16 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
   const [query, setQuery] = useState(initialQuery);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
+  const [stamps, setStamps] = useState<DocumentStamp[]>([]);
+  const [pendingQuoteApproval, setPendingQuoteApproval] = useState<{ id: number; recordVersion?: number } | null>(null);
   const canApproveQuotes = isOwner || isAdmin;
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/portal/operations?limit=100", { cache: "no-store" });
+    const [response, stampResponse] = await Promise.all([fetch("/api/portal/operations?limit=100", { cache: "no-store" }), fetch("/api/portal/document-stamps", { cache: "no-store" })]);
     const result = await response.json() as OperationsData & { error?: string };
     if (!response.ok) throw new Error(result.error || "تعذّر تحميل مساحة التشغيل");
     setData(result);
+    if (stampResponse.ok) setStamps(((await stampResponse.json()) as { stamps: DocumentStamp[] }).stamps);
   }, []);
 
   useEffect(() => {
@@ -108,20 +113,21 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
     finally { setBusy(""); }
   }
 
-  async function shareQuoteWhatsApp(quote:Quote){setBusy(`share-quote-${quote.id}`);setNotice("");try{const response=await fetch(`/api/portal/operations/quotes/${quote.id}/share`,{method:"POST"});const result=await response.json()as{shareUrl?:string;mobile?:string;clientName?:string;error?:string};if(!response.ok||!result.shareUrl||!result.mobile)throw new Error(result.error||"تعذر تجهيز رابط العرض");const digits=result.mobile.replace(/\D/g,"");const mobile=digits.startsWith("966")?digits:digits.startsWith("0")?`966${digits.slice(1)}`:digits.length===9?`966${digits}`:digits;if(!/^9665\d{8}$/.test(mobile))throw new Error("رقم جوال العميل غير صحيح");const message=`السلام عليكم ${result.clientName||""}، نرفق لكم عرض السعر ${quote.quoteCode}. رابط PDF الآمن: ${result.shareUrl}`;window.open(`https://wa.me/${mobile}?text=${encodeURIComponent(message)}`,"_blank","noopener,noreferrer");setNotice("فُتحت محادثة واتساب مع رابط عرض السعر الآمن.")}catch(error){setNotice(error instanceof Error?error.message:"تعذر مشاركة العرض")}finally{setBusy("")}}
+  async function shareQuoteWhatsApp(quote:Quote){setBusy(`share-quote-${quote.id}`);setNotice("");try{const response=await fetch(`/api/portal/operations/quotes/${quote.id}/share`,{method:"POST"});const result=await response.json()as{shareUrl?:string;mobile?:string;clientName?:string;error?:string};if(!response.ok||!result.shareUrl||!result.mobile)throw new Error(result.error||"تعذر تجهيز رابط العرض");const message=`السلام عليكم ${result.clientName||""}، نرفق لكم عرض السعر ${quote.quoteCode}. رابط PDF الآمن: ${result.shareUrl}`;const whatsappUrl=createWhatsAppUrl(result.mobile,message);if(!whatsappUrl)throw new Error("رقم جوال العميل غير صحيح");const opened=window.open(whatsappUrl,"_blank","noopener,noreferrer");if(!opened)window.location.assign(whatsappUrl);setNotice("فُتحت محادثة العميل مباشرة في واتساب مع رابط عرض السعر الآمن.")}catch(error){setNotice(error instanceof Error?error.message:"تعذر مشاركة العرض")}finally{setBusy("")}}
 
-  async function transition(action: string, item: { id: number; version?: number; recordVersion?: number }, status: string) {
+  async function transition(action: string, item: { id: number; version?: number; recordVersion?: number }, status: string, stampId?: number) {
     if (!status) return;
+    if (action === "transition-quote" && status === "approved" && !stampId) { setPendingQuoteApproval(item); return; }
     setBusy(`${action}-${item.id}`);
     setNotice("");
     try {
       const reason = ["lost", "rejected", "cancelled"].includes(status) ? window.prompt("اكتب سبب القرار (10 أحرف على الأقل)") || "" : "";
       if (["lost", "rejected", "cancelled"].includes(status) && reason.trim().length < 10) { setNotice("سبب القرار يجب ألا يقل عن 10 أحرف."); return; }
-      const response = await fetch("/api/portal/operations", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, id: item.id, status, version: item.recordVersion ?? item.version, reason }) });
+      const response = await fetch("/api/portal/operations", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, id: item.id, status, version: item.recordVersion ?? item.version, reason, stampId }) });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر تحديث الحالة");
       setNotice("تم تحديث الحالة وتسجيل القرار.");
-      await load();
+      setPendingQuoteApproval(null); await load();
     } catch (error) { setNotice(error instanceof Error ? error.message : "تعذّر التحديث"); }
     finally { setBusy(""); }
   }
@@ -189,6 +195,7 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
       <PortalAccessLists data={data} workers={data.workers} busy={busy} query={query} onUpdate={updatePortalAccess}/>
     </OperationsSection>}
     {tab === "integrations" && isAdmin && <IntegrationManager/>}
+    {pendingQuoteApproval && <div className="stamp-picker-backdrop" role="presentation"><section className="stamp-picker-dialog" role="dialog" aria-modal="true" aria-label="اختيار ختم الاعتماد"><header><div><span>اعتماد رسمي</span><h2>اختر ختم عرض السعر</h2><p>سيثبت الختم المختار في سجل الاعتماد، ولن ينشأ أي أثر رسمي قبل التأكيد.</p></div><button type="button" onClick={() => setPendingQuoteApproval(null)}>×</button></header><div className="stamp-picker-grid">{stamps.map((stamp) => <button type="button" className="stamp-choice-card" key={stamp.id} disabled={busy === `transition-quote-${pendingQuoteApproval.id}`} onClick={() => void transition("transition-quote", pendingQuoteApproval, "approved", stamp.id)}><img src={`/api/portal/document-stamps?id=${stamp.id}`} alt={stamp.name}/><strong>{stamp.name}</strong><small>{stamp.fileName}</small></button>)}</div>{!stamps.length && <p className="empty-operational">لا يوجد ختم نشط. أضف ختمًا من مكتبة الأختام أولاً.</p>}</section></div>}
   </>;
 }
 

@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clients, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, financialRecords, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { clients, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, documentStamps, financialRecords, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -46,6 +46,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (["cancelled", "terminated", "suspended"].includes(status) && reason.length < 10) return jsonNoStore({ error: "اكتب سببًا واضحًا لا يقل عن 10 أحرف" }, { status: 400 });
     const canApprove = access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
     if (status === "approved" && !canApprove) return jsonNoStore({ error: "اعتماد العقد متاح للمالك أو مشرف النظام فقط" }, { status: 403 });
+    const stampId = Number(payload.stampId || 0);
+    if (status === "approved") {
+      if (!Number.isSafeInteger(stampId) || stampId < 1) return jsonNoStore({ error: "اختيار ختم الاعتماد إلزامي" }, { status: 400 });
+      const stamp = await db.query.documentStamps.findFirst({ where: and(eq(documentStamps.id, stampId), eq(documentStamps.active, true)) });
+      if (!stamp) return jsonNoStore({ error: "الختم المختار غير موجود أو غير نشط" }, { status: 409 });
+    }
     if (["signed", "terminated", "cancelled", "superseded"].includes(status) && !canApprove) return jsonNoStore({ error: "هذه المرحلة تتطلب صلاحية المالك أو مشرف النظام" }, { status: 403 });
     if (status === "active" && !contract.approvedBy) return jsonNoStore({ error: "لا يمكن تفعيل العقد قبل اعتماده من المالك أو مشرف النظام" }, { status: 409 });
     const plannedAssignments = status === "active"
@@ -66,7 +72,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const now = new Date().toISOString();
     const [updated] = await db.update(workforceContracts).set({
       status,
-      ...(status === "approved" ? { approvedBy: access.user.email, approvedAt: now } : {}),
+      ...(status === "approved" ? { approvedBy: access.user.email, approvedAt: now, stampId } : {}),
       ...(status === "signed" ? { signedAt: now } : {}),
       ...(status === "active" ? { effectiveAt: now, suspendedAt: null } : {}),
       ...(status === "suspended" ? { suspendedAt: now, cancellationReason: reason } : {}),

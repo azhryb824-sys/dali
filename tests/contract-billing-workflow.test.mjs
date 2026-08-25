@@ -7,7 +7,7 @@ test("contracts require a balanced payment schedule and preserve mandatory clien
   const[route,pdf,ui,operations,migration]=await Promise.all([source("app/api/portal/documents/generate/route.ts"),source("lib/pdf-generator.ts"),source("app/portal/PortalDashboard.tsx"),source("app/portal/OperationsWorkspace.tsx"),source("drizzle-pg/0014_contract_payment_invoicing.sql")]);
   assert.match(route,/reduce\(\(sum, item\) => sum \+ item\.percentageBps, 0\) !== 10000/);
   assert.match(route,/commercialRegistrationFile/);assert.match(route,/vatCertificateFile/);assert.match(route,/nationalAddressFile/);assert.match(route,/client-documents/);
-  assert.match(route,/db\.insert\(clients\)/);assert.match(route,/clientId: client!\.id/);assert.match(route,/status: "active"/);
+  assert.match(route,/db\.insert\(clients\)/);assert.match(route,/db\.insert\(suppliers\)/);assert.match(route,/clientId: client\?\.id \|\| null/);assert.match(route,/supplierId: supplier\?\.id \|\| null/);assert.match(route,/status: "active"/);
   assert.match(ui,/nationalAddressFile/);assert.match(ui,/العنوان الوطني للعميل/);assert.match(ui,/required name="commercialRegistrationFile"/);
   assert.match(operations,/إنشاء عقد/);assert.match(operations,/onCreateContract/);
   assert.match(pdf,/جدول الدفعات/);assert.match(ui,/paymentSchedule/);assert.match(ui,/مجموع النسب 100%/);
@@ -53,17 +53,18 @@ test("worker sponsorship, work contracts, salary accounting and safe deletion st
   assert.match(schema,/archivedAt/);assert.match(migration,/financial_records_worker_salary_period_unique/);
 });
 
-test("sponsorship and Ajir status remain consistent from worker to quote, contract, assignment and PDF",async()=>{
+test("sponsorship and Ajir status remain operationally consistent but private in issued PDFs",async()=>{
   const[workersRoute,operationsRoute,assignmentRoute,contractRoute,portal,operations,pdf,schema,migration]=await Promise.all([
     source("app/api/portal/workers/route.ts"),source("app/api/portal/operations/route.ts"),source("app/api/portal/contracts/[id]/workers/route.ts"),source("app/api/portal/documents/generate/route.ts"),source("app/portal/PortalDashboard.tsx"),source("app/portal/OperationsWorkspace.tsx"),source("lib/pdf-generator.ts"),source("db/schema.ts"),source("drizzle-pg/0032_sponsorship_and_ajir_consistency.sql")
   ]);
   for(const field of ["sponsorshipType","sponsorName","ajirContractStatus"]){
-    for(const code of [workersRoute,operationsRoute,contractRoute,portal,operations,pdf,schema])assert.match(code,new RegExp(field));
+    for(const code of [workersRoute,operationsRoute,contractRoute,portal,operations,schema])assert.match(code,new RegExp(field));
   }
   assert.match(workersRoute,/اسم الكفيل وحالة عقد أجير/);assert.match(workersRoute,/worker-without-ajir/);
   assert.match(operationsRoute,/أكمل اسم الكفيل وحالة عقد أجير/);assert.match(contractRoute,/تطابق عرض السعر المقبول/);
   assert.match(assignmentRoute,/بيانات كفالة العامل وحالة عقد أجير لا تطابق/);assert.match(portal,/sponsorshipMatches/);
-  for(const label of ["بعقد أجير","بدون عقد أجير"]){assert.match(portal,new RegExp(label));assert.match(operations,new RegExp(label));assert.match(pdf,new RegExp(label));}
+  for(const label of ["بعقد أجير","بدون عقد أجير"]){assert.match(portal,new RegExp(label));assert.match(operations,new RegExp(label));}
+  assert.match(pdf,/publicManpowerText\(item\.notes\)/);assert.match(pdf,/publicManpowerText\(input\.details\)/);assert.doesNotMatch(pdf,/const sponsorship = item\.sponsorshipType/);
   assert.match(portal,/اسم الكفيل/);assert.match(operations,/اسم الكفيل/);
   assert.match(migration,/workers_sponsorship_consistency_check/);assert.match(migration,/quote_items_sponsorship_consistency_check/);assert.match(migration,/contract_professions_sponsorship_consistency_check/);
 });
@@ -126,9 +127,9 @@ test("contract cancellation transfers a complete immutable client case snapshot 
 });
 
 test("due installments auto invoice once, support secure WhatsApp sharing, and feed finance and legal command centers",async()=>{
-  const[invoicing,paymentsApi,paymentsUi,dashboard,legalApi,legalUi,notifications,schema,migration]=await Promise.all([source("lib/contract-payment-invoicing.ts"),source("app/api/portal/contract-payments/route.ts"),source("app/portal/PaymentManagementDashboard.tsx"),source("app/portal/ContractBillingWorkspace.tsx"),source("app/api/portal/legal-cases/route.ts"),source("app/portal/LegalCaseWorkspace.tsx"),source("lib/portal-notifications.ts"),source("db/schema.ts"),source("drizzle-pg/0025_legal_case_management.sql")]);
+  const[invoicing,paymentsApi,paymentsUi,dashboard,whatsapp,legalApi,legalUi,notifications,schema,migration]=await Promise.all([source("lib/contract-payment-invoicing.ts"),source("app/api/portal/contract-payments/route.ts"),source("app/portal/PaymentManagementDashboard.tsx"),source("app/portal/ContractBillingWorkspace.tsx"),source("lib/whatsapp.ts"),source("app/api/portal/legal-cases/route.ts"),source("app/portal/LegalCaseWorkspace.tsx"),source("lib/portal-notifications.ts"),source("db/schema.ts"),source("drizzle-pg/0025_legal_case_management.sql")]);
   assert.match(invoicing,/isNull\(contractPaymentSchedules\.invoiceDocumentId\)/);assert.match(invoicing,/contract-payment-auto-invoiced/);
-  assert.match(paymentsApi,/issueDueContractInvoice/);assert.match(paymentsApi,/clientMobiles/);assert.match(dashboard,/https:\/\/wa\.me\//);assert.match(dashboard,/رابط PDF الآمن/);
+  assert.match(paymentsApi,/issueDueContractInvoice/);assert.match(paymentsApi,/clientMobiles/);assert.match(dashboard,/createWhatsAppUrl/);assert.match(whatsapp,/https:\/\/wa\.me\//);assert.match(dashboard,/رابط PDF الآمن/);
   assert.match(paymentsUi,/مركز إدارة الدفعات والتحصيل/);assert.match(paymentsUi,/نسبة التحصيل/);assert.match(paymentsUi,/متأخر/);
   assert.match(legalApi,/legal-case-activity-created/);assert.match(legalUi,/لوحة القضايا والإجراءات والمواعيد/);assert.match(schema,/legalCaseActivities/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);
   assert.match(notifications,/contract-payment-overdue/);assert.match(notifications,/legal-activity-overdue/);assert.match(notifications,/issueDueContractInvoice/);

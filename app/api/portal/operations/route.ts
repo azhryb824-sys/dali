@@ -6,6 +6,7 @@ import {
   clientPortalUsers,
   clients,
   dataSubjectRequests,
+  documentStamps,
   quoteItems,
   quoteVersions,
   salesRepresentatives,
@@ -438,10 +439,16 @@ async function transitionRecord(action: string, payload: Record<string, unknown>
     const allowed: Record<string, string[]> = { draft: canApprove ? ["pending_approval", "approved", "cancelled"] : ["pending_approval"], pending_approval: canApprove ? ["approved", "rejected", "cancelled"] : ["approved", "rejected"], approved: canApprove ? ["sent", "cancelled"] : ["sent"], sent: canApprove ? ["accepted", "rejected", "expired", "cancelled"] : ["accepted", "rejected", "expired"], accepted: [], rejected: canApprove ? ["cancelled"] : [], expired: [], superseded: [], cancelled: [] };
     if (!allowed[item.status]?.includes(nextStatus)) throw new Error("انتقال حالة العرض غير مسموح");
     if (nextStatus === "approved" && !canApprove) throw new Error("اعتماد عرض السعر متاح للمالك أو مشرف النظام فقط");
+    const stampId = integer(payload.stampId, 1);
+    if (nextStatus === "approved") {
+      if (!stampId) throw new Error("اختيار ختم الاعتماد إلزامي");
+      const stamp = await db.query.documentStamps.findFirst({ where: and(eq(documentStamps.id, stampId), eq(documentStamps.active, true)) });
+      if (!stamp) throw new Error("الختم المختار غير موجود أو غير نشط");
+    }
     if (nextStatus === "cancelled" && !canApprove) throw new Error("إلغاء عرض السعر متاح للمالك أو مشرف النظام فقط");
     if (nextStatus === "rejected" && access.role === "employee") throw new Error("غير مصرح باتخاذ قرار الاعتماد");
     const now = new Date().toISOString();
-    const [updated] = await db.update(quoteVersions).set({ status: nextStatus, approvalReason: ["approved", "rejected"].includes(nextStatus) ? reason : item.approvalReason, approvedBy: nextStatus === "approved" ? actor : item.approvedBy, approvedAt: nextStatus === "approved" ? now : item.approvedAt, acceptedAt: nextStatus === "accepted" ? now : item.acceptedAt, updatedAt: now, recordVersion: item.recordVersion + 1 }).where(and(eq(quoteVersions.id, id), eq(quoteVersions.recordVersion, integer(payload.version, 1) ?? item.recordVersion))).returning();
+    const [updated] = await db.update(quoteVersions).set({ status: nextStatus, approvalReason: ["approved", "rejected"].includes(nextStatus) ? reason : item.approvalReason, approvedBy: nextStatus === "approved" ? actor : item.approvedBy, approvedAt: nextStatus === "approved" ? now : item.approvedAt, stampId: nextStatus === "approved" ? stampId : item.stampId, acceptedAt: nextStatus === "accepted" ? now : item.acceptedAt, updatedAt: now, recordVersion: item.recordVersion + 1 }).where(and(eq(quoteVersions.id, id), eq(quoteVersions.recordVersion, integer(payload.version, 1) ?? item.recordVersion))).returning();
     if (!updated) throw new Error("تعارض في إصدار العرض؛ حدّث الصفحة وحاول مجددًا");
     if (nextStatus === "pending_approval") await db.insert(workflowApprovals).values({ entityType: "quote-version", entityId: String(id), step: "commercial-approval", status: "pending", requestedBy: actor, assignedRole: "manager" });
     if (["approved", "rejected"].includes(nextStatus)) await db.update(workflowApprovals).set({ status: nextStatus, decisionBy: actor, decisionReason: reason, decidedAt: now }).where(and(eq(workflowApprovals.entityType, "quote-version"), eq(workflowApprovals.entityId, String(id)), eq(workflowApprovals.status, "pending")));
