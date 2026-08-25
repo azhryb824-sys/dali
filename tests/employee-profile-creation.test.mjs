@@ -8,12 +8,13 @@ const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), "ut
 test("employee creation is one integrated multipart workflow", () => {
   const api = read("app/api/portal/employees/route.ts");
   const portal = read("app/portal/PortalDashboard.tsx");
-  for (const token of ["portalUserEmail", "iqamaExpiry", "iqamaDocument", "housingAllowanceHalalas", "transportAllowanceHalalas", "otherAllowanceHalalas", "employeeDocuments", "employee-profile-created"]) assert.match(api, new RegExp(token));
+  for (const token of ["portalUserEmail", "iqamaExpiry", "iqamaDocument", "employmentContract", "employment_contract", "housingAllowanceHalalas", "transportAllowanceHalalas", "otherAllowanceHalalas", "employeeDocuments", "employee-profile-created"]) assert.match(api, new RegExp(token));
   assert.match(api, /هذا المستخدم مرتبط بموظف آخر/);
   assert.match(api, /BUCKET\.delete/);
   assert.match(portal, /fetch\("\/api\/portal\/employees"/);
   assert.match(portal, /صورة شخصية — اختيارية/);
   assert.match(portal, /صورة الإقامة — إلزامية/);
+  assert.match(portal, /عقد العمل — إلزامي ويُحفظ في ملف الموظف/);
   assert.match(portal, /اسم البنك — تلقائي/);
 });
 

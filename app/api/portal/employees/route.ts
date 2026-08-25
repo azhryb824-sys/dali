@@ -33,16 +33,20 @@ export async function POST(request: Request) {
     const bankName = iban ? bankNameFromSaudiIban(iban) : null;
     const baseSalaryHalalas = money(form.get("baseSalary")), housingAllowanceHalalas = money(form.get("housingAllowance"));
     const transportAllowanceHalalas = money(form.get("transportAllowance")), otherAllowanceHalalas = money(form.get("otherAllowance"));
-    const photo = form.get("photo"), iqamaDocument = form.get("iqamaDocument");
+    const photo = form.get("photo"), iqamaDocument = form.get("iqamaDocument"), employmentContract = form.get("employmentContract");
     const amounts = [baseSalaryHalalas, housingAllowanceHalalas, transportAllowanceHalalas, otherAllowanceHalalas];
     if (!employeeNumber || fullName.length < 2 || !/^\d{10}$/.test(nationalId) || !portalUserEmail || !jobTitle || !department || !/^\+?[0-9\s()-]{8,20}$/.test(mobile) || !/^\d{4}-\d{2}-\d{2}$/.test(hireDate) || !/^\d{4}-\d{2}-\d{2}$/.test(iqamaExpiry) || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) || amounts.some(value => !Number.isSafeInteger(value) || value < 0) || (iban && !isValidSaudiIban(iban))) return Response.json({ error: "استكمل بيانات الموظف الإلزامية وتأكد من صحة الإقامة والمستخدم والآيبان السعودي" }, { status: 400 });
     if (!(iqamaDocument instanceof File) || iqamaDocument.size < 1) return Response.json({ error: "صورة الإقامة إلزامية" }, { status: 400 });
+    if (!(employmentContract instanceof File) || employmentContract.size < 1) return Response.json({ error: "عقد العمل إلزامي لإكمال ملف الموظف" }, { status: 400 });
     if (photo instanceof File && photo.size > 0 && !imageTypes.has(photo.type)) return Response.json({ error: "الصورة الشخصية يجب أن تكون PNG أو JPG" }, { status: 400 });
     const user = await db.query.portalUsers.findFirst({ where: eq(portalUsers.email, portalUserEmail) });
     if (!user || user.status !== "active") return Response.json({ error: "اختر مستخدمًا نشطًا للموظف" }, { status: 400 });
     const linked = await db.query.employees.findFirst({ where: eq(employees.portalUserEmail, portalUserEmail) });
     if (linked) return Response.json({ error: "هذا المستخدم مرتبط بموظف آخر" }, { status: 409 });
-    const pending = [{ file: iqamaDocument, type: "national_id", title: "صورة الإقامة", expiryDate: iqamaExpiry, allowed: documentTypes }];
+    const pending = [
+      { file: iqamaDocument, type: "national_id", title: "صورة الإقامة", expiryDate: iqamaExpiry, allowed: documentTypes },
+      { file: employmentContract, type: "employment_contract", title: "عقد العمل", expiryDate: "", allowed: documentTypes },
+    ];
     if (photo instanceof File && photo.size > 0) pending.push({ file: photo, type: "personal_photo", title: "الصورة الشخصية", expiryDate: "", allowed: imageTypes });
     const uploaded = [];
     for (const item of pending) {
