@@ -1,0 +1,69 @@
+name: Apply annual contract save fix
+
+on:
+  push:
+    branches:
+      - godaddy-preview
+    paths:
+      - scripts/apply-contract-save-fix.py
+      - .github/workflows/apply-contract-save-fix.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: annual-contract-save-fix
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AUTH_MODE: credentials
+      DATABASE_URL: file:/tmp/dali-ci.db
+      UPLOADS_DIR: /tmp/dali-ci-uploads
+      AUTH_SECRET: ci-auth-secret-for-dali-with-more-than-32-characters
+      PORTAL_ADMIN_IDENTIFIER: "1234567890"
+      PORTAL_ADMIN_EMAIL: admin@example.test
+      PORTAL_ADMIN_EMAILS: admin@example.test
+      PORTAL_ADMIN_NAME: CI Administrator
+    steps:
+      - name: Check out preview branch
+        uses: actions/checkout@v4
+        with:
+          ref: godaddy-preview
+          fetch-depth: 0
+
+      - name: Apply focused source patch
+        run: python3 scripts/apply-contract-save-fix.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate test administrator password hash
+        run: echo "PORTAL_ADMIN_PASSWORD_HASH=$(node scripts/hash-password.mjs 'ci-test-password-2026!')" >> "$GITHUB_ENV"
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Build and regression tests
+        run: npm test
+
+      - name: Commit verified source changes
+        run: |
+          git config user.name "dali-verification-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add app lib tests
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: annual contract schedule and save reliability"
+          git push origin HEAD:godaddy-preview
