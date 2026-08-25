@@ -4,14 +4,15 @@ import test from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Arabic, English and Urdu share a persistent direction-aware translation runtime", async () => {
+test("Arabic, English and Bengali share a persistent direction-aware translation runtime", async () => {
   const [i18n, runtime, authoredCatalog, layout, publicApi] = await Promise.all([
     source("lib/i18n.ts"), source("app/components/LocaleRuntime.tsx"),
     source("lib/i18n-authored-strings.ts"), source("app/layout.tsx"), source("app/api/locale/route.ts")
   ]);
-  assert.match(i18n, /supportedLocales = \["ar", "en", "ur"\]/);
-  assert.match(i18n, /locale === "en" \? "ltr" : "rtl"/);
-  assert.match(i18n, /ur:"ڈیش بورڈ"/);
+  assert.match(i18n, /supportedLocales = \["ar", "en", "bn"\]/);
+  assert.match(i18n, /bn: "বাংলা"/);
+  assert.match(i18n, /locale === "ar" \? "rtl" : "ltr"/);
+  assert.match(i18n, /"لوحة المتابعة".*bn: "ড্যাশবোর্ড"/);
   assert.match(runtime, /MutationObserver/);
   assert.match(runtime, /document\.documentElement\.dir/);
   assert.match(runtime, /document\.cookie/);
@@ -31,7 +32,7 @@ test("non-admin portal users choose a saved language on first login while superv
   const [portal, onboarding, api, access, schema, migration] = await Promise.all([
     source("app/portal/page.tsx"), source("app/portal/language/page.tsx"),
     source("app/api/portal/language/route.ts"), source("lib/portal-access.ts"),
-    source("db/schema.ts"), source("drizzle-pg/0027_multilingual_preferences.sql")
+    source("db/schema.ts"), source("drizzle-pg/0039_replace_urdu_with_bengali.sql")
   ]);
   assert.match(portal, /access\.role !== "admin" && !cookieLocale && !access\.preferredLanguage/);
   assert.match(portal, /redirect\("\/portal\/language"\)/);
@@ -42,7 +43,8 @@ test("non-admin portal users choose a saved language on first login while superv
   assert.match(access, /preferredLanguage/);
   assert.match(schema, /languageSelectedAt/);
   assert.match(migration, /preferred_language/);
-  assert.match(migration, /'ar','en','ur'/);
+  assert.match(migration, /'ar','en','bn'/);
+  assert.match(migration, /WHERE "preferred_language" = 'ur'/);
 });
 
 test("login schema repair runs before unrelated HR migrations", async () => {

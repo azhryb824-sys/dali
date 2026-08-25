@@ -1,14 +1,16 @@
 import { adminUiTranslations } from "@/lib/i18n-admin-catalog";
 import { publicUiTranslations } from "@/lib/i18n-public-catalog";
 
-export const supportedLocales = ["ar", "en", "ur"] as const;
+export const supportedLocales = ["ar", "en", "bn"] as const;
 export type AppLocale = typeof supportedLocales[number];
 export const localeCookieName = "dali_locale";
 export function isAppLocale(value: unknown): value is AppLocale { return typeof value === "string" && supportedLocales.includes(value as AppLocale); }
-export function localeDirection(locale: AppLocale) { return locale === "en" ? "ltr" : "rtl"; }
-export const localeNames: Record<AppLocale,string> = { ar: "العربية", en: "English", ur: "اردو" };
+/** Preserve old Urdu preferences by migrating them to Bengali instead of breaking sign-in. */
+export function normalizeAppLocale(value: unknown): AppLocale | null { return value === "ur" ? "bn" : isAppLocale(value) ? value : null; }
+export function localeDirection(locale: AppLocale) { return locale === "ar" ? "rtl" : "ltr"; }
+export const localeNames: Record<AppLocale,string> = { ar: "العربية", en: "English", bn: "বাংলা" };
 
-type Translation = { en: string; ur: string };
+type Translation = { en: string; ur?: string; bn?: string };
 export const uiTranslations: Record<string,Translation> = {
   "الرئيسية":{en:"Home",ur:"مرکزی صفحہ"},"من نحن":{en:"About us",ur:"ہمارے بارے میں"},"خدماتنا":{en:"Services",ur:"ہماری خدمات"},"المقاولات":{en:"Contracting",ur:"تعمیرات"},"القطاعات":{en:"Sectors",ur:"شعبے"},"مناطق الخدمة":{en:"Service areas",ur:"خدمات کے علاقے"},"رمضان والحج":{en:"Ramadan & Hajj",ur:"رمضان اور حج"},"المعرفة":{en:"Insights",ur:"معلومات"},"اطلب عرض سعر":{en:"Request a quotation",ur:"قیمت کی پیشکش طلب کریں"},"ابحث في الموقع":{en:"Search the website",ur:"ویب سائٹ میں تلاش کریں"},
   "النظام الإداري الداخلي":{en:"Internal Administration System",ur:"اندرونی انتظامی نظام"},"تسجيل الدخول الآمن":{en:"Secure sign in",ur:"محفوظ لاگ اِن"},"رقم الهوية / الإقامة":{en:"National ID / Iqama",ur:"قومی شناخت / اقامہ"},"كلمة المرور":{en:"Password",ur:"پاس ورڈ"},"دخول آمن":{en:"Sign in securely",ur:"محفوظ لاگ اِن"},"نسيت كلمة المرور؟":{en:"Forgot password?",ur:"پاس ورڈ بھول گئے؟"},"تسجيل الخروج":{en:"Sign out",ur:"لاگ آؤٹ"},
@@ -36,9 +38,69 @@ Object.assign(uiTranslations,{
   "مالك النظام":{en:"System owner",ur:"نظام کا مالک"},"مشرف النظام":{en:"System administrator",ur:"سسٹم ایڈمنسٹریٹر"},"صلاحية عامة":{en:"Full access",ur:"مکمل رسائی"},"البحث في جميع أقسام النظام...":{en:"Search across all system sections...",ur:"نظام کے تمام حصوں میں تلاش کریں..."},"لا يوجد نشاط مسجّل بعد.":{en:"No activity has been recorded yet.",ur:"ابھی کوئی سرگرمی ریکارڈ نہیں ہوئی۔"},"الحساب مفعّل":{en:"Account active",ur:"اکاؤنٹ فعال"},"لم يُحدَّد قسمك بعد":{en:"Your department has not been assigned yet",ur:"آپ کا شعبہ ابھی مقرر نہیں ہوا"},"الصلاحية الحالية":{en:"Current permission",ur:"موجودہ اجازت"}
 });
 Object.assign(uiTranslations,publicUiTranslations,adminUiTranslations);
-const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>string;ur:(match:RegExpMatchArray)=>string}>=[
-  {pattern:/^مساحة عمل مهيأة لصلاحيات:\s*(.+)\.$/,en:m=>`Workspace configured for role: ${translateUi(m[1],"en")}.`,ur:m=>`کردار کے مطابق ورک اسپیس: ${translateUi(m[1],"ur")}۔`},
-  {pattern:/^مساحة عملك في قسم\s+(.+)\.$/,en:m=>`Your workspace in the ${translateUi(m[1],"en")} department.`,ur:m=>`${translateUi(m[1],"ur")} شعبے میں آپ کا ورک اسپیس۔`},
+Object.assign(uiTranslations, {
+  "الرئيسية": { ...uiTranslations["الرئيسية"], bn: "হোম" },
+  "من نحن": { ...uiTranslations["من نحن"], bn: "আমাদের সম্পর্কে" },
+  "خدماتنا": { ...uiTranslations["خدماتنا"], bn: "আমাদের সেবা" },
+  "الخدمات": { ...uiTranslations["الخدمات"], bn: "সেবা" },
+  "المقاولات": { ...uiTranslations["المقاولات"], bn: "নির্মাণ ও ঠিকাদারি" },
+  "القطاعات": { ...uiTranslations["القطاعات"], bn: "খাতসমূহ" },
+  "مناطق الخدمة": { ...uiTranslations["مناطق الخدمة"], bn: "সেবার এলাকা" },
+  "رمضان والحج": { ...uiTranslations["رمضان والحج"], bn: "রমজান ও হজ" },
+  "المعرفة": { ...uiTranslations["المعرفة"], bn: "তথ্যকেন্দ্র" },
+  "اطلب عرض سعر": { ...uiTranslations["اطلب عرض سعر"], bn: "মূল্য প্রস্তাব চান" },
+  "ابحث في الموقع": { ...uiTranslations["ابحث في الموقع"], bn: "ওয়েবসাইটে খুঁজুন" },
+  "النظام الإداري الداخلي": { ...uiTranslations["النظام الإداري الداخلي"], bn: "অভ্যন্তরীণ প্রশাসনিক ব্যবস্থা" },
+  "تسجيل الدخول الآمن": { ...uiTranslations["تسجيل الدخول الآمن"], bn: "নিরাপদ লগইন" },
+  "رقم الهوية / الإقامة": { ...uiTranslations["رقم الهوية / الإقامة"], bn: "জাতীয় পরিচয়পত্র / ইকামা নম্বর" },
+  "كلمة المرور": { ...uiTranslations["كلمة المرور"], bn: "পাসওয়ার্ড" },
+  "دخول آمن": { ...uiTranslations["دخول آمن"], bn: "নিরাপদে প্রবেশ করুন" },
+  "نسيت كلمة المرور؟": { ...uiTranslations["نسيت كلمة المرور؟"], bn: "পাসওয়ার্ড ভুলে গেছেন?" },
+  "تسجيل الخروج": { ...uiTranslations["تسجيل الخروج"], bn: "লগআউট" },
+  "نظرة عامة": { ...uiTranslations["نظرة عامة"], bn: "সারসংক্ষেপ" },
+  "لوحة المتابعة": { ...uiTranslations["لوحة المتابعة"], bn: "ড্যাশবোর্ড" },
+  "إدارة الموظفين": { ...uiTranslations["إدارة الموظفين"], bn: "কর্মচারী ব্যবস্থাপনা" },
+  "الإدارة المالية": { ...uiTranslations["الإدارة المالية"], bn: "আর্থিক ব্যবস্থাপনা" },
+  "الشؤون القانونية": { ...uiTranslations["الشؤون القانونية"], bn: "আইনগত বিষয়" },
+  "شؤون العمالة": { ...uiTranslations["شؤون العمالة"], bn: "শ্রমিক বিষয়ক ব্যবস্থাপনা" },
+  "المبيعات والتشغيل": { ...uiTranslations["المبيعات والتشغيل"], bn: "বিক্রয় ও পরিচালনা" },
+  "المقاولات والمشروعات": { ...uiTranslations["المقاولات والمشروعات"], bn: "নির্মাণ ও প্রকল্প" },
+  "مركز المستندات": { ...uiTranslations["مركز المستندات"], bn: "নথি কেন্দ্র" },
+  "إدارة الموقع الإلكتروني": { ...uiTranslations["إدارة الموقع الإلكتروني"], bn: "ওয়েবসাইট ব্যবস্থাপনা" },
+  "إدارة المستخدمين": { ...uiTranslations["إدارة المستخدمين"], bn: "ব্যবহারকারী ব্যবস্থাপনা" },
+  "الإشعارات": { ...uiTranslations["الإشعارات"], bn: "বিজ্ঞপ্তি" },
+  "البحث": { ...uiTranslations["البحث"], bn: "অনুসন্ধান" },
+  "اللغة": { ...uiTranslations["اللغة"], bn: "ভাষা" },
+  "اختيار اللغة": { ...uiTranslations["اختيار اللغة"], bn: "ভাষা নির্বাচন করুন" },
+  "إضافة": { ...uiTranslations["إضافة"], bn: "যোগ করুন" },
+  "حفظ": { ...uiTranslations["حفظ"], bn: "সংরক্ষণ করুন" },
+  "إلغاء": { ...uiTranslations["إلغاء"], bn: "বাতিল" },
+  "حذف": { ...uiTranslations["حذف"], bn: "মুছুন" },
+  "تعديل": { ...uiTranslations["تعديل"], bn: "সম্পাদনা" },
+  "اعتماد": { ...uiTranslations["اعتماد"], bn: "অনুমোদন" },
+  "تنزيل": { ...uiTranslations["تنزيل"], bn: "ডাউনলোড" },
+  "مشاركة": { ...uiTranslations["مشاركة"], bn: "শেয়ার করুন" },
+  "إغلاق": { ...uiTranslations["إغلاق"], bn: "বন্ধ করুন" },
+  "جارٍ التحميل...": { ...uiTranslations["جارٍ التحميل..."], bn: "লোড হচ্ছে..." },
+  "لا توجد نتائج": { ...uiTranslations["لا توجد نتائج"], bn: "কোনো ফলাফল নেই" },
+  "الحالة": { ...uiTranslations["الحالة"], bn: "অবস্থা" },
+  "الاسم": { ...uiTranslations["الاسم"], bn: "নাম" },
+  "البريد الإلكتروني": { ...uiTranslations["البريد الإلكتروني"], bn: "ইমেইল" },
+  "رقم الجوال": { ...uiTranslations["رقم الجوال"], bn: "মোবাইল নম্বর" },
+  "التاريخ": { ...uiTranslations["التاريخ"], bn: "তারিখ" },
+  "ملاحظات": { ...uiTranslations["ملاحظات"], bn: "মন্তব্য" },
+  "إرسال": { ...uiTranslations["إرسال"], bn: "পাঠান" },
+  "تأكيد": { ...uiTranslations["تأكيد"], bn: "নিশ্চিত করুন" },
+  "العقود والدفعات": { ...uiTranslations["العقود والدفعات"], bn: "চুক্তি ও কিস্তি" },
+  "عروض الأسعار": { ...uiTranslations["عروض الأسعار"], bn: "মূল্য প্রস্তাব" },
+  "الموظفون": { ...uiTranslations["الموظفون"], bn: "কর্মচারী" },
+  "العمالة": { ...uiTranslations["العمالة"], bn: "শ্রমিক" },
+  "تنزيل PDF": { ...uiTranslations["تنزيل PDF"], bn: "PDF ডাউনলোড" },
+  "البنغالية": { en: "Bengali", bn: "বাংলা" },
+});
+const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>string;ur:(match:RegExpMatchArray)=>string;bn?:(match:RegExpMatchArray)=>string}>=[
+  {pattern:/^مساحة عمل مهيأة لصلاحيات:\s*(.+)\.$/,en:m=>`Workspace configured for role: ${translateUi(m[1],"en")}.`,ur:m=>`کردار کے مطابق ورک اسپیس: ${m[1]}۔`,bn:m=>`ভূমিকা অনুযায়ী কর্মক্ষেত্র: ${m[1]}।`},
+  {pattern:/^مساحة عملك في قسم\s+(.+)\.$/,en:m=>`Your workspace in the ${translateUi(m[1],"en")} department.`,ur:m=>`${m[1]} شعبے میں آپ کا ورک اسپیس۔`,bn:m=>`${m[1]} বিভাগে আপনার কর্মক্ষেত্র।`},
   {pattern:/^(\d+)\s+على رأس العمل$/,en:m=>`${m[1]} active employees`,ur:m=>`${m[1]} فعال ملازمین`},
   {pattern:/^(.+)\s+إجمالي مسجّل$/,en:m=>`${m[1]} total recorded`,ur:m=>`${m[1]} کل ریکارڈ`},
   {pattern:/^(\d+)\s+تنبيه خلال 45 يوماً$/,en:m=>`${m[1]} alerts within 45 days`,ur:m=>`45 دن میں ${m[1]} انتباہات`},
@@ -50,5 +112,5 @@ const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>s
   {pattern:/^(\d+)\s+تنبيه$/,en:m=>`${m[1]} alerts`,ur:m=>`${m[1]} انتباہات`},
   {pattern:/^(\d+)\s+طلب$/,en:m=>`${m[1]} requests`,ur:m=>`${m[1]} درخواستیں`}
 ];
-const calendarWords:Record<AppLocale,Record<string,string>>={ar:{},en:{"الأحد":"Sunday","الاثنين":"Monday","الثلاثاء":"Tuesday","الأربعاء":"Wednesday","الخميس":"Thursday","الجمعة":"Friday","السبت":"Saturday","يناير":"January","فبراير":"February","مارس":"March","أبريل":"April","مايو":"May","يونيو":"June","يوليو":"July","أغسطس":"August","سبتمبر":"September","أكتوبر":"October","نوفمبر":"November","ديسمبر":"December"},ur:{"الأحد":"اتوار","الاثنين":"پیر","الثلاثاء":"منگل","الأربعاء":"بدھ","الخميس":"جمعرات","الجمعة":"جمعہ","السبت":"ہفتہ","يناير":"جنوری","فبراير":"فروری","مارس":"مارچ","أبريل":"اپریل","مايو":"مئی","يونيو":"جون","يوليو":"جولائی","أغسطس":"اگست","سبتمبر":"ستمبر","أكتوبر":"اکتوبر","نوفمبر":"نومبر","ديسمبر":"دسمبر"}};
-export function translateUi(value:string,locale:AppLocale){if(locale==="ar")return value;const exact=uiTranslations[value]?.[locale];if(exact)return exact;for(const item of dynamicUiTranslations){const match=value.match(item.pattern);if(match)return item[locale](match)}let translated=value;for(const[arabic,replacement]of Object.entries(calendarWords[locale]))translated=translated.replace(arabic,replacement);return translated;}
+const calendarWords:Record<AppLocale,Record<string,string>>={ar:{},en:{"الأحد":"Sunday","الاثنين":"Monday","الثلاثاء":"Tuesday","الأربعاء":"Wednesday","الخميس":"Thursday","الجمعة":"Friday","السبت":"Saturday","يناير":"January","فبراير":"February","مارس":"March","أبريل":"April","مايو":"May","يونيو":"June","يوليو":"July","أغسطس":"August","سبتمبر":"September","أكتوبر":"October","نوفمبر":"November","ديسمبر":"December"},bn:{"الأحد":"রবিবার","الاثنين":"সোমবার","الثلاثاء":"মঙ্গলবার","الأربعاء":"বুধবার","الخميس":"বৃহস্পতিবার","الجمعة":"শুক্রবার","السبت":"শনিবার","يناير":"জানুয়ারি","فبراير":"ফেব্রুয়ারি","مارس":"মার্চ","أبريل":"এপ্রিল","مايو":"মে","يونيو":"জুন","يوليو":"জুলাই","أغسطس":"আগস্ট","سبتمبر":"সেপ্টেম্বর","أكتوبر":"অক্টোবর","نوفمبر":"নভেম্বর","ديسمبر":"ডিসেম্বর"}};
+export function translateUi(value:string,locale:AppLocale){if(locale==="ar")return value;const exact=uiTranslations[value]?.[locale];if(exact)return exact;for(const item of dynamicUiTranslations){const match=value.match(item.pattern);const translate=item[locale];if(match&&translate)return translate(match)}let translated=value;for(const[arabic,replacement]of Object.entries(calendarWords[locale]))translated=translated.replace(arabic,replacement);return translated;}

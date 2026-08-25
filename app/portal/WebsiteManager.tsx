@@ -3,13 +3,13 @@
 import { useMemo, useState } from "react";
 import type { ManagedBlock, ManagedEntry, ManagedFaq, WebsiteCollectionKey, WebsiteContent } from "@/lib/website-content";
 
-type Tab = "overview" | "identity" | "home" | "seo" | WebsiteCollectionKey | "faq" | "visibility";
+type Tab = "overview" | "identity" | "home" | "seo" | "translations" | WebsiteCollectionKey | "faq" | "visibility";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "overview", label: "نظرة عامة" }, { id: "identity", label: "بيانات الشركة" }, { id: "home", label: "الصفحة الرئيسية" }, { id: "seo", label: "تحسين البحث" },
   { id: "services", label: "الخدمات" }, { id: "sectors", label: "القطاعات" }, { id: "locations", label: "مناطق الخدمة" }, { id: "projects", label: "المشروعات" },
   { id: "credentials", label: "التراخيص" }, { id: "articles", label: "المعرفة" }, { id: "jobs", label: "الوظائف" }, { id: "partners", label: "الشركاء" },
-  { id: "faq", label: "الأسئلة الشائعة" }, { id: "visibility", label: "ظهور الأقسام" },
+  { id: "faq", label: "الأسئلة الشائعة" }, { id: "translations", label: "الترجمة قبل النشر" }, { id: "visibility", label: "ظهور الأقسام" },
 ];
 
 const collectionHelp: Record<WebsiteCollectionKey, { title: string; description: string; path: string }> = {
@@ -40,6 +40,17 @@ function parseBlocks(value: string): ManagedBlock[] { return lines(value).map((l
 function faqsText(value: ManagedFaq[]) { return value.map((item) => `${item.question}|${item.answer}`).join("\n"); }
 function parseFaqs(value: string): ManagedFaq[] { return lines(value).map((line) => { const separator = line.indexOf("|"); return separator < 0 ? { question: line, answer: "" } : { question: line.slice(0, separator).trim(), answer: line.slice(separator + 1).trim() }; }).filter((item) => item.question && item.answer); }
 function dateOnly() { return new Date().toISOString().slice(0, 10); }
+function websiteArabicStrings(content: WebsiteContent) {
+  const values = new Set<string>();
+  function visit(value: unknown, key = "") {
+    if (key === "translations") return;
+    if (typeof value === "string" && /[\u0600-\u06ff]/.test(value) && value.length <= 6000) values.add(value.trim());
+    else if (Array.isArray(value)) value.forEach((item) => visit(item));
+    else if (value && typeof value === "object") Object.entries(value).forEach(([childKey, child]) => visit(child, childKey));
+  }
+  visit(content);
+  return [...values].filter(Boolean);
+}
 
 export default function WebsiteManager({ initialContent, canManage }: { initialContent: WebsiteContent; canManage: boolean }) {
   const [content, setContent] = useState(initialContent);
@@ -47,6 +58,8 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [translationTarget, setTranslationTarget] = useState<"en" | "bn">("en");
+  const [translating, setTranslating] = useState(false);
   const publishedCount = useMemo(() => Object.values(content.collections).flat().filter((item) => item.status === "published").length, [content]);
   const draftCount = useMemo(() => Object.values(content.collections).flat().filter((item) => item.status === "draft").length, [content]);
 
@@ -67,6 +80,26 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
     finally { setBusy(false); }
   }
 
+  async function generateWebsiteTranslations() {
+    if (!canManage || translating) return;
+    const source = websiteArabicStrings(content);
+    setTranslating(true); setNotice(""); setError("");
+    try {
+      const translatedMap = { ...content.translations[translationTarget] };
+      const pending = source.filter((value) => !translatedMap[value]);
+      for (let offset = 0; offset < pending.length; offset += 100) {
+        const values = pending.slice(offset, offset + 100);
+        const response = await fetch("/api/portal/translate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ values, target: translationTarget }) });
+        const result = await response.json() as { translated?: string[]; error?: string };
+        if (!response.ok || !result.translated || result.translated.length !== values.length) throw new Error(result.error || "تعذّر إنشاء الترجمة");
+        values.forEach((value, index) => { translatedMap[value] = result.translated![index]; });
+      }
+      mutate((draft) => { draft.translations[translationTarget] = translatedMap; });
+      setNotice(`اكتملت مسودة ${translationTarget === "en" ? "الترجمة الإنجليزية" : "الترجمة البنغالية"}. راجعها ثم اضغط حفظ ونشر.`);
+    } catch (translationError) { setError(translationError instanceof Error ? translationError.message : "تعذّر إنشاء الترجمة"); }
+    finally { setTranslating(false); }
+  }
+
   return <section className="website-manager">
     <header className="website-manager-head"><div><p className="section-kicker">إدارة الموقع الإلكتروني</p><h2>المحتوى والظهور في محركات البحث</h2><p>تغييرات الأقسام المنشورة تظهر مباشرة في الموقع العام. النصوص تُعرض كنص آمن دون قبول شيفرات HTML.</p></div><div className="website-publish-actions"><a href="/" target="_blank" rel="noreferrer">فتح الموقع العام</a><button type="button" onClick={save} disabled={!canManage || busy}>{busy ? "جارٍ الحفظ..." : "حفظ ونشر التغييرات"}</button></div></header>
     {(notice || error) && <div className={error ? "website-message error" : "website-message success"} role={error ? "alert" : "status"}>{error || notice}</div>}
@@ -79,6 +112,7 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
         {tab === "seo" && <EditorPanel title="إعدادات تحسين محركات البحث" description="تُستخدم الكلمات المستهدفة لتوجيه المحتوى، وليست بديلًا عن صفحات مفيدة أو سمعة محلية حقيقية."><div className="website-form-grid"><Field wide label="عنوان الصفحة الرئيسية لمحركات البحث" value={content.seo.homeTitle} onChange={(value) => mutate((draft) => { draft.seo.homeTitle = value; })} disabled={!canManage}/><Field wide label="وصف نتيجة البحث" value={content.seo.homeDescription} onChange={(value) => mutate((draft) => { draft.seo.homeDescription = value; })} disabled={!canManage} multiline/><Field wide label="وصف المنشأة في البيانات المنظمة" value={content.seo.organizationDescription} onChange={(value) => mutate((draft) => { draft.seo.organizationDescription = value; })} disabled={!canManage} multiline/><Field wide label="الكلمات والموضوعات الأساسية" value={content.seo.focusKeywords} onChange={(value) => mutate((draft) => { draft.seo.focusKeywords = value; })} disabled={!canManage} multiline/></div><div className="keyword-clusters"><h3>خريطة الكلمات ذات الأولوية</h3>{keywordClusters.map((cluster) => <article key={cluster.intent}><strong>{cluster.intent}</strong><p>{cluster.terms}</p></article>)}</div><p className="website-editor-note">لا يمكن ضمان المركز الأول تقنيًا. الترتيب المحلي يعتمد كذلك على الصلة والمسافة والشهرة، وملف النشاط التجاري والمراجعات والروابط ورضا المستخدمين.</p></EditorPanel>}
         {(Object.keys(content.collections) as WebsiteCollectionKey[]).includes(tab as WebsiteCollectionKey) && <CollectionEditor collectionKey={tab as WebsiteCollectionKey} entries={content.collections[tab as WebsiteCollectionKey]} canManage={canManage} onChange={(entries) => mutate((draft) => { draft.collections[tab as WebsiteCollectionKey] = entries; })}/>}
         {tab === "faq" && <EditorPanel title="الأسئلة الشائعة العامة" description="تظهر في الصفحة الرئيسية وصفحة مستقلة، وتُضاف إلى البيانات المنظمة فقط عندما تكون الإجابة ظاهرة للزائر."><FaqEditor faqs={content.faq} disabled={!canManage} onChange={(faq) => mutate((draft) => { draft.faq = faq; })}/></EditorPanel>}
+        {tab === "translations" && <EditorPanel title="الترجمة الآلية القابلة للمراجعة قبل النشر" description="العربية هي المصدر. أنشئ مسودة لغة واحدة، راجع كل ترجمة وعدّلها، ثم استخدم زر حفظ ونشر أعلى الصفحة."><div className="collection-toolbar"><label>لغة المسودة<select value={translationTarget} disabled={!canManage || translating} onChange={(event) => setTranslationTarget(event.target.value === "bn" ? "bn" : "en")}><option value="en">English</option><option value="bn">বাংলা</option></select></label><button type="button" disabled={!canManage || translating} onClick={() => void generateWebsiteTranslations()}>{translating ? "جارٍ إنشاء المسودة..." : "إنشاء/استكمال الترجمة آليًا"}</button><span>{Object.keys(content.translations[translationTarget]).length} نص مترجم</span></div><div className="faq-editor">{websiteArabicStrings(content).map((source) => <article key={`${translationTarget}-${source}`}><p dir="rtl">{source}</p><Field label={translationTarget === "en" ? "English" : "বাংলা"} value={content.translations[translationTarget][source] || ""} onChange={(value) => mutate((draft) => { if (value.trim()) draft.translations[translationTarget][source] = value; else delete draft.translations[translationTarget][source]; })} disabled={!canManage} multiline dir="ltr"/></article>)}</div></EditorPanel>}
         {tab === "visibility" && <EditorPanel title="ظهور الأقسام" description="إخفاء القسم يزيل رابطه من التنقل، بينما تتحكم حالة كل عنصر في نشر صفحته."><div className="visibility-grid">{Object.entries(content.visibility).map(([key, value]) => <label key={key}><input type="checkbox" checked={value} disabled={!canManage} onChange={(event) => mutate((draft) => { draft.visibility[key as keyof WebsiteContent["visibility"]] = event.target.checked; })}/><span>{({ hajj: "موسما رمضان والحج", services: "الخدمات", sectors: "القطاعات", locations: "مناطق الخدمة", projects: "المشروعات", credentials: "التراخيص", articles: "مركز المعرفة", jobs: "الوظائف", partners: "الموردون والشركاء", faq: "الأسئلة الشائعة" } as Record<string, string>)[key]}</span></label>)}</div></EditorPanel>}
       </div>
     </div>

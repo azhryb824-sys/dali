@@ -16,7 +16,7 @@ import { portalSessionEndPath, portalSessionStartPath, verifyPortalSession } fro
 import PortalDashboard from "./PortalDashboard";
 import PortalAccessRequestForm from "./PortalAccessRequestForm";
 import { canReadConstruction, getActivePortalScopes } from "@/lib/access-policy";
-import { isAppLocale, localeCookieName } from "@/lib/i18n";
+import { localeCookieName, normalizeAppLocale } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,7 @@ function boundedPortalLoad<T>(promise: Promise<T>, label: string, timeoutMs = 12
 
 async function ProtectedPortal() {
   const storedLocale = (await cookies()).get(localeCookieName)?.value;
-  const cookieLocale = isAppLocale(storedLocale) ? storedLocale : null;
+  const cookieLocale = normalizeAppLocale(storedLocale);
   const user = await requireChatGPTUser("/portal");
   const session = await verifyPortalSession(user.email);
   if (session.status === "missing") redirect(portalSessionStartPath("/portal"));

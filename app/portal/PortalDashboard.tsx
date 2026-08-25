@@ -250,7 +250,7 @@ function Icon({ name }: { name: IconName }) {
 }
 
 export default function PortalDashboard({ currentUser, initialRequests, initialRequestReplies, initialNotifications, initialUsers, initialActivity, initialEmployees, initialFinance, initialLegal, initialWorkers, initialWorkerAttachments, initialDocuments, initialAssets, initialContracts, initialContractProfessions, initialContractAssignments, initialConversations, initialConversationMessages, initialBusinessHours, initialChatAutomation, initialWebsiteContent, canAccessWebsite, canManageWebsite, canAccessConstruction, canManageChatSettings, canManageDocuments, canManageAssets, emailConfigured, signOutPath }: {
-  currentUser: { email: string; displayName: string; role: PortalRole; department: PortalDepartment; functionalRoles: string[]; functionalPermissions: string[]; preferredLanguage: "ar" | "en" | "ur" };
+  currentUser: { email: string; displayName: string; role: PortalRole; department: PortalDepartment; functionalRoles: string[]; functionalPermissions: string[]; preferredLanguage: "ar" | "en" | "bn" };
   initialRequests: WorkforceRequest[]; initialRequestReplies: WorkforceRequestReply[]; initialNotifications: PortalNotification[]; initialUsers: PortalUser[]; initialActivity: Activity[];
   initialEmployees: EmployeeRecord[]; initialFinance: FinanceRecord[]; initialLegal: LegalRecord[]; initialWorkers: WorkerRecord[]; initialWorkerAttachments: WorkerAttachment[];
   initialDocuments: CompanyDocument[]; initialAssets: CompanyAsset[]; canManageDocuments: boolean; canManageAssets: boolean;

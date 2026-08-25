@@ -19,7 +19,7 @@ export type PortalAccess = {
   user: ChatGPTUser;
   functionalRoles: string[];
   functionalPermissions: string[];
-  preferredLanguage: "ar" | "en" | "ur" | null;
+  preferredLanguage: "ar" | "en" | "bn" | null;
 };
 
 const allDepartments: Exclude<PortalDepartment, "general">[] = ["employees", "finance", "legal", "workforce", "construction"];
@@ -160,7 +160,7 @@ async function readPreferredLanguage(email: string): Promise<PortalAccess["prefe
       [email],
     );
     const locale = rows[0]?.preferred_language;
-    return locale === "ar" || locale === "en" || locale === "ur" ? locale : null;
+    return locale === "ur" ? "bn" : locale === "ar" || locale === "en" || locale === "bn" ? locale : null;
   } catch (error) {
     const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
     if (code !== "42703") console.warn("portal-language-unavailable", error instanceof Error ? error.message : String(error));

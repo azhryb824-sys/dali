@@ -36,6 +36,7 @@ export type WebsiteContent = {
   version: number;
   updatedAt: string;
   updatedBy: string;
+  translations: { en: Record<string, string>; bn: Record<string, string> };
   site: {
     companyName: string;
     shortName: string;
@@ -226,6 +227,7 @@ export const DEFAULT_WEBSITE_CONTENT: WebsiteContent = {
   version: 1,
   updatedAt: `${TODAY}T00:00:00.000Z`,
   updatedBy: "system",
+  translations: { en: {}, bn: {} },
   site: {
     companyName: "شركة دالي للتشغيل والصيانة",
     shortName: "دالي للتشغيل والصيانة",
@@ -387,6 +389,17 @@ export function sanitizeWebsiteContent(value: unknown, fallback = DEFAULT_WEBSIT
   const home = record(root.home);
   const visibility = record(root.visibility);
   const collections = record(root.collections);
+  const translations = record(root.translations);
+  const sanitizeTranslationMap = (input: unknown, fallbackMap: Record<string, string>) => {
+    const source = record(input);
+    const result: Record<string, string> = {};
+    for (const [key, translated] of Object.entries(source).slice(0, 4000)) {
+      const sourceText = plainText(key, 6000);
+      const translatedText = plainText(translated, 6000);
+      if (sourceText && translatedText) result[sourceText] = translatedText;
+    }
+    return Object.keys(result).length ? result : fallbackMap;
+  };
   const processValue = Array.isArray(home.process) ? home.process.slice(0, 12).map((item) => {
     const row = record(item);
     return { title: plainText(row.title, 140), text: plainText(row.text, 500) };
@@ -395,6 +408,10 @@ export function sanitizeWebsiteContent(value: unknown, fallback = DEFAULT_WEBSIT
     version: Number.isInteger(root.version) ? Math.max(1, Number(root.version)) : fallback.version,
     updatedAt: plainText(root.updatedAt, 40, fallback.updatedAt),
     updatedBy: plainText(root.updatedBy, 180, fallback.updatedBy),
+    translations: {
+      en: sanitizeTranslationMap(translations.en, fallback.translations.en),
+      bn: sanitizeTranslationMap(translations.bn, fallback.translations.bn),
+    },
     site: {
       companyName: plainText(site.companyName, 180, fallback.site.companyName),
       shortName: plainText(site.shortName, 120, fallback.site.shortName),
