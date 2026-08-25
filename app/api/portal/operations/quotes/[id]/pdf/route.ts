@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import { clients, companyAssets, quoteItems, quoteVersions, salesOpportunities } from "@/db/schema";
 import { attachmentHeaders } from "@/lib/company-documents";
 import { generateIssuedPdf } from "@/lib/pdf-generator";
+import { parsePaymentSchedule } from "@/lib/payment-schedules";
 import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
 
 function metadata(value: string | null) {
@@ -16,7 +17,7 @@ function metadata(value: string | null) {
   };
 }
 
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access || !canAccessPortalDepartment(access, "workforce", false)) return Response.json({ error: "غير مصرح بتنزيل عرض السعر" }, { status: 403 });
   const id = Number((await context.params).id);
@@ -39,7 +40,16 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const taxableHalalas = Math.max(0, quote.subtotalHalalas - quote.discountHalalas);
   const vatHalalas = Math.round(taxableHalalas * details.vatRateBps / 10000);
   const totalHalalas = taxableHalalas + vatHalalas;
+  const pdfLanguage = new URL(request.url).searchParams.get("language") === "bilingual" ? "bilingual" : "ar";
+  const paymentDrafts = parsePaymentSchedule(quote.paymentScheduleJson);
+  const paymentSchedule = paymentDrafts.map((payment, index) => {
+    const amountHalalas = index === paymentDrafts.length - 1
+      ? totalHalalas - paymentDrafts.slice(0, -1).reduce((sum, row) => sum + Math.round(totalHalalas * row.percentageBps / 10000), 0)
+      : Math.round(totalHalalas * payment.percentageBps / 10000);
+    return { ...payment, amountHalalas };
+  });
   const bytes = await generateIssuedPdf({
+    pdfLanguage,
     documentType: "quotation",
     referenceCode: `${quote.quoteCode}-V${quote.versionNumber}`,
     clientName: client?.legalName || opportunity.title,
@@ -59,9 +69,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     vatHalalas,
     amountHalalas: totalHalalas,
     paymentTerms: quote.terms || undefined,
+    paymentSchedule,
     assumptions: details.assumptions || undefined,
     terms: "الأسعار خاصة بنطاق العمل والكميات والمدة المحددة. أي أعمال أو كميات إضافية تستلزم عرضًا أو ملحقًا مستقلًا. يخضع بدء الخدمة لتوفر الموارد واعتماد العميل والمتطلبات النظامية.",
     quotationItems: items.map((item) => ({ description: item.profession, quantity: item.quantity, durationMonths: item.durationMonths, unitPriceHalalas: item.unitPriceHalalas, lineTotalHalalas: item.lineTotalHalalas, notes: item.notes, sponsorshipType: item.sponsorshipType as "dali" | "other" | null, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus as "not_applicable" | "with_ajir" | "without_ajir" | null })),
   }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
-  return new Response(new Uint8Array(bytes).buffer, { headers: attachmentHeaders(`${quote.quoteCode}-V${quote.versionNumber}.pdf`, "application/pdf") });
+  return new Response(new Uint8Array(bytes).buffer, { headers: attachmentHeaders(`${quote.quoteCode}-V${quote.versionNumber}-${pdfLanguage}.pdf`, "application/pdf") });
 }

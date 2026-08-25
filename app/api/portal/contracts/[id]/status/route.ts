@@ -5,6 +5,7 @@ import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
+import { annualApprovalSchedule } from "@/lib/payment-schedules";
 
 const transitions: Record<string, string[]> = {
   draft: ["internal_review", "approved", "cancelled"],
@@ -49,6 +50,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         if (!worker || worker.status !== "available") return jsonNoStore({ error: `تعذّر تفعيل العقد لأن العامل رقم ${assignment.workerId} لم يعد متاحًا` }, { status: 409 });
       }
     }
+    const approvalInstallments = status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed"
+      ? await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id))
+      : [];
+    if (approvalInstallments.some((payment) => !["scheduled", "due"].includes(payment.status))) {
+      return jsonNoStore({ error: "تعذر اعتماد العقد لوجود دفعة تمت معالجتها ماليًا" }, { status: 409 });
+    }
     const now = new Date().toISOString();
     const [updated] = await db.update(workforceContracts).set({
       status,
@@ -61,6 +68,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       updatedAt: now,
     }).where(and(eq(workforceContracts.id, id), eq(workforceContracts.status, contract.status))).returning();
     if (!updated) return jsonNoStore({ error: "تغيرت حالة العقد قبل حفظ القرار" }, { status: 409 });
+    if (status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed") {
+      const editable = approvalInstallments.sort((a, b) => a.installmentNumber - b.installmentNumber);
+      const dueDates = annualApprovalSchedule(now, editable.length);
+      for (const [index, payment] of editable.entries()) {
+        await db.update(contractPaymentSchedules).set({ dueDate: dueDates[index], servicePeriod: dueDates[index].slice(0, 7), status: "scheduled", updatedAt: now }).where(eq(contractPaymentSchedules.id, payment.id));
+      }
+      if (dueDates[0]) await db.update(workforceContracts).set({ firstPaymentDueDate: dueDates[0], updatedAt: now }).where(eq(workforceContracts.id, id));
+      await emitPortalNotification({ eventType: "annual-contract-payments-scheduled", title: "جُدولت دفعات العقد السنوي", message: `${contract.referenceCode} — تبدأ الدفعة الأولى بعد شهر من الاعتماد في ${dueDates[0]}.`, severity: "info", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
+    }
     if (["cancelled", "terminated"].includes(status)) {
       await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), inArray(contractPaymentSchedules.status, ["scheduled", "due", "referred"])));
       const assignments = await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), inArray(contractWorkerAssignments.status, ["planned", "active"])));

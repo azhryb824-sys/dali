@@ -17,6 +17,7 @@ export const issuedDocumentLabels = {
 export type IssuedDocumentType = keyof typeof issuedDocumentLabels;
 
 export type IssuedDocumentInput = {
+  pdfLanguage?: "ar" | "bilingual";
   documentType: IssuedDocumentType;
   referenceCode: string;
   clientName: string;
@@ -70,6 +71,118 @@ export type IssuedDocumentInput = {
     ajirContractStatus?: "not_applicable" | "with_ajir" | "without_ajir" | null;
   }>;
 };
+
+const englishDocumentLabels: Record<IssuedDocumentType, string> = {
+  workforce_contract: "Manpower Supply and Operations Contract",
+  quotation: "Quotation",
+  progress_claim: "Progress Claim",
+  invoice: "Invoice",
+  receipt: "Receipt Voucher",
+  payment_voucher: "Payment Voucher",
+  construction_record: "Construction Project Record",
+};
+
+function englishText(value?: string | null) {
+  if (!value) return "Not specified";
+  const replacements: Array<[RegExp, string]> = [
+    [/توريد وتشغيل القوى العاملة وفق البنود والكميات والمواقع المعتمدة\./g, "Supply and operation of manpower according to the approved items, quantities and locations."],
+    [/تستحق الدفعات وفق الجدول أدناه\./g, "Installments are due according to the payment schedule below."],
+    [/تخضع الخدمات للأنظمة المعمول بها في المملكة العربية السعودية\./g, "Services are governed by the applicable laws and regulations of the Kingdom of Saudi Arabia."],
+    [/توريد العمالة/g, "Manpower supply"], [/التشغيل والصيانة/g, "Operations and maintenance"], [/المقاولات/g, "Contracting"], [/الخدمات الموسمية/g, "Seasonal services"],
+    [/عامل نظافة/g, "Cleaner"], [/عامل/g, "Worker"], [/مشرف/g, "Supervisor"], [/فني/g, "Technician"], [/كهربائي/g, "Electrician"], [/سباك/g, "Plumber"],
+    [/على كفالة شركة دالي/g, "Sponsored by Dali Company"], [/على كفالة/g, "Sponsored by"], [/بعقد أجير/g, "With Ajeer contract"], [/بدون عقد أجير/g, "Without Ajeer contract"],
+    [/الدفعة الأولى/g, "First installment"], [/الدفعة الثانية/g, "Second installment"], [/الدفعة/g, "Installment"], [/موسم الحج/g, "Hajj season"], [/موسم رمضان/g, "Ramadan season"],
+    [/مكة المكرمة/g, "Makkah"], [/المشاعر المقدسة/g, "Holy Sites"], [/الرياض/g, "Riyadh"], [/المملكة العربية السعودية/g, "Kingdom of Saudi Arabia"],
+    [/شركة الكفيل/g, "Sponsor Company"], [/شركة العميل التجريبية/g, "Sample Client Company"],
+  ];
+  return replacements.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
+}
+
+async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: CompanyAsset[]) {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(`${englishDocumentLabels[input.documentType]} - ${input.referenceCode}`);
+  const resources = await loadResources(pdf, assets);
+  let page = pdf.addPage([PAGE.width, PAGE.height]);
+  let y = PAGE.height - 58;
+  let pageNumber = 1;
+  const addPage = () => { page = pdf.addPage([PAGE.width, PAGE.height]); pageNumber += 1; y = PAGE.height - 58; header(); };
+  const header = () => {
+    page.drawRectangle({ x: 0, y: PAGE.height - 10, width: PAGE.width, height: 10, color: COLORS.navy });
+    drawLeft(page, "DALI OPERATIONS & MAINTENANCE CO.", PAGE.height - 42, resources.latinBold, 12, COLORS.navy);
+    drawRight(page, `Page ${pageNumber}`, PAGE.height - 42, resources.latinRegular, 8, COLORS.muted);
+    page.drawLine({ start: { x: PAGE.margin, y: PAGE.height - 52 }, end: { x: PAGE.width - PAGE.margin, y: PAGE.height - 52 }, thickness: .7, color: COLORS.line });
+  };
+  const ensure = (height: number) => { if (y - height < 65) addPage(); };
+  const heading = (value: string) => { ensure(38); drawLeft(page, value, y, resources.latinBold, 16, COLORS.navy); page.drawRectangle({ x: PAGE.margin, y: y - 11, width: 34, height: 3, color: COLORS.red }); y -= 34; };
+  const row = (label: string, value: string) => { const lines = wrapWords(resources.latinRegular, value || "Not specified", 8, PAGE.width - PAGE.margin * 2 - 24); const height = 20 + lines.length * 11; ensure(height + 3); page.drawRectangle({ x: PAGE.margin, y: y - height + 7, width: PAGE.width - PAGE.margin * 2, height, color: COLORS.pale, borderColor: COLORS.line, borderWidth: .5 }); drawLeft(page, label, y - 3, resources.latinBold, 7, COLORS.red, PAGE.margin + 12); lines.forEach((line, index) => drawLeft(page, line, y - 16 - index * 11, resources.latinRegular, 8, COLORS.text, PAGE.margin + 12)); y -= height + 3; };
+  header();
+  heading(englishDocumentLabels[input.documentType]);
+  row("Reference", input.referenceCode); row("Issue date", input.issueDate); row("Client / Entity", input.clientName);
+  if (input.clientCr) row("Commercial registration", input.clientCr);
+  if (input.clientVat) row("VAT number", input.clientVat);
+  if (input.clientAddress) row("National address", englishText(input.clientAddress));
+  if (input.workSite) row("Service location", englishText(input.workSite));
+  if (input.startDate || input.endDate) row("Term", `${input.startDate || "-"} to ${input.endDate || "-"}`);
+  if (input.quotationItems?.length) {
+    heading("Items and Pricing");
+    input.quotationItems.forEach((item, index) => row(`Item ${index + 1}`, `${englishText(item.description)} | Qty: ${item.quantity || "Open"} | Duration: ${item.durationMonths} month(s) | Unit price: ${((item.unitPriceHalalas || 0) / 100).toFixed(2)} SAR | Total: ${((item.lineTotalHalalas || 0) / 100).toFixed(2)} SAR${item.sponsorshipType === "dali" ? " | Sponsored by Dali Company" : item.sponsorshipType === "other" ? ` | Sponsor: ${englishText(item.sponsorName)} | ${item.ajirContractStatus === "with_ajir" ? "With Ajeer contract" : "Without Ajeer contract"}` : ""}`));
+  }
+  if (input.professions?.length) {
+    heading("Manpower Requirements");
+    input.professions.forEach((item, index) => row(`Requirement ${index + 1}`, `${englishText(item.profession)} | Required: ${input.quantityMode === "open" ? "Open" : item.requiredCount}${item.sponsorshipType === "dali" ? " | Sponsored by Dali Company" : item.sponsorshipType === "other" ? ` | Sponsor: ${englishText(item.sponsorName)} | ${item.ajirContractStatus === "with_ajir" ? "With Ajeer contract" : "Without Ajeer contract"}` : ""}`));
+  }
+  if (input.amountHalalas) { row("Subtotal", `${((input.subtotalHalalas || input.amountHalalas) / 100).toFixed(2)} SAR`); if (input.vatHalalas) row("VAT", `${(input.vatHalalas / 100).toFixed(2)} SAR`); row("Total", `${(input.amountHalalas / 100).toFixed(2)} SAR`); }
+  if (input.paymentSchedule?.length) { heading("Payment Schedule"); input.paymentSchedule.forEach((payment, index) => row(`Installment ${index + 1}`, `${englishText(payment.title)} | Due: ${payment.dueDate} | ${(payment.percentageBps / 100).toFixed(2)}% | ${(payment.amountHalalas / 100).toFixed(2)} SAR`)); }
+  if (input.documentType === "workforce_contract") {
+    row("Scope", englishText(input.details));
+    if (input.paymentTerms) row("Payment terms", englishText(input.paymentTerms));
+    if (input.specialTerms) row("Special terms", englishText(input.specialTerms));
+    addPage(); heading("Contract Terms and Conditions");
+    const clauses = [
+      ["1. Supply and Assignment", "The First Party shall provide manpower in the approved professions and numbers. Names may be completed or replaced according to availability and regulatory requirements without reducing the agreed profession or number."],
+      ["2. Mobilization and Worksite", "Service begins on the approved date after completing site-entry requirements. Manpower shall not be moved to a materially different site or duty without the First Party's written approval."],
+      ["3. Working Hours and Shifts", "Working hours, shifts and weekly rest are governed by the scope and applicable regulations. Additional hours or unagreed shifts are charged under the price appendix or a separate written approval."],
+      ["4. Supervision and Safety", "The Second Party directs daily work at its site and provides a safe workplace, site instructions and task-specific protective equipment. The First Party provides administrative supervision and operational follow-up."],
+      ["5. Replacement and Absence", "The Second Party shall promptly report absence or deficient performance through approved channels. The First Party shall remedy or replace within a reasonable operational period subject to profession and availability."],
+      ["6. Fees and Invoicing", "Financial claims are issued under the approved billing cycle and payment schedule and fall due on their specified dates. No deduction or set-off is permitted without an approved document stating the reason and amount."],
+      ["7. Taxes", "VAT is applied only when enabled in the financial document, at the applicable statutory rate, and is shown separately from the service value."],
+      ["8. Employment Compliance", "The First Party manages employment documents, salaries and employer obligations. The Second Party shall not assign manpower duties that conflict with the profession, regulations or safety requirements."],
+      ["9. Confidentiality and Data", "Both parties shall protect personal, operational and confidential information and use it only to perform this contract in accordance with applicable laws and approved policies."],
+      ["10. Non-Solicitation", "The Second Party shall not directly or indirectly recruit or employ manpower supplied under this contract during its term and for the agreed period afterward without the First Party's written approval."],
+      ["11. Force Majeure", "Neither party is liable for delay caused by circumstances beyond reasonable control, provided the other party is notified promptly and reasonable steps are taken to mitigate the effect."],
+      ["12. Suspension and Termination", "Service may be suspended or the contract terminated for a material breach after written notice and a reasonable cure period, without prejudice to accrued rights and amounts due through the effective date."],
+      ["13. Amendments and Renewal", "An amendment, extension or renewal is effective only when documented in an appendix or a new linked version approved by both parties, while the prior version remains preserved in the system record."],
+      ["14. Notices", "Notices sent through the addresses and communication channels registered by the parties are recognized. Each party shall notify the other of any change."],
+      ["15. Governing Law and Jurisdiction", "This contract is governed by the laws of the Kingdom of Saudi Arabia. The parties shall first seek amicable settlement; otherwise, jurisdiction lies with the competent judicial authority."],
+    ];
+    clauses.forEach(([label, body], index) => { if (index > 0 && index % 5 === 0) { addPage(); heading("Terms and Conditions — Continued"); } row(label, body); });
+    row("Approval and Signatures", "This contract is issued electronically and becomes effective only after approval and signature by both parties. Appendices, schedules and linked versions form part of it. The Arabic and English texts constitute one instrument; if interpretation differs, the Arabic text prevails. First Party: Dali Operations & Maintenance Co. | Second Party: Client authorized representative.");
+  } else {
+    heading("Terms and Details");
+    row("Scope", englishText(input.details));
+    if (input.paymentTerms) row("Payment terms", englishText(input.paymentTerms));
+    if (input.specialTerms) row("Special terms", englishText(input.specialTerms));
+  }
+  return pdf.save();
+}
+
+async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: CompanyAsset[]) {
+  const [arabicBytes, englishBytes] = await Promise.all([
+    generateIssuedPdf({ ...input, pdfLanguage: "ar" }, assets),
+    createEnglishIssuedPdf({ ...input, pdfLanguage: "ar" }, assets),
+  ]);
+  const [arabicPdf, englishPdf] = await Promise.all([PDFDocument.load(arabicBytes), PDFDocument.load(englishBytes)]);
+  const output = await PDFDocument.create();
+  const pages = Math.max(arabicPdf.getPageCount(), englishPdf.getPageCount());
+  for (let index = 0; index < pages; index += 1) {
+    const page = output.addPage([PAGE.width * 2, PAGE.height]);
+    if (index < englishPdf.getPageCount()) { const [embedded] = await output.embedPdf(englishPdf, [index]); page.drawPage(embedded, { x: 0, y: 0, width: PAGE.width, height: PAGE.height }); }
+    if (index < arabicPdf.getPageCount()) { const [embedded] = await output.embedPdf(arabicPdf, [index]); page.drawPage(embedded, { x: PAGE.width, y: 0, width: PAGE.width, height: PAGE.height }); }
+    page.drawLine({ start: { x: PAGE.width, y: 0 }, end: { x: PAGE.width, y: PAGE.height }, thickness: 1.2, color: COLORS.navy });
+  }
+  output.setTitle(`${englishDocumentLabels[input.documentType]} | ${issuedDocumentLabels[input.documentType]} - ${input.referenceCode}`);
+  return output.save();
+}
 
 export type CompanyAsset = {
   slot: "stamp" | "signature";
@@ -416,6 +529,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
 }
 
 export async function generateIssuedPdf(input: IssuedDocumentInput, assets: CompanyAsset[]) {
+  if (input.pdfLanguage === "bilingual") return createBilingualIssuedPdf(input, assets);
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${issuedDocumentLabels[input.documentType]} - ${input.referenceCode}`);
   pdf.setAuthor("شركة دالي للتشغيل والصيانة");

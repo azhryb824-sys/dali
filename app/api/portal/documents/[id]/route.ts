@@ -18,21 +18,22 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, id) });
   if (!document || document.status !== "active") return Response.json({ error: "المستند غير موجود" }, { status: 404 });
   const inline = new URL(request.url).searchParams.get("inline") === "1";
+  const pdfLanguage = new URL(request.url).searchParams.get("language") === "bilingual" ? "bilingual" : "ar";
   if (document.source === "generated" && document.documentType === "workforce_contract") {
     const contract = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.documentId, document.id) });
     if (!contract?.approvedBy || !["approved", "sent", "signed", "active", "suspended", "expired", "terminated", "superseded"].includes(contract.status)) {
       return Response.json({ error: "لا يمكن تنزيل العقد قبل اعتماده من المالك" }, { status: 409 });
     }
-    const regenerated = await regenerateIssuedDocumentPdf(id);
+    const regenerated = await regenerateIssuedDocumentPdf(id, pdfLanguage);
     if (!regenerated) return Response.json({ error: "تعذّر إعادة إنشاء العقد" }, { status: 404 });
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "contract-regenerated-and-downloaded", entityType: "company-document", entityId: String(id) });
-    return new Response(new Uint8Array(regenerated.bytes).buffer, { headers: attachmentHeaders(document.fileName, "application/pdf", undefined, inline ? "inline" : "attachment") });
+    return new Response(new Uint8Array(regenerated.bytes).buffer, { headers: attachmentHeaders(document.fileName.replace(/\.pdf$/i, `-${pdfLanguage}.pdf`), "application/pdf", undefined, inline ? "inline" : "attachment") });
   }
   if (document.source === "generated" && document.contentType === "application/pdf") {
-    const regenerated = await regenerateIssuedDocumentPdf(id);
+    const regenerated = await regenerateIssuedDocumentPdf(id, pdfLanguage);
     if (!regenerated) return Response.json({ error: "تعذّر تحديث ملف PDF وفق القالب الحالي" }, { status: 409 });
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "issued-pdf-regenerated-and-downloaded", entityType: "company-document", entityId: String(id) });
-    return new Response(new Uint8Array(regenerated.bytes).buffer, { headers: attachmentHeaders(document.fileName, "application/pdf", undefined, inline ? "inline" : "attachment") });
+    return new Response(new Uint8Array(regenerated.bytes).buffer, { headers: attachmentHeaders(document.fileName.replace(/\.pdf$/i, `-${pdfLanguage}.pdf`), "application/pdf", undefined, inline ? "inline" : "attachment") });
   }
   const object = await getRuntimeEnv().BUCKET.get(document.storageKey);
   if (!object) return Response.json({ error: "ملف المستند غير متاح" }, { status: 404 });

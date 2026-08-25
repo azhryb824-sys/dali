@@ -23,6 +23,7 @@ import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-acc
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
+import { addUtcMonths, parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
 
 const prefixes: Record<IssuedDocumentType, string> = {
   workforce_contract: "CTR",
@@ -188,9 +189,10 @@ export async function POST(request: Request) {
       if (professionInputs.some((item) => item.sponsorshipType === "other" && (!item.sponsorName || !["with_ajir", "without_ajir"].includes(item.ajirContractStatus)))) return Response.json({ error: "أكمل اسم الكفيل وحالة عقد أجير لكل مهنة على كفالة جهة أخرى" }, { status: 400 });
       const vatRateBpsForSchedule = vatEnabled ? Math.round(vatRate * 100) : 0;
       if (quantityMode === "fixed" && seasonType === "regular") {
-        if (!firstPaymentDueDate || firstPaymentDueDate === "" || !endDate || firstPaymentDueDate > endDate) return Response.json({ error: "أدخل تاريخ استحقاق أول دفعة شهرية على ألا يتجاوز نهاية العقد" }, { status: 400 });
+        const provisionalFirstDueDate = firstPaymentDueDate || addUtcMonths(issueDate, 1);
+        if (!provisionalFirstDueDate || !endDate || provisionalFirstDueDate > endDate) return Response.json({ error: "مدة العقد لا تسمح بإنشاء الدفعة الشهرية الأولى بعد شهر من الاعتماد" }, { status: 400 });
         const monthlySubtotal = professionInputs.reduce((sum, item) => sum + item.requiredCount * item.unitSalaryHalalas, 0);
-        const dueDates = monthlyDueDates(firstPaymentDueDate, endDate);
+        const dueDates = monthlyDueDates(provisionalFirstDueDate, endDate);
         if (!dueDates.length) return Response.json({ error: "تعذر إنشاء جدول الدفعات الشهرية من التاريخ المحدد" }, { status: 400 });
         paymentSchedule = dueDates.map((dueDate) => { const vatHalalas = Math.round(monthlySubtotal * vatRateBpsForSchedule / 10000); return { title: `استحقاق رواتب شهر ${dueDate.slice(0,7)}`, dueDate, percentageBps: Math.round(10000 / dueDates.length), subtotalHalalas: monthlySubtotal, vatHalalas, amountHalalas: monthlySubtotal + vatHalalas, billingBasis: "monthly_salary", servicePeriod: dueDate.slice(0,7) }; });
         contractAmountHalalas = monthlySubtotal * dueDates.length;
@@ -227,6 +229,12 @@ export async function POST(request: Request) {
     if (quoteVersionId && (!sourceQuote || !["approved", "sent", "accepted"].includes(sourceQuote.status))) return Response.json({ error: "لا يمكن إنشاء عقد إلا من عرض سعر معتمد" }, { status: 409 });
     if (existingQuoteContract) return Response.json({ error: "تم تحويل عرض السعر إلى عقد سابقًا" }, { status: 409 });
     if (sourceQuote && sourceQuote.quantityMode !== quantityMode) return Response.json({ error: "نوع العدد في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
+    if (sourceQuote && sourceQuote.seasonType !== seasonType) return Response.json({ error: "نوع الموسم والفوترة في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
+    if (sourceQuote && seasonType !== "regular" && quantityMode === "fixed") {
+      const sourceSchedule = parsePaymentSchedule(sourceQuote.paymentScheduleJson);
+      if (!validateSeasonalSchedule(sourceSchedule)) return Response.json({ error: "عرض السعر الموسمي المرتبط لا يحتوي جدول دفعات معتمدًا" }, { status: 409 });
+      paymentSchedule = parsePayments(sourceSchedule.map((row) => ({ title: row.title, dueDate: row.dueDate, percentage: row.percentageBps / 100 })), contractAmountHalalas, vatEnabled ? Math.round(vatRate * 100) : 0);
+    }
     const sourceOpportunity = sourceQuote ? await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, sourceQuote.opportunityId) }) : null;
     const sourceQuoteItems = sourceQuote ? await db.select().from(quoteItems).where(eq(quoteItems.quoteVersionId, sourceQuote.id)) : [];
     if (sourceQuote && (!sourceOpportunity || !sourceQuoteItems.length)) return Response.json({ error: "بيانات عرض السعر المرتبط غير مكتملة" }, { status: 409 });
@@ -390,7 +398,7 @@ export async function POST(request: Request) {
         vatRateBps,
         seasonType,
         billingMode,
-        firstPaymentDueDate: firstPaymentDueDate || null,
+        firstPaymentDueDate: paymentSchedule[0]?.dueDate || firstPaymentDueDate || null,
         details,
         createdBy: access.user.email,
       }).returning();

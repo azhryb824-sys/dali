@@ -15,11 +15,11 @@ function record(value: string | null) {
 function text(value: unknown) { return typeof value === "string" && value.trim() ? value.trim() : undefined; }
 function number(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : undefined; }
 
-export async function regenerateIssuedDocumentPdf(documentId: number) {
+export async function regenerateIssuedDocumentPdf(documentId: number, pdfLanguage: "ar" | "bilingual" = "ar") {
   const db = getDb();
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, documentId) });
   if (!document || document.source !== "generated" || !document.documentType) return null;
-  if (document.documentType === "workforce_contract") return regenerateWorkforceContractPdf(documentId);
+  if (document.documentType === "workforce_contract") return regenerateWorkforceContractPdf(documentId, pdfLanguage);
   if (!(document.documentType in issuedDocumentLabels)) return null;
 
   const [assets, financial] = await Promise.all([
@@ -30,6 +30,7 @@ export async function regenerateIssuedDocumentPdf(documentId: number) {
   const documentType = document.documentType as IssuedDocumentType;
   const details = text(metadata.details) || financial?.notes || document.title;
   const input: IssuedDocumentInput = {
+    pdfLanguage,
     documentType,
     referenceCode: document.referenceCode,
     clientName: document.counterparty || "الجهة المستفيدة",
@@ -51,11 +52,13 @@ export async function regenerateIssuedDocumentPdf(documentId: number) {
     paymentTerms: text(metadata.paymentTerms),
   };
   const pdfBytes = await generateIssuedPdf(input, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
-  const nextMetadata = JSON.stringify({ ...metadata, details, templateVersion: CURRENT_ISSUED_PDF_TEMPLATE, regeneratedAt: new Date().toISOString() });
-  await getRuntimeEnv().BUCKET.put(document.storageKey, pdfBytes, {
-    httpMetadata: { contentType: "application/pdf" },
-    customMetadata: { regenerated: "true", referenceCode: document.referenceCode, template: CURRENT_ISSUED_PDF_TEMPLATE },
-  });
-  await db.update(companyDocuments).set({ sizeBytes: pdfBytes.byteLength, metadataJson: nextMetadata, updatedAt: new Date().toISOString() }).where(eq(companyDocuments.id, document.id));
+  if (pdfLanguage === "ar") {
+    const nextMetadata = JSON.stringify({ ...metadata, details, templateVersion: CURRENT_ISSUED_PDF_TEMPLATE, regeneratedAt: new Date().toISOString() });
+    await getRuntimeEnv().BUCKET.put(document.storageKey, pdfBytes, {
+      httpMetadata: { contentType: "application/pdf" },
+      customMetadata: { regenerated: "true", referenceCode: document.referenceCode, template: CURRENT_ISSUED_PDF_TEMPLATE },
+    });
+    await db.update(companyDocuments).set({ sizeBytes: pdfBytes.byteLength, metadataJson: nextMetadata, updatedAt: new Date().toISOString() }).where(eq(companyDocuments.id, document.id));
+  }
   return { bytes: pdfBytes, document };
 }

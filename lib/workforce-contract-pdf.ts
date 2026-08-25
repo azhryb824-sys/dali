@@ -16,7 +16,7 @@ type ContractMetadata = {
   specialTerms?: string;
 };
 
-export async function regenerateWorkforceContractPdf(documentId: number) {
+export async function regenerateWorkforceContractPdf(documentId: number, pdfLanguage: "ar" | "bilingual" = "ar") {
   const db = getDb();
   const [document, contract, assets] = await Promise.all([
     db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, documentId) }),
@@ -38,6 +38,7 @@ export async function regenerateWorkforceContractPdf(documentId: number) {
   try { metadata = document.metadataJson ? JSON.parse(document.metadataJson) as ContractMetadata : {}; } catch { metadata = {}; }
 
   const pdfBytes = await generateIssuedPdf({
+    pdfLanguage,
     documentType: "workforce_contract",
     referenceCode: contract.referenceCode,
     clientName: contract.clientName,
@@ -74,10 +75,12 @@ export async function regenerateWorkforceContractPdf(documentId: number) {
     paymentSchedule: paymentSchedule.sort((a, b) => a.installmentNumber - b.installmentNumber).map((payment) => ({ title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas })),
   }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
 
-  await getRuntimeEnv().BUCKET.put(document.storageKey, pdfBytes, {
-    httpMetadata: { contentType: "application/pdf" },
-    customMetadata: { regenerated: "true", referenceCode: contract.referenceCode, template: "letterhead-v2" },
-  });
-  await db.update(companyDocuments).set({ sizeBytes: pdfBytes.byteLength, updatedAt: new Date().toISOString() }).where(eq(companyDocuments.id, document.id));
+  if (pdfLanguage === "ar") {
+    await getRuntimeEnv().BUCKET.put(document.storageKey, pdfBytes, {
+      httpMetadata: { contentType: "application/pdf" },
+      customMetadata: { regenerated: "true", referenceCode: contract.referenceCode, template: "letterhead-v2" },
+    });
+    await db.update(companyDocuments).set({ sizeBytes: pdfBytes.byteLength, updatedAt: new Date().toISOString() }).where(eq(companyDocuments.id, document.id));
+  }
   return { bytes: pdfBytes, document };
 }

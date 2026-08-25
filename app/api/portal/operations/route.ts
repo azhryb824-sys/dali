@@ -22,6 +22,7 @@ import { auditPortalAction, enqueueOutbox, recordStatusChange } from "@/lib/audi
 import { beginOperation, completeOperation, failOperation } from "@/lib/idempotency";
 import { canAccessPortalDepartment, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
+import { parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
 import { jsonNoStore, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
 
 const text = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -157,7 +158,10 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     const workSite = text(payload.workSite, 180);
     const vatRate = Number(payload.vatRate || 0);
     const quantityMode = payload.quantityMode === "open" ? "open" : "fixed";
+    const seasonType = payload.seasonType === "ramadan" || payload.seasonType === "hajj" ? payload.seasonType : "regular";
+    const paymentSchedule = parsePaymentSchedule(payload.paymentSchedule);
     if (!opportunityId || !issueDate || !validUntil || validUntil < issueDate || !rawItems.length || activityLabel.length < 3 || workSite.length < 2 || !Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100) throw new Error("بيانات عرض السعر غير مكتملة");
+    if (quantityMode === "fixed" && seasonType !== "regular" && !validateSeasonalSchedule(paymentSchedule)) throw new Error("عروض موسمي الحج ورمضان تتطلب دفعات بمواعيد صحيحة ومجموع نسب 100%");
     const opportunity = await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, opportunityId) });
     if (!opportunity) throw new Error("الفرصة غير موجودة");
     const normalizedItems = rawItems.slice(0, 50).map((raw, index) => {
@@ -178,7 +182,7 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     const discountHalalas = Math.min(subtotalHalalas, Math.max(0, Math.round((Number(payload.discount) || 0) * 100)));
     const vatHalalas = Math.round((subtotalHalalas - discountHalalas) * vatRate / 100);
     const assumptions = [`النشاط: ${activityLabel}`, `موقع الخدمة: ${workSite}`, `الضريبة: ${vatRate}`, text(payload.assumptions, 2500)].filter(Boolean).join("\n");
-    const [quote] = await db.insert(quoteVersions).values({ quoteCode: code("QUO"), opportunityId, versionNumber: 1, status: "draft", issueDate, validUntil, quantityMode, vatRateBps: Math.round(vatRate * 100), subtotalHalalas, discountHalalas, totalHalalas: subtotalHalalas - discountHalalas + vatHalalas, assumptions, terms: text(payload.terms, 3000) || null, createdBy: actor }).returning();
+    const [quote] = await db.insert(quoteVersions).values({ quoteCode: code("QUO"), opportunityId, versionNumber: 1, status: "draft", issueDate, validUntil, quantityMode, seasonType, paymentScheduleJson: paymentSchedule.length ? JSON.stringify(paymentSchedule) : null, vatRateBps: Math.round(vatRate * 100), subtotalHalalas, discountHalalas, totalHalalas: subtotalHalalas - discountHalalas + vatHalalas, assumptions, terms: text(payload.terms, 3000) || null, createdBy: actor }).returning();
     try {
       await db.insert(quoteItems).values(normalizedItems.map((item) => ({ ...item, quoteVersionId: quote.id })));
     } catch (error) {
@@ -207,7 +211,7 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     const validUntil = date(payload.validUntil) || defaultExpiry;
     if (validUntil < issueDate) throw new Error("تاريخ صلاحية النسخة الجديدة غير صحيح");
     const versionNumber = Math.max(...existingVersions.map((item) => item.versionNumber), source.versionNumber) + 1;
-    const [quote] = await db.insert(quoteVersions).values({ quoteCode: source.quoteCode, opportunityId: source.opportunityId, versionNumber, status: "draft", issueDate, validUntil, quantityMode: source.quantityMode, vatRateBps: source.vatRateBps, subtotalHalalas: source.subtotalHalalas, discountHalalas: source.discountHalalas, totalHalalas: source.totalHalalas, assumptions: source.assumptions, terms: source.terms, createdBy: actor }).returning();
+    const [quote] = await db.insert(quoteVersions).values({ quoteCode: source.quoteCode, opportunityId: source.opportunityId, versionNumber, status: "draft", issueDate, validUntil, quantityMode: source.quantityMode, seasonType: source.seasonType, paymentScheduleJson: source.paymentScheduleJson, vatRateBps: source.vatRateBps, subtotalHalalas: source.subtotalHalalas, discountHalalas: source.discountHalalas, totalHalalas: source.totalHalalas, assumptions: source.assumptions, terms: source.terms, createdBy: actor }).returning();
     try {
       await db.insert(quoteItems).values(sourceItems.map((item) => ({ quoteVersionId: quote.id, profession: item.profession, quantity: item.quantity, durationMonths: item.durationMonths, unitPriceHalalas: item.unitPriceHalalas, lineTotalHalalas: item.lineTotalHalalas, notes: item.notes, sponsorshipType: item.sponsorshipType, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus, sortOrder: item.sortOrder })));
       await db.update(quoteVersions).set({ status: "superseded", updatedAt: new Date().toISOString(), recordVersion: source.recordVersion + 1 }).where(and(eq(quoteVersions.id, source.id), eq(quoteVersions.recordVersion, source.recordVersion)));

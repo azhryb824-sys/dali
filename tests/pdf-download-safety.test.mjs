@@ -49,7 +49,8 @@ test("activity-aware quotations include itemized branded PDF output", async () =
   assert.match(ui, /توريد العمالة/);
   assert.match(ui, /راتب العامل/);
   assert.match(generator, /workforcePricing/);
-  assert.match(ui, /تنزيل PDF/);
+  assert.match(ui, /PDF عربي/);
+  assert.match(ui, /PDF عربي\/English/);
   assert.match(operations, /vatHalalas/);
   assert.match(operations, /activityLabel/);
 });

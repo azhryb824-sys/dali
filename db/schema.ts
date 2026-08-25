@@ -1245,6 +1245,8 @@ export const quoteVersions = pgTable(
     discountHalalas: integer("discount_halalas").notNull().default(0),
     totalHalalas: integer("total_halalas").notNull().default(0),
     quantityMode: text("quantity_mode").notNull().default("fixed"),
+    seasonType: text("season_type").notNull().default("regular"),
+    paymentScheduleJson: text("payment_schedule_json"),
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
     assumptions: text("assumptions"),
     terms: text("terms"),
@@ -1268,6 +1270,7 @@ export const quoteVersions = pgTable(
     index("quote_versions_valid_until_idx").on(table.validUntil),
     check("quote_versions_status_check", sql`${table.status} in ('draft', 'pending_approval', 'approved', 'sent', 'accepted', 'rejected', 'expired', 'superseded', 'cancelled')`),
     check("quote_versions_quantity_mode_check", sql`${table.quantityMode} in ('fixed','open')`),
+    check("quote_versions_season_type_check", sql`${table.seasonType} in ('regular','ramadan','hajj')`),
   ],
 );
 

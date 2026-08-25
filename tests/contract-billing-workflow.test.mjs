@@ -86,7 +86,23 @@ test("owner referral, accounting invoice, payment recording and legal escalation
   assert.match(route,/contract-payment-invoiced/);assert.match(route,/contract-payment-paid/);assert.match(route,/client-file-referred-legal/);
   assert.match(route,/subtotalHalalas:payment\.subtotalHalalas/);assert.match(route,/vatHalalas:payment\.vatHalalas/);
   assert.match(route,/payment\.dueDate>=now\.slice\(0,10\)/);
-  assert.match(ui,/تنزيل PDF/);assert.match(ui,/مشاركة/);assert.match(ui,/تسجيل السداد/);assert.match(ui,/إحالة الملف للقانونية/);
+  assert.match(ui,/PDF عربي/);assert.match(ui,/PDF عربي\/English/);assert.match(ui,/مشاركة/);assert.match(ui,/تسجيل السداد/);assert.match(ui,/إحالة الملف للقانونية/);
+});
+
+test("seasonal and annual payment schedules flow through quotes contracts finance and bilingual PDFs",async()=>{
+  const[helper,quoteApi,contractApi,statusApi,paymentsApi,quotePdf,documentPdf,generator,quoteUi,contractUi,schema,migration]=await Promise.all([
+    source("lib/payment-schedules.ts"),source("app/api/portal/operations/route.ts"),source("app/api/portal/documents/generate/route.ts"),source("app/api/portal/contracts/[id]/status/route.ts"),source("app/api/portal/contract-payments/route.ts"),source("app/api/portal/operations/quotes/[id]/pdf/route.ts"),source("app/api/portal/documents/[id]/route.ts"),source("lib/pdf-generator.ts"),source("app/portal/OperationsWorkspace.tsx"),source("app/portal/ContractBillingWorkspace.tsx"),source("db/schema.ts"),source("drizzle-pg/0034_payment_schedules_and_bilingual_pdfs.sql")
+  ]);
+  assert.match(helper,/validateSeasonalSchedule/);assert.match(helper,/annualApprovalSchedule/);
+  assert.match(quoteApi,/seasonType/);assert.match(quoteApi,/paymentScheduleJson/);assert.match(quoteApi,/مجموع نسب 100%/);
+  assert.match(contractApi,/sourceQuote\.paymentScheduleJson/);assert.match(contractApi,/seasonal_installments/);
+  assert.match(statusApi,/annualApprovalSchedule\(now/);assert.match(statusApi,/annual-contract-payments-scheduled/);
+  assert.match(paymentsApi,/action==="reschedule"/);assert.match(paymentsApi,/invoiceDocumentId\|\|payment\.financialRecordId/);assert.match(paymentsApi,/contract-payment-rescheduled/);
+  for(const sourceCode of [quotePdf,documentPdf]){assert.match(sourceCode,/language/);assert.match(sourceCode,/bilingual/);}
+  assert.match(generator,/createBilingualIssuedPdf/);assert.match(generator,/PAGE\.width \* 2/);assert.match(generator,/x: PAGE\.width/);assert.match(generator,/Payment Schedule/);
+  assert.match(quoteUi,/موسم رمضان/);assert.match(quoteUi,/موسم الحج/);assert.match(quoteUi,/مجموع النسب/);assert.match(quoteUi,/PDF عربي\/English/);
+  assert.match(contractUi,/تعديل موعد الدفعة/);assert.match(contractUi,/PDF عربي\/English/);
+  assert.match(schema,/paymentScheduleJson/);assert.match(schema,/seasonType/);assert.match(migration,/quote_versions_season_type_check/);
 });
 
 test("contract and quotation edit delete and cancellation actions preserve financial and legal history",async()=>{
