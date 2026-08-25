@@ -922,7 +922,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   });
 
   return <main className="admin-shell">
-    <LocaleRuntime initialLocale={currentUser.preferredLanguage} portal/>
+    <LocaleRuntime initialLocale={currentUser.preferredLanguage} portal websiteTranslations={currentUser.preferredLanguage === "ar" ? {} : initialWebsiteContent.translations[currentUser.preferredLanguage]}/>
     <aside className={`admin-sidebar ${menuOpen ? "sidebar-open" : ""}`}>
       <div className="sidebar-brand"><Image src="/dally-logo.jpg" alt="شعار شركة دالي" width={545} height={280} sizes="160px"/><span>النظام الإداري</span></div>
       <nav aria-label="أقسام النظام">
