@@ -31,8 +31,10 @@ export function validateSeasonalSchedule(rows: PaymentScheduleDraft[]) {
 }
 
 export function addUtcMonths(value: string, months: number) {
-  const source = new Date(`${value.slice(0, 10)}T00:00:00Z`);
-  if (Number.isNaN(source.getTime())) return "";
+  const normalized = value.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized) || !Number.isInteger(months)) return "";
+  const source = new Date(`${normalized}T00:00:00Z`);
+  if (Number.isNaN(source.getTime()) || source.toISOString().slice(0, 10) !== normalized) return "";
   const day = source.getUTCDate();
   const target = new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth() + months, 1));
   const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
@@ -53,4 +55,13 @@ export function annualInstallmentPercentages(installments = ANNUAL_CONTRACT_MONT
 export function annualApprovalSchedule(approvedAt: string, installments = ANNUAL_CONTRACT_MONTHS) {
   const approvalDate = approvedAt.slice(0, 10);
   return Array.from({ length: Math.max(0, installments) }, (_, index) => addUtcMonths(approvalDate, index + 1));
+}
+
+export function annualContractSchedule(startDate: string) {
+  const normalizedStartDate = startDate.slice(0, 10);
+  const endDate = addUtcMonths(normalizedStartDate, ANNUAL_CONTRACT_MONTHS);
+  const dueDates = endDate
+    ? Array.from({ length: ANNUAL_CONTRACT_MONTHS }, (_, index) => addUtcMonths(normalizedStartDate, index + 1))
+    : [];
+  return { endDate, dueDates };
 }

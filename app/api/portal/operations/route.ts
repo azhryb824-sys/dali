@@ -170,7 +170,8 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
       const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
       const profession = text(item.profession, 120);
       const quantity = integer(item.quantity, quantityMode === "open" ? 0 : 1, 100000);
-      const durationMonths = integer(item.durationMonths, 1, 120);
+      const requestedDurationMonths = integer(item.durationMonths, 1, 120);
+      const durationMonths = activityLabel === "توريد العمالة" && seasonType === "regular" ? 12 : requestedDurationMonths;
       const unitPriceHalalas = Math.round((Number(item.unitPrice) || 0) * 100);
       const sponsorshipType = item.sponsorshipType === "dali" ? "dali" : item.sponsorshipType === "other" ? "other" : null;
       const sponsorName = sponsorshipType === "other" ? text(item.sponsorName, 160) : null;

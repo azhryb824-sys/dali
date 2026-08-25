@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./portal.css";
+import "./contract-workflow.css";
 import "./approval-actions.css";
 import "./enhancements.css";
 import "./contract-lifecycle.css";

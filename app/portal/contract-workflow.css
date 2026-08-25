@@ -1,0 +1,96 @@
+.issue-modal .contract-wizard-steps {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.issue-modal .contract-wizard-steps button {
+  min-height: 44px;
+  height: auto;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.issue-modal .contract-final-step {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px !important;
+}
+
+.issue-modal .contract-final-step > *,
+.issue-modal .payment-plan-card,
+.issue-modal .attachments-card {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.issue-modal .contract-final-heading strong,
+.issue-modal .billing-mode-summary b,
+.issue-modal .calculated-contract-value strong {
+  font-size: 14px;
+}
+
+.issue-modal .contract-final-heading p,
+.issue-modal .billing-mode-summary span,
+.issue-modal .calculated-contract-value span,
+.issue-modal .contract-tax-fields > label,
+.issue-modal .contract-tax-fields small,
+.issue-modal .contract-payment-builder label {
+  font-size: 12px;
+}
+
+.annual-contract-dates {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #c9e6d7;
+  border-radius: 10px;
+  background: #f1faf5;
+}
+
+.annual-contract-dates span {
+  display: grid;
+  gap: 4px;
+}
+
+.annual-contract-dates small,
+.annual-payment-summary small {
+  color: #5f7d6d;
+  font-size: 11px;
+}
+
+.annual-contract-dates b,
+.annual-payment-summary strong {
+  color: #176844;
+  font-size: 14px;
+  direction: ltr;
+  text-align: right;
+}
+
+.annual-payment-summary > div {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 7px 10px;
+  margin-top: 7px;
+  padding-top: 11px;
+  border-top: 1px solid #c9e6d7;
+}
+
+@media (max-width: 760px) {
+  .issue-modal .contract-wizard-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .annual-payment-summary > div {
+    grid-template-columns: auto 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .issue-modal .contract-wizard-steps,
+  .annual-contract-dates {
+    grid-template-columns: 1fr;
+  }
+}

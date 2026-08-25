@@ -1,18 +1,33 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { annualContractSchedule } from "../lib/payment-schedules.ts";
 const source=(path)=>readFile(new URL(`../${path}`,import.meta.url),"utf8");
+
+test("annual contracts derive twelve calendar-month installments from the start date",()=>{
+  const monthEnd=annualContractSchedule("2026-01-31");
+  assert.equal(monthEnd.endDate,"2027-01-31");
+  assert.equal(monthEnd.dueDates.length,12);
+  assert.equal(monthEnd.dueDates[0],"2026-02-28");
+  assert.equal(monthEnd.dueDates[1],"2026-03-31");
+  assert.equal(monthEnd.dueDates[11],monthEnd.endDate);
+
+  const leapDay=annualContractSchedule("2024-02-29");
+  assert.equal(leapDay.dueDates[0],"2024-03-29");
+  assert.equal(leapDay.endDate,"2025-02-28");
+  assert.deepEqual(annualContractSchedule("2026-02-30"),{endDate:"",dueDates:[]});
+});
 
 test("contracts require a balanced payment schedule and preserve mandatory client attachments",async()=>{
   const[route,pdf,ui,operations,migration]=await Promise.all([source("app/api/portal/documents/generate/route.ts"),source("lib/pdf-generator.ts"),source("app/portal/PortalDashboard.tsx"),source("app/portal/OperationsWorkspace.tsx"),source("drizzle-pg/0014_contract_payment_invoicing.sql")]);
   assert.match(route,/reduce\(\(sum, item\) => sum \+ item\.percentageBps, 0\) !== 10000/);
   assert.match(route,/commercialRegistrationFile/);assert.match(route,/vatCertificateFile/);assert.match(route,/nationalAddressFile/);assert.match(route,/client-documents/);
-  assert.match(route,/db\.insert\(clients\)/);assert.match(route,/db\.insert\(suppliers\)/);assert.match(route,/clientId: client\?\.id \|\| null/);assert.match(route,/supplierId: supplier\?\.id \|\| null/);assert.match(route,/status: "active"/);
+  assert.match(route,/db\.transaction/);assert.match(route,/tx\.insert\(clients\)/);assert.match(route,/tx\.insert\(suppliers\)/);assert.match(route,/clientId: client\?\.id \|\| null/);assert.match(route,/supplierId: supplier\?\.id \|\| null/);assert.match(route,/status: "active"/);
   assert.match(ui,/nationalAddressFile/);assert.match(ui,/العنوان الوطني للعميل/);assert.match(ui,/required name="commercialRegistrationFile"/);
   assert.match(operations,/إنشاء عقد/);assert.match(operations,/onCreateContract/);
   assert.match(pdf,/جدول الدفعات/);assert.match(ui,/paymentSchedule/);assert.match(ui,/مجموع النسب 100%/);
-  assert.match(ui,/type="hidden" name="seasonType" value=\{seasonType\}/);assert.match(ui,/type="hidden" name="firstPaymentDueDate"/);
-  assert.match(route,/if \(paymentSchedule\.length\) await db\.insert\(contractPaymentSchedules\)/);
+  assert.match(ui,/type="hidden" name="seasonType" value=\{seasonType\}/);assert.doesNotMatch(ui,/name="firstPaymentDueDate"/);assert.match(ui,/annualContractSchedule\(contractStartDate\)/);
+  assert.match(route,/if \(paymentSchedule\.length\) await tx\.insert\(contractPaymentSchedules\)/);
   assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/contract_payment_schedules_invoice_unique/);
 });
 
@@ -21,7 +36,7 @@ test("contract professions include hospitality and trades with enforced custom p
   for(const profession of ["سباك","كهربائي","ويتر","لحام","عامل تنظيف فندقي","أخرى"])assert.match(requirements,new RegExp(profession));
   assert.match(route,/item\.profession === "أخرى"/);assert.match(route,/اسم المهنة الفعلي/);
   assert.match(requirements,/label: "حداد"/);assert.match(requirements,/label: "لحام"/);assert.doesNotMatch(requirements,/حداد \/ لحام/);
-  assert.match(route,/unitSalaryHalalas/);assert.match(route,/ANNUAL_CONTRACT_MONTHS/);assert.match(route,/Array\.from\(\{ length: ANNUAL_CONTRACT_MONTHS \}/);assert.match(route,/annualInstallmentPercentages/);assert.match(route,/monthly_salary/);assert.match(route,/seasonal_percentage/);
+  assert.match(route,/unitSalaryHalalas/);assert.match(route,/annualContractSchedule\(startDate\)/);assert.match(route,/monthly_salary/);assert.match(route,/seasonal_percentage/);
   assert.match(ui,/اكتب المهنة يدوياً/);assert.match(ui,/راتب العامل الشهري/);assert.match(ui,/العدد المطلوب/);
   assert.match(ui,/commercialRegistrationFile/);assert.match(ui,/vatCertificateFile/);assert.match(ui,/nationalAddressFile/);
 });
@@ -94,15 +109,15 @@ test("seasonal and annual payment schedules flow through quotes contracts financ
   const[helper,quoteApi,contractApi,statusApi,paymentsApi,quotePdf,documentPdf,generator,quoteUi,contractUi,schema,migration]=await Promise.all([
     source("lib/payment-schedules.ts"),source("app/api/portal/operations/route.ts"),source("app/api/portal/documents/generate/route.ts"),source("app/api/portal/contracts/[id]/status/route.ts"),source("app/api/portal/contract-payments/route.ts"),source("app/api/portal/operations/quotes/[id]/pdf/route.ts"),source("app/api/portal/documents/[id]/route.ts"),source("lib/pdf-generator.ts"),source("app/portal/OperationsWorkspace.tsx"),source("app/portal/ContractBillingWorkspace.tsx"),source("db/schema.ts"),source("drizzle-pg/0034_payment_schedules_and_bilingual_pdfs.sql")
   ]);
-  assert.match(helper,/validateSeasonalSchedule/);assert.match(helper,/annualApprovalSchedule/);
+  assert.match(helper,/validateSeasonalSchedule/);assert.match(helper,/annualContractSchedule/);assert.match(helper,/ANNUAL_CONTRACT_MONTHS = 12/);
   assert.match(quoteApi,/seasonType/);assert.match(quoteApi,/paymentScheduleJson/);assert.match(quoteApi,/مجموع نسب 100%/);
   assert.match(contractApi,/sourceQuote\.paymentScheduleJson/);assert.match(contractApi,/seasonal_installments/);
-  assert.match(statusApi,/annualApprovalSchedule\(now/);assert.match(statusApi,/annual-contract-payments-scheduled/);
+  assert.match(statusApi,/annualContractSchedule\(contract\.startDate\)/);assert.match(statusApi,/annual-contract-payments-scheduled/);assert.match(statusApi,/بعد شهر من بداية العقد/);
   assert.match(paymentsApi,/action==="reschedule"/);assert.match(paymentsApi,/invoiceDocumentId\|\|payment\.financialRecordId/);assert.match(paymentsApi,/contract-payment-rescheduled/);
   for(const sourceCode of [quotePdf,documentPdf]){assert.match(sourceCode,/language/);assert.match(sourceCode,/bilingual/);}
   assert.match(generator,/createBilingualIssuedPdf/);assert.match(generator,/PAGE\.width \* 2/);assert.match(generator,/x: PAGE\.width/);assert.match(generator,/Payment Schedule/);
   assert.match(quoteUi,/موسم رمضان/);assert.match(quoteUi,/موسم الحج/);assert.match(quoteUi,/مجموع النسب/);assert.match(quoteUi,/PDF عربي\/English/);
-  assert.match(contractUi,/تعديل موعد الدفعة/);assert.match(contractUi,/PDF عربي\/English/);
+  assert.match(contractUi,/تعديل موعد الدفعة/);assert.match(contractUi,/PDF عربي\/English/);assert.match(contractUi,/contract\.seasonType==="regular"\?null/);
   assert.match(schema,/paymentScheduleJson/);assert.match(schema,/seasonType/);assert.match(migration,/quote_versions_season_type_check/);
 });
 

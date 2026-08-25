@@ -5,7 +5,7 @@ import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
-import { annualApprovalSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
+import { annualContractSchedule } from "@/lib/payment-schedules";
 
 const transitions: Record<string, string[]> = {
   draft: ["internal_review", "approved", "cancelled"],
@@ -66,37 +66,43 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const approvalInstallments = status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed"
       ? await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id))
       : [];
+    const annualApprovalDueDates = status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed"
+      ? annualContractSchedule(contract.startDate).dueDates
+      : [];
+    if (status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed" && (approvalInstallments.length !== 12 || annualApprovalDueDates.length !== 12)) {
+      return jsonNoStore({ error: "جدول العقد السنوي غير مكتمل؛ يجب أن يحتوي على 12 دفعة شهرية" }, { status: 409 });
+    }
     if (approvalInstallments.some((payment) => !["scheduled", "due"].includes(payment.status))) {
       return jsonNoStore({ error: "تعذر اعتماد العقد لوجود دفعة تمت معالجتها ماليًا" }, { status: 409 });
     }
     const now = new Date().toISOString();
-    const [updated] = await db.update(workforceContracts).set({
-      status,
-      ...(status === "approved" ? { approvedBy: access.user.email, approvedAt: now, stampId } : {}),
-      ...(status === "signed" ? { signedAt: now } : {}),
-      ...(status === "active" ? { effectiveAt: now, suspendedAt: null } : {}),
-      ...(status === "suspended" ? { suspendedAt: now, cancellationReason: reason } : {}),
-      ...(status === "terminated" ? { terminatedAt: now, cancellationReason: reason } : {}),
-      ...(status === "cancelled" ? { cancellationReason: reason } : {}),
-      updatedAt: now,
-    }).where(and(eq(workforceContracts.id, id), eq(workforceContracts.status, contract.status))).returning();
-    if (!updated) return jsonNoStore({ error: "تغيرت حالة العقد قبل حفظ القرار" }, { status: 409 });
-    if (status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed") {
-      const editable = approvalInstallments.sort((a, b) => a.installmentNumber - b.installmentNumber);
-      const dueDates = annualApprovalSchedule(now, editable.length);
-      const percentages = annualInstallmentPercentages(editable.length);
-      for (const [index, payment] of editable.entries()) {
-        await db.update(contractPaymentSchedules).set({
-          title: `الدفعة الشهرية ${index + 1} من ${editable.length} — ${dueDates[index].slice(0, 7)}`,
-          dueDate: dueDates[index],
-          percentageBps: percentages[index],
-          servicePeriod: dueDates[index].slice(0, 7),
-          status: "scheduled",
-          updatedAt: now,
-        }).where(eq(contractPaymentSchedules.id, payment.id));
+    const updated = await db.transaction(async (tx) => {
+      const [changed] = await tx.update(workforceContracts).set({
+        status,
+        ...(status === "approved" ? { approvedBy: access.user.email, approvedAt: now, stampId } : {}),
+        ...(status === "signed" ? { signedAt: now } : {}),
+        ...(status === "active" ? { effectiveAt: now, suspendedAt: null } : {}),
+        ...(status === "suspended" ? { suspendedAt: now, cancellationReason: reason } : {}),
+        ...(status === "terminated" ? { terminatedAt: now, cancellationReason: reason } : {}),
+        ...(status === "cancelled" ? { cancellationReason: reason } : {}),
+        updatedAt: now,
+      }).where(and(eq(workforceContracts.id, id), eq(workforceContracts.status, contract.status))).returning();
+      if (!changed) return null;
+      if (annualApprovalDueDates.length) {
+        const editable = approvalInstallments.sort((a, b) => a.installmentNumber - b.installmentNumber);
+        for (const [index, payment] of editable.entries()) {
+          const dueDate = annualApprovalDueDates[index];
+          await tx.update(contractPaymentSchedules).set({ dueDate, servicePeriod: dueDate.slice(0, 7), status: dueDate <= now.slice(0, 10) ? "due" : "scheduled", updatedAt: now }).where(eq(contractPaymentSchedules.id, payment.id));
+        }
+        await tx.update(workforceContracts).set({ firstPaymentDueDate: annualApprovalDueDates[0], updatedAt: now }).where(eq(workforceContracts.id, id));
       }
-      if (dueDates[0]) await db.update(workforceContracts).set({ firstPaymentDueDate: dueDates[0], updatedAt: now }).where(eq(workforceContracts.id, id));
-      await emitPortalNotification({ eventType: "annual-contract-payments-scheduled", title: "جُدولت دفعات العقد السنوي", message: `${contract.referenceCode} — تبدأ الدفعة الأولى بعد شهر من الاعتماد في ${dueDates[0]}.`, severity: "info", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
+      return annualApprovalDueDates.length
+        ? { ...changed, firstPaymentDueDate: annualApprovalDueDates[0] }
+        : changed;
+    });
+    if (!updated) return jsonNoStore({ error: "تغيرت حالة العقد قبل حفظ القرار" }, { status: 409 });
+    if (annualApprovalDueDates.length) {
+      await emitPortalNotification({ eventType: "annual-contract-payments-scheduled", title: "جُدولت دفعات العقد السنوي", message: `${contract.referenceCode} — تبدأ الدفعة الأولى بعد شهر من بداية العقد في ${annualApprovalDueDates[0]}.`, severity: "info", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
     }
     if (["cancelled", "terminated"].includes(status)) {
       await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), inArray(contractPaymentSchedules.status, ["scheduled", "due", "referred"])));
