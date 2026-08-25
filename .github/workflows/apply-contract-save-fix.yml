@@ -35,6 +35,28 @@ jobs:
           ref: godaddy-preview
           fetch-depth: 0
 
+      - name: Make patcher support compact client files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/apply-contract-save-fix.py")
+          source = path.read_text(encoding="utf-8")
+          old = '''    if 'from "@/lib/client-api"' not in source:
+                  source = replace_once(source, '\"use client\";\\n', '\"use client\";\\n\\nimport { readApiJson } from \"@/lib/client-api\";\\n', f"client api import {relative}")
+          '''
+          new = '''    if 'from "@/lib/client-api"' not in source:
+                  directive = '\"use client\";'
+                  position = source.find(directive)
+                  if position < 0:
+                      raise RuntimeError(f"client api import {relative}: client directive not found")
+                  insert_at = position + len(directive)
+                  source = source[:insert_at] + '\\n\\nimport { readApiJson } from \"@/lib/client-api\";\\n' + source[insert_at:]
+          '''
+          if old not in source:
+              raise SystemExit("target patcher block was not found")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Apply focused source patch
         run: python3 scripts/apply-contract-save-fix.py
 
