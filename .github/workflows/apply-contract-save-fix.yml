@@ -60,6 +60,21 @@ jobs:
       - name: Apply focused source patch
         run: python3 scripts/apply-contract-save-fix.py
 
+      - name: Make wizard validation DOM-type safe
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("app/portal/PortalDashboard.tsx")
+          source = path.read_text(encoding="utf-8")
+          old = '''    const requiredFields = form ? Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input[required], select[required], textarea[required]")).filter((field) => field.type !== "hidden" && field.offsetParent !== null) : [];
+          '''
+          new = '''    const requiredFields = form ? Array.from(form.querySelectorAll("input[required], select[required], textarea[required]")).filter((field) => field instanceof HTMLElement && (!(field instanceof HTMLInputElement) || field.type !== "hidden") && field.offsetParent !== null) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> : [];
+          '''
+          if old not in source:
+              raise SystemExit("wizard validation line was not found")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
