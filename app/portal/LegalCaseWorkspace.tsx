@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- initial API hydration selects the first returned case */
 import {FormEvent,useCallback,useEffect,useMemo,useState}from"react";
 type Matter={id:number;referenceCode:string;title:string;counterparty:string;status:string;referralReason:string|null;fileSnapshotJson:string|null};
 type Activity={id:number;legalRecordId:number;activityType:string;title:string;details:string|null;priority:string;status:string;dueAt:string|null;assignedTo:string|null};

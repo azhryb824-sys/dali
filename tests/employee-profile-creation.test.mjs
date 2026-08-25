@@ -21,13 +21,13 @@ test("employee creation is one integrated multipart workflow", () => {
 test("Saudi IBAN remains formatted, validated with MOD-97 and resolves the bank", async () => {
   const source = read("lib/saudi-banks.ts");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const module = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+  const bankModule = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
   const iban = "SA0380000000608010167519";
-  assert.equal(module.isValidSaudiIban(iban), true);
-  assert.equal(module.bankNameFromSaudiIban(iban), "مصرف الراجحي");
-  assert.equal(module.formatSaudiIban(iban), "SA03 8000 0000 6080 1016 7519");
-  assert.equal(module.formatSaudiIban(""), "SA");
-  assert.equal(module.isValidSaudiIban("SA00 0000 0000 0000 0000 0000"), false);
+  assert.equal(bankModule.isValidSaudiIban(iban), true);
+  assert.equal(bankModule.bankNameFromSaudiIban(iban), "مصرف الراجحي");
+  assert.equal(bankModule.formatSaudiIban(iban), "SA03 8000 0000 6080 1016 7519");
+  assert.equal(bankModule.formatSaudiIban(""), "SA");
+  assert.equal(bankModule.isValidSaudiIban("SA00 0000 0000 0000 0000 0000"), false);
 });
 
 test("employee payroll incorporates all persisted allowances", () => {

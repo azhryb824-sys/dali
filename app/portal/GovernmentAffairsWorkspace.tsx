@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- initial API hydration is asynchronous and intentional */
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Site={id:number;name:string;portalUrl:string;accountReference:string|null;notes:string|null;hasUsername:boolean;hasPassword:boolean};

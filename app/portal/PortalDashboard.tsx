@@ -1433,9 +1433,11 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
   },[selectedSourceRequest]);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [professions, setProfessions] = useState<DraftProfession[]>([{ key: "profession-1", profession: workforceProfessions[0].label, customProfession: "", requiredCount: 1, unitSalary: 0, sponsorshipType:"dali", sponsorName:"", ajirContractStatus:"not_applicable" }]);
+  const [payments,setPayments]=useState<DraftPayment[]>([{key:"payment-1",title:"الدفعة الأولى",dueDate:"",percentage:100}]);
+  // Opening a quote conversion intentionally hydrates the contract wizard state once.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{if(!initialQuoteId||!convertibleQuotes.length)return;const quote=convertibleQuotes.find(item=>item.id===initialQuoteId);if(!quote)return;setSelectedQuoteId(String(quote.id));setQuantityMode(quote.quantityMode);setSeasonType(quote.seasonType);if(quote.paymentScheduleJson){try{const rows=JSON.parse(quote.paymentScheduleJson) as Array<{title:string;dueDate:string;percentageBps:number}>;setPayments(rows.map((row,index)=>({key:`quote-payment-${index}`,title:row.title,dueDate:row.dueDate,percentage:row.percentageBps/100})))}catch{setPayments([])}}setContractAmount(String(quote.subtotalHalalas/100));setContractVatEnabled(quote.vatRateBps>0);setContractVatRate(String(quote.vatRateBps/100));if(quote.items.length)setProfessions(quote.items.map((item,index)=>({key:`quote-profession-${index}`,profession:item.profession,requiredCount:quote.quantityMode==="open"?0:Math.max(1,item.quantity),unitSalary:(item.unitPriceHalalas||0)/100,sponsorshipType:item.sponsorshipType||"dali",sponsorName:item.sponsorName||"",ajirContractStatus:item.ajirContractStatus||"not_applicable"})));window.setTimeout(()=>{const form=document.querySelector<HTMLFormElement>(".issue-modal form");const field=form?.elements.namedItem("clientName");if(field instanceof HTMLInputElement)field.value=quote.clientName},0)},[initialQuoteId,convertibleQuotes]);
   const [selectedWorkers, setSelectedWorkers] = useState<Record<string, number[]>>({});
-  const [payments,setPayments]=useState<DraftPayment[]>([{key:"payment-1",title:"الدفعة الأولى",dueDate:"",percentage:100}]);
   const isContract = documentType === "workforce_contract";
   const capacity = professions.map((item) => {
     const registered = workers.filter((worker) => worker.profession === item.profession).length;

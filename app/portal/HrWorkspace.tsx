@@ -62,8 +62,10 @@ export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; 
     void action("POST", { action: "generate-payroll", periodMonth: fd.get("periodMonth"), paymentDate: fd.get("paymentDate") }, "payroll").then(() => form.reset());
   }
   function submitExtended(event:FormEvent<HTMLFormElement>,actionName:string){event.preventDefault();const form=event.currentTarget;const payload=Object.fromEntries(new FormData(form));void action("POST",{action:actionName,...payload},actionName).then(()=>form.reset())}
-  const expiringDocuments=data.documents.filter(item=>item.expiryDate&&item.expiryDate<=new Date(Date.now()+30*86400000).toISOString().slice(0,10)&&item.expiryDate>=new Date().toISOString().slice(0,10));
-  const pendingLeaves=data.leaves.filter(item=>item.status==="pending");const today=new Date().toISOString().slice(0,10);const todayAttendance=data.attendance.filter(item=>item.attendanceDate===today);
+  const [today] = useState(() => new Date().toISOString().slice(0,10));
+  const [thirtyDaysFromToday] = useState(() => new Date(Date.now()+30*86400000).toISOString().slice(0,10));
+  const expiringDocuments=data.documents.filter(item=>item.expiryDate&&item.expiryDate<=thirtyDaysFromToday&&item.expiryDate>=today);
+  const pendingLeaves=data.leaves.filter(item=>item.status==="pending");const todayAttendance=data.attendance.filter(item=>item.attendanceDate===today);
 
   return <section className="hr-workspace">
     <header className="hr-heading"><div><span>الموارد البشرية والرواتب</span><h2>الملفات الوظيفية ومسير الرواتب</h2><p>الرواتب لا تُصرف مباشرة؛ تمر بالإنشاء والاعتماد وقيد الاستحقاق وقيد الصرف ثم الإغلاق.</p></div><strong>{money(totalMonthly)}<small>التكلفة الشهرية الأساسية</small></strong></header>

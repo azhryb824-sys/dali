@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/purity -- payment cutoffs are intentionally calculated from the current dashboard time */
 import{useEffect,useMemo,useState}from"react";
 type Contract={id:number;referenceCode:string;clientName:string};type Payment={id:number;contractId:number;title:string;dueDate:string;amountHalalas:number;status:string;invoiceDocumentId:number|null};type Data={contracts:Contract[];payments:Payment[]};
 const money=(value:number)=>new Intl.NumberFormat("ar-SA",{style:"currency",currency:"SAR",maximumFractionDigits:0}).format(value/100);
