@@ -2,8 +2,10 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const fontPaths = {
-  arabicBold: "cairo-arabic-700-normal.woff",
-  latinBold: "cairo-latin-700-normal.woff",
+  arabicRegular: "DaliArabic-Regular.ttf",
+  arabicBold: "DaliArabic-Bold.ttf",
+  latinRegular: "DaliArabic-Regular.ttf",
+  latinBold: "DaliArabic-Bold.ttf",
 } as const;
 
 const fontCache = new Map<keyof typeof fontPaths, Promise<Uint8Array>>();
