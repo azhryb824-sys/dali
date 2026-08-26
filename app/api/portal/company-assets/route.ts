@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyAssets, portalActivity } from "@/db/schema";
 import { attachmentHeaders, cleanText, objectKey, safeFileName } from "@/lib/company-documents";
-import { canAccessPortalDocuments, canManageCompanyAssets, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessCompanyFiles, canManageCompanyAssets, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
@@ -12,7 +12,7 @@ const MAX_ASSET_BYTES = 5 * 1024 * 1024;
 
 export async function GET(request: Request) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !canAccessPortalDocuments(access)) return Response.json({ error: "غير مصرح بمعاينة الأصل" }, { status: 403 });
+  if (!access || !canAccessCompanyFiles(access)) return Response.json({ error: "غير مصرح بمعاينة الأصل" }, { status: 403 });
   const slot = new URL(request.url).searchParams.get("slot");
   if (slot !== "stamp" && slot !== "signature") return Response.json({ error: "نوع الأصل غير صحيح" }, { status: 400 });
   const asset = await getDb().query.companyAssets.findFirst({ where: eq(companyAssets.slot, slot) });
