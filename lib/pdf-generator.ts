@@ -230,26 +230,22 @@ async function embedImage(pdf: PDFDocument, bytes: Uint8Array, contentType: stri
   throw new Error("صيغة صورة الختم أو التوقيع غير مدعومة");
 }
 
-const latinFontByFont = new WeakMap<PDFFont, PDFFont>();
-
 async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<PdfResources> {
   pdf.registerFontkit(fontkit);
-  const [arabicBold, latinBoldBytes] = await Promise.all([
+  const [arabicRegularBytes, arabicBoldBytes, latinRegularBytes, latinBoldBytes] = await Promise.all([
+    cairoFontBytes("arabicRegular"),
     cairoFontBytes("arabicBold"),
+    cairoFontBytes("latinRegular"),
     cairoFontBytes("latinBold"),
   ]);
   const [regular, bold, latinRegular, latinBold] = await Promise.all([
-    pdf.embedFont(arabicBold, { subset: true }),
-    pdf.embedFont(arabicBold, { subset: true }),
-    pdf.embedFont(latinBoldBytes, { subset: true }),
+    pdf.embedFont(arabicRegularBytes, { subset: true }),
+    pdf.embedFont(arabicBoldBytes, { subset: true }),
+    pdf.embedFont(latinRegularBytes, { subset: true }),
     pdf.embedFont(latinBoldBytes, { subset: true }),
   ]);
 
   const runtime = getRuntimeEnv();
-  latinFontByFont.set(regular, latinRegular);
-  latinFontByFont.set(bold, latinBold);
-  latinFontByFont.set(latinRegular, latinRegular);
-  latinFontByFont.set(latinBold, latinBold);
 
   const [logoResponse, letterheadResponse, transparentStampResponse, transparentSignatureResponse] = await Promise.all([
     runtime.ASSETS.fetch(new Request("https://assets.local/dally-logo.jpg")),
@@ -310,39 +306,17 @@ function printableText(font: PDFFont, value: string, preserveSpacing = false) {
   return preserveSpacing ? text : text.replace(/\s{2,}/g, " ").trim();
 }
 
-function textRuns(font: PDFFont, value: string) {
-  const normalized = normalizedPdfText(value);
-  const latinFont = latinFontByFont.get(font);
-  if (!latinFont || latinFont === font || !/[0-9]/.test(normalized)) {
-    return [{ text: printableText(font, normalized), font }];
-  }
-  const runs: Array<{ text: string; font: PDFFont }> = [];
-  let cursor = 0;
-  for (const match of normalized.matchAll(/[0-9][0-9.,:/%+\-]*/g)) {
-    const index = match.index ?? 0;
-    if (index > cursor) runs.push({ text: printableText(font, normalized.slice(cursor, index), true), font });
-    runs.push({ text: printableText(latinFont, match[0], true), font: latinFont });
-    cursor = index + match[0].length;
-  }
-  if (cursor < normalized.length) runs.push({ text: printableText(font, normalized.slice(cursor), true), font });
-  return runs.filter((run) => run.text.length > 0);
-}
-
 function textWidth(font: PDFFont, value: string, size: number) {
-  return textRuns(font, value).reduce((total, run) => total + run.font.widthOfTextAtSize(run.text, size), 0);
+  return font.widthOfTextAtSize(printableText(font, value), size);
 }
 
 function drawRight(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, right = PAGE.width - PAGE.margin) {
-  let cursor = right;
-  for (const run of textRuns(font, value)) {
-    const runWidth = run.font.widthOfTextAtSize(run.text, size);
-    cursor -= runWidth;
-    page.drawText(run.text, { x: cursor, y, font: run.font, size, color });
-  }
+  const text = printableText(font, value);
+  page.drawText(text, { x: right - textWidth(font, text, size), y, font, size, color });
 }
 
 function drawLeft(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, left = PAGE.margin) {
-  drawRight(page, value, y, font, size, color, left + textWidth(font, value, size));
+  page.drawText(printableText(font, value), { x: left, y, font, size, color });
 }
 
 function wrapWords(font: PDFFont, value: string, size: number, maxWidth: number) {
@@ -377,7 +351,7 @@ function dateLabel(value?: string) {
 
 function moneyLabel(halalas?: number) {
   if (!halalas) return "غير محدد";
-  const value = (halalas / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,/g, "٬").replace(/\./g, "٫");
+  const value = (halalas / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${arabicDigits(value)} ريال سعودي`;
 }
 
