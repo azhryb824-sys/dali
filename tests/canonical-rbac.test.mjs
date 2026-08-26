@@ -40,7 +40,7 @@ test("unauthorized pages are hidden and direct APIs enforce dedicated permission
   assert.doesNotMatch(dashboard, /currentUser\.role !== "employee" \|\| currentUser\.department === department/);
   assert.match(read("app/api/portal/government/route.ts"), /hasPortalPermission\(access,"government"/);
   assert.match(read("app/api/portal/operations/route.ts"), /hasPortalPermission\(access, "operations"/);
-  assert.match(read("app/api/portal/contracts/\[id\]/status/route.ts"), /hasPortalPermission\(access, "contracts", "write"\)/);
+  assert.match(read("app/api/portal/contracts/[id]/status/route.ts"), /hasPortalPermission\(access, "contracts", "write"\)/);
 });
 
 test("approval bypass is limited to owner and supervisor", () => {
