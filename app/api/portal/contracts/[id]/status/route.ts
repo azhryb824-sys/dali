@@ -198,8 +198,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         module: "documents",
         entityType: "workforce-contract",
         entityId: id,
-        actionView: "contract-documents",
-        targetDepartment: "contracts",
+        actionView: "contractual-documents",
+        targetDepartment: "workforce",
       }).catch(() => undefined);
     }
     return jsonNoStore({ contract: updated, signatureUploadUrl, signatureUploadExpiresAt: signatureUploadExpiresAt || undefined });
