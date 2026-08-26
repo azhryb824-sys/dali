@@ -14,11 +14,14 @@ test("PDF digit normalization converts Arabic and Persian numerals to ASCII", ()
 test("all programmatic PDF generators enforce Latin numerals", () => {
   const issued = read("lib/pdf-generator.ts");
   const brand = read("lib/brand-identity-pdf.ts");
+  const fonts = read("lib/cairo-font-bytes.ts");
   assert.match(issued, /latinDigits\(String\(value \|\| " "\)\)/);
   assert.match(issued, /ar-SA-u-ca-gregory-nu-latn/);
-  assert.match(issued, /latinFontByFont\.set\(regular, latinRegular\)/);
-  assert.match(issued, /font: run\.font/);
+  assert.match(issued, /cairoFontBytes\("arabicRegular"\)/);
+  assert.doesNotMatch(issued, /latinFontByFont/);
   assert.doesNotMatch(issued, /٠١٢٣٤٥٦٧٨٩/);
-  assert.match(brand, /latinFontByFont\.set\(regular, latinRegular\)/);
-  assert.match(brand, /font: run\.font/);
+  assert.match(brand, /cairoFontBytes\("arabicRegular"\)/);
+  assert.doesNotMatch(brand, /latinFontByFont/);
+  assert.match(fonts, /DaliArabic-Regular\.ttf/);
+  assert.match(fonts, /DaliArabic-Bold\.ttf/);
 });
