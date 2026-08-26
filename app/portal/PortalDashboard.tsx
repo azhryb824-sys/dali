@@ -904,11 +904,15 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         }
       }
       const response = await fetch(`/api/portal/contracts/${contractId}/status`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, reason, stampId }) });
-      const result = await readApiJson(response) as { contract?: WorkforceContract; error?: string };
+      const result = await readApiJson(response) as { contract?: WorkforceContract; error?: string; signatureUploadUrl?: string };
       if (!response.ok || !result.contract) throw new Error(result.error || "تعذّر تحديث حالة العقد");
       setContracts((items) => items.map((item) => item.id === contractId ? result.contract as WorkforceContract : item));
       router.refresh();
-      notify("تم تحديث حالة العقد وتسجيل القرار في سجل التدقيق.");
+      if (status === "approved") {
+        if (!result.signatureUploadUrl) throw new Error("تم الاعتماد لكن لم يُنشأ رابط رفع النسخة الموقعة");
+        await navigator.clipboard.writeText(result.signatureUploadUrl);
+        notify(`تم اعتماد العقد ونسخ رابط رفع النسخة الموقعة إلى الحافظة: ${result.signatureUploadUrl}`);
+      } else notify("تم تحديث حالة العقد وتسجيل القرار في سجل التدقيق.");
     } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تحديث حالة العقد."); }
     finally { setBusy(null); }
   }
