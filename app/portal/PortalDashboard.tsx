@@ -32,6 +32,7 @@ import LocaleRuntime from "@/app/components/LocaleRuntime";
 import GovernmentAffairsWorkspace from "./GovernmentAffairsWorkspace";
 import TaskCenter, { GlobalTaskReminder } from "./TaskCenter";
 import ContractualDocumentsWorkspace from "./ContractualDocumentsWorkspace";
+import WorkforceSupervisionWorkspace from "./WorkforceSupervisionWorkspace";
 import LetterPdfLibrary from "./LetterPdfLibrary";
 import { defaultWorkforceContractClauses, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 import { ANNUAL_CONTRACT_MONTHS, annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
@@ -40,7 +41,7 @@ import { readApiJson } from "@/lib/client-api";
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
 type RequestStatus = "new" | "reviewing" | "contacted" | "closed";
-type View = "overview" | "notifications" | "tasks" | "employees" | "finance" | "legal" | "government" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "contractual-documents" | "documents" | "brand" | "website" | "users";
+type View = "overview" | "notifications" | "tasks" | "employees" | "finance" | "legal" | "government" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "workforce-supervision" | "contractual-documents" | "documents" | "brand" | "website" | "users";
 type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 type WorkforceRequest = {
@@ -433,6 +434,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     if (next === "employees" || next === "finance" || next === "legal" || next === "workforce") return canAccess(next);
     if (next === "government") return canAccessGovernment;
     if (next === "operations" || next === "representatives") return canAccessOperations;
+    if (next === "workforce-supervision") return canAccessContracts && canAccess("workforce");
     if (next === "contractual-documents") return canAccessContracts;
     if (next === "documents" || next === "brand") return canAccessDocuments;
     if (next === "construction") return canAccessConstruction;
@@ -988,7 +990,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     finally { setBusy(null); }
   }
 
-  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", tasks: "المهام والتذكيرات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", government: "العلاقات الحكومية والامتثال", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", representatives: "إدارة المناديب", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", "contractual-documents": "العقود والعروض والخطابات", documents: "مستندات الشركة", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "إدارة المشرفين والمستخدمين" };
+  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", tasks: "المهام والتذكيرات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", government: "العلاقات الحكومية والامتثال", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", representatives: "إدارة المناديب", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", "workforce-supervision": "إدارة الإشراف على العمالة", "contractual-documents": "العقود والعروض والخطابات", documents: "مستندات الشركة", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
   const visibleRequests = requests.filter((item) => {
     const matchesStatus = requestFilter === "all" || safeRequestStatus(item.status) === requestFilter;
     const haystack = `${item.fullName} ${item.mobile} ${item.email} ${item.trackingCode} ${item.specialization}`.toLowerCase();
@@ -1012,11 +1014,12 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {canAccessOperations && <button className={view === "operations" ? "active" : ""} onClick={() => changeView("operations")}><Icon name="finance" /><span>المبيعات والتشغيل</span></button>}
         {canAccessOperations && <button className={view === "representatives" ? "active" : ""} onClick={() => changeView("representatives")}><Icon name="users"/><span>إدارة المناديب</span></button>}
         {canAccessConstruction && <button className={view === "construction" ? "active" : ""} onClick={() => changeView("construction")}><Icon name="legal" /><span>المقاولات والمشروعات</span></button>}
+        {canAccessContracts && canAccess("workforce") && <button className={view === "workforce-supervision" ? "active" : ""} onClick={() => changeView("workforce-supervision")}><Icon name="workforce"/><span>إدارة الإشراف على العمالة</span></button>}
         {canAccessContracts && <button className={view === "contractual-documents" ? "active" : ""} onClick={() => changeView("contractual-documents")}><Icon name="documents" /><span>العقود والعروض والخطابات</span></button>}
         {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مستندات الشركة</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
         {canAccessDocuments && <button className={view === "brand" ? "active" : ""} onClick={() => changeView("brand")}><Icon name="brand" /><span>الهوية البصرية</span></button>}
         {canAccessWebsite && <button className={view === "website" ? "active" : ""} onClick={() => changeView("website")}><Icon name="website"/><span>إدارة الموقع</span></button>}
-        {(currentUser.role === "admin" || functionalAdmin) && <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}><Icon name="users" /><span>إدارة المشرفين والمستخدمين</span>{users.some((item) => item.status === "pending") && <i />}</button>}
+        {(currentUser.role === "admin" || functionalAdmin) && <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}><Icon name="users" /><span>المستخدمون والصلاحيات</span>{users.some((item) => item.status === "pending") && <i />}</button>}
       </nav>
       <div className="sidebar-foot"><div className="security-note"><span>✓</span><p><strong>اتصال محمي</strong>تُطبّق الصلاحيات من جهة الخادم.</p></div><a href={signOutPath}>تسجيل الخروج</a></div>
     </aside>
@@ -1153,6 +1156,8 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "representatives" && canAccess("workforce") && <SalesRepresentativesWorkspace canWrite={canWrite}/>}
         {view === "construction" && canAccessConstruction && <ConstructionWorkspace/>}
 
+        {view === "workforce-supervision" && canAccessContracts && canAccess("workforce") && <WorkforceSupervisionWorkspace contracts={contracts} professions={contractProfessions} assignments={contractAssignments} workers={workers} onOpenContract={setSelectedContractId}/>}
+
         {view === "contractual-documents" && canAccessContracts && <><ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={canManageDocuments} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract",quoteId)}/><LetterPdfLibrary/></>}
 
         {view === "documents" && canAccessDocuments && <DocumentCenter
@@ -1179,7 +1184,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "brand" && canAccessDocuments && <BrandIdentityManager/>}
         {view === "website" && canAccessWebsite && <WebsiteManager initialContent={initialWebsiteContent} canManage={canManageWebsite}/>}
 
-        {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="إدارة المشرفين والمستخدمين" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني." actionLabel="إضافة مستخدم" canWrite onAdd={() => setUserModal(true)}>
+        {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني." actionLabel="إضافة مستخدم" canWrite onAdd={() => setUserModal(true)}>
           <section className="panel users-panel"><div className="panel-head"><div><h2>حسابات النظام</h2><p>{users.filter((item) => item.status === "pending").length} حساب بانتظار الاعتماد · لا توجد كلمات مرور محفوظة في النظام</p></div></div><div className="user-list">{users.map((item) => <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}` || busy === `user-password-${item.email}`} onSave={updateUser} onResetPassword={resetUserPassword}/>)}</div></section>
           <RoleDefinitionManager/>
           <AccessScopeManager currentEmail={currentUser.email}/>
