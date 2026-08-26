@@ -3,13 +3,15 @@ import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
 import { brandIdentityAssets, type BrandIdentityAssetId } from "@/lib/brand-identity";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { cairoFontBytes } from "@/lib/cairo-font-bytes";
+import { latinDigits } from "@/lib/latin-digits";
 
 const PAGE = { width: 595.28, height: 841.89, margin: 48 };
 const C = { navy: rgb(0, .114, .176), red: rgb(.886, .11, .145), text: rgb(.12, .17, .2), muted: rgb(.42, .48, .52), pale: rgb(.96, .97, .975) };
 
 function width(font: PDFFont, value: string, size: number) { return font.widthOfTextAtSize(value || " ", size); }
 function right(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = C.text, edge = PAGE.width - PAGE.margin) {
-  page.drawText(value, { x: edge - width(font, value, size), y, font, size, color });
+  const normalized = latinDigits(value);
+  page.drawText(normalized, { x: edge - width(font, normalized, size), y, font, size, color });
 }
 function wrap(font: PDFFont, value: string, size: number, maxWidth: number) {
   const lines: string[] = [];
