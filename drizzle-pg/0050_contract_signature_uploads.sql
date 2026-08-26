@@ -25,6 +25,6 @@ CREATE INDEX IF NOT EXISTS contract_signature_requests_expires_idx
 CREATE UNIQUE INDEX IF NOT EXISTS contract_signature_requests_one_pending_idx
   ON public.contract_signature_requests(contract_id) WHERE status = 'pending';
 
-INSERT INTO private.__dali_migrations (name, checksum, applied_at)
-VALUES ('0050_contract_signature_uploads.sql', '0050_contract_signature_uploads_v1', CURRENT_TIMESTAMP)
-ON CONFLICT (name) DO UPDATE SET checksum = EXCLUDED.checksum;
+INSERT INTO private.__dali_migrations (name)
+VALUES ('0050_contract_signature_uploads.sql')
+ON CONFLICT (name) DO NOTHING;
