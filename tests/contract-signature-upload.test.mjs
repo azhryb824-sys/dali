@@ -52,3 +52,17 @@ test("client upload page is mobile friendly and approval UI exposes the generate
   assert.match(dashboard,/clipboard\.writeText/);
   assert.match(billing,/clipboard\.writeText/);
 });
+
+test("contract list offers an internal signed PDF replacement form",()=>{
+  const billing=read("app/portal/ContractBillingWorkspace.tsx");
+  const route=read("app/api/portal/contracts/[id]/signed-document/route.ts");
+  assert.match(billing,/رفع العقد الموقع/);
+  assert.match(billing,/setSignedUploadContract\(contract\)/);
+  assert.match(billing,/accept="application\/pdf,\.pdf"/);
+  assert.match(billing,/signed-document/);
+  assert.match(route,/hasPortalPermission\(access,"contracts","write"\)/);
+  assert.match(route,/source:"signed-upload"/);
+  assert.match(route,/previousContractStorageKey/);
+  assert.match(route,/status:"signed"/);
+  assert.match(route,/BUCKET\.delete\(storageKey\)/);
+});
