@@ -21,7 +21,7 @@ ON CONFLICT (role_key) DO UPDATE SET
 UPDATE public.portal_roles role
 SET permissions_json = COALESCE((
   SELECT jsonb_agg(permission ORDER BY permission)::text
-  FROM jsonb_array_elements_text(role.permissions_json::jsonb) AS permission
+  FROM jsonb_array_elements_text(role.permissions_json::jsonb) AS item(permission)
   WHERE role.role_key IN ('system_owner','system_admin')
      OR (
        permission <> '*'
