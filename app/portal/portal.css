@@ -199,3 +199,8 @@
   .contract-drawer .document-actions button{width:100%}
   .contract-profession-sections>section>header{align-items:flex-start;gap:10px}
 }
+
+body:has(.drawer-layer) .portal-language-switcher,
+body:has(.drawer-layer) .video-desk,
+body:has(.modal-layer) .portal-language-switcher,
+body:has(.modal-layer) .video-desk{visibility:hidden;pointer-events:none}
