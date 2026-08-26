@@ -988,7 +988,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     finally { setBusy(null); }
   }
 
-  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", tasks: "المهام والتذكيرات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", government: "العلاقات الحكومية والامتثال", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", representatives: "إدارة المناديب", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", "contractual-documents": "العقود والعروض والخطابات", documents: "مستندات الشركة", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "المستخدمون والصلاحيات" };
+  const viewTitle: Record<View, string> = { overview: "لوحة المتابعة", notifications: "مركز الإشعارات", tasks: "المهام والتذكيرات", employees: "إدارة الموظفين", finance: "الإدارة المالية", legal: "الشؤون القانونية", government: "العلاقات الحكومية والامتثال", workforce: "شؤون العمالة", operations: "المبيعات والتشغيل", representatives: "إدارة المناديب", construction: "المقاولات والمشروعات", conversations: "المحادثات المباشرة", "contractual-documents": "العقود والعروض والخطابات", documents: "مستندات الشركة", brand: "الهوية البصرية", website: "إدارة الموقع الإلكتروني", users: "إدارة المشرفين والمستخدمين" };
   const visibleRequests = requests.filter((item) => {
     const matchesStatus = requestFilter === "all" || safeRequestStatus(item.status) === requestFilter;
     const haystack = `${item.fullName} ${item.mobile} ${item.email} ${item.trackingCode} ${item.specialization}`.toLowerCase();
@@ -1016,7 +1016,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مستندات الشركة</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
         {canAccessDocuments && <button className={view === "brand" ? "active" : ""} onClick={() => changeView("brand")}><Icon name="brand" /><span>الهوية البصرية</span></button>}
         {canAccessWebsite && <button className={view === "website" ? "active" : ""} onClick={() => changeView("website")}><Icon name="website"/><span>إدارة الموقع</span></button>}
-        {(currentUser.role === "admin" || functionalAdmin) && <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}><Icon name="users" /><span>المستخدمون والصلاحيات</span>{users.some((item) => item.status === "pending") && <i />}</button>}
+        {(currentUser.role === "admin" || functionalAdmin) && <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}><Icon name="users" /><span>إدارة المشرفين والمستخدمين</span>{users.some((item) => item.status === "pending") && <i />}</button>}
       </nav>
       <div className="sidebar-foot"><div className="security-note"><span>✓</span><p><strong>اتصال محمي</strong>تُطبّق الصلاحيات من جهة الخادم.</p></div><a href={signOutPath}>تسجيل الخروج</a></div>
     </aside>
@@ -1179,7 +1179,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "brand" && canAccessDocuments && <BrandIdentityManager/>}
         {view === "website" && canAccessWebsite && <WebsiteManager initialContent={initialWebsiteContent} canManage={canManageWebsite}/>}
 
-        {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني." actionLabel="إضافة مستخدم" canWrite onAdd={() => setUserModal(true)}>
+        {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="إدارة المشرفين والمستخدمين" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني." actionLabel="إضافة مستخدم" canWrite onAdd={() => setUserModal(true)}>
           <section className="panel users-panel"><div className="panel-head"><div><h2>حسابات النظام</h2><p>{users.filter((item) => item.status === "pending").length} حساب بانتظار الاعتماد · لا توجد كلمات مرور محفوظة في النظام</p></div></div><div className="user-list">{users.map((item) => <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}` || busy === `user-password-${item.email}`} onSave={updateUser} onResetPassword={resetUserPassword}/>)}</div></section>
           <RoleDefinitionManager/>
           <AccessScopeManager currentEmail={currentUser.email}/>
