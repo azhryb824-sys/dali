@@ -69,3 +69,26 @@ test("contract approval loads active stamps and sends the selected stamp id",()=
   assert.match(status,/eq\(documentStamps\.active, true\)/);
   assert.match(stamps,/where\(eq\(documentStamps\.active, true\)\)/);
 });
+
+
+test("document edit buttons open system forms and draft delete actions remain available",()=>{
+  const billing=read("app/portal/ContractBillingWorkspace.tsx");
+  const operations=read("app/portal/OperationsWorkspace.tsx");
+  const letters=read("app/portal/ContractualDocumentsWorkspace.tsx");
+  const dashboard=read("app/portal/PortalDashboard.tsx");
+  assert.match(billing,/setEditingContract\(contract\)/);
+  assert.match(billing,/aria-label="تعديل العقد"/);
+  assert.match(billing,/setEditingPayment\(payment\)/);
+  assert.match(operations,/setEditingQuote\(quote\)/);
+  assert.match(operations,/aria-label="تعديل عرض السعر"/);
+  assert.match(letters,/setEditingLetter\(letter\)/);
+  assert.match(letters,/aria-label="تعديل الخطاب الرسمي"/);
+  assert.match(dashboard,/setShowEditForm\(true\)/);
+  assert.match(dashboard,/submitContractEdit/);
+  assert.match(billing,/method:"DELETE"/);
+  assert.match(operations,/method: "DELETE"/);
+  assert.match(letters,/method:"DELETE"/);
+  assert.match(billing,/>حذف<\/button>/);
+  assert.match(operations,/>حذف<\/button>/);
+  assert.match(letters,/>حذف<\/button>/);
+});
