@@ -162,12 +162,16 @@ for asset in "${css_assets[@]}"; do
   curl -fsS -o /dev/null "$BASE_URL$asset" || fail "تعذر تحميل ملف CSS: $asset"
 done
 
-log "فحص مسار تسجيل الدخول بطلب غير صحيح دون استخدام بيانات حقيقية"
+log "فحص مسار تسجيل الدخول عبر عنوان reverse proxy دون استخدام بيانات حقيقية"
 headers_file="$(mktemp)"
 trap 'rm -f "${headers_file:-}"' EXIT
 login_status="$(curl -sS -o /dev/null -D "$headers_file" -w '%{http_code}' \
   -X POST \
   -H 'content-type: application/x-www-form-urlencoded' \
+  -H 'origin: https://dali-repair.local' \
+  -H 'host: dali-repair.local' \
+  -H 'x-forwarded-host: dali-repair.local' \
+  -H 'x-forwarded-proto: https' \
   --data-urlencode 'identifier=0000000000' \
   --data-urlencode 'password=not-a-real-password-2026!' \
   --data-urlencode 'returnTo=/portal' \
