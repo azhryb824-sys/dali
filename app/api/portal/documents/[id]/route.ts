@@ -1,14 +1,14 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { companyDocuments, portalActivity, workforceContracts } from "@/db/schema";
+import { companyDocuments, portalActivity } from "@/db/schema";
 import { attachmentHeaders } from "@/lib/company-documents";
-import { canAccessPortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessCompanyFiles, requirePortalApiRole } from "@/lib/portal-access";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { regenerateIssuedDocumentPdf } from "@/lib/issued-document-regeneration";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !canAccessPortalDocuments(access)) return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });
+  if (!access || !canAccessCompanyFiles(access)) return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });
 
   const { id: value } = await context.params;
   const id = Number(value);
@@ -20,10 +20,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const inline = new URL(request.url).searchParams.get("inline") === "1";
   const pdfLanguage = new URL(request.url).searchParams.get("language") === "bilingual" ? "bilingual" : "ar";
   if (document.source === "generated" && document.documentType === "workforce_contract") {
-    const contract = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.documentId, document.id) });
-    if (!contract?.approvedBy || !["approved", "sent", "signed", "active", "suspended", "expired", "terminated", "superseded"].includes(contract.status)) {
-      return Response.json({ error: "لا يمكن تنزيل العقد قبل اعتماده من المالك" }, { status: 409 });
-    }
     const regenerated = await regenerateIssuedDocumentPdf(id, pdfLanguage);
     if (!regenerated) return Response.json({ error: "تعذّر إعادة إنشاء العقد" }, { status: 404 });
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "contract-regenerated-and-downloaded", entityType: "company-document", entityId: String(id) });
