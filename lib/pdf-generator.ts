@@ -3,6 +3,7 @@ import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { halalasToArabicWords } from "@/lib/arabic-money";
 import { cairoFontBytes } from "@/lib/cairo-font-bytes";
+import { latinDigits } from "@/lib/latin-digits";
 import { defaultWorkforceContractClauses, publicManpowerText, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 export const issuedDocumentLabels = {
@@ -280,22 +281,18 @@ async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<
 }
 
 function arabicDigits(value: string | number) {
-  return String(value).replace(/\d/g, (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
+  return latinDigits(value);
 }
 
 function printableText(font: PDFFont, value: string) {
   const supported = new Set(font.getCharacterSet());
-  const normalized = String(value || " ")
+  const normalized = latinDigits(String(value || " "))
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
     .replace(/[\u2010-\u2015\u2212]/g, "-")
     .replace(/\u00a0/g, " ");
   return Array.from(normalized).map((character) => {
     const code = character.codePointAt(0)!;
     if (supported.has(code)) return character;
-    if (/\d/.test(character)) {
-      const alternative = "٠١٢٣٤٥٦٧٨٩"[Number(character)];
-      if (supported.has(alternative.codePointAt(0)!)) return alternative;
-    }
     const alternatives: Record<string, string> = { ".": "٫", ",": "،", ";": "؛", "?": "؟", "%": "٪", ":": " ", "-": " " };
     const alternative = alternatives[character];
     return alternative && supported.has(alternative.codePointAt(0)!) ? alternative : " ";
@@ -342,7 +339,7 @@ function dateLabel(value?: string) {
   if (!value) return "غير محدد";
   const date = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(date);
+  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory-nu-latn", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
 function moneyLabel(halalas?: number) {
