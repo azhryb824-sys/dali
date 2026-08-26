@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { contractProfessions, contractWorkerAssignments, portalActivity, workers, workforceContracts } from "@/db/schema";
-import { requirePortalApiRole } from "@/lib/portal-access";
+import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { rejectCrossSiteRequest } from "@/lib/security";
 
@@ -11,7 +11,8 @@ function positiveId(value: unknown) {
 }
 
 async function requireContractWrite() {
-  return requirePortalApiRole(["admin", "manager"]);
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  return access && await hasPortalPermission(access, "contracts", "write") ? access : null;
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
