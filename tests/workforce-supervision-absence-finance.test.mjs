@@ -13,6 +13,8 @@ test("workforce supervisor has exact movement permissions without approvals",()=
   assert.doesNotMatch(migration,/workforce_supervisor[^\n]*\.(approve|post|pay|administer)/);
   assert.match(users,/workforce_supervisor/);
   assert.match(dashboard,/مشرف العمالة/);
+  assert.match(dashboard,/view === "contractual-documents" && canAccessContracts/);
+  assert.doesNotMatch(dashboard,/view === "contractual-documents" && canAccessDocuments/);
 });
 
 test("supervisor can assign and release individual workers at the contract site",()=>{
