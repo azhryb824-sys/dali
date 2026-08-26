@@ -80,6 +80,7 @@ export async function POST(request: Request) {
     }
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: `company-${slot}-updated`, entityType: "company-asset", entityId: slot });
     if (previous?.storageKey && previous.storageKey !== storageKey) {
+      if (slot === "stamp") await db.update(documentStamps).set({ active: false, updatedAt: now }).where(eq(documentStamps.storageKey, previous.storageKey));
       await getRuntimeEnv().BUCKET.delete(previous.storageKey).catch(() => undefined);
     }
     await emitPortalNotification({ eventType: `company-${slot}-updated`, title: slot === "stamp" ? "تم تحديث ختم الشركة" : "تم تحديث توقيع الشركة", message: `حدّث مدير النظام الأصل الرسمي المستخدم في ملفات PDF.`, severity: "warning", module: "documents", entityType: "company-asset", entityId: slot, actionView: "documents", targetRole: "admin" }).catch(() => undefined);
