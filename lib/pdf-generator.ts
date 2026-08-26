@@ -230,6 +230,8 @@ async function embedImage(pdf: PDFDocument, bytes: Uint8Array, contentType: stri
   throw new Error("صيغة صورة الختم أو التوقيع غير مدعومة");
 }
 
+const latinFontByFont = new WeakMap<PDFFont, PDFFont>();
+
 async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<PdfResources> {
   pdf.registerFontkit(fontkit);
   const [arabicBold, latinBoldBytes] = await Promise.all([
@@ -244,6 +246,11 @@ async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<
   ]);
 
   const runtime = getRuntimeEnv();
+  latinFontByFont.set(regular, latinRegular);
+  latinFontByFont.set(bold, latinBold);
+  latinFontByFont.set(latinRegular, latinRegular);
+  latinFontByFont.set(latinBold, latinBold);
+
   const [logoResponse, letterheadResponse, transparentStampResponse, transparentSignatureResponse] = await Promise.all([
     runtime.ASSETS.fetch(new Request("https://assets.local/dally-logo.jpg")),
     runtime.ASSETS.fetch(new Request("https://assets.local/images/dali-letterhead.png")),
@@ -284,32 +291,58 @@ function arabicDigits(value: string | number) {
   return latinDigits(value);
 }
 
-function printableText(font: PDFFont, value: string) {
-  const supported = new Set(font.getCharacterSet());
-  const normalized = latinDigits(String(value || " "))
+function normalizedPdfText(value: string) {
+  return latinDigits(String(value || " "))
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
     .replace(/[\u2010-\u2015\u2212]/g, "-")
     .replace(/\u00a0/g, " ");
-  return Array.from(normalized).map((character) => {
+}
+
+function printableText(font: PDFFont, value: string, preserveSpacing = false) {
+  const supported = new Set(font.getCharacterSet());
+  const text = Array.from(normalizedPdfText(value)).map((character) => {
     const code = character.codePointAt(0)!;
     if (supported.has(code)) return character;
     const alternatives: Record<string, string> = { ".": "٫", ",": "،", ";": "؛", "?": "؟", "%": "٪", ":": " ", "-": " " };
     const alternative = alternatives[character];
     return alternative && supported.has(alternative.codePointAt(0)!) ? alternative : " ";
-  }).join("").replace(/\s{2,}/g, " ").trim();
+  }).join("");
+  return preserveSpacing ? text : text.replace(/\s{2,}/g, " ").trim();
+}
+
+function textRuns(font: PDFFont, value: string) {
+  const normalized = normalizedPdfText(value);
+  const latinFont = latinFontByFont.get(font);
+  if (!latinFont || latinFont === font || !/[0-9]/.test(normalized)) {
+    return [{ text: printableText(font, normalized), font }];
+  }
+  const runs: Array<{ text: string; font: PDFFont }> = [];
+  let cursor = 0;
+  for (const match of normalized.matchAll(/[0-9][0-9.,:/%+\-]*/g)) {
+    const index = match.index ?? 0;
+    if (index > cursor) runs.push({ text: printableText(font, normalized.slice(cursor, index), true), font });
+    runs.push({ text: printableText(latinFont, match[0], true), font: latinFont });
+    cursor = index + match[0].length;
+  }
+  if (cursor < normalized.length) runs.push({ text: printableText(font, normalized.slice(cursor), true), font });
+  return runs.filter((run) => run.text.length > 0);
 }
 
 function textWidth(font: PDFFont, value: string, size: number) {
-  return font.widthOfTextAtSize(printableText(font, value), size);
+  return textRuns(font, value).reduce((total, run) => total + run.font.widthOfTextAtSize(run.text, size), 0);
 }
 
 function drawRight(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, right = PAGE.width - PAGE.margin) {
-  const text = printableText(font, value);
-  page.drawText(text, { x: right - textWidth(font, text, size), y, font, size, color });
+  let cursor = right;
+  for (const run of textRuns(font, value)) {
+    const runWidth = run.font.widthOfTextAtSize(run.text, size);
+    cursor -= runWidth;
+    page.drawText(run.text, { x: cursor, y, font: run.font, size, color });
+  }
 }
 
 function drawLeft(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, left = PAGE.margin) {
-  page.drawText(printableText(font, value), { x: left, y, font, size, color });
+  drawRight(page, value, y, font, size, color, left + textWidth(font, value, size));
 }
 
 function wrapWords(font: PDFFont, value: string, size: number, maxWidth: number) {
