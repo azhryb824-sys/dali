@@ -98,8 +98,9 @@ log "المشروع: $ROOT"
 load_env_file "$ENV_FILE"
 export NODE_ENV=production
 
+auth_secret="${AUTH_SECRET:-}"
 [[ -n "${DATABASE_URL:-}" ]] || fail "DATABASE_URL غير موجود في ملف البيئة"
-[[ ${#AUTH_SECRET:-0} -ge 32 ]] || fail "AUTH_SECRET غير موجود أو أقصر من 32 حرفًا"
+[[ ${#auth_secret} -ge 32 ]] || fail "AUTH_SECRET غير موجود أو أقصر من 32 حرفًا"
 if [[ -n "${PORTAL_ADMIN_PASSWORD_HASH:-}" ]] && [[ ! "$PORTAL_ADMIN_PASSWORD_HASH" =~ ^pbkdf2\$[0-9]+\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$ ]]; then
   log "تنبيه: هاش مشرف البيئة غير صالح، وسيعتمد الدخول على بيانات الاعتماد المحفوظة إن وُجدت"
 fi
