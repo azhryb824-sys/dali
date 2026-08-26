@@ -886,7 +886,22 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   async function updateContractStatus(contractId: number, status: string, reason: string) {
     setBusy(`contract-status-${contractId}`);
     try {
-      const response = await fetch(`/api/portal/contracts/${contractId}/status`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, reason }) });
+      let stampId: number | undefined;
+      if (status === "approved") {
+        const stampResponse = await fetch("/api/portal/document-stamps", { cache: "no-store" });
+        const stampData = await readApiJson(stampResponse) as { stamps?: Array<{ id: number; name: string }>; error?: string };
+        if (!stampResponse.ok) throw new Error(stampData.error || "تعذر تحميل أختام الاعتماد");
+        const stamps = stampData.stamps || [];
+        if (!stamps.length) throw new Error("لا يوجد ختم اعتماد نشط. أضف ختمًا من إدارة الهوية والمستندات أولًا.");
+        if (stamps.length === 1) stampId = stamps[0].id;
+        else {
+          const selected = window.prompt(`اختر رقم ختم الاعتماد:\n${stamps.map((stamp) => `${stamp.id} — ${stamp.name}`).join("\n")}`, String(stamps[0].id));
+          if (selected === null) return;
+          stampId = Number(selected);
+          if (!stamps.some((stamp) => stamp.id === stampId)) throw new Error("رقم الختم المختار غير صحيح");
+        }
+      }
+      const response = await fetch(`/api/portal/contracts/${contractId}/status`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, reason, stampId }) });
       const result = await readApiJson(response) as { contract?: WorkforceContract; error?: string };
       if (!response.ok || !result.contract) throw new Error(result.error || "تعذّر تحديث حالة العقد");
       setContracts((items) => items.map((item) => item.id === contractId ? result.contract as WorkforceContract : item));
