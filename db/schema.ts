@@ -584,6 +584,7 @@ export const financialRecords = pgTable(
     category: text("category").notNull(),
     description: text("description").notNull(),
     amountHalalas: integer("amount_halalas").notNull(),
+    absenceDeductionHalalas: integer("absence_deduction_halalas").notNull().default(0),
     subtotalHalalas: integer("subtotal_halalas"),
     vatHalalas: integer("vat_halalas").notNull().default(0),
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
@@ -1200,6 +1201,37 @@ export const contractWorkerAssignments = pgTable(
     index("contract_worker_assignments_profession_id_idx").on(table.contractProfessionId),
     index("contract_worker_assignments_worker_id_idx").on(table.workerId),
     index("contract_worker_assignments_status_idx").on(table.status),
+  ],
+);
+
+export const contractWorkerAbsences = pgTable(
+  "contract_worker_absences",
+  {
+    id: serial("id").primaryKey(),
+    contractId: integer("contract_id").notNull().references(() => workforceContracts.id, { onDelete: "cascade" }),
+    paymentScheduleId: integer("payment_schedule_id").notNull().references(() => contractPaymentSchedules.id, { onDelete: "restrict" }),
+    workerId: integer("worker_id").references(() => workers.id, { onDelete: "restrict" }),
+    contractProfessionId: integer("contract_profession_id").notNull().references(() => contractProfessions.id, { onDelete: "restrict" }),
+    profession: text("profession").notNull(),
+    absenceDate: text("absence_date").notNull(),
+    absentCount: integer("absent_count").notNull().default(1),
+    dailyRateHalalas: integer("daily_rate_halalas").notNull(),
+    deductionHalalas: integer("deduction_halalas").notNull(),
+    status: text("status").notNull().default("active"),
+    notes: text("notes"),
+    dedupeKey: text("dedupe_key").notNull().unique(),
+    recordedBy: text("recorded_by").notNull(),
+    voidedBy: text("voided_by"),
+    voidedAt: text("voided_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("contract_worker_absences_contract_date_idx").on(table.contractId, table.absenceDate),
+    index("contract_worker_absences_payment_idx").on(table.paymentScheduleId),
+    index("contract_worker_absences_worker_idx").on(table.workerId),
+    check("contract_worker_absences_count_check", sql`${table.absentCount} > 0 and ${table.dailyRateHalalas} > 0 and ${table.deductionHalalas} = ${table.absentCount} * ${table.dailyRateHalalas}`),
+    check("contract_worker_absences_status_check", sql`${table.status} in ('active','void')`),
   ],
 );
 
