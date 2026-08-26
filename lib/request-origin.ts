@@ -36,7 +36,10 @@ function forwardedExternalUrl(request: Request) {
 }
 
 export function externalRequestOrigin(request: Request) {
-  return (configuredExternalUrl() || forwardedExternalUrl(request) || new URL(request.url)).origin;
+  // On a self-hosted VPS the reverse proxy carries the origin the visitor
+  // actually used. Prefer it over a potentially stale Render/Sites URL left in
+  // the environment after migration. The Node port remains private to Nginx.
+  return (forwardedExternalUrl(request) || configuredExternalUrl() || new URL(request.url)).origin;
 }
 
 export function externalRequestUrl(request: Request, path: string) {
@@ -48,12 +51,14 @@ export function isSecureExternalRequest(request: Request) {
 }
 
 export function allowedRequestOrigins(request: Request) {
-  const configured = configuredExternalUrl();
-  if (configured) return new Set([configured.origin]);
-
   const origins = new Set<string>();
+  const configured = configuredExternalUrl();
   const requestUrl = safeHttpUrl(request.url);
   const forwarded = forwardedExternalUrl(request);
+
+  // Keep the explicitly configured origin valid, but do not make it the only
+  // valid origin after the service has moved behind a different reverse proxy.
+  if (configured) origins.add(configured.origin);
   if (requestUrl) origins.add(requestUrl.origin);
   if (forwarded) origins.add(forwarded.origin);
 
