@@ -92,3 +92,15 @@ test("document edit buttons open system forms and draft delete actions remain av
   assert.match(operations,/>حذف<\/button>/);
   assert.match(letters,/>حذف<\/button>/);
 });
+
+
+test("workforce supervision has a dedicated permission-protected navigation and workspace",()=>{
+  const dashboard=read("app/portal/PortalDashboard.tsx");
+  const workspace=read("app/portal/WorkforceSupervisionWorkspace.tsx");
+  assert.match(dashboard,/إدارة الإشراف على العمالة/);
+  assert.match(dashboard,/view === "workforce-supervision"/);
+  assert.match(dashboard,/canAccessContracts && canAccess\("workforce"\)/);
+  assert.match(workspace,/فتح إدارة الإسناد والإعادة/);
+  assert.match(workspace,/contractProfessionId/);
+  assert.match(workspace,/item\.status==="active"/);
+});
