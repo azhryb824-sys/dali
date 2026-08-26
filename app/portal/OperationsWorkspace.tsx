@@ -35,15 +35,16 @@ type CreateOperation = (action: string, form: HTMLFormElement, extra?: Record<st
 const money = (halalas: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 2 }).format(halalas / 100);
 const fmt = (value: string) => new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value.includes("T") ? value : `${value}T00:00:00`));
 
-export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initialTab = "crm", initialQuery = "", onCreateContract }: { canWrite: boolean; isAdmin: boolean; isOwner: boolean; initialTab?: OperationsTab; initialQuery?: string; onCreateContract: (quoteId?:number) => void }) {
+export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initialTab = "crm", initialQuery = "", onCreateContract, allowedTabs, embedded = false }: { canWrite: boolean; isAdmin: boolean; isOwner: boolean; initialTab?: OperationsTab; initialQuery?: string; onCreateContract: (quoteId?:number) => void; allowedTabs?: OperationsTab[]; embedded?: boolean }) {
   const [data, setData] = useState<OperationsData | null>(null);
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const [tab, setTab] = useState<Tab>(allowedTabs?.includes(initialTab) ? initialTab : allowedTabs?.[0] || initialTab);
   const [query, setQuery] = useState(initialQuery);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [stamps, setStamps] = useState<DocumentStamp[]>([]);
   const [pendingQuoteApproval, setPendingQuoteApproval] = useState<{ id: number; recordVersion?: number } | null>(null);
   const canApproveQuotes = isOwner || isAdmin;
+  const availableTabs = allowedTabs || (["crm","quotes","contracts","orders","timesheets","capacity","privacy",...(isAdmin ? ["clients","integrations"] : [])] as Tab[]);
 
   const load = useCallback(async () => {
     const [response, stampResponse] = await Promise.all([fetch("/api/portal/operations?limit=100", { cache: "no-store" }), fetch("/api/portal/document-stamps", { cache: "no-store" })]);
@@ -160,11 +161,11 @@ export default function OperationsWorkspace({ canWrite, isAdmin, isOwner, initia
   if (!data) return <section className="operations-loading" aria-live="polite"><span/><p>جارٍ تحميل دورة العميل والتشغيل...</p></section>;
 
   return <>
-    <div className="content-heading module-heading"><div><p className="admin-eyebrow">من الطلب إلى التحصيل</p><h1>المبيعات والتشغيل</h1><span>عملاء وفرص وعروض أسعار وأوامر تشغيل ودوام وخطط سعة ضمن مسار واحد.</span></div><button className="admin-secondary" onClick={() => void load()}>تحديث البيانات</button></div>
+    {!embedded && <div className="content-heading module-heading"><div><p className="admin-eyebrow">من الطلب إلى التحصيل</p><h1>المبيعات والتشغيل</h1><span>العملاء والفرص وأوامر التشغيل والدوام وخطط السعة، بينما أُديرت العروض والعقود في مركزها المستقل.</span></div><button className="admin-secondary" onClick={() => void load()}>تحديث البيانات</button></div>}
     {notice && <div className="operations-notice" role="status">{notice}</div>}
-    <section className="metric-grid compact-metrics operations-metrics"><article><span>العملاء</span><strong>{metrics.clients}</strong><small>عميل وفرصة</small></article><article><span>قيمة المسار</span><strong>{money(metrics.pipeline)}</strong><small>فرص مفتوحة</small></article><article><span>موافقات معلقة</span><strong>{metrics.approvals}</strong><small>عروض ودوام</small></article><article><span>أوامر قيد التجهيز</span><strong>{metrics.staffing}</strong><small>تحتاج إسنادًا</small></article></section>
+    {!embedded && <section className="metric-grid compact-metrics operations-metrics"><article><span>العملاء</span><strong>{metrics.clients}</strong><small>عميل وفرصة</small></article><article><span>قيمة المسار</span><strong>{money(metrics.pipeline)}</strong><small>فرص مفتوحة</small></article><article><span>موافقات معلقة</span><strong>{metrics.approvals}</strong><small>عروض ودوام</small></article><article><span>أوامر قيد التجهيز</span><strong>{metrics.staffing}</strong><small>تحتاج إسنادًا</small></article></section>}
     <section className="operations-tabs" role="tablist" aria-label="وحدات المبيعات والتشغيل">
-      {(["crm","quotes","contracts","orders","timesheets","capacity","privacy",...(isAdmin ? ["clients","integrations"] : [])] as Tab[]).map((value) => <button role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} key={value} onClick={() => setTab(value)}>{({ crm: "العملاء والفرص", quotes: "عروض الأسعار", contracts:"العقود والدفعات", orders: "أوامر التشغيل", timesheets: "الدوام", capacity: "السعة الموسمية", privacy: "طلبات الخصوصية", clients: "وصول البوابات", integrations: "التكامل والصيانة" } as Record<Tab,string>)[value]}</button>)}
+      {availableTabs.map((value) => <button role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} key={value} onClick={() => setTab(value)}>{({ crm: "العملاء والفرص", quotes: "عروض الأسعار", contracts:"العقود والدفعات", orders: "أوامر التشغيل", timesheets: "الدوام", capacity: "السعة الموسمية", privacy: "طلبات الخصوصية", clients: "وصول البوابات", integrations: "التكامل والصيانة" } as Record<Tab,string>)[value]}</button>)}
     </section>
     <div className="operations-search"><label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث داخل الوحدة الحالية"/></label></div>
 
