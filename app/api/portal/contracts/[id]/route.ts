@@ -14,7 +14,9 @@ const clean = (value: unknown, max: number) => typeof value === "string" ? value
 
 async function access() {
   const actor = await requirePortalApiRole(["admin", "manager", "employee"]);
-  return actor && await hasPortalPermission(actor, "workforce", "write") ? actor : null;
+  if (!actor) return null;
+  const elevated = actor.role === "admin" || actor.functionalRoles.includes("system_owner") || actor.functionalRoles.includes("system_admin");
+  return elevated || await hasPortalPermission(actor, "workforce", "write") ? actor : null;
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
