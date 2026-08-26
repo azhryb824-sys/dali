@@ -772,7 +772,8 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   async function createUser(form: HTMLFormElement) {
     setBusy("create-user");
     try {
-      const payload = Object.fromEntries(new FormData(form).entries());
+      const formData = new FormData(form);
+      const payload = { ...Object.fromEntries(formData.entries()), functionalRoles: formData.getAll("functionalRoles") };
       const response = await fetch("/api/portal/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       const data = await readApiJson(response) as { user?: PortalUser; error?: string };
       if (!response.ok || !data.user) throw new Error(data.error || "تعذّرت إضافة المستخدم.");
