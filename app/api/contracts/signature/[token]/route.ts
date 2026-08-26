@@ -101,7 +101,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
         storageKey: signedStorageKey, fileName, contentType: "application/pdf",
         sizeBytes: validation.bytes.byteLength, source: "signed-upload",
         validationStatus: "pdf-signature-validated", validationDetails: validation.validationDetails,
-        metadataJson: JSON.stringify({ ...metadata, originalApprovedStorageKey: signatureRequest.originalStorageKey, signatureRequestId: signatureRequest.id, clientSignedUploadedAt: now }),
+        metadataJson: JSON.stringify({ ...metadata, originalStorageKey: signatureRequest.originalStorageKey, originalApprovedStorageKey: signatureRequest.originalStorageKey, signatureRequestId: signatureRequest.id, clientSignedUploadedAt: now }),
         updatedAt: now,
       }).where(and(eq(companyDocuments.id, document.id), eq(companyDocuments.storageKey, signatureRequest.originalStorageKey))).returning();
       if (!savedDocument) throw new Error("CONTRACT_DOCUMENT_CHANGED");
