@@ -278,7 +278,7 @@ export function canAccessPortalDepartment(
 ) {
   if (access.role === "admin") return true;
   if (access.functionalPermissions.includes("*") || access.functionalPermissions.includes(`${department}.${write ? "write" : "read"}`)) return true;
-  return !write && access.department === department;
+  return false;
 }
 
 export function canAccessPortalDocuments(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
@@ -319,5 +319,5 @@ export async function hasPortalPermission(
   if (["read", "write"].includes(action) && ["employees", "finance", "legal", "workforce", "construction"].includes(resource)) {
     return canAccessPortalDepartment(access, resource as Exclude<PortalDepartment, "general">, action === "write");
   }
-  return action === "read" && (access.department === resource || resource === "overview");
+  return action === "read" && resource === "overview";
 }
