@@ -28,7 +28,7 @@ test("authorized users can preview uploaded documents, stamp and signature inlin
     source("app/api/portal/documents/[id]/route.ts"), source("app/api/portal/company-assets/route.ts"), source("app/portal/PortalDashboard.tsx"), source("lib/pdf-generator.ts"),
   ]);
   assert.match(documents, /inline \? "inline" : "attachment"/);
-  assert.match(assets, /canAccessPortalDocuments/);assert.match(assets, /"inline"/);
+  assert.match(assets, /canAccessCompanyFiles/);assert.match(assets, /"inline"/);
   assert.match(ui, /معاينة/);assert.match(ui, /\?inline=1/);
   assert.doesNotMatch(ui, /عنوان المستند<input name="title"/);
   assert.doesNotMatch(generator, /composer\.field\("الموضوع", input\.title\)/);
