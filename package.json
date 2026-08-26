@@ -24,7 +24,8 @@
     "db:apply:postgres": "node scripts/apply-postgres-migration.mjs",
     "db:audit:migrations": "node scripts/audit-migrations.mjs",
     "db:audit:postgres": "node scripts/audit-postgres-schema.mjs",
-    "db:audit:storage": "node scripts/audit-storage-runtime.mjs"
+    "db:audit:storage": "node scripts/audit-storage-runtime.mjs",
+    "db:import:storage-files": "node scripts/import-file-storage-to-postgres.mjs"
   },
   "dependencies": {
     "@fontsource/cairo": "^5.3.0",
