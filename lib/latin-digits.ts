@@ -9,3 +9,9 @@ export function latinDigits(value: string | number | null | undefined) {
       : code - ARABIC_INDIC_ZERO);
   });
 }
+
+export function rtlPdfDigits(value: string | number | null | undefined) {
+  return latinDigits(value).replace(/[0-9][0-9.,:/%+\-]*/g, (token) =>
+    Array.from(token).reverse().join("")
+  );
+}
