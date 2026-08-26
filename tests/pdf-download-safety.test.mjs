@@ -79,7 +79,7 @@ test("quotation approval is a visible owner and system-admin action", async () =
   assert.match(workspace, /\["draft","pending_approval"\]\.includes\(quote\.status\)/);
   assert.match(workspace, /transition\("transition-quote", quote, "approved"\)/);
   assert.match(dashboard, /role === "system_owner" \|\| role === "system_admin"/);
-  assert.match(operations, /اعتماد عرض السعر متاح للمالك أو مشرف النظام فقط/);
+  assert.match(operations, /قرار اعتماد أو رفض أو إلغاء عرض السعر متاح للمالك أو مشرف النظام فقط/);
   assert.match(operations, /draft: canApprove \? \["pending_approval", "approved", "cancelled"\]/);
 });
 
