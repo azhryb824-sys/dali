@@ -12,6 +12,7 @@ const expected = {
   government_relations_officer: ["overview.read","government.read","government.write"],
   administrative_assistant: ["overview.read","operations.read","operations.write","contracts.read","contracts.write","documents.read","documents.preview","documents.write","documents.share"],
   lawyer: ["overview.read","legal.read","legal.write","documents.read","documents.preview"],
+  workforce_supervisor: ["overview.read","workforce.read","workforce.write","contracts.read","contracts.write"],
 };
 
 try {
