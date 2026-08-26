@@ -43,15 +43,21 @@ updated_at = CURRENT_TIMESTAMP::text
 WHERE role.role_key NOT IN ('system_owner','system_admin');
 
 UPDATE public.portal_user_permissions permission
-SET allowed = false
-WHERE permission.allowed = true
-  AND permission.action IN ('approve','post','pay','administer')
-  AND NOT EXISTS (
-    SELECT 1 FROM public.portal_access_scopes scope
-    WHERE scope.user_email = permission.user_email
-      AND scope.active = true
-      AND scope.functional_role IN ('system_owner','system_admin')
-  );
+SET allowed = EXISTS (
+  SELECT 1
+  FROM public.portal_access_scopes scope
+  JOIN public.portal_roles role ON role.role_key = scope.functional_role AND role.active = true
+  CROSS JOIN LATERAL jsonb_array_elements_text(role.permissions_json::jsonb) AS item(grant_name)
+  WHERE scope.user_email = permission.user_email
+    AND scope.active = true
+    AND grant_name = permission.resource || '.' || permission.action
+)
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.portal_access_scopes root_scope
+  WHERE root_scope.user_email = permission.user_email
+    AND root_scope.active = true
+    AND root_scope.functional_role IN ('system_owner','system_admin')
+);
 
 -- Elevated roles remain impossible to weaken through an old database definition.
 UPDATE public.portal_users
