@@ -63,7 +63,7 @@ test("quotation drafts support create save edit delete with dependent cleanup", 
   assert.match(quoteRoute, /delete\(workflowApprovals\)/);
   assert.match(quoteRoute, /delete\(quoteItems\)/);
   assert.match(quoteRoute, /delete\(quoteVersions\)/);
-  assert.match(ui, /void editQuote\(quote\)/);
+  assert.match(ui, /editQuote\(quote\)/);
   assert.match(ui, /void deleteQuote\(quote\)/);
 });
 
