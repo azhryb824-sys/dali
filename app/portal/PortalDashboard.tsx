@@ -801,7 +801,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
       else if (availableShortage) notify(`تم إصدار العقد رغم وجود عجز تشغيلي مقداره ${availableShortage} عامل، ويمكن استكمال الإسناد لاحقاً.`);
       else if (unassigned) notify(`تم إصدار العقد مع ترك ${unassigned} خانة عمالية دون إسناد لاستكمالها لاحقاً.`);
       else notify("تم إصدار ملف PDF بالختم والتوقيع المعتمدين.");
-    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إصدار المستند."); }
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذّر إصدار المستند."); throw error; }
     finally { setBusy(null); }
   }
 
@@ -1421,6 +1421,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
   const [contractDirection,setContractDirection]=useState<WorkforceContractDirection>("dali_supplier");
   const [contractClauses,setContractClauses]=useState<Array<WorkforceContractClause&{key:string}>>(()=>defaultWorkforceContractClauses("dali_supplier").map((item,index)=>({...item,key:`clause-${index}`})));
   const [translatingClauses,setTranslatingClauses]=useState(false);
+  const [submissionError,setSubmissionError]=useState("");
   useEffect(()=>{if(initialType!=="workforce_contract")return;void fetch("/api/portal/sales-representatives",{cache:"no-store"}).then(response=>response.ok?response.json():Promise.reject()).then((data:unknown)=>{const parsed=data as {representatives?:Array<{id:number;representativeCode:string;fullName:string;status:string;representativeType:"sales"|"purchasing"}>;requests?:Array<{id:number;requestCode:string;representativeId:number;requestType:"sales"|"purchase";title:string;details:string;workSite:string|null;clientName:string|null;status:string}>};setRepresentatives((parsed.representatives||[]).filter(item=>item.status==="active"));setRepresentativeRequests((parsed.requests||[]).filter(item=>item.status==="approved"));}).catch(()=>{setRepresentatives([]);setRepresentativeRequests([])});},[initialType]);
   useEffect(()=>{if(initialType!=="workforce_contract")return;void fetch("/api/portal/operations?limit=100",{cache:"no-store"}).then(response=>response.ok?response.json():Promise.reject()).then((raw:unknown)=>{const data=raw as {quotes?:Array<{id:number;quoteCode:string;opportunityId:number;status:string;quantityMode:"fixed"|"open";seasonType:"regular"|"ramadan"|"hajj";paymentScheduleJson:string|null;vatRateBps:number;subtotalHalalas:number}>;quoteItems?:Array<{quoteVersionId:number;profession:string;quantity:number;unitPriceHalalas:number;sponsorshipType?:"dali"|"other"|null;sponsorName?:string|null;ajirContractStatus?:"not_applicable"|"with_ajir"|"without_ajir"|null}>;opportunities?:Array<{id:number;clientId:number|null;title:string}>;clients?:Array<{id:number;legalName:string}>};setConvertibleQuotes((data.quotes||[]).filter(quote=>["approved","sent","accepted"].includes(quote.status)).map(quote=>{const opportunity=(data.opportunities||[]).find(item=>item.id===quote.opportunityId);const client=(data.clients||[]).find(item=>item.id===opportunity?.clientId);return{id:quote.id,quoteCode:quote.quoteCode,quantityMode:quote.quantityMode||"fixed",seasonType:quote.seasonType||"regular",paymentScheduleJson:quote.paymentScheduleJson||null,vatRateBps:quote.vatRateBps||0,subtotalHalalas:quote.subtotalHalalas||0,clientName:client?.legalName||"",title:opportunity?.title||quote.quoteCode,items:(data.quoteItems||[]).filter(item=>item.quoteVersionId===quote.id).map(item=>({profession:item.profession,quantity:item.quantity,unitPriceHalalas:item.unitPriceHalalas,sponsorshipType:item.sponsorshipType,sponsorName:item.sponsorName,ajirContractStatus:item.ajirContractStatus}))};}));}).catch(()=>setConvertibleQuotes([]));},[initialType]);
   type DraftProfession = { key: string; profession: string; customProfession?: string; requiredCount: number; unitSalary?: number; sponsorshipType:"dali"|"other"; sponsorName:string; ajirContractStatus:"not_applicable"|"with_ajir"|"without_ajir" };
@@ -1482,7 +1483,54 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
       return { ...items, [key]: next };
     });
   }
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+  function showContractValidationError(targetStep: 1 | 2 | 3 | 4, message: string, field?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null) {
+    setSubmissionError(message);
+    setStep(targetStep);
+    window.setTimeout(() => {
+      field?.focus();
+      field?.reportValidity();
+      document.querySelector(".issue-modal")?.scrollTo({ top: 0, behavior: "smooth" });
+    }, 0);
+  }
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setSubmissionError("");
+    if (isContract) {
+      const invalidProfession = professions.find((item) =>
+        (item.profession === "أخرى" && (item.customProfession || "").trim().length < 2)
+        || !Number.isFinite(item.unitSalary) || (item.unitSalary || 0) <= 0
+        || (item.sponsorshipType === "other" && ((item.sponsorName || "").trim().length < 2 || !["with_ajir", "without_ajir"].includes(item.ajirContractStatus)))
+      );
+      if (invalidProfession) {
+        showContractValidationError(2, "أكمل المهنة والراتب وجهة الكفالة وحالة عقد أجير لكل مهنة.");
+        return;
+      }
+      if (seasonType !== "regular" && quantityMode === "fixed" && (payments.length === 0 || Math.abs(payments.reduce((sum,item)=>sum+item.percentage,0)-100) >= .01 || payments.some(item=>!item.title.trim()||!item.dueDate||item.percentage<=0))) {
+        showContractValidationError(4, "أكمل جدول الدفعات الموسمية واجعل مجموع النسب 100٪.");
+        return;
+      }
+      if (!contractClauses.some((item)=>item.included && item.title.trim() && item.body.trim())) {
+        showContractValidationError(4, "يجب إبقاء بند تعاقدي مكتمل واحد على الأقل.");
+        return;
+      }
+    }
+    const invalid = Array.from(form.elements).find((element) =>
+      (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement)
+      && element.type !== "hidden" && !element.checkValidity()
+    ) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | undefined;
+    if (invalid) {
+      const finalStep = invalid.closest(".contract-final-step");
+      showContractValidationError(finalStep ? 4 : 1, invalid.validationMessage || "أكمل الحقول المطلوبة قبل حفظ العقد.", invalid);
+      return;
+    }
+    try {
+      await onSubmit(form);
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "تعذّر حفظ العقد. راجع البيانات وحاول مرة أخرى.");
+      document.querySelector(".issue-modal")?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
   function validateAndSetStep(target: 1 | 2 | 3 | 4) {
     if (target <= step) { setStep(target); return; }
     if (target > step + 1) return;
@@ -1517,7 +1565,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إصدار المستند" onClick={onClose}/><section className="record-modal document-modal issue-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف PDF رسمي"><div className="drawer-head"><div><span>الإصدار الرسمي</span><h2>{isContract ? "إنشاء عقد توفير عمالة" : "إنشاء ملف PDF"}</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div>
     {!assetsReady && <div className="asset-required"><Icon name="stamp"/><p><strong>الختم والتوقيع غير مكتملين</strong><span>يجب أن يرفع مدير النظام الأصلين المعتمدين قبل الإصدار.</span></p></div>}
     {isContract && <div className="contract-wizard-steps"><button type="button" className={step === 1 ? "active" : "done"} onClick={() => validateAndSetStep(1)}>1 بيانات العقد</button><button type="button" className={step === 2 ? "active" : step > 2 ? "done" : ""} onClick={() => validateAndSetStep(2)}>2 المهن والأعداد</button><button type="button" className={step === 3 ? "active" : step > 3 ? "done" : ""} onClick={() => validateAndSetStep(3)}>3 اختيار العمالة</button><button type="button" className={step === 4 ? "active" : ""} onClick={() => validateAndSetStep(4)}>4 الدفعات والمرفقات</button></div>}
-    <form className={`contract-quantity-${quantityMode}`} onSubmit={submit}>
+    <form className={`contract-quantity-${quantityMode}`} onSubmit={submit} noValidate>
+      {submissionError&&<div className="contract-save-error span-two" role="alert"><strong>تعذّر حفظ العقد</strong><span>{submissionError}</span></div>}
       <input type="hidden" name="professions" value={serializedProfessions}/>
       <input type="hidden" name="paymentSchedule" value={serializedPayments}/>
       <input type="hidden" name="quantityMode" value={quantityMode}/>
@@ -1535,7 +1584,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
 
       {isContract && <div className={`issue-form-step span-two ${step === 2 ? "visible" : ""}`}><div className="profession-builder-head"><div><strong>المهن المطلوبة في العقد</strong><small>يمكن إضافة أكثر من مهنة، ولكل مهنة عدد مستقل. اكتب داخل حقل المهنة للبحث السريع.</small></div><button type="button" onClick={addProfession} disabled={professions.length >= workforceProfessions.length}><Icon name="plus"/> إضافة مهنة</button></div><div className="profession-builder">{capacity.map((item) => <article key={item.key}><label>المهنة<SearchableCombobox name={`profession_${item.key}`} value={item.profession} options={workforceProfessions.map((option) => option.label).filter((label) => label === item.profession || !professions.some((other) => other.key !== item.key && other.profession === label))} onChange={(value) => setProfessionValue(item.key, value)} placeholder="ابحث عن المهنة" required/></label><label>العدد المطلوب<input type="number" min="1" max="100000" value={item.requiredCount} onChange={(event) => setProfessionCount(item.key, Number(event.target.value))}/></label><div><span><b>{item.available}</b> متاح</span><span><b>{item.registered}</b> مسجل</span></div><p className={item.registeredShortage || item.availableShortage ? "shortage" : "ready"}>{item.registeredShortage ? `أقل من المطلوب في السجلات بفارق ${item.registeredShortage}` : item.availableShortage ? `عجز تشغيلي حالي: ${item.availableShortage}` : "العدد متاح حالياً"}</p>{professions.length > 1 && <button className="remove-profession" type="button" onClick={() => removeProfession(item.key)}>حذف</button>}</article>)}</div><p className="form-hint">وجود عجز لا يمنع إنشاء العقد؛ سيظهر التنبيه ويظل استكمال العمالة متاحاً لاحقاً.</p></div>}
 
-      {isContract && step === 2 && <div className="contract-profession-pricing span-two"><div className="profession-builder-head"><div><strong>الراتب والمهنة المخصصة</strong><small>راتب العامل الشهري إلزامي لكل مهنة حتى في العقد مفتوح العدد، ويُستخدم عند احتساب الفواتير الفعلية.</small></div></div><div className="profession-builder">{professions.map((item)=><article key={`pricing-${item.key}`}>{item.profession==="أخرى"&&<label>اكتب المهنة يدوياً<input required minLength={2} maxLength={120} value={item.customProfession||""} onChange={event=>setCustomProfession(item.key,event.target.value)} placeholder="مثال: فني مضخات"/></label>}<label>راتب العامل الشهري (ريال)<input required type="number" min="0.01" max="1000000" step="0.01" value={item.unitSalary||""} onChange={event=>setProfessionSalary(item.key,Number(event.target.value))}/></label><label>جهة الكفالة<select value={item.sponsorshipType} onChange={event=>setProfessionSponsorship(item.key,event.target.value as "dali"|"other")} disabled={Boolean(selectedQuoteId)}><option value="dali">على كفالة شركة دالي</option><option value="other">على كفالة جهة أخرى</option></select></label>{item.sponsorshipType==="other"&&<><label>اسم الكفيل<input required minLength={2} maxLength={160} value={item.sponsorName} onChange={event=>setProfessionSponsorName(item.key,event.target.value)} readOnly={Boolean(selectedQuoteId)}/></label><label>حالة عقد أجير<select required value={item.ajirContractStatus} onChange={event=>setProfessionAjir(item.key,event.target.value as "with_ajir"|"without_ajir")} disabled={Boolean(selectedQuoteId)}><option value="with_ajir">بعقد أجير</option><option value="without_ajir">بدون عقد أجير</option></select></label></>}<p>{item.profession==="أخرى"?(item.customProfession||"مهنة أخرى"):item.profession} · {quantityMode==="open"?"عدد مفتوح":`${item.requiredCount} عامل`} · {formatMoney(Math.round((item.unitSalary||0)*100))} للعامل/شهر</p></article>)}</div></div>}
+      {isContract && step === 2 && <div className="contract-profession-pricing span-two"><div className="profession-builder-head"><div><strong>الراتب والمهنة المخصصة</strong><small>راتب العامل الشهري إلزامي لكل مهنة حتى في العقد مفتوح العدد، ويُستخدم عند احتساب الفواتير الفعلية.</small></div></div><div className="profession-builder">{professions.map((item)=><article key={`pricing-${item.key}`}>{item.profession==="أخرى"&&<label>اكتب المهنة يدوياً<input required minLength={2} maxLength={120} value={item.customProfession||""} onChange={event=>setCustomProfession(item.key,event.target.value)} placeholder="مثال: فني مضخات"/></label>}<label>راتب العامل الشهري (ريال)<input required type="number" min="0.01" max="1000000" step="0.01" value={item.unitSalary||""} onChange={event=>setProfessionSalary(item.key,Number(event.target.value))}/></label><label>جهة الكفالة<select value={item.sponsorshipType} onChange={event=>setProfessionSponsorship(item.key,event.target.value as "dali"|"other")} disabled={Boolean(selectedQuoteId)}><option value="dali">على كفالة شركة دالي</option><option value="other">على كفالة جهة أخرى</option></select></label>{item.sponsorshipType==="other"&&<label>اسم الكفيل<input required minLength={2} maxLength={160} value={item.sponsorName} onChange={event=>setProfessionSponsorName(item.key,event.target.value)} readOnly={Boolean(selectedQuoteId)}/></label>}<label>حالة عقد أجير<select required={item.sponsorshipType==="other"} value={item.ajirContractStatus} onChange={event=>setProfessionAjir(item.key,event.target.value as "with_ajir"|"without_ajir")} disabled={Boolean(selectedQuoteId)||item.sponsorshipType==="dali"}>{item.sponsorshipType==="dali"?<option value="not_applicable">لا ينطبق — العامل على كفالة دالي</option>:<><option value="with_ajir">بعقد أجير</option><option value="without_ajir">بدون عقد أجير</option></>}</select><small>{item.sponsorshipType==="dali"?"يصبح اختيار أجير متاحًا عند اختيار كفالة جهة أخرى.":"حدد بوضوح هل توفير العامل مرتبط بعقد أجير."}</small></label><p>{item.profession==="أخرى"?(item.customProfession||"مهنة أخرى"):item.profession} · {quantityMode==="open"?"عدد مفتوح":`${item.requiredCount} عامل`} · {formatMoney(Math.round((item.unitSalary||0)*100))} للعامل/شهر</p></article>)}</div></div>}
 
       {isContract && <div className={`issue-form-step span-two ${step === 3 ? "visible" : ""}`}><div className="selection-intro"><strong>اختيار العمالة المتاحة</strong><p>اختيار الأسماء اختياري. يمكنك تخطي هذه الخطوة وإنشاء العقد ثم إضافة العمالة لاحقاً.</p></div><div className="worker-selection-groups">{capacity.map((item) => { const candidates = workers.filter((worker) => worker.profession === item.profession && worker.status === "available" && sponsorshipMatches(worker, item)); const selected = selectedWorkers[item.key] || []; return <section key={item.key}><header><div><strong>{item.profession}</strong><small>مطلوب {item.requiredCount} · مختار {selected.length}</small></div><span className={selected.length === item.requiredCount ? "complete" : ""}>{item.requiredCount - selected.length} متبقٍ</span></header><div>{candidates.length ? candidates.map((worker) => <label key={worker.id} className={selected.includes(worker.id) ? "selected" : ""}><input type="checkbox" checked={selected.includes(worker.id)} disabled={!selected.includes(worker.id) && selected.length >= item.requiredCount} onChange={() => toggleWorker(item.key, worker.id, item.requiredCount)}/><span>{initials(worker.fullName)}</span><p><strong>{worker.fullName}</strong><small>{worker.workerNumber} · إقامة {worker.iqamaNumber || "غير مسجلة"} · {sponsorshipLabel(worker)}</small></p></label>) : <p className="empty-operational">لا توجد عمالة متاحة بهذه المهنة حالياً.</p>}</div></section>; })}</div>{totalShortage > 0 && <div className="contract-shortage-summary"><Icon name="bell"/><p><strong>يمكن إصدار العقد رغم العجز</strong><span>إجمالي العجز التشغيلي الحالي {totalShortage} عامل عبر المهن المطلوبة.</span></p></div>}</div>}
 
