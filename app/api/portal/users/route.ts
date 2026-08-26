@@ -13,12 +13,12 @@ const allowedRoles = new Set(["admin", "manager", "employee"]);
 const allowedStatuses = new Set(["active", "pending", "suspended"]);
 const allowedDepartments = new Set(["general", "employees", "finance", "legal", "workforce", "construction"]);
 const permissionProfiles = new Set<PermissionProfile>(["read_only", "operator", "role_default"]);
-const assignableFunctionalRoles = new Set(["system_owner", "system_admin", "hr_officer", "accountant", "government_relations_officer", "administrative_assistant", "lawyer"]);
+const assignableFunctionalRoles = new Set(["system_owner", "system_admin", "hr_officer", "accountant", "government_relations_officer", "administrative_assistant", "lawyer", "workforce_supervisor"]);
 const roleDepartments: Record<string, string> = {
   accountant: "finance", lawyer: "legal", legal_affairs: "legal", sales_representative: "workforce",
   purchasing_representative: "finance", administrative_assistant: "general",
   finance_director: "finance", project_accountant: "finance", contracts_manager: "legal",
-  procurement_officer: "finance", hr_officer: "employees", workforce_operations_manager: "workforce",
+  procurement_officer: "finance", hr_officer: "employees", workforce_operations_manager: "workforce", workforce_supervisor: "workforce",
   regional_manager: "workforce", construction_director: "construction", project_manager: "construction",
   site_engineer: "construction", planning_engineer: "construction", cost_engineer: "construction",
 };
