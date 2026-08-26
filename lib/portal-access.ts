@@ -50,6 +50,7 @@ const functionalDepartmentAccess: Record<string, { read: Exclude<PortalDepartmen
   sales_representative: { read: ["workforce"], write: ["workforce"] },
   purchasing_representative: { read: ["finance", "construction"], write: ["finance"] },
   administrative_assistant: { read: [], write: [] },
+  workforce_supervisor: { read: ["workforce"], write: ["workforce"] },
 };
 const functionalApprovals: Record<string, string[]> = {
   finance: ["finance_director"], employees: ["hr_officer"], legal: ["contracts_manager"], workforce: ["workforce_operations_manager", "regional_manager"], construction: ["construction_director", "project_manager"],
@@ -76,6 +77,7 @@ function fallbackPermissions(roles: string[]) {
     if (role === "finance_director") permissions.add("finance.post");
     if (role === "government_relations_officer") { permissions.add("government.read"); permissions.add("government.write"); }
     if (role === "administrative_assistant") { ["operations.read","operations.write","contracts.read","contracts.write","documents.read","documents.write","documents.share"].forEach((permission) => permissions.add(permission)); }
+    if (role === "workforce_supervisor") { ["workforce.read","workforce.write","contracts.read","contracts.write"].forEach((permission) => permissions.add(permission)); }
   }
   return [...permissions];
 }
