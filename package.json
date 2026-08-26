@@ -27,7 +27,8 @@
     "db:audit:storage": "node scripts/audit-storage-runtime.mjs",
     "db:import:storage-files": "node scripts/import-file-storage-to-postgres.mjs",
     "db:audit:rbac": "node scripts/audit-rbac-runtime.mjs",
-    "db:audit:workforce-finance": "node scripts/audit-workforce-absence-finance.mjs"
+    "db:audit:workforce-finance": "node scripts/audit-workforce-absence-finance.mjs",
+    "db:audit:contract-signatures": "node scripts/audit-contract-signatures.mjs"
   },
   "dependencies": {
     "@fontsource/cairo": "^5.3.0",
