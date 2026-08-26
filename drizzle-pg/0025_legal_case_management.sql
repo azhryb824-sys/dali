@@ -20,4 +20,14 @@ CREATE INDEX IF NOT EXISTS "legal_case_activities_case_idx" ON "legal_case_activ
 CREATE INDEX IF NOT EXISTS "legal_case_activities_due_idx" ON "legal_case_activities" USING btree ("due_at");
 CREATE INDEX IF NOT EXISTS "legal_case_activities_status_idx" ON "legal_case_activities" USING btree ("status");
 ALTER TABLE "legal_case_activities" ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE "legal_case_activities" FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE "legal_case_activities" FROM PUBLIC;
+DO $
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'REVOKE ALL ON TABLE public.legal_case_activities FROM anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'REVOKE ALL ON TABLE public.legal_case_activities FROM authenticated';
+  END IF;
+END
+$;
