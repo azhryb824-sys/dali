@@ -105,10 +105,19 @@ export async function POST(request: Request) {
   if (!access || !canManagePortalDocuments(access)) return Response.json({ error: "غير مصرح بإصدار المستندات" }, { status: 403 });
   const correlationId = requestCorrelationId(request);
 
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch (error) {
+    console.error(`[issued-document-form-data:${correlationId}]`, error);
+    return Response.json({
+      error: `تعذّر قراءة ملفات العقد. تأكد أن الحجم الإجمالي للمرفقات لا يتجاوز 40 ميجابايت ثم أعد المحاولة. مرجع التتبع: ${correlationId}`,
+    }, { status: 400, headers: { "x-correlation-id": correlationId } });
+  }
+
   let storageKey = "";
   const auxiliaryStorageKeys: string[] = [];
   try {
-    const form = await request.formData();
     const payload = Object.fromEntries(form.entries()) as Record<string, unknown>;
     const commercialRegistrationFile = form.get("commercialRegistrationFile");
     const vatCertificateFile = form.get("vatCertificateFile");
