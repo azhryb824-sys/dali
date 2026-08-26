@@ -16,6 +16,9 @@ test("all programmatic PDF generators enforce Latin numerals", () => {
   const brand = read("lib/brand-identity-pdf.ts");
   assert.match(issued, /latinDigits\(String\(value \|\| " "\)\)/);
   assert.match(issued, /ar-SA-u-ca-gregory-nu-latn/);
+  assert.match(issued, /latinFontByFont\.set\(regular, latinRegular\)/);
+  assert.match(issued, /font: run\.font/);
   assert.doesNotMatch(issued, /٠١٢٣٤٥٦٧٨٩/);
-  assert.match(brand, /const normalized = latinDigits\(value\)/);
+  assert.match(brand, /latinFontByFont\.set\(regular, latinRegular\)/);
+  assert.match(brand, /font: run\.font/);
 });
