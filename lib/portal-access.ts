@@ -285,6 +285,10 @@ export function canAccessPortalDocuments(access: Pick<PortalAccess, "role" | "de
   return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.read");
 }
 
+export function canAccessCompanyFiles(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
+  return canAccessPortalDocuments(access) || canManageCompanyAssets(access);
+}
+
 export function canManagePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
   return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.write") || access.functionalPermissions.includes("finance.write");
 }
