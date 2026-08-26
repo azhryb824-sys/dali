@@ -272,3 +272,23 @@
 @media(hover:none){
   .admin-shell :where(button,a,summary){-webkit-tap-highlight-color:rgba(22,139,141,.16)}
 }
+
+
+/* Contract save failures stay visible inside the dialog. */
+.contract-save-error{
+  position:sticky;
+  top:78px;
+  z-index:4;
+  display:grid;
+  gap:5px;
+  padding:13px 15px;
+  border:1px solid #efb7bd;
+  border-inline-start:4px solid var(--portal-danger);
+  border-radius:12px;
+  background:#fff1f2;
+  box-shadow:0 8px 24px rgba(112,18,30,.09);
+  color:var(--portal-danger);
+}
+.contract-save-error strong{color:#8f1420!important;font-size:14px}
+.contract-save-error span{color:#8f2731!important;font-size:13px;line-height:1.7}
+@media(max-width:620px){.contract-save-error{top:68px}}
