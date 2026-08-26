@@ -26,7 +26,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   const elevated = access && (access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin"));
-  if (!access || (!elevated && !(await hasPortalPermission(access, "workforce", "write")))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
+  if (!access || (!elevated && !(await hasPortalPermission(access, "contracts", "write")))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   try {
     const id = Number((await context.params).id);
     const payload = await request.json() as Record<string, unknown>;
