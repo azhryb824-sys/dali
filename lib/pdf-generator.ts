@@ -3,7 +3,7 @@ import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { halalasToArabicWords } from "@/lib/arabic-money";
 import { cairoFontBytes } from "@/lib/cairo-font-bytes";
-import { latinDigits } from "@/lib/latin-digits";
+import { latinDigits, rtlPdfDigits } from "@/lib/latin-digits";
 import { defaultWorkforceContractClauses, publicManpowerText, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 export const issuedDocumentLabels = {
@@ -230,6 +230,8 @@ async function embedImage(pdf: PDFDocument, bytes: Uint8Array, contentType: stri
   throw new Error("صيغة صورة الختم أو التوقيع غير مدعومة");
 }
 
+const rtlFonts = new WeakSet<PDFFont>();
+
 async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<PdfResources> {
   pdf.registerFontkit(fontkit);
   const [arabicRegularBytes, arabicBoldBytes, latinRegularBytes, latinBoldBytes] = await Promise.all([
@@ -244,6 +246,9 @@ async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<
     pdf.embedFont(latinRegularBytes, { subset: true }),
     pdf.embedFont(latinBoldBytes, { subset: true }),
   ]);
+
+  rtlFonts.add(regular);
+  rtlFonts.add(bold);
 
   const runtime = getRuntimeEnv();
 
@@ -287,8 +292,8 @@ function arabicDigits(value: string | number) {
   return latinDigits(value);
 }
 
-function normalizedPdfText(value: string) {
-  return latinDigits(String(value || " "))
+function normalizedPdfText(value: string, rtl = false) {
+  return (rtl ? rtlPdfDigits(value) : latinDigits(value))
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
     .replace(/[\u2010-\u2015\u2212]/g, "-")
     .replace(/\u00a0/g, " ");
@@ -296,7 +301,7 @@ function normalizedPdfText(value: string) {
 
 function printableText(font: PDFFont, value: string, preserveSpacing = false) {
   const supported = new Set(font.getCharacterSet());
-  const text = Array.from(normalizedPdfText(value)).map((character) => {
+  const text = Array.from(normalizedPdfText(value, rtlFonts.has(font))).map((character) => {
     const code = character.codePointAt(0)!;
     if (supported.has(code)) return character;
     const alternatives: Record<string, string> = { ".": "٫", ",": "،", ";": "؛", "?": "؟", "%": "٪", ":": " ", "-": " " };
