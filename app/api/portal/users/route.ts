@@ -40,9 +40,18 @@ export async function POST(request: Request) {
     const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
     const displayName = typeof payload.displayName === "string" ? payload.displayName.trim().slice(0, 160) : "";
     const password = typeof payload.password === "string" ? payload.password : "";
-    const functionalRoles = Array.isArray(payload.functionalRoles)
-      ? [...new Set(payload.functionalRoles.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean))]
-      : typeof payload.functionalRole === "string" && payload.functionalRole.trim() ? [payload.functionalRole.trim()] : [];
+    const submittedFunctionalRoles = Array.isArray(payload.functionalRoles)
+      ? payload.functionalRoles
+      : typeof payload.functionalRoles === "string"
+        ? [payload.functionalRoles]
+        : typeof payload.functionalRole === "string"
+          ? [payload.functionalRole]
+          : [];
+    const functionalRoles = [...new Set(submittedFunctionalRoles
+      .filter((value): value is string => typeof value === "string")
+      .flatMap((value) => value.split(","))
+      .map((value) => value.trim())
+      .filter(Boolean))];
     const requestedProfile = typeof payload.permissionProfile === "string" ? payload.permissionProfile as PermissionProfile : "role_default";
     const permissionProfile: PermissionProfile = permissionProfiles.has(requestedProfile) ? requestedProfile : "role_default";
     const db = getDb();
