@@ -292,3 +292,306 @@
 .contract-save-error strong{color:#8f1420!important;font-size:14px}
 .contract-save-error span{color:#8f2731!important;font-size:13px;line-height:1.7}
 @media(max-width:620px){.contract-save-error{top:68px}}
+
+
+/* Contract center: explicit hierarchy and dark-surface contrast. */
+.contractual-workspace{
+  display:grid;
+  gap:18px;
+  min-width:0;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+.contractual-workspace>.feature-heading{
+  margin:0;
+  min-height:158px;
+  padding:28px 30px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:22px;
+  background:linear-gradient(125deg,#052b3b 0%,#0c5665 72%,#6b3346 130%);
+  box-shadow:0 18px 44px rgba(4,42,58,.16);
+}
+.admin-shell .feature-heading :where(h1,h2,h3,h4,strong,b){
+  color:#fff!important;
+}
+.admin-shell .feature-heading :where(p,small){
+  color:#d9e8ec!important;
+}
+.admin-shell .feature-heading>div>span{
+  color:#a9e0e2!important;
+}
+.feature-heading>b{
+  display:grid;
+  place-content:center;
+  min-width:150px;
+  min-height:96px;
+  padding:14px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:16px;
+  background:rgba(255,255,255,.08);
+}
+.contractual-workspace>.operations-workspace,
+.contractual-workspace>.operations-center{min-width:0}
+.contractual-workspace .operations-tabs{
+  margin:0;
+  padding:7px;
+  gap:7px;
+  border:1px solid var(--portal-line);
+  border-radius:14px;
+  background:#edf3f5;
+}
+.contractual-workspace .operations-tabs button{
+  flex:1 1 180px;
+  border:0;
+  border-radius:10px;
+  background:transparent;
+  color:#536b75;
+  font-weight:750;
+}
+.contractual-workspace .operations-tabs button.active{
+  background:#082f40!important;
+  color:#fff!important;
+  box-shadow:0 7px 18px rgba(3,45,60,.16);
+}
+.contract-create-toolbar{
+  margin:0!important;
+  padding:14px 0 0;
+}
+.contract-create-toolbar .admin-primary{
+  min-width:150px;
+  padding-inline:22px;
+}
+
+/* Payment command center: prevent stretched cards and unreadable dark header text. */
+.payment-command-center{
+  margin:0!important;
+  min-width:0;
+  overflow:hidden;
+  border-radius:20px!important;
+  background:#fff!important;
+}
+.payment-command-center>header{
+  min-height:164px;
+  padding:26px 28px!important;
+  gap:24px;
+  background:linear-gradient(125deg,#052b3b,#075167)!important;
+}
+.admin-shell .payment-command-center>header :where(h2,strong){
+  color:#fff!important;
+}
+.admin-shell .payment-command-center>header p{
+  max-width:780px;
+  color:#d4e2e7!important;
+  font-size:13px;
+  line-height:1.75;
+}
+.admin-shell .payment-command-center>header>div>span{
+  color:#ff7d83!important;
+  font-size:11px;
+}
+.collection-ring{
+  flex:0 0 106px;
+  width:106px!important;
+  height:106px!important;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.collection-ring::before{background:#07364a!important}
+.collection-ring strong{font-size:22px!important;color:#fff!important}
+.collection-ring small{font-size:10px!important;color:#d8e7eb!important}
+
+.payment-kpis{
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  align-items:stretch;
+  border:1px solid #dde6e9;
+  border-top:0;
+  background:#fff;
+}
+.payment-kpis article{
+  min-width:0;
+  min-height:118px!important;
+  max-height:150px;
+  padding:18px!important;
+  align-content:center;
+  gap:7px!important;
+  border-inline-start:1px solid #e1e8eb;
+  background:linear-gradient(160deg,#fff,#f7fafb);
+}
+.payment-kpis article::before{content:none!important}
+.payment-kpis span{font-size:12px!important;color:#60737c!important}
+.payment-kpis strong{
+  font-size:clamp(18px,1.5vw,24px)!important;
+  color:#0a3040!important;
+  white-space:nowrap;
+}
+.payment-kpis small{font-size:11px!important;color:#778991!important}
+.payment-kpis article.success{background:linear-gradient(160deg,#fff,#eff9f4)}
+.payment-kpis article.success strong{color:#176f4c!important}
+.payment-kpis article.warning{background:linear-gradient(160deg,#fff,#fff4f4)}
+.payment-kpis article.warning strong{color:#b5202c!important}
+
+.payment-filters{
+  padding:14px 16px!important;
+  gap:8px!important;
+  border-inline:1px solid #dde6e9;
+  background:#f5f8f9!important;
+}
+.payment-filters button{
+  min-height:38px!important;
+  padding:7px 15px!important;
+  color:#4f6670;
+  font-size:12px!important;
+  font-weight:700;
+}
+.payment-filters button.active{background:#0a4052!important;color:#fff!important}
+.payment-dashboard-table{
+  max-width:100%;
+  border:1px solid #dde6e9;
+  border-top:0;
+  background:#fff;
+}
+.payment-dashboard-table table{min-width:760px}
+.payment-dashboard-table th{
+  padding-block:13px!important;
+  background:#eef3f5!important;
+  color:#38535f!important;
+  font-size:12px!important;
+}
+.payment-dashboard-table td{font-size:13px!important}
+.payment-dashboard-table tr.overdue td{background:#fff3f4!important}
+
+/* Contract list and payment schedules. */
+.contract-billing{
+  margin:0;
+  overflow:hidden;
+  border-radius:20px!important;
+}
+.contract-billing>header{
+  padding:20px 22px!important;
+  background:#f6f9fa!important;
+}
+.contract-billing>header h2{font-size:20px!important;color:#0a3040!important}
+.contract-billing>header p{font-size:13px!important;color:#5e737d!important}
+.contract-billing-list{display:grid;gap:14px;padding:16px!important}
+.contract-billing-list>article{
+  overflow:hidden;
+  border:1px solid #dce5e8;
+  border-radius:15px;
+  background:#fff;
+}
+.contract-billing-list>article>header{padding:17px 18px;background:#f8fafb}
+.contract-card-actions{display:flex;flex-wrap:wrap;gap:7px}
+.payment-schedule-list>div{
+  grid-template-columns:minmax(220px,1fr) auto auto minmax(230px,auto);
+  gap:12px;
+  padding:14px 18px;
+}
+.payment-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+
+/* Contract creation dialog: consistent cards, spacing and footer actions. */
+.issue-modal{
+  background:#f4f8f9!important;
+}
+.issue-modal>.drawer-head{
+  padding:18px 20px;
+  border-bottom:1px solid #dce6e9;
+  background:rgba(255,255,255,.97)!important;
+}
+.issue-modal form{padding:18px;gap:16px!important}
+.issue-modal .issue-form-step.visible,
+.issue-modal .contract-profession-pricing,
+.issue-modal .contract-final-card{
+  padding:18px;
+  border:1px solid #dce5e8;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 7px 22px rgba(4,42,58,.05);
+}
+.issue-modal .contract-profession-pricing{display:grid;gap:14px}
+.issue-modal .profession-builder article{
+  border-color:#d8e3e7;
+  border-radius:13px;
+  background:#f9fbfc;
+}
+.issue-modal .contract-wizard-steps{
+  margin:0!important;
+  padding:12px 18px;
+  border-bottom:1px solid #dce5e8;
+  background:#fff;
+}
+.issue-modal .contract-wizard-steps button{
+  border:1px solid #d8e2e6;
+  background:#f3f6f7;
+  color:#536a74;
+}
+.issue-modal .contract-wizard-steps button.active{
+  border-color:#07394b;
+  background:#07394b!important;
+  color:#fff!important;
+}
+.issue-modal .contract-wizard-steps button.done{
+  border-color:#bcdccc;
+  background:#edf8f2!important;
+  color:#176e4b!important;
+}
+.issue-modal .modal-actions{
+  position:sticky;
+  bottom:-18px;
+  z-index:4;
+  margin:0 -18px -18px;
+  padding:14px 18px;
+  border-top:1px solid #d8e3e7;
+  background:rgba(255,255,255,.96);
+  backdrop-filter:blur(12px);
+}
+
+/* Any intentionally dark portal header must keep a light foreground. */
+.admin-shell :is(
+  .feature-heading,.payment-command-center>header,.accounting-heading,
+  .executive-command-head,.portal-notice,.operations-notice
+) :where(h1,h2,h3,h4,strong,b,legend){
+  color:#fff!important;
+}
+.admin-shell :is(
+  .feature-heading,.payment-command-center>header,.accounting-heading,
+  .executive-command-head,.portal-notice,.operations-notice
+) :where(p,small,label){
+  color:#d8e6ea!important;
+}
+
+@media(max-width:1050px){
+  .payment-kpis{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .payment-kpis article{max-height:none}
+  .payment-schedule-list>div{grid-template-columns:minmax(190px,1fr) auto auto}
+  .payment-actions{grid-column:1/-1;justify-content:flex-start}
+}
+@media(max-width:720px){
+  .contractual-workspace>.feature-heading{min-height:0;padding:22px 18px}
+  .feature-heading>b{display:none}
+  .payment-command-center>header{min-height:0;align-items:flex-start!important;padding:22px 18px!important}
+  .collection-ring{flex-basis:84px;width:84px!important;height:84px!important}
+  .payment-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .payment-kpis article{min-height:104px!important;padding:14px!important}
+  .payment-dashboard-table{overflow-x:auto}
+  .contract-billing-list{padding:10px!important}
+  .contract-billing-list>article>header{align-items:flex-start;flex-direction:column}
+  .contract-card-actions{width:100%}
+  .contract-card-actions>*{flex:1 1 130px}
+  .payment-schedule-list>div{grid-template-columns:1fr;align-items:start}
+  .payment-actions{display:grid!important;grid-template-columns:1fr 1fr!important;width:100%}
+  .payment-actions>*{width:100%;text-align:center;justify-content:center}
+  .issue-modal form{padding:12px}
+  .issue-modal .issue-form-step.visible,
+  .issue-modal .contract-profession-pricing,
+  .issue-modal .contract-final-card{padding:14px}
+}
+@media(max-width:430px){
+  .payment-command-center>header{display:grid}
+  .collection-ring{justify-self:start}
+  .payment-kpis{grid-template-columns:1fr!important}
+  .payment-kpis article{min-height:94px!important}
+  .payment-actions{grid-template-columns:1fr!important}
+}
