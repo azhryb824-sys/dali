@@ -21,7 +21,7 @@ CREATE INDEX IF NOT EXISTS "legal_case_activities_due_idx" ON "legal_case_activi
 CREATE INDEX IF NOT EXISTS "legal_case_activities_status_idx" ON "legal_case_activities" USING btree ("status");
 ALTER TABLE "legal_case_activities" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE "legal_case_activities" FROM PUBLIC;
-DO $
+DO $dali_migration$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'REVOKE ALL ON TABLE public.legal_case_activities FROM anon';
@@ -30,4 +30,4 @@ BEGIN
     EXECUTE 'REVOKE ALL ON TABLE public.legal_case_activities FROM authenticated';
   END IF;
 END
-$;
+$dali_migration$;
