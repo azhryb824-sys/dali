@@ -769,6 +769,26 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
     } catch (error) { notify(error instanceof Error ? error.message : "تعذّر تحديث صلاحيات المستخدم."); } finally { setBusy(null); }
   }
 
+  async function resetUserPassword(email: string, temporaryPassword: string) {
+    setBusy(`user-password-${email}`);
+    try {
+      const response = await fetch("/api/portal/users/password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, temporaryPassword }),
+      });
+      const data = await readApiJson(response) as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) throw new Error(data.error || "تعذّرت إعادة تعيين كلمة المرور.");
+      notify("تم حفظ كلمة المرور المؤقتة وإبطال الجلسات السابقة. سيُطلب من المستخدم تغييرها عند أول دخول.");
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "تعذّرت إعادة تعيين كلمة المرور.");
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function createUser(form: HTMLFormElement) {
     setBusy("create-user");
     try {
@@ -1131,7 +1151,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "website" && canAccessWebsite && <WebsiteManager initialContent={initialWebsiteContent} canManage={canManageWebsite}/>}
 
         {view === "users" && (currentUser.role === "admin" || functionalAdmin) && <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني." actionLabel="إضافة مستخدم" canWrite onAdd={() => setUserModal(true)}>
-          <section className="panel users-panel"><div className="panel-head"><div><h2>حسابات النظام</h2><p>{users.filter((item) => item.status === "pending").length} حساب بانتظار الاعتماد · لا توجد كلمات مرور محفوظة في النظام</p></div></div><div className="user-list">{users.map((item) => <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}`} onSave={updateUser}/>)}</div></section>
+          <section className="panel users-panel"><div className="panel-head"><div><h2>حسابات النظام</h2><p>{users.filter((item) => item.status === "pending").length} حساب بانتظار الاعتماد · لا توجد كلمات مرور محفوظة في النظام</p></div></div><div className="user-list">{users.map((item) => <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}` || busy === `user-password-${item.email}`} onSave={updateUser} onResetPassword={resetUserPassword}/>)}</div></section>
           <RoleDefinitionManager/>
           <AccessScopeManager currentEmail={currentUser.email}/>
         </ModuleSection>}
@@ -1156,16 +1176,18 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   </main>;
 }
 
-function UserAccessCard({ user, self, busy, onSave }: {
+function UserAccessCard({ user, self, busy, onSave, onResetPassword }: {
   user: PortalUser;
   self: boolean;
   busy: boolean;
   onSave: (email: string, role: PortalRole, department: PortalDepartment, status: "active" | "pending" | "suspended", reason: string) => Promise<void>;
+  onResetPassword: (email: string, temporaryPassword: string) => Promise<boolean>;
 }) {
   const [role, setRole] = useState<PortalRole>(user.role as PortalRole);
   const [department, setDepartment] = useState<PortalDepartment>(user.department as PortalDepartment);
   const [status, setStatus] = useState<"active" | "pending" | "suspended">(user.status as "active" | "pending" | "suspended");
   const [reason, setReason] = useState("");
+  const [temporaryPassword, setTemporaryPassword] = useState("");
   const requestComplete = Boolean(user.requestSubmittedAt && user.termsAcceptedAt);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1181,6 +1203,7 @@ function UserAccessCard({ user, self, busy, onSave }: {
         <label>الحالة<select value={status} disabled={self || busy} onChange={(event) => setStatus(event.target.value as "active" | "pending" | "suspended")}><option value="active" disabled={!requestComplete && user.status !== "active"}>نشط</option><option value="pending">قيد الاعتماد</option><option value="suspended">موقوف</option></select></label>
       </div>
       {!self && <div className="user-access-decision"><label>سبب القرار أو التغيير<textarea value={reason} onChange={(event) => setReason(event.target.value)} required minLength={10} maxLength={1000} rows={2} placeholder="اكتب مبررًا واضحًا يظهر في سجل التدقيق."/></label><button className="admin-primary" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ القرار الأمني"}</button></div>}
+      {!self && <div className="user-password-reset"><label>كلمة مرور مؤقتة<input value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} type="password" minLength={12} maxLength={128} autoComplete="new-password" dir="ltr" placeholder="12 خانة: كبير وصغير ورقم ورمز"/></label><button type="button" className="admin-secondary" disabled={busy || temporaryPassword.length < 12} onClick={() => void onResetPassword(user.email, temporaryPassword).then((saved) => { if (saved) setTemporaryPassword(""); })}>{busy ? "جارٍ الحفظ..." : "إعادة تعيين كلمة المرور"}</button><small>تُبطل الجلسات الحالية، وتصبح هذه كلمة مؤقتة يجب تغييرها عند أول دخول.</small></div>}
       {self && <p className="self-access-note">لا يمكن تعديل صلاحية حسابك من جلستك الحالية؛ يمنع ذلك الرفع الذاتي للصلاحيات أو تعطيل حساب مدير النظام بالخطأ.</p>}
     </form>
   </article>;
