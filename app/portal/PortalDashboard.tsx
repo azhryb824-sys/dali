@@ -314,8 +314,11 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const canAccess = (department: RecordEntity) => hasPermission(`${department}.read`);
   const canWriteDepartment = (department: RecordEntity) => hasPermission(`${department}.write`);
   const viewDepartment: Partial<Record<View, RecordEntity>> = { employees:"employees", finance:"finance", legal:"legal", workforce:"workforce", conversations:"workforce" };
-  const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!) : currentUser.role === "admin" || functionalAdmin;
-  const canAccessDocuments = hasPermission("documents.read");
+  const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!)
+    : view === "operations" || view === "representatives" ? hasPermission("operations.write")
+    : view === "contractual-documents" ? hasPermission("contracts.write")
+    : currentUser.role === "admin" || functionalAdmin;
+  const canAccessDocuments = currentUser.role === "admin" || hasPermission("assets.administer");
   const canAccessGovernment = hasPermission("government.read");
   const canAccessOperations = hasPermission("operations.read");
   const canAccessContracts = hasPermission("contracts.read");
