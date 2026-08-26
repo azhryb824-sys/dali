@@ -17,6 +17,42 @@ ON CONFLICT (role_key) DO UPDATE SET
   active = true,
   updated_at = CURRENT_TIMESTAMP::text;
 
+-- Approval, posting, payment, and administration remain exclusive to owner/admin.
+UPDATE public.portal_roles role
+SET permissions_json = COALESCE((
+  SELECT jsonb_agg(permission ORDER BY permission)::text
+  FROM jsonb_array_elements_text(role.permissions_json::jsonb) AS permission
+  WHERE role.role_key IN ('system_owner','system_admin')
+     OR (
+       permission <> '*'
+       AND permission !~ '\\.(approve|post|pay|administer)
+UPDATE public.portal_users
+SET role = 'admin', department = 'general', updated_at = CURRENT_TIMESTAMP::text
+WHERE email IN (
+  SELECT user_email FROM public.portal_access_scopes
+  WHERE active = true AND functional_role IN ('system_owner','system_admin')
+);
+
+INSERT INTO private.__dali_migrations (name)
+VALUES ('0048_canonical_multi_role_rbac.sql')
+ON CONFLICT (name) DO NOTHING;
+
+     )
+), '[]'),
+updated_at = CURRENT_TIMESTAMP::text
+WHERE role.role_key NOT IN ('system_owner','system_admin');
+
+UPDATE public.portal_user_permissions permission
+SET allowed = false
+WHERE permission.allowed = true
+  AND permission.action IN ('approve','post','pay','administer')
+  AND NOT EXISTS (
+    SELECT 1 FROM public.portal_access_scopes scope
+    WHERE scope.user_email = permission.user_email
+      AND scope.active = true
+      AND scope.functional_role IN ('system_owner','system_admin')
+  );
+
 -- Elevated roles remain impossible to weaken through an old database definition.
 UPDATE public.portal_users
 SET role = 'admin', department = 'general', updated_at = CURRENT_TIMESTAMP::text
