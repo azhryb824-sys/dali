@@ -1053,6 +1053,32 @@ export const documentShareLinks = pgTable(
   ],
 );
 
+export const contractSignatureRequests = pgTable(
+  "contract_signature_requests",
+  {
+    id: text("id").primaryKey(),
+    contractId: integer("contract_id").notNull(),
+    documentId: integer("document_id").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    status: text("status").notNull().default("pending"),
+    expiresAt: text("expires_at").notNull(),
+    originalStorageKey: text("original_storage_key").notNull(),
+    signedStorageKey: text("signed_storage_key"),
+    signedFileName: text("signed_file_name"),
+    signedSizeBytes: integer("signed_size_bytes"),
+    uploadedAt: text("uploaded_at"),
+    uploadedSourceHash: text("uploaded_source_hash"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("contract_signature_requests_contract_idx").on(table.contractId, table.createdAt),
+    index("contract_signature_requests_expires_idx").on(table.expiresAt),
+    check("contract_signature_requests_status_check", sql`${table.status} in ('pending','uploaded','revoked','expired')`),
+  ],
+);
+
 export const companyAssets = pgTable(
   "company_assets",
   {
