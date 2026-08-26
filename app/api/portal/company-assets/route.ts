@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { companyAssets, portalActivity } from "@/db/schema";
+import { companyAssets, documentStamps, portalActivity } from "@/db/schema";
 import { attachmentHeaders, cleanText, objectKey, safeFileName } from "@/lib/company-documents";
 import { canAccessCompanyFiles, canManageCompanyAssets, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
@@ -68,6 +68,16 @@ export async function POST(request: Request) {
       set: { fileName, storageKey, contentType: file.type, sizeBytes: file.size, validationStatus: "signature-validated", validationDetails: validation.validationDetails, uploadedBy: access.user.email, updatedAt: now },
     }).returning();
 
+    if (slot === "stamp") {
+      await db.insert(documentStamps).values({
+        name: "ختم الشركة المعتمد", storageKey: saved.storageKey, fileName: saved.fileName,
+        contentType: saved.contentType, sizeBytes: saved.sizeBytes, active: true,
+        createdBy: access.user.email, updatedAt: now,
+      }).onConflictDoUpdate({
+        target: documentStamps.storageKey,
+        set: { fileName: saved.fileName, contentType: saved.contentType, sizeBytes: saved.sizeBytes, active: true, updatedAt: now },
+      });
+    }
     await db.insert(portalActivity).values({ actorEmail: access.user.email, action: `company-${slot}-updated`, entityType: "company-asset", entityId: slot });
     if (previous?.storageKey && previous.storageKey !== storageKey) {
       await getRuntimeEnv().BUCKET.delete(previous.storageKey).catch(() => undefined);
