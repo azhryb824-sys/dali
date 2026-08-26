@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export HOSTNAME="${HOSTNAME:-0.0.0.0}"
-export PORT="${PORT:-3000}"
+BIND_HOST="${DALI_BIND_HOST:-0.0.0.0}"
+PORT="${PORT:-3000}"
+export HOSTNAME="$BIND_HOST"
+export PORT
 
 needs_build=0
 [[ -f ".next/BUILD_ID" ]] || needs_build=1
@@ -31,5 +33,5 @@ fi
 # next.config.ts does not produce a standalone artifact. Always start the build
 # that owns the current .next/static directory so HTML, JavaScript and CSS share
 # the same build identifier.
-echo "[godaddy] starting verified Next.js production build $(cat .next/BUILD_ID)"
-exec node_modules/.bin/next start -H "$HOSTNAME" -p "$PORT"
+echo "[godaddy] starting verified Next.js production build $(cat .next/BUILD_ID) on ${BIND_HOST}:${PORT}"
+exec node_modules/.bin/next start -H "$BIND_HOST" -p "$PORT"
