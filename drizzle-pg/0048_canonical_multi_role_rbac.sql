@@ -22,26 +22,13 @@ UPDATE public.portal_roles role
 SET permissions_json = COALESCE((
   SELECT jsonb_agg(permission ORDER BY permission)::text
   FROM jsonb_array_elements_text(role.permissions_json::jsonb) AS item(permission)
-  WHERE role.role_key IN ('system_owner','system_admin')
-     OR (
-       permission <> '*'
-       AND permission !~ '\\.(approve|post|pay|administer)
-UPDATE public.portal_users
-SET role = 'admin', department = 'general', updated_at = CURRENT_TIMESTAMP::text
-WHERE email IN (
-  SELECT user_email FROM public.portal_access_scopes
-  WHERE active = true AND functional_role IN ('system_owner','system_admin')
-);
-
-INSERT INTO private.__dali_migrations (name)
-VALUES ('0048_canonical_multi_role_rbac.sql')
-ON CONFLICT (name) DO NOTHING;
-
-     )
+  WHERE permission <> '*'
+    AND permission !~ E'\\.(approve|post|pay|administer)$'
 ), '[]'),
 updated_at = CURRENT_TIMESTAMP::text
 WHERE role.role_key NOT IN ('system_owner','system_admin');
 
+-- Existing explicit overrides are normalized to the union of active assigned roles.
 UPDATE public.portal_user_permissions permission
 SET allowed = EXISTS (
   SELECT 1
