@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       }
       return created;
     });
-    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRoles }, reason: isRootRole ? `إنشاء ${functionalRole === "system_owner" ? "مالك نظام" : "مشرف نظام"} بصلاحيات كاملة` : `إنشاء حساب بأدوار ${roleDefinitions.map((definition) => definition!.labelAr).join("، ")} وحزمة ${permissionProfile}`, source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
+    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRoles }, reason: isRootRole ? `إنشاء ${functionalRoles.includes("system_owner") ? "مالك نظام" : "مشرف نظام"} بصلاحيات كاملة` : `إنشاء حساب بأدوار ${roleDefinitions.map((definition) => definition!.labelAr).join("، ")} وحزمة ${permissionProfile}`, source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
     await emitPortalNotification({ eventType: "portal-user-created", title: "أُضيف مستخدم جديد", message: `${displayName} — ${roleDefinitions.map((definition) => definition!.labelAr).join("، ")} — ${department}.`, severity: "warning", module: "users", entityType: "portal-user", entityId: email, actionView: "users", targetRole: "admin" }).catch(() => undefined);
     return jsonNoStore({ user: { ...user, functionalRoles } }, { status: 201 });
   } catch (error) {
