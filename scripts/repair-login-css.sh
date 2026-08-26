@@ -113,6 +113,7 @@ npm run db:audit:migrations
 
 log "إصلاح بنية تسجيل الدخول دون حذف بيانات"
 npm run db:apply:postgres -- 0045_login_runtime_schema_repair.sql
+npm run db:apply:postgres -- 0046_login_server_role_policy.sql
 node scripts/audit-auth-runtime.mjs
 
 log "استكمال هجرة المحادثات والتقييمات المعلقة"
