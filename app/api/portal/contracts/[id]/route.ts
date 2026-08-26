@@ -16,7 +16,7 @@ async function access() {
   const actor = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!actor) return null;
   const elevated = actor.role === "admin" || actor.functionalRoles.includes("system_owner") || actor.functionalRoles.includes("system_admin");
-  return elevated || await hasPortalPermission(actor, "workforce", "write") ? actor : null;
+  return elevated || await hasPortalPermission(actor, "contracts", "write") ? actor : null;
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
