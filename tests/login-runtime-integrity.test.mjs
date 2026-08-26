@@ -55,6 +55,15 @@ test("login repair migration restores only additive credential runtime structure
   assert.doesNotMatch(migration, /DROP\s+TABLE|TRUNCATE|DROP\s+COLUMN/i);
 });
 
+test("the current reverse-proxy origin remains valid after moving away from a configured legacy host", async () => {
+  const origin = await source("lib/request-origin.ts");
+
+  assert.match(origin, /forwardedExternalUrl\(request\) \|\| configuredExternalUrl\(\)/);
+  assert.match(origin, /if \(configured\) origins\.add\(configured\.origin\)/);
+  assert.match(origin, /if \(forwarded\) origins\.add\(forwarded\.origin\)/);
+  assert.doesNotMatch(origin, /if \(configured\) return new Set/);
+});
+
 test("one-command recovery preserves dollar signs and validates the deployed login path", async () => {
   const [repair, audit] = await Promise.all([
     source("scripts/repair-login-css.sh"),
@@ -67,6 +76,7 @@ test("one-command recovery preserves dollar signs and validates the deployed log
   assert.match(repair, /rm -rf \.next/);
   assert.match(repair, /error=service/);
   assert.match(repair, /_next\/static/);
+  assert.match(repair, /x-forwarded-host: dali-repair\.local/);
   assert.match(audit, /invalidCredentialRows/);
   assert.match(audit, /missingTables/);
   assert.match(audit, /authSecretReady/);
