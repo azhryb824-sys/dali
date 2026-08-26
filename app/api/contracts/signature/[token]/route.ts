@@ -122,7 +122,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
       eventType: "signed-contract-uploaded", title: "تم استلام العقد الموقع من العميل",
       message: `${contract.referenceCode} — استُبدلت النسخة الحالية بالنسخة الموقعة مع حفظ الأصل المعتمد.`,
       severity: "info", module: "documents", entityType: "workforce-contract", entityId: contract.id,
-      actionView: "contract-documents", targetDepartment: "contracts",
+      actionView: "contractual-documents", targetDepartment: "workforce",
     }).catch(() => undefined);
     return jsonNoStore({ status: "ok", referenceCode: contract.referenceCode });
   } catch (error) {
