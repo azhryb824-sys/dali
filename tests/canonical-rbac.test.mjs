@@ -23,11 +23,14 @@ test("canonical roles have exact least-privilege grants", () => {
 test("new users require and persist multiple roles", () => {
   const route = read("app/api/portal/users/route.ts");
   assert.match(route, /Array\.isArray\(payload\.functionalRoles\)/);
+  assert.match(route, /typeof payload\.functionalRoles === "string"/);
   assert.match(route, /يجب اختيار دور وظيفي واحد على الأقل/);
   assert.match(route, /portalAccessScopes\)\.values\(functionalRoles\.map/);
   assert.match(route, /combinedPermissions/);
   const dashboard = read("app/portal/PortalDashboard.tsx");
-  assert.match(dashboard, /formData\.getAll\("functionalRoles"\)/);
+  const createUserBlock = dashboard.slice(dashboard.indexOf("async function createUser"), dashboard.indexOf("async function uploadDocument"));
+  assert.match(createUserBlock, /formData\.getAll\("functionalRoles"\)/);
+  assert.doesNotMatch(createUserBlock, /const payload = Object\.fromEntries\(new FormData\(form\)\.entries\(\)\)/);
   assert.match(dashboard, /type="checkbox" name="functionalRoles"/);
 });
 
