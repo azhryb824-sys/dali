@@ -45,6 +45,19 @@ try {
       AND r.role_key NOT IN ('system_owner','system_admin')
       AND (permission = '*' OR permission ~ '\\.(approve|post|pay|administer)$')
   `;
+  const outOfRoleOverrides = await sql`
+    SELECT p.user_email, p.resource, p.action
+    FROM public.portal_user_permissions p
+    WHERE p.allowed = true
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.portal_access_scopes s
+        JOIN public.portal_roles r ON r.role_key = s.functional_role AND r.active = true
+        CROSS JOIN LATERAL jsonb_array_elements_text(r.permissions_json::jsonb) AS item(grant_name)
+        WHERE s.user_email = p.user_email AND s.active = true
+          AND (grant_name = '*' OR grant_name = p.resource || '.' || p.action)
+      )
+  `;
   const forbiddenUserApprovals = await sql`
     SELECT p.user_email, p.resource, p.action
     FROM public.portal_user_permissions p
@@ -56,8 +69,8 @@ try {
           AND s.functional_role IN ('system_owner','system_admin')
       )
   `;
-  const status = !mismatches.length && !usersWithoutRoles.length && !forbiddenRoleApprovals.length && !forbiddenUserApprovals.length ? "ok" : "mismatch";
-  console.log(JSON.stringify({ status, canonicalRoles: Object.keys(expected).length, mismatches, usersWithoutRoles, forbiddenRoleApprovals, forbiddenUserApprovals }, null, 2));
+  const status = !mismatches.length && !usersWithoutRoles.length && !forbiddenRoleApprovals.length && !outOfRoleOverrides.length && !forbiddenUserApprovals.length ? "ok" : "mismatch";
+  console.log(JSON.stringify({ status, canonicalRoles: Object.keys(expected).length, mismatches, usersWithoutRoles, forbiddenRoleApprovals, outOfRoleOverrides, forbiddenUserApprovals }, null, 2));
   if (status !== "ok") process.exitCode = 1;
 } finally {
   await sql.end();
