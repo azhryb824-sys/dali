@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -39,4 +40,37 @@ test("GoDaddy startup rejects stale or incomplete Next static assets", async () 
   assert.match(script, /-name '\*\.css'/);
   assert.match(script, /next start/);
   assert.doesNotMatch(script, /standalone\/server\.js/);
+});
+
+test("login repair migration restores only additive credential runtime structures", async () => {
+  const migration = await source("drizzle-pg/0045_login_runtime_schema_repair.sql");
+
+  for (const table of ["portal_users", "portal_auth_credentials", "password_reset_tokens", "public_rate_limits"]) {
+    assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS "${table}"`));
+  }
+  assert.match(migration, /must_change_password/);
+  assert.match(migration, /last_activity_at/);
+  assert.match(migration, /preferred_language" IN \('ar','en','bn'\)/);
+  assert.match(migration, /REVOKE ALL ON TABLE/);
+  assert.doesNotMatch(migration, /DROP\s+TABLE|TRUNCATE|DROP\s+COLUMN/i);
+});
+
+test("one-command recovery preserves dollar signs and validates the deployed login path", async () => {
+  const [repair, audit] = await Promise.all([
+    source("scripts/repair-login-css.sh"),
+    source("scripts/audit-auth-runtime.mjs"),
+  ]);
+
+  assert.match(repair, /export "\$key=\$value"/);
+  assert.doesNotMatch(repair, /source \/etc\/dali\/dali\.env/);
+  assert.match(repair, /0045_login_runtime_schema_repair\.sql/);
+  assert.match(repair, /rm -rf \.next/);
+  assert.match(repair, /error=service/);
+  assert.match(repair, /_next\/static/);
+  assert.match(audit, /invalidCredentialRows/);
+  assert.match(audit, /missingTables/);
+  assert.match(audit, /authSecretReady/);
+
+  const syntax = spawnSync("bash", ["-n", "scripts/repair-login-css.sh"], { encoding: "utf8" });
+  assert.equal(syntax.status, 0, syntax.stderr || syntax.stdout);
 });
