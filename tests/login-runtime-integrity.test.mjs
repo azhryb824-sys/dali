@@ -42,17 +42,25 @@ test("GoDaddy startup rejects stale or incomplete Next static assets", async () 
   assert.doesNotMatch(script, /standalone\/server\.js/);
 });
 
-test("login repair migration restores only additive credential runtime structures", async () => {
-  const migration = await source("drizzle-pg/0045_login_runtime_schema_repair.sql");
+test("login repair migrations restore additive schema and server-only runtime access", async () => {
+  const [schemaRepair, serverPolicy] = await Promise.all([
+    source("drizzle-pg/0045_login_runtime_schema_repair.sql"),
+    source("drizzle-pg/0046_login_server_role_policy.sql"),
+  ]);
 
   for (const table of ["portal_users", "portal_auth_credentials", "password_reset_tokens", "public_rate_limits"]) {
-    assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS "${table}"`));
+    assert.match(schemaRepair, new RegExp(`CREATE TABLE IF NOT EXISTS "${table}"`));
+    assert.match(serverPolicy, new RegExp(`public\\.${table}`));
   }
-  assert.match(migration, /must_change_password/);
-  assert.match(migration, /last_activity_at/);
-  assert.match(migration, /preferred_language" IN \('ar','en','bn'\)/);
-  assert.match(migration, /REVOKE ALL ON TABLE/);
-  assert.doesNotMatch(migration, /DROP\s+TABLE|TRUNCATE|DROP\s+COLUMN/i);
+  assert.match(schemaRepair, /must_change_password/);
+  assert.match(schemaRepair, /last_activity_at/);
+  assert.match(schemaRepair, /preferred_language" IN \('ar','en','bn'\)/);
+  assert.match(schemaRepair, /REVOKE ALL ON TABLE/);
+  assert.match(serverPolicy, /ENABLE ROW LEVEL SECURITY/);
+  assert.match(serverPolicy, /TO dali_app USING \(true\) WITH CHECK \(true\)/);
+  assert.match(serverPolicy, /FROM anon/);
+  assert.match(serverPolicy, /FROM authenticated/);
+  assert.doesNotMatch(`${schemaRepair}\n${serverPolicy}`, /DROP\s+TABLE|TRUNCATE|DROP\s+COLUMN/i);
 });
 
 test("the current reverse-proxy origin remains valid after moving away from a configured legacy host", async () => {
@@ -73,6 +81,7 @@ test("one-command recovery preserves dollar signs and validates the deployed log
   assert.match(repair, /export "\$key=\$value"/);
   assert.doesNotMatch(repair, /source \/etc\/dali\/dali\.env/);
   assert.match(repair, /0045_login_runtime_schema_repair\.sql/);
+  assert.match(repair, /0046_login_server_role_policy\.sql/);
   assert.match(repair, /rm -rf \.next/);
   assert.match(repair, /error=service/);
   assert.match(repair, /_next\/static/);
