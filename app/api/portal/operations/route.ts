@@ -439,15 +439,13 @@ async function transitionRecord(action: string, payload: Record<string, unknown>
     const canApprove = access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
     const allowed: Record<string, string[]> = { draft: canApprove ? ["pending_approval", "approved", "cancelled"] : ["pending_approval"], pending_approval: canApprove ? ["approved", "rejected", "cancelled"] : ["approved", "rejected"], approved: canApprove ? ["sent", "cancelled"] : ["sent"], sent: canApprove ? ["accepted", "rejected", "expired", "cancelled"] : ["accepted", "rejected", "expired"], accepted: [], rejected: canApprove ? ["cancelled"] : [], expired: [], superseded: [], cancelled: [] };
     if (!allowed[item.status]?.includes(nextStatus)) throw new Error("انتقال حالة العرض غير مسموح");
-    if (nextStatus === "approved" && !canApprove) throw new Error("اعتماد عرض السعر متاح للمالك أو مشرف النظام فقط");
+    if (["approved", "rejected", "cancelled"].includes(nextStatus) && !canApprove) throw new Error("قرار اعتماد أو رفض أو إلغاء عرض السعر متاح للمالك أو مشرف النظام فقط");
     const stampId = integer(payload.stampId, 1);
     if (nextStatus === "approved") {
       if (!stampId) throw new Error("اختيار ختم الاعتماد إلزامي");
       const stamp = await db.query.documentStamps.findFirst({ where: and(eq(documentStamps.id, stampId), eq(documentStamps.active, true)) });
       if (!stamp) throw new Error("الختم المختار غير موجود أو غير نشط");
     }
-    if (nextStatus === "cancelled" && !canApprove) throw new Error("إلغاء عرض السعر متاح للمالك أو مشرف النظام فقط");
-    if (nextStatus === "rejected" && access.role === "employee") throw new Error("غير مصرح باتخاذ قرار الاعتماد");
     const now = new Date().toISOString();
     const [updated] = await db.update(quoteVersions).set({ status: nextStatus, approvalReason: ["approved", "rejected"].includes(nextStatus) ? reason : item.approvalReason, approvedBy: nextStatus === "approved" ? actor : item.approvedBy, approvedAt: nextStatus === "approved" ? now : item.approvedAt, stampId: nextStatus === "approved" ? stampId : item.stampId, acceptedAt: nextStatus === "accepted" ? now : item.acceptedAt, updatedAt: now, recordVersion: item.recordVersion + 1 }).where(and(eq(quoteVersions.id, id), eq(quoteVersions.recordVersion, integer(payload.version, 1) ?? item.recordVersion))).returning();
     if (!updated) throw new Error("تعارض في إصدار العرض؛ حدّث الصفحة وحاول مجددًا");
