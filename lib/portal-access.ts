@@ -282,7 +282,7 @@ export function canAccessPortalDepartment(
 }
 
 export function canAccessPortalDocuments(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.department === "legal" || access.department === "finance" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.read") || access.functionalPermissions.includes("legal.read") || access.functionalPermissions.includes("finance.read");
+  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.read");
 }
 
 export function canManagePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
