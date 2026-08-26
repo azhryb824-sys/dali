@@ -25,7 +25,8 @@ function clean(value: unknown, length: number) { return typeof value === "string
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "workforce", "write"))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
+  const elevated = access && (access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin"));
+  if (!access || (!elevated && !(await hasPortalPermission(access, "workforce", "write")))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   try {
     const id = Number((await context.params).id);
     const payload = await request.json() as Record<string, unknown>;
@@ -44,7 +45,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       reason = `إلغاء بسبب تأخر سداد الدفعة رقم ${oldest.installmentNumber} (${oldest.title}) المستحقة بتاريخ ${oldest.dueDate}، وعدم تسجيل سدادها حتى تاريخ القرار.`;
     }
     if (["cancelled", "terminated", "suspended"].includes(status) && reason.length < 10) return jsonNoStore({ error: "اكتب سببًا واضحًا لا يقل عن 10 أحرف" }, { status: 400 });
-    const canApprove = access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
+    const canApprove = access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
     if (status === "approved" && !canApprove) return jsonNoStore({ error: "اعتماد العقد متاح للمالك أو مشرف النظام فقط" }, { status: 403 });
     const stampId = Number(payload.stampId || 0);
     if (status === "approved") {
