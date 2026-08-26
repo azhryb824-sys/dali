@@ -3,10 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const nextConfig = await readFile(new URL("../next.config.ts", import.meta.url), "utf8");
+const proxy = await readFile(new URL("../proxy.ts", import.meta.url), "utf8");
 const route = await readFile(new URL("../app/api/portal/documents/generate/route.ts", import.meta.url), "utf8");
 
-test("Next proxy accepts the complete contract multipart payload", () => {
-  assert.match(nextConfig, /proxyClientMaxBodySize:\s*"40mb"/);
+test("contract multipart upload bypasses unsupported Next proxy buffering", () => {
+  assert.doesNotMatch(nextConfig, /proxyClientMaxBodySize/);
+  assert.match(proxy, /api\/portal\/documents\/generate/);
 });
 
 test("multipart parsing errors are not mislabeled as database failures", () => {
