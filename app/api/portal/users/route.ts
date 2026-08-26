@@ -13,6 +13,7 @@ const allowedRoles = new Set(["admin", "manager", "employee"]);
 const allowedStatuses = new Set(["active", "pending", "suspended"]);
 const allowedDepartments = new Set(["general", "employees", "finance", "legal", "workforce", "construction"]);
 const permissionProfiles = new Set<PermissionProfile>(["read_only", "operator", "role_default"]);
+const assignableFunctionalRoles = new Set(["system_owner", "system_admin", "hr_officer", "accountant", "government_relations_officer", "administrative_assistant", "lawyer"]);
 const roleDepartments: Record<string, string> = {
   accountant: "finance", lawyer: "legal", legal_affairs: "legal", sales_representative: "workforce",
   purchasing_representative: "finance", administrative_assistant: "general",
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
     const permissionProfile: PermissionProfile = permissionProfiles.has(requestedProfile) ? requestedProfile : "role_default";
     const db = getDb();
     if (!functionalRoles.length) return jsonNoStore({ error: "يجب اختيار دور وظيفي واحد على الأقل" }, { status: 400 });
+    if (functionalRoles.some((roleKey) => !assignableFunctionalRoles.has(roleKey))) return jsonNoStore({ error: "أحد الأدوار المختارة غير متاح للإسناد" }, { status: 400 });
     const activeRoleDefinitions = await db.select().from(portalRoles);
     const definitionByKey = new Map(activeRoleDefinitions.filter((item) => item.active).map((item) => [item.roleKey, item]));
     const roleDefinitions = functionalRoles.map((roleKey) => definitionByKey.get(roleKey));
