@@ -1,0 +1,274 @@
+/*
+ * Portal visual accessibility and responsive hardening.
+ * Presentation-only overrides; intentionally loaded last.
+ */
+
+.admin-shell{
+  --portal-ink:#102f3c;
+  --portal-muted:#526b77;
+  --portal-line:rgba(12,64,78,.18);
+  --portal-focus:#168b8d;
+  --portal-success:#176b49;
+  --portal-success-bg:#eef9f4;
+  --portal-warning:#805715;
+  --portal-danger:#a71927;
+  overflow-x:hidden;
+}
+
+.admin-shell,
+.admin-shell button,
+.admin-shell input,
+.admin-shell select,
+.admin-shell textarea{font-size:14px}
+
+.admin-shell :where(p,li,dd,dt,label,td,th,small,span){
+  overflow-wrap:anywhere;
+}
+
+.admin-shell :where(p,td,label){line-height:1.65}
+.admin-shell :where(small,.form-hint,.muted){font-size:12px;line-height:1.7;color:var(--portal-muted)}
+.admin-shell :where(h1,h2,h3,h4,strong,legend){line-height:1.35}
+
+.admin-shell :where(input,select,textarea,button,a[role="button"],summary){
+  max-width:100%;
+}
+.admin-shell :where(input,select,textarea){
+  min-height:44px;
+  font-size:14px!important;
+}
+.admin-shell textarea{min-height:104px}
+.admin-shell :where(button,a[role="button"],.admin-primary,.admin-secondary){
+  min-height:44px;
+  font-size:13px;
+  line-height:1.35;
+}
+.admin-shell :where(button,a,input,select,textarea,summary):focus-visible{
+  outline:3px solid rgba(22,139,141,.32)!important;
+  outline-offset:2px;
+}
+
+/* Preserve readable foregrounds for semantic surfaces. */
+.admin-shell :where(.success,.ready,.complete,.approved,.active-success){
+  color:var(--portal-success);
+}
+.admin-shell :where(.warning,.pending,.shortage){
+  color:var(--portal-warning);
+}
+.admin-shell :where(.error,.failed,.danger,.rejected){
+  color:var(--portal-danger);
+}
+.admin-shell :where(.success,.ready,.complete,.warning,.pending,.error,.failed,.danger)
+  :where(strong,b,span,p,small){
+  color:inherit;
+}
+
+/* Contract creation dialog: fixes the collapsed first-payment notice. */
+.issue-modal{
+  width:min(980px,calc(100vw - 32px));
+  max-height:calc(100dvh - 32px);
+  overflow:auto;
+}
+.issue-modal .drawer-head{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.96);backdrop-filter:blur(14px)}
+.issue-modal .drawer-head span{font-size:12px}
+.issue-modal .drawer-head h2{font-size:clamp(22px,3vw,30px)}
+.issue-modal form label{font-size:13px;color:#38545f}
+.issue-modal form label>small{margin-top:3px}
+.contract-billing-controls{
+  display:grid;
+  grid-template-columns:minmax(220px,.7fr) minmax(280px,1.3fr);
+  gap:14px;
+  align-items:stretch;
+}
+.billing-mode-summary{
+  min-width:0;
+  min-height:88px;
+  padding:16px 18px;
+  border:1px solid #b9dfcd;
+  border-radius:14px;
+  background:var(--portal-success-bg);
+  color:var(--portal-success);
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:6px;
+  text-align:start;
+}
+.billing-mode-summary::before,
+.billing-mode-summary::after{content:none!important}
+.billing-mode-summary b{
+  display:block;
+  width:auto!important;
+  height:auto!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:#135f41!important;
+  font-size:15px!important;
+  line-height:1.45!important;
+  white-space:normal;
+}
+.billing-mode-summary span{
+  display:block;
+  color:#39745b!important;
+  font-size:13px!important;
+  line-height:1.7!important;
+}
+.contract-billing-controls>.form-hint{grid-column:1/-1;margin:0}
+.annual-contract-period{
+  min-width:0;
+  padding:13px;
+  border:1px solid var(--portal-line);
+  border-radius:12px;
+  background:#f7fafb;
+}
+.annual-contract-period span,
+.annual-contract-period small{display:block}
+.annual-contract-period strong{display:block;margin:5px 0;font-size:14px}
+
+.contract-wizard-steps{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:8px!important;
+}
+.contract-wizard-steps button{
+  min-width:0;
+  height:auto!important;
+  min-height:48px;
+  padding:9px 10px;
+  font-size:13px!important;
+  line-height:1.45;
+  white-space:normal;
+}
+.issue-form-step{min-width:0}
+.profession-builder article,
+.worker-selection-groups>section,
+.payment-schedule-builder article{min-width:0}
+
+/* Tables remain usable without shrinking their contents into unreadable text. */
+.admin-shell :where(.table-wrap,.accounting-table,.management-table,.records-table,.employee-table){
+  max-width:100%;
+  overflow-x:auto;
+  overscroll-behavior-inline:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.admin-shell table{font-size:13px}
+.admin-shell th,.admin-shell td{padding:11px 10px}
+.admin-shell :where(th,td){vertical-align:middle}
+
+/* Action groups wrap instead of escaping their cards. */
+.admin-shell :where(
+  .heading-actions,.panel-actions,.document-actions,.payment-actions,
+  .finance-document-actions,.approved-quote-actions,.collection-entry-actions,
+  .integration-actions,.website-publish-actions
+){flex-wrap:wrap}
+.admin-shell :where(
+  .heading-actions,.panel-actions,.document-actions,.payment-actions,
+  .finance-document-actions,.approved-quote-actions
+)>*{max-width:100%}
+
+/* Tablet */
+@media(max-width:900px){
+  .admin-content{padding:18px 14px 28px}
+  .content-heading,.module-heading{align-items:flex-start;flex-wrap:wrap}
+  .content-heading>*,.module-heading>*{min-width:0}
+  .admin-shell :where(
+    .metric-grid,.finance-metrics,.hr-metrics,.compliance-metrics,
+    .construction-metrics,.module-metrics,.executive-kpis,.accounting-metrics
+  ){grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .contract-billing-controls{grid-template-columns:1fr}
+  .contract-billing-controls>.form-hint{grid-column:1}
+  .issue-modal{width:min(96vw,760px)}
+}
+
+/* Phone */
+@media(max-width:620px){
+  .admin-shell{font-size:14px}
+  .admin-topbar{padding-inline:10px;gap:8px}
+  .admin-content{padding:12px 10px 22px}
+  .content-heading h1{font-size:23px}
+  .content-heading p{font-size:13px}
+  .admin-shell :where(
+    .panel,.management-panel,.accounting-setup,.accounting-table,
+    .construction-card,.construction-form,.legal-matter-layout,
+    .contractual-workspace,.government-workspace,.letter-pdf-library,
+    .executive-people-center,.bank-reconciliation,.integrations-panel
+  ){border-radius:13px}
+
+  .issue-modal{
+    width:100vw;
+    max-width:100vw;
+    min-height:100dvh;
+    max-height:100dvh;
+    margin:0;
+    padding:14px!important;
+    border-radius:0!important;
+  }
+  .issue-modal .drawer-head{padding-bottom:12px}
+  .issue-modal .drawer-head h2{font-size:21px}
+  .issue-modal .drawer-head>button{min-width:44px;width:44px;padding:0}
+  .issue-modal form{gap:14px}
+  .issue-form-step{grid-template-columns:1fr!important;gap:14px!important}
+  .issue-form-step>*{grid-column:1!important}
+  .billing-mode-summary{min-height:0;padding:14px}
+  .billing-mode-summary b{font-size:14px!important}
+  .billing-mode-summary span{font-size:12px!important}
+
+  .contract-wizard-steps{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:6px!important;
+  }
+  .contract-wizard-steps button{min-height:52px;padding:8px 6px;font-size:12px!important}
+
+  .profession-builder-head{display:grid;grid-template-columns:1fr}
+  .profession-builder-head button{width:100%;justify-content:center}
+  .profession-builder article{grid-template-columns:1fr!important;padding:12px}
+  .profession-builder article>*{grid-column:1!important}
+  .worker-selection-groups>section>header{align-items:flex-start;gap:8px}
+  .worker-selection-groups>section>div{grid-template-columns:1fr!important}
+  .contract-add-worker{grid-template-columns:1fr!important}
+  .contract-assigned-list article{grid-template-columns:auto minmax(0,1fr)}
+  .contract-assigned-list article button{grid-column:1/-1;width:100%}
+
+  .admin-shell :where(
+    .metric-grid,.finance-metrics,.hr-metrics,.compliance-metrics,
+    .construction-metrics,.module-metrics,.executive-kpis,.accounting-metrics,
+    .website-stats,.account-list
+  ){grid-template-columns:1fr!important}
+
+  .admin-shell :where(
+    .heading-actions,.panel-actions,.document-actions,.payment-actions,
+    .finance-document-actions,.approved-quote-actions,.website-publish-actions,
+    .collection-entry-actions
+  ){display:grid!important;grid-template-columns:1fr;width:100%;gap:8px}
+  .admin-shell :where(
+    .heading-actions,.panel-actions,.document-actions,.payment-actions,
+    .finance-document-actions,.approved-quote-actions,.website-publish-actions,
+    .collection-entry-actions
+  )>*{width:100%!important;justify-content:center;text-align:center}
+
+  .filter-tabs,.construction-tabs,.executive-tabs,.website-tabs{
+    display:flex!important;
+    max-width:100%;
+    overflow-x:auto;
+    flex-wrap:nowrap!important;
+    scroll-snap-type:x proximity;
+    scrollbar-width:thin;
+  }
+  .filter-tabs button,.construction-tabs button,.executive-tabs button,.website-tabs button{
+    flex:0 0 auto;
+    white-space:nowrap;
+    scroll-snap-align:start;
+  }
+}
+
+@media(max-width:390px){
+  .contract-wizard-steps{grid-template-columns:1fr!important}
+  .admin-content{padding-inline:8px}
+}
+
+@media(hover:none){
+  .admin-shell :where(button,a,summary){-webkit-tap-highlight-color:rgba(22,139,141,.16)}
+}
