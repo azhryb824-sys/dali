@@ -39,6 +39,7 @@ const nextConfig: NextConfig = {
     const protectedNoStoreHeaders = [
       { key: "Cache-Control", value: "private, no-store, no-cache, must-revalidate, max-age=0" },
       { key: "Pragma", value: "no-cache" },
+      { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
     ];
     return [
       { source: "/:path*", headers: securityHeaders },
