@@ -1,11 +1,12 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clients, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, documentStamps, financialRecords, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { clients, companyDocuments, contractPaymentSchedules, contractSignatureRequests, contractProfessions, contractWorkerAssignments, documentStamps, financialRecords, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
 import { annualContractSchedule } from "@/lib/payment-schedules";
+import { hashShareToken } from "@/lib/company-documents";
 
 const transitions: Record<string, string[]> = {
   draft: ["internal_review", "approved", "cancelled"],
@@ -77,6 +78,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return jsonNoStore({ error: "تعذر اعتماد العقد لوجود دفعة تمت معالجتها ماليًا" }, { status: 409 });
     }
     const now = new Date().toISOString();
+    const approvedDocument = status === "approved"
+      ? await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, contract.documentId) })
+      : null;
+    if (status === "approved" && (!approvedDocument || approvedDocument.status !== "active")) {
+      return jsonNoStore({ error: "مستند العقد المعتمد غير موجود أو غير نشط" }, { status: 409 });
+    }
+    const signatureToken = status === "approved"
+      ? crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "")
+      : "";
+    const signatureTokenHash = signatureToken ? await hashShareToken(signatureToken) : "";
+    const signatureRequestId = signatureToken ? crypto.randomUUID() : "";
+    const signatureUploadExpiresAt = signatureToken ? new Date(Date.now() + 14 * 86400000).toISOString() : "";
     const updated = await db.transaction(async (tx) => {
       const [changed] = await tx.update(workforceContracts).set({
         status,
@@ -89,6 +102,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         updatedAt: now,
       }).where(and(eq(workforceContracts.id, id), eq(workforceContracts.status, contract.status))).returning();
       if (!changed) return null;
+      if (status === "approved" && approvedDocument) {
+        await tx.update(contractSignatureRequests).set({ status: "revoked", updatedAt: now })
+          .where(and(eq(contractSignatureRequests.contractId, id), eq(contractSignatureRequests.status, "pending")));
+        await tx.insert(contractSignatureRequests).values({
+          id: signatureRequestId,
+          contractId: id,
+          documentId: approvedDocument.id,
+          tokenHash: signatureTokenHash,
+          status: "pending",
+          expiresAt: signatureUploadExpiresAt,
+          originalStorageKey: approvedDocument.storageKey,
+          createdBy: access.user.email,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
       if (annualApprovalDueDates.length) {
         const editable = approvalInstallments.sort((a, b) => a.installmentNumber - b.installmentNumber);
         for (const [index, payment] of editable.entries()) {
@@ -157,7 +186,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const correlationId = await recordStatusChange({ entityType: "workforce-contract", entityId: id, fromStatus: contract.status, toStatus: status, reason: reason || null, actorEmail: access.user.email });
     await auditPortalAction({ actorEmail: access.user.email, action: "workforce-contract-status-changed", entityType: "workforce-contract", entityId: id, before: contract, after: updated, reason: reason || null, correlationId });
     await emitPortalNotification({ eventType: "workforce-contract-status-changed", title: "تغيّرت حالة عقد عمالة", message: `${updated.referenceCode} — ${updated.clientName} — ${contract.status} ← ${status}.`, severity: ["cancelled", "terminated", "suspended"].includes(status) ? "warning" : "info", module: "workforce", entityType: "workforce-contract", entityId: id, actionView: "workforce", targetDepartment: "workforce" }).catch(() => undefined);
-    return jsonNoStore({ contract: updated });
+    const signatureUploadUrl = signatureToken
+      ? `${new URL(request.url).origin}/contracts/signature/${signatureToken}`
+      : undefined;
+    if (signatureUploadUrl) {
+      await emitPortalNotification({
+        eventType: "contract-signature-link-created",
+        title: "تم إنشاء رابط توقيع العقد",
+        message: `${updated.referenceCode} — الرابط صالح حتى ${signatureUploadExpiresAt} ويمكن استخدامه مرة واحدة.`,
+        severity: "info",
+        module: "documents",
+        entityType: "workforce-contract",
+        entityId: id,
+        actionView: "contract-documents",
+        targetDepartment: "contracts",
+      }).catch(() => undefined);
+    }
+    return jsonNoStore({ contract: updated, signatureUploadUrl, signatureUploadExpiresAt: signatureUploadExpiresAt || undefined });
   } catch (error) {
     return jsonNoStore({ error: error instanceof Error ? error.message : "تعذّر تحديث العقد" }, { status: 400 });
   }
