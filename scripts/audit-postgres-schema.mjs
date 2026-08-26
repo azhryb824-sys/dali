@@ -69,7 +69,25 @@ try {
   `;
   const tracking = new Set(trackingColumns.map((row) => row.column_name));
   const migrationTrackingReady = tracking.has("name") && tracking.has("checksum") && tracking.has("applied_at");
-  const result = { status: missingTables.length || missingColumns.length ? "mismatch" : "ok", expectedTables: expected.size, actualPublicTables: actual.size, missingTables, missingColumns, migrationTrackingReady };
+  const storageColumns = await sql`
+    select column_name
+    from information_schema.columns
+    where table_schema = 'private' and table_name = 'object_storage'
+  `;
+  const storage = new Set(storageColumns.map((row) => row.column_name));
+  const requiredStorageColumns = ["storage_key", "object_data", "content_type", "etag", "updated_at"];
+  const missingStorageColumns = requiredStorageColumns.filter((column) => !storage.has(column));
+  const objectStorageReady = missingStorageColumns.length === 0;
+  const result = {
+    status: missingTables.length || missingColumns.length || !objectStorageReady ? "mismatch" : "ok",
+    expectedTables: expected.size,
+    actualPublicTables: actual.size,
+    missingTables,
+    missingColumns,
+    migrationTrackingReady,
+    objectStorageReady,
+    missingStorageColumns,
+  };
   console.log(JSON.stringify(result, null, 2));
   if (result.status !== "ok" || !migrationTrackingReady) process.exitCode = 1;
 } finally {
