@@ -151,7 +151,7 @@ const functionalRoleLabels: Record<string, string> = {
   contracts_manager: "مدير العقود", procurement_officer: "مسؤول المشتريات", project_accountant: "محاسب مشروع", document_controller: "مراقب وثائق",
   quality_officer: "مسؤول الجودة", safety_officer: "مسؤول السلامة", hr_officer: "مسؤول الموارد البشرية", government_relations_officer: "مسؤول العلاقات الحكومية والامتثال", regional_manager: "مدير منطقة",
   client_consultant: "ممثل العميل أو الاستشاري", subcontractor: "مقاول باطن",
-  accountant: "المحاسب", legal_affairs: "شؤون قانونية", sales_representative: "مندوب مبيعات",
+  accountant: "المحاسب", lawyer: "محامي", legal_affairs: "شؤون قانونية", sales_representative: "مندوب مبيعات",
   purchasing_representative: "مندوب مشتريات", administrative_assistant: "مساعد إداري",
 };
 const departmentLabels: Record<PortalDepartment, string> = {
@@ -310,11 +310,15 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const functionalAdmin = currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
   const isSystemOwner = currentUser.functionalRoles.includes("system_owner");
   const isSystemAdmin = currentUser.functionalRoles.includes("system_admin");
-  const canAccess = (department: RecordEntity) => currentUser.role !== "employee" || currentUser.department === department || currentUser.functionalPermissions.includes("*") || currentUser.functionalPermissions.includes(`${department}.read`);
-  const canWriteDepartment = (department: RecordEntity) => currentUser.role === "admin" || currentUser.role === "manager" || currentUser.functionalPermissions.includes("*") || currentUser.functionalPermissions.includes(`${department}.write`);
-  const viewDepartment: Partial<Record<View, RecordEntity>> = { employees:"employees", finance:"finance", legal:"legal", workforce:"workforce", operations:"workforce", conversations:"workforce" };
-  const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!) : currentUser.role === "admin" || currentUser.role === "manager" || functionalAdmin;
-  const canAccessDocuments = currentUser.role !== "employee" || currentUser.department === "legal" || currentUser.department === "finance" || currentUser.functionalPermissions.includes("*") || currentUser.functionalPermissions.includes("documents.read");
+  const hasPermission = (permission: string) => currentUser.role === "admin" || currentUser.functionalPermissions.includes("*") || currentUser.functionalPermissions.includes(permission);
+  const canAccess = (department: RecordEntity) => hasPermission(`${department}.read`);
+  const canWriteDepartment = (department: RecordEntity) => hasPermission(`${department}.write`);
+  const viewDepartment: Partial<Record<View, RecordEntity>> = { employees:"employees", finance:"finance", legal:"legal", workforce:"workforce", conversations:"workforce" };
+  const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!) : currentUser.role === "admin" || functionalAdmin;
+  const canAccessDocuments = hasPermission("documents.read");
+  const canAccessGovernment = hasPermission("government.read");
+  const canAccessOperations = hasPermission("operations.read");
+  const canAccessContracts = hasPermission("contracts.read");
   const activeRoleLabel = currentUser.functionalRoles.map((role) => functionalRoleLabels[role] || role).join("، ") || roleLabels[currentUser.role];
 
   useEffect(() => {
@@ -421,7 +425,20 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   const unreadConversationMessages = conversationMessages.filter((item) => item.senderType === "visitor" && !item.readByStaffAt).length;
   const waitingConversations = conversations.filter((item) => item.status === "waiting").length;
 
-  function changeView(next: View) { setView(next); setQuery(""); setMenuOpen(false); }
+  function canOpenView(next: View) {
+    if (["overview", "notifications", "tasks"].includes(next)) return true;
+    if (next === "employees" || next === "finance" || next === "legal" || next === "workforce") return canAccess(next);
+    if (next === "government") return canAccessGovernment;
+    if (next === "operations" || next === "representatives") return canAccessOperations;
+    if (next === "contractual-documents") return canAccessContracts;
+    if (next === "documents" || next === "brand") return canAccessDocuments;
+    if (next === "construction") return canAccessConstruction;
+    if (next === "conversations") return hasPermission("conversations.read") || hasPermission("conversations.write");
+    if (next === "website") return canAccessWebsite;
+    if (next === "users") return functionalAdmin || currentUser.role === "admin";
+    return false;
+  }
+  function changeView(next: View) { if (!canOpenView(next)) { setView("overview"); setMenuOpen(false); return; } setView(next); setQuery(""); setMenuOpen(false); }
   function notify(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 5000); }
 
   const refreshNotifications = useCallback(async (silent = false) => {
@@ -601,7 +618,8 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
   async function sendRequestReply(requestId: number, form: HTMLFormElement) {
     setBusy(`reply-${requestId}`);
     try {
-      const payload = Object.fromEntries(new FormData(form).entries());
+      const formData = new FormData(form);
+      const payload = { ...Object.fromEntries(formData.entries()), functionalRoles: formData.getAll("functionalRoles") };
       const response = await fetch(`/api/portal/requests/${requestId}/reply`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -936,12 +954,12 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {canAccess("employees") && <button className={view === "employees" ? "active" : ""} onClick={() => changeView("employees")}><Icon name="employees" /><span>إدارة الموظفين</span><small>{employees.length}</small></button>}
         {canAccess("finance") && <button className={view === "finance" ? "active" : ""} onClick={() => changeView("finance")}><Icon name="finance" /><span>الإدارة المالية</span></button>}
         {canAccess("legal") && <button className={view === "legal" ? "active" : ""} onClick={() => changeView("legal")}><Icon name="legal" /><span>الشؤون القانونية</span>{legalAlerts > 0 && <b>{legalAlerts}</b>}</button>}
-        {canAccess("legal") && <button className={view === "government" ? "active" : ""} onClick={() => changeView("government")}><Icon name="website" /><span>العلاقات الحكومية</span></button>}
+        {canAccessGovernment && <button className={view === "government" ? "active" : ""} onClick={() => changeView("government")}><Icon name="website" /><span>العلاقات الحكومية</span></button>}
         {canAccess("workforce") && <button className={view === "workforce" ? "active" : ""} onClick={() => changeView("workforce")}><Icon name="workforce" /><span>شؤون العمالة</span>{(requestCounts.new + workerAlerts + incompleteWorkerFiles) > 0 && <b>{requestCounts.new + workerAlerts + incompleteWorkerFiles}</b>}</button>}
-        {canAccess("workforce") && <button className={view === "operations" ? "active" : ""} onClick={() => changeView("operations")}><Icon name="finance" /><span>المبيعات والتشغيل</span></button>}
-        {canAccess("workforce") && <button className={view === "representatives" ? "active" : ""} onClick={() => changeView("representatives")}><Icon name="users"/><span>إدارة المناديب</span></button>}
+        {canAccessOperations && <button className={view === "operations" ? "active" : ""} onClick={() => changeView("operations")}><Icon name="finance" /><span>المبيعات والتشغيل</span></button>}
+        {canAccessOperations && <button className={view === "representatives" ? "active" : ""} onClick={() => changeView("representatives")}><Icon name="users"/><span>إدارة المناديب</span></button>}
         {canAccessConstruction && <button className={view === "construction" ? "active" : ""} onClick={() => changeView("construction")}><Icon name="legal" /><span>المقاولات والمشروعات</span></button>}
-        {canAccessDocuments && <button className={view === "contractual-documents" ? "active" : ""} onClick={() => changeView("contractual-documents")}><Icon name="documents" /><span>العقود والعروض والخطابات</span></button>}
+        {canAccessContracts && <button className={view === "contractual-documents" ? "active" : ""} onClick={() => changeView("contractual-documents")}><Icon name="documents" /><span>العقود والعروض والخطابات</span></button>}
         {canAccessDocuments && <button className={view === "documents" ? "active" : ""} onClick={() => changeView("documents")}><Icon name="documents" /><span>مستندات الشركة</span>{documentAlerts > 0 && <b>{documentAlerts}</b>}</button>}
         {canAccessDocuments && <button className={view === "brand" ? "active" : ""} onClick={() => changeView("brand")}><Icon name="brand" /><span>الهوية البصرية</span></button>}
         {canAccessWebsite && <button className={view === "website" ? "active" : ""} onClick={() => changeView("website")}><Icon name="website"/><span>إدارة الموقع</span></button>}
@@ -1166,21 +1184,22 @@ function UserAccessCard({ user, self, busy, onSave }: {
 
 function CreateUserModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [roles,setRoles]=useState<Array<{roleKey:string;labelAr:string;description:string|null;active:boolean}>>([]);
-  const [roleKey,setRoleKey]=useState("administrative_assistant");
+  const [selectedRoles,setSelectedRoles]=useState<string[]>([]);
   const [loadError,setLoadError]=useState("");
-  useEffect(()=>{let active=true;void fetch("/api/portal/role-definitions",{cache:"no-store"}).then(async response=>{const data=await readApiJson(response)as{roles?:Array<{roleKey:string;labelAr:string;description:string|null;active:boolean}>;error?:string};if(!response.ok)throw new Error(data.error||"تعذر تحميل الأدوار");if(active){const available=(data.roles||[]).filter(role=>role.active);setRoles(available);setRoleKey(current=>available.some(role=>role.roleKey===current)?current:available[0]?.roleKey||"")}}).catch(error=>{if(active)setLoadError(error instanceof Error?error.message:"تعذر تحميل الأدوار")});return()=>{active=false}},[]);
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void onSubmit(event.currentTarget); }
+  useEffect(()=>{let active=true;void fetch("/api/portal/role-definitions",{cache:"no-store"}).then(async response=>{const data=await readApiJson(response)as{roles?:Array<{roleKey:string;labelAr:string;description:string|null;active:boolean}>;error?:string};if(!response.ok)throw new Error(data.error||"تعذر تحميل الأدوار");if(active){const available=(data.roles||[]).filter(role=>role.active);setRoles(available);setSelectedRoles(current=>current.filter(key=>available.some(role=>role.roleKey===key)))}}).catch(error=>{if(active)setLoadError(error instanceof Error?error.message:"تعذر تحميل الأدوار")});return()=>{active=false}},[]);
+  function toggleRole(roleKey:string){setSelectedRoles(current=>current.includes(roleKey)?current.filter(key=>key!==roleKey):[...current,roleKey]);}
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if(!selectedRoles.length){setLoadError("اختر دوراً وظيفياً واحداً على الأقل");return;} void onSubmit(event.currentTarget); }
   return <div className="modal-layer"><button className="drawer-backdrop" aria-label="إغلاق نافذة إضافة مستخدم" onClick={onClose}/><section className="record-modal create-user-modal" role="dialog" aria-modal="true" aria-label="إضافة مستخدم"><div className="drawer-head"><div><span>إدارة المستخدمين</span><h2>إضافة مستخدم جديد</h2></div><button onClick={onClose} aria-label="إغلاق"><Icon name="close"/></button></div><form onSubmit={submit}>
     <label>الاسم الكامل<input name="displayName" required minLength={3} maxLength={160} autoComplete="name"/></label>
     <label>رقم الهوية<input name="identifier" required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} dir="ltr" placeholder="10 أرقام"/></label>
     <label>البريد الإلكتروني<input name="email" type="email" required maxLength={254} dir="ltr" autoComplete="email"/></label>
     <label>كلمة المرور المؤقتة<input name="password" type="password" required minLength={12} maxLength={128} dir="ltr" autoComplete="new-password"/></label>
-    <label>الدور الوظيفي<select name="functionalRole" required value={roleKey} onChange={event=>setRoleKey(event.target.value)}>{roles.map(role=><option key={role.roleKey} value={role.roleKey}>{role.labelAr}</option>)}</select><small>{roles.find(role=>role.roleKey===roleKey)?.description||"يحدد هذا الدور الوحدات والإجراءات المتاحة للمستخدم."}</small></label>
-    <label>القسم<select name="department" defaultValue="general"><option value="general">صلاحية عامة</option><option value="employees">إدارة الموظفين</option><option value="finance">الإدارة المالية</option><option value="legal">الشؤون القانونية</option><option value="workforce">شؤون العمالة</option><option value="construction">المقاولات والمشروعات</option></select></label>
-    <fieldset className="quick-permission-profile span-two"><legend>حزمة الصلاحيات السريعة</legend><label><input type="radio" name="permissionProfile" value="role_default" defaultChecked/><span><b>صلاحيات الدور</b><small>الحزمة الموصى بها للدور المختار.</small></span></label><label><input type="radio" name="permissionProfile" value="operator"/><span><b>تنفيذ دون اعتماد</b><small>إنشاء وتعديل وتحويل، دون اعتماد أو دفع أو ترحيل.</small></span></label><label><input type="radio" name="permissionProfile" value="read_only"/><span><b>اطلاع فقط</b><small>عرض البيانات والتقارير دون أي تعديل.</small></span></label></fieldset>
+    <fieldset className="quick-permission-profile span-two"><legend>الأدوار الوظيفية (يمكن اختيار أكثر من دور)</legend>{roles.map(role=><label key={role.roleKey}><input type="checkbox" name="functionalRoles" value={role.roleKey} checked={selectedRoles.includes(role.roleKey)} onChange={()=>toggleRole(role.roleKey)}/><span><b>{role.labelAr}</b><small>{role.description||"صلاحيات محددة حسب الدور"}</small></span></label>)}</fieldset>
+    <input type="hidden" name="department" value="general"/>
+    <fieldset className="quick-permission-profile span-two"><legend>حزمة الصلاحيات السريعة</legend><label><input type="radio" name="permissionProfile" value="role_default" defaultChecked/><span><b>صلاحيات الأدوار</b><small>اتحاد صلاحيات جميع الأدوار المختارة.</small></span></label><label><input type="radio" name="permissionProfile" value="operator"/><span><b>تنفيذ دون اعتماد</b><small>إنشاء وتعديل دون اعتماد أو دفع أو ترحيل.</small></span></label><label><input type="radio" name="permissionProfile" value="read_only"/><span><b>اطلاع فقط</b><small>عرض البيانات دون أي تعديل.</small></span></label></fieldset>
     {loadError&&<p className="form-error span-two">{loadError}</p>}
-    <p className="form-hint span-two">هذه العملية متاحة للمالك ومشرف النظام فقط. يدخل المستخدم أول مرة برقم هويته وكلمة المرور المؤقتة، ثم يعيّن كلمة دائمة تُبطل المؤقتة نهائيًا. يجب أن تضم المؤقتة 12 خانة على الأقل وحرفًا كبيرًا وصغيرًا ورقمًا ورمزًا.</p>
-    <div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy}>{busy ? "جارٍ الإنشاء..." : "إنشاء المستخدم بكلمة مؤقتة"}</button></div>
+    <p className="form-hint span-two">اختيار دور واحد على الأقل إلزامي. تُجمع صلاحيات الأدوار المختارة، ولا يمنح أي منها اعتماداً إلا المالك أو مشرف النظام.</p>
+    <div className="modal-actions span-two"><button type="button" onClick={onClose}>إلغاء</button><button className="admin-primary" type="submit" disabled={busy||!selectedRoles.length}>{busy ? "جارٍ الإنشاء..." : "إنشاء المستخدم"}</button></div>
   </form></section></div>;
 }
 
