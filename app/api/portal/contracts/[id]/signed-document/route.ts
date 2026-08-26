@@ -53,7 +53,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
       return savedContract;
     });
     if(!saved)throw new Error("CONTRACT_DOCUMENT_CHANGED");
-    await emitPortalNotification({eventType:"signed-contract-uploaded",title:"تم رفع العقد الموقع",message:`${contract.referenceCode} — أصبحت النسخة الموقعة هي النسخة الحالية مع حفظ مرجع السابقة.`,severity:"info",module:"documents",entityType:"workforce-contract",entityId:id,actionView:"contract-documents",targetDepartment:"contracts"}).catch(()=>undefined);
+    await emitPortalNotification({eventType:"signed-contract-uploaded",title:"تم رفع العقد الموقع",message:`${contract.referenceCode} — أصبحت النسخة الموقعة هي النسخة الحالية مع حفظ مرجع السابقة.`,severity:"info",module:"documents",entityType:"workforce-contract",entityId:id,actionView:"contractual-documents",targetDepartment: "workforce"}).catch(()=>undefined);
     return jsonNoStore({status:"ok",contract:saved});
   }catch(error){
     if(storageKey)await getRuntimeEnv().BUCKET.delete(storageKey).catch(()=>undefined);
