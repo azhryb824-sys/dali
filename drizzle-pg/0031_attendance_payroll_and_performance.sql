@@ -103,7 +103,7 @@ ALTER TABLE public.portal_attendance_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_deduction_proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employee_performance_reviews ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.portal_attendance_policies, public.portal_attendance_sessions, public.attendance_deduction_proposals, public.employee_performance_reviews FROM PUBLIC;
-DO $
+DO $dali_migration$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'REVOKE ALL ON TABLE public.portal_attendance_policies, public.portal_attendance_sessions, public.attendance_deduction_proposals, public.employee_performance_reviews FROM anon';
@@ -112,7 +112,7 @@ BEGIN
     EXECUTE 'REVOKE ALL ON TABLE public.portal_attendance_policies, public.portal_attendance_sessions, public.attendance_deduction_proposals, public.employee_performance_reviews FROM authenticated';
   END IF;
 END
-$;
+$dali_migration$;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.portal_attendance_policies, public.portal_attendance_sessions, public.attendance_deduction_proposals, public.employee_performance_reviews TO dali_app;
 GRANT USAGE, SELECT ON SEQUENCE public.attendance_deduction_proposals_id_seq, public.employee_performance_reviews_id_seq TO dali_app;
 CREATE POLICY portal_attendance_policies_server_access ON public.portal_attendance_policies AS PERMISSIVE FOR ALL TO dali_app USING (true) WITH CHECK (true);
