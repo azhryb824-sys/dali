@@ -631,3 +631,98 @@
 @media(max-width:620px){
   .issue-modal .document-type-control{grid-template-columns:1fr;padding:14px}
 }
+
+
+/* Complete dark-surface foreground protection across portal modules. */
+.admin-shell :is(
+  .hr-heading,.compliance-workspace>header,.reports-workspace>header,
+  .documents-heading .document-approval-entry,.executive-command-head,
+  .accounting-heading,.video-desk-panel>header,.portal-video-call header
+) :where(h1,h2,h3,h4,strong,b,span){
+  color:#fff!important;
+}
+.admin-shell :is(
+  .hr-heading,.compliance-workspace>header,.reports-workspace>header,
+  .documents-heading .document-approval-entry,.executive-command-head,
+  .accounting-heading,.video-desk-panel>header,.portal-video-call header
+) :where(p,small,label){
+  color:#d7e5e9!important;
+}
+
+/* Compact, dismissible video-call desk that stays clear of page content. */
+.video-desk{
+  position:fixed;
+  z-index:1450;
+  left:18px;
+  right:auto;
+  bottom:82px;
+  width:auto;
+  pointer-events:none;
+}
+.video-desk>*{pointer-events:auto}
+.video-desk-launcher{
+  min-width:48px!important;
+  width:auto;
+  min-height:48px!important;
+  height:48px;
+  padding:0 13px!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  border-radius:24px!important;
+  background:#073747!important;
+  box-shadow:0 9px 26px rgba(1,31,43,.22)!important;
+}
+.video-desk-launcher>span{font-size:17px!important}
+.video-desk-launcher>small{
+  max-width:90px;
+  color:#fff!important;
+  font-size:11px!important;
+  white-space:nowrap;
+}
+.video-desk-launcher.idle>small{
+  max-width:0;
+  overflow:hidden;
+  opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.video-desk-launcher.idle:hover>small,
+.video-desk-launcher.idle:focus-visible>small{max-width:90px;opacity:1}
+.video-desk-launcher>strong{
+  min-width:20px!important;
+  width:20px;
+  height:20px!important;
+  padding:0!important;
+  color:#fff!important;
+  font-size:10px!important;
+}
+.video-desk-panel{
+  position:absolute!important;
+  inset:auto auto 58px 0!important;
+  width:min(370px,calc(100vw - 28px))!important;
+  max-height:min(620px,calc(100dvh - 170px))!important;
+  border-radius:16px!important;
+  box-shadow:0 22px 64px rgba(0,29,45,.28)!important;
+}
+.video-desk-panel>header{padding:14px 15px!important}
+.video-desk-panel>header h2{font-size:17px!important}
+.video-desk-panel>header button{
+  min-width:38px!important;
+  width:38px!important;
+  height:38px!important;
+}
+.video-presence{padding:9px 12px!important}
+.video-presence button{min-height:34px!important;font-size:10px!important}
+.video-call-list{padding:10px!important}
+.video-call-list>article{padding:12px!important}
+.video-desk-panel>footer{padding:10px 12px!important}
+@media(max-width:650px){
+  .video-desk{left:10px;right:auto;bottom:72px}
+  .video-desk-launcher{width:48px;padding:0!important;justify-content:center}
+  .video-desk-launcher>small{display:none!important}
+  .video-desk-panel{
+    position:fixed!important;
+    inset:auto 10px 130px 10px!important;
+    width:auto!important;
+    max-height:min(68dvh,560px)!important;
+    border-radius:16px!important;
+  }
+}
