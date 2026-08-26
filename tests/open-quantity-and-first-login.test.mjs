@@ -18,3 +18,24 @@ test("new users must replace the temporary password exactly once",async()=>{
   assert.match(reset,/mustChangePassword: false/);assert.match(reset,/passwordChangedAt: now/);assert.match(reset,/isNull\(passwordResetTokens\.usedAt\)/);
   assert.match(schema,/mustChangePassword/);assert.match(page,/تُلغى المؤقتة نهائيًا/);assert.match(migration,/must_change_password/);
 });
+
+
+test("owner and system administrator can set a temporary password for another user",async()=>{
+  const[adminReset,users,login,reset,styles]=await Promise.all([
+    source("app/api/portal/users/password/route.ts"),
+    source("app/portal/PortalDashboard.tsx"),
+    source("app/api/auth/login/route.ts"),
+    source("app/api/auth/reset-password/route.ts"),
+    source("app/portal/portal.css"),
+  ]);
+  assert.match(adminReset,/system_owner/);assert.match(adminReset,/system_admin/);
+  assert.match(adminReset,/email === access\.user\.email\.toLowerCase\(\)/);
+  assert.match(adminReset,/strongTemporaryPassword/);assert.match(adminReset,/hashPassword\(temporaryPassword\)/);
+  assert.match(adminReset,/mustChangePassword: true/);assert.match(adminReset,/passwordChangedAt: null/);
+  assert.match(adminReset,/revokePortalSessionsForUser\(email, "administrator-password-reset"\)/);
+  assert.doesNotMatch(adminReset,/after: \{[^}]*temporaryPassword/);
+  assert.match(users,/\/api\/portal\/users\/password/);assert.match(users,/كلمة مرور مؤقتة/);
+  assert.match(login,/credential\.mustChangePassword/);assert.match(login,/first=1/);
+  assert.match(reset,/mustChangePassword: false/);assert.match(reset,/passwordChangedAt: now/);
+  assert.match(styles,/\.user-password-reset/);
+});
