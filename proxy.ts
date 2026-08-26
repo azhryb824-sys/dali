@@ -19,7 +19,7 @@ const contentSecurityPolicy = [
   "upgrade-insecure-requests",
 ].join("; ");
 
-const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$))/;
+const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
 
 export function proxy(request: NextRequest) {
   const response = NextResponse.next();
