@@ -40,7 +40,7 @@ try {
   const forbiddenRoleApprovals = await sql`
     SELECT role_key, permission
     FROM public.portal_roles r
-    CROSS JOIN LATERAL jsonb_array_elements_text(r.permissions_json::jsonb) permission
+    CROSS JOIN LATERAL jsonb_array_elements_text(r.permissions_json::jsonb) AS item(permission)
     WHERE r.active = true
       AND r.role_key NOT IN ('system_owner','system_admin')
       AND (permission = '*' OR permission ~ '\\.(approve|post|pay|administer)$')
