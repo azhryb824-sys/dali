@@ -60,6 +60,19 @@ ON CONFLICT (role_key) DO UPDATE SET
   active=true,
   updated_at=CURRENT_TIMESTAMP::text;
 
+-- Make an existing official company stamp immediately selectable for contract approval.
+INSERT INTO public.document_stamps
+  (name, storage_key, file_name, content_type, size_bytes, active, created_by, created_at, updated_at)
+SELECT
+  'ختم الشركة المعتمد', asset.storage_key, asset.file_name, asset.content_type,
+  asset.size_bytes, true, asset.uploaded_by, asset.updated_at, asset.updated_at
+FROM public.company_assets asset
+WHERE asset.slot = 'stamp'
+  AND NOT EXISTS (
+    SELECT 1 FROM public.document_stamps stamp
+    WHERE stamp.storage_key = asset.storage_key
+  );
+
 INSERT INTO private.__dali_migrations (name)
 VALUES ('0049_workforce_supervision_absence_deductions.sql')
 ON CONFLICT (name) DO NOTHING;
