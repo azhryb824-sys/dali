@@ -10,7 +10,7 @@ import { getBusinessHoursState } from "@/lib/business-hours";
 import { getChatAutomationConfig } from "@/lib/chat-automation";
 import { emailDeliveryConfigured } from "@/lib/email-delivery";
 import { listPortalNotifications } from "@/lib/portal-notifications";
-import { canAccessPortalDepartment, canAccessPortalDocuments, canManageCompanyAssets, canManagePortalConversations, canManagePortalDocuments, hasPortalPermission, resolvePortalAccess } from "@/lib/portal-access";
+import { canAccessCompanyFiles, canAccessPortalDepartment, canManageCompanyAssets, canManagePortalConversations, canManagePortalDocuments, hasPortalPermission, resolvePortalAccess } from "@/lib/portal-access";
 import { getWebsiteContent } from "@/lib/website-content";
 import { portalSessionEndPath, portalSessionStartPath, verifyPortalSession } from "@/lib/portal-session";
 import PortalDashboard from "./PortalDashboard";
@@ -85,7 +85,7 @@ async function ProtectedPortal() {
   const db = getDb();
   const canManageRequests = access.role === "admin" || access.role === "manager" || canAccessPortalDepartment(access, "workforce", true);
   const canAdministerUsers = access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
-  const canSeeDocuments = canAccessPortalDocuments(access);
+  const canSeeDocuments = canAccessCompanyFiles(access);
   const canSeeContracts = await hasPortalPermission(access, "contracts", "read");
   const canSeeConversations = canManagePortalConversations(access);
   const [canReadWebsite, canManageWebsite, constructionPermission, constructionScopes] = await Promise.all([
