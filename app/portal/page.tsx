@@ -86,7 +86,7 @@ async function ProtectedPortal() {
   const canManageRequests = access.role === "admin" || access.role === "manager" || canAccessPortalDepartment(access, "workforce", true);
   const canAdministerUsers = access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
   const canSeeDocuments = canAccessPortalDocuments(access);
-  const canSeeContracts = canAccessPortalDepartment(access, "workforce") || canAccessPortalDepartment(access, "finance");
+  const canSeeContracts = await hasPortalPermission(access, "contracts", "read");
   const canSeeConversations = canManagePortalConversations(access);
   const [canReadWebsite, canManageWebsite, constructionPermission, constructionScopes] = await Promise.all([
     hasPortalPermission(access, "website", "read"),
