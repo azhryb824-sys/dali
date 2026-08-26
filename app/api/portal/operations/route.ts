@@ -21,7 +21,7 @@ import {
 } from "@/db/schema";
 import { auditPortalAction, enqueueOutbox, recordStatusChange } from "@/lib/audit";
 import { beginOperation, completeOperation, failOperation } from "@/lib/idempotency";
-import { canAccessPortalDepartment, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
+import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
 import { jsonNoStore, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
@@ -39,8 +39,7 @@ const code = (prefix: string) => `${prefix}-${Date.now().toString(36).toUpperCas
 
 async function requireOperationsAccess(write = false) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !canAccessPortalDepartment(access, "workforce", write)) return null;
-  if (write && !(await hasPortalPermission(access, "workforce", "write"))) return null;
+  if (!access || !(await hasPortalPermission(access, "operations", write ? "write" : "read"))) return null;
   return access;
 }
 
