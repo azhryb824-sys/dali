@@ -8,11 +8,35 @@ import { latinDigits } from "@/lib/latin-digits";
 const PAGE = { width: 595.28, height: 841.89, margin: 48 };
 const C = { navy: rgb(0, .114, .176), red: rgb(.886, .11, .145), text: rgb(.12, .17, .2), muted: rgb(.42, .48, .52), pale: rgb(.96, .97, .975) };
 
-function width(font: PDFFont, value: string, size: number) { return font.widthOfTextAtSize(value || " ", size); }
-function right(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = C.text, edge = PAGE.width - PAGE.margin) {
+const latinFontByFont = new WeakMap<PDFFont, PDFFont>();
+
+function runs(font: PDFFont, value: string) {
   const normalized = latinDigits(value);
-  page.drawText(normalized, { x: edge - width(font, normalized, size), y, font, size, color });
+  const latinFont = latinFontByFont.get(font);
+  if (!latinFont || !/[0-9]/.test(normalized)) return [{ text: normalized, font }];
+  const result: Array<{ text: string; font: PDFFont }> = [];
+  let cursor = 0;
+  for (const match of normalized.matchAll(/[0-9][0-9.,:/%+\-]*/g)) {
+    const index = match.index ?? 0;
+    if (index > cursor) result.push({ text: normalized.slice(cursor, index), font });
+    result.push({ text: match[0], font: latinFont });
+    cursor = index + match[0].length;
+  }
+  if (cursor < normalized.length) result.push({ text: normalized.slice(cursor), font });
+  return result;
 }
+function width(font: PDFFont, value: string, size: number) {
+  return runs(font, value || " ").reduce((total, run) => total + run.font.widthOfTextAtSize(run.text, size), 0);
+}
+function right(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = C.text, edge = PAGE.width - PAGE.margin) {
+  let cursor = edge;
+  for (const run of runs(font, value)) {
+    const runWidth = run.font.widthOfTextAtSize(run.text, size);
+    cursor -= runWidth;
+    page.drawText(run.text, { x: cursor, y, font: run.font, size, color });
+  }
+}
+
 function wrap(font: PDFFont, value: string, size: number, maxWidth: number) {
   const lines: string[] = [];
   for (const paragraph of value.split("\n")) {
@@ -72,11 +96,18 @@ export async function generateBrandIdentityPdf(id: BrandIdentityAssetId) {
   const asset = brandIdentityAssets.find((item) => item.id === id)!;
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const cairoBold = await cairoFontBytes("arabicBold");
-  const [regular, bold] = await Promise.all([
-    pdf.embedFont(cairoBold, { subset: true }),
-    pdf.embedFont(cairoBold, { subset: true }),
+  const [cairoBold, cairoLatin] = await Promise.all([
+    cairoFontBytes("arabicBold"),
+    cairoFontBytes("latinBold"),
   ]);
+  const [regular, bold, latinRegular, latinBold] = await Promise.all([
+    pdf.embedFont(cairoBold, { subset: true }),
+    pdf.embedFont(cairoBold, { subset: true }),
+    pdf.embedFont(cairoLatin, { subset: true }),
+    pdf.embedFont(cairoLatin, { subset: true }),
+  ]);
+  latinFontByFont.set(regular, latinRegular);
+  latinFontByFont.set(bold, latinBold);
   const logoResponse = await getRuntimeEnv().ASSETS.fetch(new Request("https://assets.local/dally-logo.jpg"));
   const logo = logoResponse.ok ? await pdf.embedJpg(new Uint8Array(await logoResponse.arrayBuffer())) : null;
   let page = pdf.addPage([PAGE.width, PAGE.height]);
