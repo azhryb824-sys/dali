@@ -40,8 +40,8 @@ const functionalDepartmentAccess: Record<string, { read: Exclude<PortalDepartmen
   document_controller: { read: ["construction", "legal"], write: ["construction", "legal"] },
   quality_officer: { read: ["construction"], write: ["construction"] },
   safety_officer: { read: ["construction"], write: ["construction"] },
-  hr_officer: { read: ["employees", "workforce"], write: ["employees"] },
-  government_relations_officer: { read: ["legal", "employees", "workforce", "finance"], write: ["legal"] },
+  hr_officer: { read: ["employees"], write: ["employees"] },
+  government_relations_officer: { read: [], write: [] },
   regional_manager: { read: ["construction", "workforce"], write: ["construction", "workforce"] },
   client_consultant: { read: ["construction"], write: [] },
   subcontractor: { read: ["construction"], write: [] },
@@ -49,7 +49,7 @@ const functionalDepartmentAccess: Record<string, { read: Exclude<PortalDepartmen
   legal_affairs: { read: ["legal"], write: ["legal"] },
   sales_representative: { read: ["workforce"], write: ["workforce"] },
   purchasing_representative: { read: ["finance", "construction"], write: ["finance"] },
-  administrative_assistant: { read: ["employees"], write: [] },
+  administrative_assistant: { read: [], write: [] },
 };
 const functionalApprovals: Record<string, string[]> = {
   finance: ["finance_director"], employees: ["hr_officer"], legal: ["contracts_manager"], workforce: ["workforce_operations_manager", "regional_manager"], construction: ["construction_director", "project_manager"],
@@ -74,6 +74,8 @@ function fallbackPermissions(roles: string[]) {
     access?.write.forEach((department) => permissions.add(`${department}.write`));
     for (const [resource, approvers] of Object.entries(functionalApprovals)) if (approvers.includes(role)) permissions.add(`${resource}.approve`);
     if (role === "finance_director") permissions.add("finance.post");
+    if (role === "government_relations_officer") { permissions.add("government.read"); permissions.add("government.write"); }
+    if (role === "administrative_assistant") { ["operations.read","operations.write","contracts.read","contracts.write","documents.read","documents.write","documents.share"].forEach((permission) => permissions.add(permission)); }
   }
   return [...permissions];
 }
@@ -274,17 +276,17 @@ export function canAccessPortalDepartment(
   department: Exclude<PortalDepartment, "general">,
   write = false,
 ) {
-  if (access.role === "admin" || access.role === "manager") return true;
+  if (access.role === "admin") return true;
   if (access.functionalPermissions.includes("*") || access.functionalPermissions.includes(`${department}.${write ? "write" : "read"}`)) return true;
   return !write && access.department === department;
 }
 
 export function canAccessPortalDocuments(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.role === "manager" || access.department === "legal" || access.department === "finance" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.read") || access.functionalPermissions.includes("legal.read") || access.functionalPermissions.includes("finance.read");
+  return access.role === "admin" || access.department === "legal" || access.department === "finance" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.read") || access.functionalPermissions.includes("legal.read") || access.functionalPermissions.includes("finance.read");
 }
 
 export function canManagePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.role === "manager" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.write") || access.functionalPermissions.includes("finance.write");
+  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.write") || access.functionalPermissions.includes("finance.write");
 }
 
 export function canManageCompanyAssets(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
@@ -296,7 +298,7 @@ export function canAdministerPortalUsers(access: Pick<PortalAccess, "role" | "fu
 }
 
 export function canManagePortalConversations(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.role === "manager" || access.department === "workforce" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("workforce.write") || access.functionalPermissions.includes("conversations.write");
+  return access.role === "admin" || access.department === "workforce" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("workforce.write") || access.functionalPermissions.includes("conversations.write");
 }
 
 export async function hasPortalPermission(
@@ -317,6 +319,5 @@ export async function hasPortalPermission(
   if (["read", "write"].includes(action) && ["employees", "finance", "legal", "workforce", "construction"].includes(resource)) {
     return canAccessPortalDepartment(access, resource as Exclude<PortalDepartment, "general">, action === "write");
   }
-  if (access.role === "manager") return action !== "administer";
   return action === "read" && (access.department === resource || resource === "overview");
 }
