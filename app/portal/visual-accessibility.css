@@ -595,3 +595,39 @@
   .payment-kpis article{min-height:94px!important}
   .payment-actions{grid-template-columns:1fr!important}
 }
+
+
+/* Primary document choice stays above every workflow step. */
+.issue-modal .document-type-control{
+  display:grid;
+  grid-template-columns:minmax(220px,420px) minmax(220px,1fr);
+  align-items:end;
+  gap:10px 18px;
+  padding:16px 18px;
+  border:1px solid #cfdde2;
+  border-inline-start:4px solid #0c7180;
+  border-radius:15px;
+  background:linear-gradient(135deg,#fff,#f2f8f9);
+}
+.issue-modal .document-type-control label{
+  display:grid;
+  gap:7px;
+  color:#173f4e;
+  font-size:13px;
+  font-weight:800;
+}
+.issue-modal .document-type-control select{
+  min-height:48px;
+  border-color:#b8cbd2!important;
+  background:#fff!important;
+  font-weight:750;
+}
+.issue-modal .document-type-control>small{
+  align-self:center;
+  color:#607781;
+  font-size:12px;
+  line-height:1.7;
+}
+@media(max-width:620px){
+  .issue-modal .document-type-control{grid-template-columns:1fr;padding:14px}
+}
