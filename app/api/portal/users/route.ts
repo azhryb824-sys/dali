@@ -14,8 +14,8 @@ const allowedStatuses = new Set(["active", "pending", "suspended"]);
 const allowedDepartments = new Set(["general", "employees", "finance", "legal", "workforce", "construction"]);
 const permissionProfiles = new Set<PermissionProfile>(["read_only", "operator", "role_default"]);
 const roleDepartments: Record<string, string> = {
-  accountant: "finance", legal_affairs: "legal", sales_representative: "workforce",
-  purchasing_representative: "finance", administrative_assistant: "employees",
+  accountant: "finance", lawyer: "legal", legal_affairs: "legal", sales_representative: "workforce",
+  purchasing_representative: "finance", administrative_assistant: "general",
   finance_director: "finance", project_accountant: "finance", contracts_manager: "legal",
   procurement_officer: "finance", hr_officer: "employees", workforce_operations_manager: "workforce",
   regional_manager: "workforce", construction_director: "construction", project_manager: "construction",
@@ -39,17 +39,23 @@ export async function POST(request: Request) {
     const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
     const displayName = typeof payload.displayName === "string" ? payload.displayName.trim().slice(0, 160) : "";
     const password = typeof payload.password === "string" ? payload.password : "";
-    const functionalRole = typeof payload.functionalRole === "string" ? payload.functionalRole.trim() : "";
+    const functionalRoles = Array.isArray(payload.functionalRoles)
+      ? [...new Set(payload.functionalRoles.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean))]
+      : typeof payload.functionalRole === "string" && payload.functionalRole.trim() ? [payload.functionalRole.trim()] : [];
     const requestedProfile = typeof payload.permissionProfile === "string" ? payload.permissionProfile as PermissionProfile : "role_default";
     const permissionProfile: PermissionProfile = permissionProfiles.has(requestedProfile) ? requestedProfile : "role_default";
     const db = getDb();
-    const roleDefinition = functionalRole ? await db.query.portalRoles.findFirst({ where: eq(portalRoles.roleKey, functionalRole) }) : null;
-    if (!roleDefinition?.active) return jsonNoStore({ error: "اختر دوراً وظيفياً نشطاً للمستخدم" }, { status: 400 });
-    const isRootRole = functionalRole === "system_owner" || functionalRole === "system_admin";
+    if (!functionalRoles.length) return jsonNoStore({ error: "يجب اختيار دور وظيفي واحد على الأقل" }, { status: 400 });
+    const activeRoleDefinitions = await db.select().from(portalRoles);
+    const definitionByKey = new Map(activeRoleDefinitions.filter((item) => item.active).map((item) => [item.roleKey, item]));
+    const roleDefinitions = functionalRoles.map((roleKey) => definitionByKey.get(roleKey));
+    if (roleDefinitions.some((definition) => !definition)) return jsonNoStore({ error: "تتضمن الأدوار دوراً غير موجود أو غير نشط" }, { status: 400 });
+    const isRootRole = functionalRoles.some((roleKey) => roleKey === "system_owner" || roleKey === "system_admin");
     if (isRootRole && !(access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin"))) return jsonNoStore({ error: "إنشاء مالك النظام أو مشرفه متاح للمالك أو مشرف قائم فقط" }, { status: 403 });
     const role = isRootRole ? "admin" : "employee";
     const submittedDepartment = typeof payload.department === "string" ? payload.department : "general";
-    const department = isRootRole ? "general" : roleDepartments[functionalRole] || submittedDepartment;
+    const inferredDepartments = [...new Set(functionalRoles.map((roleKey) => roleDepartments[roleKey]).filter(Boolean))];
+    const department = isRootRole || inferredDepartments.length !== 1 ? "general" : inferredDepartments[0] || submittedDepartment;
     if (!/^\d{10}$/.test(identifier) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || displayName.length < 3 || !allowedRoles.has(role) || !allowedDepartments.has(department) || password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
       return jsonNoStore({ error: "أكمل البيانات: هوية من 10 أرقام، بريد صحيح، وكلمة مرور من 12 خانة تشمل حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا" }, { status: 400 });
     }
@@ -63,9 +69,10 @@ export async function POST(request: Request) {
     const user = await db.transaction(async (tx) => {
       await tx.insert(portalAuthCredentials).values({ identifier, email, displayName, passwordHash, mustChangePassword: true, passwordChangedAt: null, createdAt: now, updatedAt: now });
       const [created] = await tx.insert(portalUsers).values({ email, displayName, role, department, status: "active", requestedDepartment: department, requestedJobTitle: "أُضيف بواسطة الإدارة", requestReason: "إنشاء مباشر بواسطة المالك أو مشرف النظام", requestSubmittedAt: now, termsAcceptedAt: now, approvedBy: access.user.email, approvedAt: now, createdAt: now, updatedAt: now }).returning();
-      await tx.insert(portalAccessScopes).values({ userEmail: email, functionalRole, active: true, canApproveOwn: false, createdBy: access.user.email, createdAt: now, updatedAt: now });
+      await tx.insert(portalAccessScopes).values(functionalRoles.map((functionalRole) => ({ userEmail: email, functionalRole, active: true, canApproveOwn: false, createdBy: access.user.email, createdAt: now, updatedAt: now })));
       if (!isRootRole) {
-        const explicitRules = permissionsForProfile(parseRolePermissions(roleDefinition.permissionsJson), permissionProfile);
+        const combinedPermissions = [...new Set(roleDefinitions.flatMap((definition) => parseRolePermissions(definition!.permissionsJson)))];
+        const explicitRules = permissionsForProfile(combinedPermissions, permissionProfile);
         await tx.insert(portalUserPermissions).values(explicitRules.map((rule) => ({
           userEmail: email, resource: rule.resource, action: rule.action, allowed: rule.allowed,
           scope: department === "general" ? "all" : "department", createdBy: access.user.email, createdAt: now,
@@ -73,9 +80,9 @@ export async function POST(request: Request) {
       }
       return created;
     });
-    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRole }, reason: isRootRole ? `إنشاء ${functionalRole === "system_owner" ? "مالك نظام" : "مشرف نظام"} بصلاحيات كاملة` : `إنشاء حساب بدور ${roleDefinition.labelAr} وحزمة ${permissionProfile}`, source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
-    await emitPortalNotification({ eventType: "portal-user-created", title: "أُضيف مستخدم جديد", message: `${displayName} — ${roleDefinition.labelAr} — ${department}.`, severity: "warning", module: "users", entityType: "portal-user", entityId: email, actionView: "users", targetRole: "admin" }).catch(() => undefined);
-    return jsonNoStore({ user }, { status: 201 });
+    await auditPortalAction({ actorEmail: access.user.email, action: "portal-user-created", entityType: "portal-user", entityId: email, after: { ...user, identifier: "**********", functionalRoles }, reason: isRootRole ? `إنشاء ${functionalRole === "system_owner" ? "مالك نظام" : "مشرف نظام"} بصلاحيات كاملة` : `إنشاء حساب بأدوار ${roleDefinitions.map((definition) => definition!.labelAr).join("، ")} وحزمة ${permissionProfile}`, source: "security", correlationId: requestCorrelationId(request), ipHash: await requestSourceHash(request) });
+    await emitPortalNotification({ eventType: "portal-user-created", title: "أُضيف مستخدم جديد", message: `${displayName} — ${roleDefinitions.map((definition) => definition!.labelAr).join("، ")} — ${department}.`, severity: "warning", module: "users", entityType: "portal-user", entityId: email, actionView: "users", targetRole: "admin" }).catch(() => undefined);
+    return jsonNoStore({ user: { ...user, functionalRoles } }, { status: 201 });
   } catch (error) {
     console.error("portal-user-create-failed", error);
     return jsonNoStore({ error: "تعذّر إضافة المستخدم" }, { status: 500 });
