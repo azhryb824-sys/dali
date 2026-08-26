@@ -50,7 +50,7 @@ const available = new Map([...expected.keys()].map((table) => [table, new Set()]
 for (const match of sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)?\s+(?:public\.)?"?([a-z0-9_]+)"?\s*\(([\s\S]*?)\);/gi)) {
   const columns = available.get(match[1]);
   if (!columns) continue;
-  for (const column of match[2].matchAll(/(?:^|,)\s*"([a-z0-9_]+)"\s+(?:serial|integer|text|boolean|timestamp|json|numeric|uuid|bigint|date|varchar)/gim)) columns.add(column[1]);
+  for (const column of match[2].matchAll(/(?:^|,)\s*"?([a-z0-9_]+)"?\s+(?:serial|integer|text|boolean|timestamp|json|numeric|uuid|bigint|date|varchar)/gim)) columns.add(column[1]);
 }
 for (const match of sql.matchAll(/ALTER TABLE\s+(?:public\.)?"?([a-z0-9_]+)"?\s+ADD COLUMN(?: IF NOT EXISTS)?\s+"?([a-z0-9_]+)"?/gi)) {
   available.get(match[1])?.add(match[2]);
