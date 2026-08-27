@@ -76,7 +76,7 @@ test("sponsorship and Ajir status remain operationally consistent but private in
     for(const code of [workersRoute,operationsRoute,contractRoute,portal,operations,schema])assert.match(code,new RegExp(field));
   }
   assert.match(workersRoute,/اسم الكفيل وحالة عقد أجير/);assert.match(workersRoute,/worker-without-ajir/);
-  assert.match(operationsRoute,/أكمل اسم الكفيل وحالة عقد أجير/);assert.match(contractRoute,/تطابق عرض السعر المقبول/);
+  assert.match(operationsRoute,/أكمل اسم الكفيل/);assert.match(operationsRoute,/not_applicable/);assert.match(contractRoute,/تطابق عرض السعر المقبول/);
   assert.match(assignmentRoute,/بيانات كفالة العامل وحالة عقد أجير لا تطابق/);assert.match(portal,/sponsorshipMatches/);
   for(const label of ["بعقد أجير","بدون عقد أجير"]){assert.match(portal,new RegExp(label));assert.match(operations,new RegExp(label));}
   assert.match(pdf,/publicManpowerText\(item\.notes\)/);assert.match(pdf,/publicManpowerText\(input\.details\)/);assert.doesNotMatch(pdf,/const sponsorship = item\.sponsorshipType/);
@@ -146,7 +146,7 @@ test("due installments auto invoice once, support secure WhatsApp sharing, and f
   assert.match(invoicing,/isNull\(contractPaymentSchedules\.invoiceDocumentId\)/);assert.match(invoicing,/contract-payment-auto-invoiced/);
   assert.match(paymentsApi,/issueDueContractInvoice/);assert.match(paymentsApi,/clientMobiles/);assert.match(dashboard,/createWhatsAppUrl/);assert.match(whatsapp,/https:\/\/wa\.me\//);assert.match(dashboard,/رابط PDF الآمن/);
   assert.match(paymentsUi,/مركز إدارة الدفعات والتحصيل/);assert.match(paymentsUi,/نسبة التحصيل/);assert.match(paymentsUi,/متأخر/);
-  assert.match(legalApi,/legal-case-activity-created/);assert.match(legalUi,/لوحة القضايا والإجراءات والمواعيد/);assert.match(schema,/legalCaseActivities/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);
+  assert.match(legalApi,/legal-case-activity-created/);assert.match(legalUi,/ملف قانوني مترابط بالعقد والعميل/);assert.match(legalUi,/مرفقات الشؤون القانونية/);assert.match(schema,/legalCaseActivities/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);
   assert.match(notifications,/contract-payment-overdue/);assert.match(notifications,/legal-activity-overdue/);assert.match(notifications,/issueDueContractInvoice/);
 });
 
