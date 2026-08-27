@@ -25,6 +25,9 @@ test("desktop build publishes the updater metadata with the installer", async ()
   assert.equal(desktopPackage.build.publish.releaseType, "release");
   assert.match(workflow, /--publish always/);
   assert.doesNotMatch(workflow, /inputs\.publish_update/);
+  assert.match(workflow, /Create immutable release tag/);
+  assert.match(workflow, /git push origin \$tag/);
+  assert.doesNotMatch(workflow, /tags: \["v\*"\]/);
   assert.match(workflow, /desktop\/dist\/latest\.yml/);
   assert.match(workflow, /desktop\/dist\/\*\.blockmap/);
 });

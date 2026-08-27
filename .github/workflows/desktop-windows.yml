@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [godaddy-preview]
-    tags: ["v*"]
     paths:
       - "desktop/**"
       - ".github/workflows/desktop-windows.yml"
@@ -26,6 +25,15 @@ jobs:
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci
+      - name: Create immutable release tag
+        shell: pwsh
+        run: |
+          $version = node -p "require('./desktop/package.json').version"
+          $tag = "v$version"
+          git fetch --tags origin
+          if (git tag --list $tag) { throw "Release tag $tag already exists; increase the desktop version." }
+          git tag -a $tag $env:GITHUB_SHA -m "Dali Desktop $version"
+          git push origin $tag
       - name: Build single Windows installer
         working-directory: desktop
         env:
