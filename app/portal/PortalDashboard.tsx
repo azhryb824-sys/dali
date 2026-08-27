@@ -152,7 +152,7 @@ const functionalRoleLabels: Record<string, string> = {
   contracts_manager: "مدير العقود", procurement_officer: "مسؤول المشتريات", project_accountant: "محاسب مشروع", document_controller: "مراقب وثائق",
   quality_officer: "مسؤول الجودة", safety_officer: "مسؤول السلامة", hr_officer: "مسؤول الموارد البشرية", government_relations_officer: "مسؤول العلاقات الحكومية والامتثال", regional_manager: "مدير منطقة",
   client_consultant: "ممثل العميل أو الاستشاري", subcontractor: "مقاول باطن",
-  accountant: "المحاسب", lawyer: "محامي", workforce_supervisor: "مشرف العمالة", legal_affairs: "شؤون قانونية", sales_representative: "مندوب مبيعات",
+  accountant: "المحاسب", lawyer: "محامي", legal_supervisor: "محامي مشرف", legal_lawyer: "محامي فرعي", workforce_supervisor: "مشرف العمالة", legal_affairs: "شؤون قانونية", sales_representative: "مندوب مبيعات",
   purchasing_representative: "مندوب مشتريات", administrative_assistant: "مساعد إداري",
 };
 const departmentLabels: Record<PortalDepartment, string> = {
