@@ -23,6 +23,7 @@ test("desktop build publishes the updater metadata with the installer", async ()
   assert.equal(desktopPackage.build.publish.owner, "azhryb824-sys");
   assert.equal(desktopPackage.build.publish.repo, "dali");
   assert.match(workflow, /--publish always/);
+  assert.doesNotMatch(workflow, /inputs\.publish_update/);
   assert.match(workflow, /desktop\/dist\/latest\.yml/);
   assert.match(workflow, /desktop\/dist\/\*\.blockmap/);
 });
