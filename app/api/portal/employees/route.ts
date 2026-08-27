@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       { file: employmentContract, type: "employment_contract", title: "عقد العمل", expiryDate: contractEndDate || "", allowed: documentTypes },
     ];
     if (photo instanceof File && photo.size > 0) pending.push({ file: photo, type: "personal_photo", title: "الصورة الشخصية", expiryDate: "", allowed: imageTypes });
-    const uploaded = [];
+    const uploaded: Array<(typeof pending)[number] & { fileName: string; storageKey: string }> = [];
     for (const item of pending) {
       const validation = await validateUploadedFile(item.file, { contentTypes: item.allowed, maxBytes: item.type === "personal_photo" ? 5 * 1024 * 1024 : 12 * 1024 * 1024 });
       if (!validation.valid) throw new Error(validation.error);
