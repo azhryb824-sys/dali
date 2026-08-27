@@ -193,7 +193,7 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     const discountHalalas = Math.min(subtotalHalalas, Math.max(0, Math.round((Number(payload.discount) || 0) * 100)));
     const vatHalalas = Math.round((subtotalHalalas - discountHalalas) * vatRate / 100);
     const assumptions = [`النشاط: ${activityLabel}`, `موقع الخدمة: ${workSite}`, `الضريبة: ${vatRate}`, text(payload.assumptions, 2500)].filter(Boolean).join("\n");
-    const [quote] = await db.insert(quoteVersions).values({ quoteCode: code("QUO"), opportunityId, versionNumber: 1, status: "draft", issueDate, validUntil, quantityMode, seasonType, paymentScheduleJson: paymentSchedule.length ? JSON.stringify(paymentSchedule) : null, accommodationParty, transportParty, vatRateBps: Math.round(vatRate * 100), subtotalHalalas, discountHalalas, totalHalalas: subtotalHalalas - discountHalalas + vatHalalas, assumptions, terms: text(payload.terms, 3000) || null, createdBy: actor }).returning();
+    const [quote] = await db.insert(quoteVersions).values({ quoteCode: code("QUO"), opportunityId: opportunity.id, versionNumber: 1, status: "draft", issueDate, validUntil, quantityMode, seasonType, paymentScheduleJson: paymentSchedule.length ? JSON.stringify(paymentSchedule) : null, accommodationParty, transportParty, vatRateBps: Math.round(vatRate * 100), subtotalHalalas, discountHalalas, totalHalalas: subtotalHalalas - discountHalalas + vatHalalas, assumptions, terms: text(payload.terms, 3000) || null, createdBy: actor }).returning();
     try {
       await db.insert(quoteItems).values(normalizedItems.map((item) => ({ ...item, quoteVersionId: quote.id })));
     } catch (error) {
