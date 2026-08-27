@@ -25,7 +25,9 @@ test("Ajir selection is independent from Dali sponsorship and available workers 
 
 test("contract and quotation logistics are persisted and rendered in PDFs",()=>{
   const schema=read("db/schema.ts"),migration=read("drizzle-pg/0051_contract_presentation_legal_attachments.sql"),pdf=read("lib/pdf-generator.ts"),quote=read("app/portal/OperationsWorkspace.tsx");
-  for(const source of [schema,migration,pdf,quote]){assert.match(source,/accommodationParty/);assert.match(source,/transportParty/)}
+  for(const source of [schema,pdf,quote]){assert.match(source,/accommodationParty/);assert.match(source,/transportParty/)}
+  assert.match(migration,/accommodation_party/);
+  assert.match(migration,/transport_party/);
 });
 
 test("contract signatures use the client and appear only after approval",()=>{
