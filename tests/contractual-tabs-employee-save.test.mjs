@@ -60,3 +60,10 @@ test("contract wizard validates only the active step before purchaser payment ta
   assert.match(dashboard, /دالي مشتري العمالة — عقد تكلفة مع مورّد/);
   assert.match(dashboard, /اختيار الأسماء اختياري/);
 });
+test("Dali-sponsored purchaser professions can retain an explicit Ajir status", async () => {
+  const migration = await read("drizzle-pg/0052_contract_profession_ajir_consistency.sql");
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS contract_professions_sponsorship_consistency_check/);
+  assert.match(migration, /sponsorship_type = 'dali'[\s\S]*ajir_contract_status IN \('not_applicable', 'with_ajir', 'without_ajir'\)/);
+  assert.match(migration, /sponsorship_type = 'other'[\s\S]*length\(trim\(sponsor_name\)\) >= 2/);
+  assert.doesNotMatch(migration, /DELETE FROM|DROP TABLE|DROP COLUMN/i);
+});
