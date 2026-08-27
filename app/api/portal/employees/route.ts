@@ -11,8 +11,10 @@ import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
 
 const imageTypes = new Set(["image/png", "image/jpeg"]);
 const documentTypes = new Set(["application/pdf", "image/png", "image/jpeg"]);
+const latinDigits = (value: string) => value.replace(/[٠-٩۰-۹]/g, digit => String("٠١٢٣٤٥٦٧٨".includes(digit) ? "٠١٢٣٤٥٦٧٨".indexOf(digit) : "۰۱۲۳۴۵۶۷۸۹".indexOf(digit)));
 const clean = (value: FormDataEntryValue | null, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
-const money = (value: FormDataEntryValue | null) => Math.round(Number(value || 0) * 100);
+const cleanDigits = (value: FormDataEntryValue | null, max: number) => latinDigits(clean(value, max));
+const money = (value: FormDataEntryValue | null) => Math.round(Number(latinDigits(typeof value === "string" ? value : "0").replace(",", ".")) * 100);
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
@@ -23,17 +25,17 @@ export async function POST(request: Request) {
   const db = getDb();
   try {
     const form = await request.formData();
-    const employeeNumber = clean(form.get("employeeNumber"), 30).toUpperCase();
-    const fullName = clean(form.get("fullName"), 120), nationalId = clean(form.get("nationalId"), 10);
+    const employeeNumber = latinDigits(clean(form.get("employeeNumber"), 30)).toUpperCase();
+    const fullName = clean(form.get("fullName"), 120), nationalId = cleanDigits(form.get("nationalId"), 10);
     const jobTitle = clean(form.get("jobTitle"), 100), department = clean(form.get("department"), 100);
-    const mobile = clean(form.get("mobile"), 20), email = clean(form.get("email"), 160).toLowerCase() || null;
+    const mobile = cleanDigits(form.get("mobile"), 20), email = clean(form.get("email"), 160).toLowerCase() || null;
     const nationality = clean(form.get("nationality"), 80) || null, hireDate = clean(form.get("hireDate"), 10);
     const iqamaExpiry = clean(form.get("iqamaExpiry"), 10), portalUserEmail = clean(form.get("portalUserEmail"), 160).toLowerCase();
     const sponsorshipType = clean(form.get("sponsorshipType"), 10);
     const sponsorName = sponsorshipType === "other" ? clean(form.get("sponsorName"), 160) : null;
     const contractEndDate = sponsorshipType === "dali" ? clean(form.get("contractEndDate"), 10) : null;
     const workPermitExpiry = sponsorshipType === "dali" ? clean(form.get("workPermitExpiry"), 10) : null;
-    const rawIban = clean(form.get("iban"), 50), iban = rawIban && rawIban !== "SA" ? normalizeSaudiIban(rawIban) : null;
+    const rawIban = cleanDigits(form.get("iban"), 50), iban = rawIban && rawIban !== "SA" ? normalizeSaudiIban(rawIban) : null;
     const bankName = iban ? bankNameFromSaudiIban(iban) : null;
     const baseSalaryHalalas = money(form.get("baseSalary")), housingAllowanceHalalas = money(form.get("housingAllowance"));
     const transportAllowanceHalalas = money(form.get("transportAllowance")), otherAllowanceHalalas = money(form.get("otherAllowance"));
@@ -61,9 +63,12 @@ export async function POST(request: Request) {
       storedKeys.push(storageKey); uploaded.push({ ...item, fileName, storageKey });
     }
     const now = new Date().toISOString();
-    const [saved] = await db.insert(employees).values({ employeeNumber, fullName, jobTitle, department, mobile, email, portalUserEmail, nationalId, nationality, sponsorshipType, sponsorName, iqamaExpiry, contractEndDate, workPermitExpiry, hireDate, bankName, iban, baseSalaryHalalas, housingAllowanceHalalas, transportAllowanceHalalas, otherAllowanceHalalas, updatedAt: now }).returning();
+    const saved = await db.transaction(async (tx) => {
+      const [employee] = await tx.insert(employees).values({ employeeNumber, fullName, jobTitle, department, mobile, email, portalUserEmail, nationalId, nationality, sponsorshipType, sponsorName, iqamaExpiry, contractEndDate, workPermitExpiry, hireDate, bankName, iban, baseSalaryHalalas, housingAllowanceHalalas, transportAllowanceHalalas, otherAllowanceHalalas, updatedAt: now }).returning();
+      await tx.insert(employeeDocuments).values(uploaded.map(item => ({ employeeId: employee.id, documentType: item.type, documentNumber: item.type === "national_id" ? nationalId : null, expiryDate: item.expiryDate || null, fileName: item.fileName, storageKey: item.storageKey, status: "valid", notes: item.title, createdBy: access.user.email, updatedAt: now })));
+      return employee;
+    });
     employeeId = saved.id;
-    await db.insert(employeeDocuments).values(uploaded.map(item => ({ employeeId: saved.id, documentType: item.type, documentNumber: item.type === "national_id" ? nationalId : null, expiryDate: item.expiryDate || null, fileName: item.fileName, storageKey: item.storageKey, status: "valid", notes: item.title, createdBy: access.user.email, updatedAt: now })));
     await auditPortalAction({ actorEmail: access.user.email, action: "employee-profile-created", entityType: "employee", entityId: saved.id, after: { ...saved, files: uploaded.map(item => item.type) } });
     await emitPortalNotification({ eventType: "employee-profile-created", title: "اكتمل إنشاء ملف موظف", message: `${saved.employeeNumber} — ${saved.fullName} — مرتبط بالمستخدم ${portalUserEmail}.`, severity: "success", module: "employees", entityType: "employee", entityId: saved.id, actionView: "employees", targetDepartment: "employees" }).catch(() => undefined);
     return Response.json({ employee: saved }, { status: 201 });
