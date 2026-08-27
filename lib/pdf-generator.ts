@@ -711,16 +711,340 @@ export type FinancialReportPdfInput = {
 };
 
 export async function generateFinancialReportPdf(input: FinancialReportPdfInput, assets: CompanyAsset[]) {
-  const pdf=await PDFDocument.create();pdf.setTitle(`القوائم المالية - ${input.referenceCode}`);pdf.setAuthor("شركة دالي للتشغيل والصيانة");pdf.setCreator("النظام الإداري لشركة دالي للتشغيل والصيانة");pdf.setCreationDate(new Date());
-  const resources=await loadResources(pdf,assets);let page!:PDFPage;let pageNumber=0;let y=0;const headerInput:IssuedDocumentInput={documentType:"progress_claim",referenceCode:input.referenceCode,clientName:"شركة دالي للتشغيل والصيانة",title:"القوائم والتقارير المالية",issueDate:new Date().toISOString().slice(0,10),details:""};
-  const addPage=()=>{if(pageNumber)drawEndorsement(page,resources,input.referenceCode);page=pdf.addPage([PAGE.width,PAGE.height]);pageNumber++;drawHeader(page,resources,headerInput,pageNumber);y=PAGE.height-128;};
-  const ensure=(height:number)=>{if(y-height<PAGE.footerTop+20)addPage();};const heading=(text:string)=>{ensure(36);drawRight(page,text,y,resources.bold,16,COLORS.navy);page.drawRectangle({x:PAGE.width-PAGE.margin-32,y:y-11,width:32,height:3,color:COLORS.red});y-=35;};
-  const summary=(label:string,value:number)=>{ensure(34);page.drawRectangle({x:PAGE.margin,y:y-25,width:PAGE.width-PAGE.margin*2,height:32,color:COLORS.pale,borderColor:COLORS.line,borderWidth:.5});drawRight(page,label,y-7,resources.bold,9,COLORS.text);drawLeft(page,moneyLabel(value),y-7,resources.bold,9,COLORS.navy);y-=39;};
-  const textSummary=(label:string,value:string)=>{ensure(34);page.drawRectangle({x:PAGE.margin,y:y-25,width:PAGE.width-PAGE.margin*2,height:32,color:COLORS.pale,borderColor:COLORS.line,borderWidth:.5});drawRight(page,label,y-7,resources.bold,9,COLORS.text);drawLeft(page,value,y-7,resources.regular,8,COLORS.navy);y-=39;};
-  const tableHeader=(columns:Array<{label:string;x:number}>)=>{ensure(28);page.drawRectangle({x:PAGE.margin,y:y-20,width:PAGE.width-PAGE.margin*2,height:25,color:COLORS.navy});columns.forEach(column=>drawRight(page,column.label,y-11,resources.bold,8,rgb(1,1,1),column.x));y-=27;};
-  addPage();heading("القوائم المالية");textSummary("الفترة",`من ${dateLabel(input.from)} إلى ${dateLabel(input.to)}`);summary("إجمالي الإيرادات",input.income.revenueHalalas);summary("إجمالي المصروفات",input.income.expenseHalalas);summary("صافي الربح أو الخسارة",input.income.netIncomeHalalas);textSummary("صافي النتيجة كتابة",`${input.income.netIncomeHalalas<0?"خسارة مقدارها ":""}${halalasToArabicWords(Math.abs(input.income.netIncomeHalalas))}`);
-  heading("قائمة المركز المالي");summary("الأصول",input.balanceSheet.assetsHalalas);summary("الالتزامات",input.balanceSheet.liabilitiesHalalas);summary("حقوق الملكية",input.balanceSheet.equityHalalas);summary("نتيجة الأعمال المتراكمة",input.balanceSheet.currentEarningsHalalas);summary("فرق الاتزان",input.balanceSheet.differenceHalalas);
-  heading("ميزان المراجعة");const trialColumns=[{label:"الحساب",x:PAGE.width-PAGE.margin-8},{label:"مدين",x:330},{label:"دائن",x:225},{label:"الرصيد",x:120}];tableHeader(trialColumns);for(const row of input.trialBalance){ensure(28);if(y>PAGE.height-150)tableHeader(trialColumns);drawRight(page,`${row.code} - ${row.nameAr}`,y-8,resources.regular,7,COLORS.text,PAGE.width-PAGE.margin-8);drawRight(page,moneyLabel(row.debitHalalas),y-8,resources.regular,7,COLORS.text,330);drawRight(page,moneyLabel(row.creditHalalas),y-8,resources.regular,7,COLORS.text,225);drawRight(page,moneyLabel(row.netHalalas),y-8,resources.bold,7,COLORS.navy,120);page.drawLine({start:{x:PAGE.margin,y:y-14},end:{x:PAGE.width-PAGE.margin,y:y-14},thickness:.4,color:COLORS.line});y-=24;}
-  heading("ربحية العقود");const profitColumns=[{label:"العقد والعميل",x:PAGE.width-PAGE.margin-8},{label:"الإيرادات",x:320},{label:"التكاليف",x:210},{label:"النتيجة",x:105}];tableHeader(profitColumns);for(const row of input.profitability){ensure(31);drawRight(page,`${row.referenceCode} - ${row.clientName}`,y-8,resources.regular,7,COLORS.text,PAGE.width-PAGE.margin-8);drawRight(page,moneyLabel(row.revenueHalalas),y-8,resources.regular,7,COLORS.text,320);drawRight(page,moneyLabel(row.costHalalas),y-8,resources.regular,7,COLORS.text,210);drawRight(page,`${moneyLabel(row.profitHalalas)} (${row.marginPercent}%)`,y-8,resources.bold,7,row.profitHalalas<0?COLORS.red:COLORS.navy,105);page.drawLine({start:{x:PAGE.margin,y:y-14},end:{x:PAGE.width-PAGE.margin,y:y-14},thickness:.4,color:COLORS.line});y-=26;}
-  drawEndorsement(page,resources,input.referenceCode);return pdf.save();
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(`القوائم المالية - ${input.referenceCode}`);
+  pdf.setAuthor("شركة دالي للتشغيل والصيانة");
+  pdf.setCreator("النظام الإداري لشركة دالي للتشغيل والصيانة");
+  pdf.setCreationDate(new Date());
+
+  const resources = await loadResources(pdf, assets);
+  const reportDate = new Date().toISOString().slice(0, 10);
+  const headerInput: IssuedDocumentInput = {
+    documentType: "progress_claim",
+    referenceCode: input.referenceCode,
+    clientName: "شركة دالي للتشغيل والصيانة",
+    title: "القوائم والتقارير المالية",
+    issueDate: reportDate,
+    details: "",
+  };
+
+  let page!: PDFPage;
+  let pageNumber = 0;
+  let y = 0;
+
+  const addPage = () => {
+    if (pageNumber) drawEndorsement(page, resources, input.referenceCode);
+    page = pdf.addPage([PAGE.width, PAGE.height]);
+    pageNumber += 1;
+    drawHeader(page, resources, headerInput, pageNumber);
+    y = PAGE.height - 128;
+  };
+
+  const ensure = (height: number) => {
+    if (y - height < PAGE.footerTop + 20) {
+      addPage();
+      return true;
+    }
+    return false;
+  };
+
+  const amountLabel = (halalas: number) =>
+    `${(halalas / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
+
+  const sectionHeading = (title: string, subtitle?: string) => {
+    ensure(subtitle ? 52 : 40);
+    drawRight(page, title, y, resources.bold, 15, COLORS.navy);
+    page.drawRectangle({
+      x: PAGE.width - PAGE.margin - 38,
+      y: y - 12,
+      width: 38,
+      height: 3,
+      color: COLORS.red,
+    });
+    if (subtitle) drawRight(page, subtitle, y - 24, resources.regular, 7.5, COLORS.muted);
+    y -= subtitle ? 48 : 36;
+  };
+
+  const infoRow = (label: string, value: string) => {
+    ensure(34);
+    page.drawRectangle({
+      x: PAGE.margin,
+      y: y - 25,
+      width: PAGE.width - PAGE.margin * 2,
+      height: 32,
+      color: COLORS.pale,
+      borderColor: COLORS.line,
+      borderWidth: 0.5,
+    });
+    drawRight(page, label, y - 7, resources.bold, 8.5, COLORS.text);
+    drawLeft(page, value, y - 7, resources.bold, 8.5, COLORS.navy);
+    y -= 39;
+  };
+
+  const metricCard = (
+    x: number,
+    width: number,
+    label: string,
+    value: number,
+    accent: ReturnType<typeof rgb>,
+  ) => {
+    page.drawRectangle({
+      x,
+      y: y - 64,
+      width,
+      height: 64,
+      color: rgb(0.985, 0.988, 0.99),
+      borderColor: COLORS.line,
+      borderWidth: 0.7,
+    });
+    page.drawRectangle({ x: x + width - 4, y: y - 64, width: 4, height: 64, color: accent });
+    drawRight(page, label, y - 20, resources.bold, 7.8, COLORS.muted, x + width - 12);
+    drawRight(page, amountLabel(value), y - 46, resources.bold, 10.5, accent, x + width - 12);
+  };
+
+  const balanceItem = (x: number, width: number, label: string, value: number, accent = COLORS.navy) => {
+    page.drawRectangle({
+      x,
+      y: y - 43,
+      width,
+      height: 43,
+      color: COLORS.pale,
+      borderColor: COLORS.line,
+      borderWidth: 0.5,
+    });
+    drawRight(page, label, y - 16, resources.bold, 7.5, COLORS.muted, x + width - 10);
+    drawRight(page, amountLabel(value), y - 34, resources.bold, 9, accent, x + width - 10);
+  };
+
+  const tableHeading = (title: string, subtitle: string) => {
+    sectionHeading(title, subtitle);
+  };
+
+  const trialHeader = () => {
+    page.drawRectangle({
+      x: PAGE.margin,
+      y: y - 23,
+      width: PAGE.width - PAGE.margin * 2,
+      height: 27,
+      color: COLORS.navy,
+    });
+    drawRight(page, "الحساب", y - 13, resources.bold, 8, rgb(1, 1, 1), PAGE.width - PAGE.margin - 9);
+    drawRight(page, "مدين", y - 13, resources.bold, 8, rgb(1, 1, 1), 318);
+    drawRight(page, "دائن", y - 13, resources.bold, 8, rgb(1, 1, 1), 218);
+    drawRight(page, "الرصيد", y - 13, resources.bold, 8, rgb(1, 1, 1), 118);
+    y -= 29;
+  };
+
+  const profitabilityHeader = () => {
+    page.drawRectangle({
+      x: PAGE.margin,
+      y: y - 23,
+      width: PAGE.width - PAGE.margin * 2,
+      height: 27,
+      color: COLORS.navy,
+    });
+    drawRight(page, "العقد والعميل", y - 13, resources.bold, 8, rgb(1, 1, 1), PAGE.width - PAGE.margin - 9);
+    drawRight(page, "الإيرادات", y - 13, resources.bold, 8, rgb(1, 1, 1), 315);
+    drawRight(page, "التكاليف", y - 13, resources.bold, 8, rgb(1, 1, 1), 211);
+    drawRight(page, "الربح / الهامش", y - 13, resources.bold, 8, rgb(1, 1, 1), 108);
+    y -= 29;
+  };
+
+  addPage();
+
+  page.drawRectangle({
+    x: PAGE.margin,
+    y: y - 82,
+    width: PAGE.width - PAGE.margin * 2,
+    height: 82,
+    color: COLORS.navy,
+  });
+  page.drawRectangle({
+    x: PAGE.width - PAGE.margin - 6,
+    y: y - 82,
+    width: 6,
+    height: 82,
+    color: COLORS.red,
+  });
+  drawRight(page, "القوائم المالية", y - 29, resources.bold, 20, rgb(1, 1, 1), PAGE.width - PAGE.margin - 18);
+  drawRight(page, `تقرير مالي للفترة من ${dateLabel(input.from)} إلى ${dateLabel(input.to)}`, y - 53, resources.regular, 9, rgb(0.84, 0.88, 0.9), PAGE.width - PAGE.margin - 18);
+  drawLeft(page, input.referenceCode, y - 29, resources.latinBold, 9, rgb(1, 1, 1), PAGE.margin + 16);
+  drawLeft(page, dateLabel(reportDate), y - 53, resources.regular, 8, rgb(0.84, 0.88, 0.9), PAGE.margin + 16);
+  y -= 104;
+
+  sectionHeading("ملخص الأداء المالي", "القيم بالريال السعودي وتشمل الأرقام المسجلة خلال الفترة المحددة");
+  ensure(74);
+  const cardGap = 8;
+  const cardWidth = (PAGE.width - PAGE.margin * 2 - cardGap * 2) / 3;
+  metricCard(PAGE.margin, cardWidth, "صافي الربح أو الخسارة", input.income.netIncomeHalalas, input.income.netIncomeHalalas < 0 ? COLORS.red : rgb(0.05, 0.48, 0.33));
+  metricCard(PAGE.margin + cardWidth + cardGap, cardWidth, "إجمالي المصروفات", input.income.expenseHalalas, COLORS.red);
+  metricCard(PAGE.margin + (cardWidth + cardGap) * 2, cardWidth, "إجمالي الإيرادات", input.income.revenueHalalas, COLORS.navy);
+  y -= 78;
+  infoRow(
+    "صافي النتيجة كتابة",
+    `${input.income.netIncomeHalalas < 0 ? "خسارة مقدارها " : ""}${halalasToArabicWords(Math.abs(input.income.netIncomeHalalas))}`,
+  );
+
+  sectionHeading("قائمة المركز المالي", "عرض موجز للأصول والالتزامات وحقوق الملكية ونتيجة الاتزان");
+  ensure(98);
+  const halfWidth = (PAGE.width - PAGE.margin * 2 - 8) / 2;
+  balanceItem(PAGE.margin, halfWidth, "الالتزامات", input.balanceSheet.liabilitiesHalalas);
+  balanceItem(PAGE.margin + halfWidth + 8, halfWidth, "الأصول", input.balanceSheet.assetsHalalas);
+  y -= 49;
+  balanceItem(PAGE.margin, halfWidth, "نتيجة الأعمال المتراكمة", input.balanceSheet.currentEarningsHalalas);
+  balanceItem(PAGE.margin + halfWidth + 8, halfWidth, "حقوق الملكية", input.balanceSheet.equityHalalas);
+  y -= 49;
+  const differenceColor = input.balanceSheet.differenceHalalas === 0 ? rgb(0.05, 0.48, 0.33) : COLORS.red;
+  infoRow("فرق الاتزان", amountLabel(input.balanceSheet.differenceHalalas));
+  page.drawRectangle({
+    x: PAGE.margin,
+    y: y + 14,
+    width: 4,
+    height: 32,
+    color: differenceColor,
+  });
+
+  tableHeading("ميزان المراجعة", "تفاصيل حركة وأرصدة الحسابات خلال الفترة");
+  trialHeader();
+  if (!input.trialBalance.length) {
+    infoRow("الحالة", "لا توجد حركات مالية ضمن الفترة المحددة");
+  } else {
+    input.trialBalance.forEach((row, index) => {
+      if (ensure(27)) {
+        tableHeading("ميزان المراجعة - تابع", "تفاصيل حركة وأرصدة الحسابات خلال الفترة");
+        trialHeader();
+      }
+      if (index % 2 === 0) {
+        page.drawRectangle({
+          x: PAGE.margin,
+          y: y - 21,
+          width: PAGE.width - PAGE.margin * 2,
+          height: 25,
+          color: COLORS.pale,
+        });
+      }
+      drawRight(page, `${row.code} - ${row.nameAr}`, y - 12, resources.regular, 7.2, COLORS.text, PAGE.width - PAGE.margin - 9);
+      drawRight(page, amountLabel(row.debitHalalas), y - 12, resources.regular, 7, COLORS.text, 318);
+      drawRight(page, amountLabel(row.creditHalalas), y - 12, resources.regular, 7, COLORS.text, 218);
+      drawRight(page, amountLabel(row.netHalalas), y - 12, resources.bold, 7, row.netHalalas < 0 ? COLORS.red : COLORS.navy, 118);
+      page.drawLine({
+        start: { x: PAGE.margin, y: y - 21 },
+        end: { x: PAGE.width - PAGE.margin, y: y - 21 },
+        thickness: 0.35,
+        color: COLORS.line,
+      });
+      y -= 25;
+    });
+
+    if (ensure(34)) {
+      tableHeading("ميزان المراجعة - تابع", "إجماليات الحسابات خلال الفترة");
+      trialHeader();
+    }
+    const trialTotals = input.trialBalance.reduce(
+      (totals, row) => ({
+        debit: totals.debit + row.debitHalalas,
+        credit: totals.credit + row.creditHalalas,
+        net: totals.net + row.netHalalas,
+      }),
+      { debit: 0, credit: 0, net: 0 },
+    );
+    page.drawRectangle({
+      x: PAGE.margin,
+      y: y - 25,
+      width: PAGE.width - PAGE.margin * 2,
+      height: 29,
+      color: rgb(0.91, 0.94, 0.95),
+      borderColor: COLORS.navy,
+      borderWidth: 0.6,
+    });
+    drawRight(page, "الإجمالي", y - 14, resources.bold, 8, COLORS.navy, PAGE.width - PAGE.margin - 9);
+    drawRight(page, amountLabel(trialTotals.debit), y - 14, resources.bold, 7.2, COLORS.navy, 318);
+    drawRight(page, amountLabel(trialTotals.credit), y - 14, resources.bold, 7.2, COLORS.navy, 218);
+    drawRight(page, amountLabel(trialTotals.net), y - 14, resources.bold, 7.2, trialTotals.net < 0 ? COLORS.red : COLORS.navy, 118);
+    y -= 35;
+  }
+
+  tableHeading("ربحية العقود", "مقارنة الإيرادات والتكاليف وصافي الربح لكل عقد");
+  profitabilityHeader();
+  if (!input.profitability.length) {
+    infoRow("الحالة", "لا توجد عقود ذات حركة مالية ضمن الفترة المحددة");
+  } else {
+    input.profitability.forEach((row, index) => {
+      if (ensure(30)) {
+        tableHeading("ربحية العقود - تابع", "مقارنة الإيرادات والتكاليف وصافي الربح لكل عقد");
+        profitabilityHeader();
+      }
+      if (index % 2 === 0) {
+        page.drawRectangle({
+          x: PAGE.margin,
+          y: y - 23,
+          width: PAGE.width - PAGE.margin * 2,
+          height: 27,
+          color: COLORS.pale,
+        });
+      }
+      const party = `${row.referenceCode} - ${row.clientName}`;
+      drawRight(page, party, y - 12, resources.regular, 7, COLORS.text, PAGE.width - PAGE.margin - 9);
+      drawRight(page, amountLabel(row.revenueHalalas), y - 12, resources.regular, 6.8, COLORS.text, 315);
+      drawRight(page, amountLabel(row.costHalalas), y - 12, resources.regular, 6.8, COLORS.text, 211);
+      drawRight(
+        page,
+        `${amountLabel(row.profitHalalas)} (${row.marginPercent.toFixed(1)}%)`,
+        y - 12,
+        resources.bold,
+        6.8,
+        row.profitHalalas < 0 ? COLORS.red : rgb(0.05, 0.48, 0.33),
+        108,
+      );
+      page.drawLine({
+        start: { x: PAGE.margin, y: y - 23 },
+        end: { x: PAGE.width - PAGE.margin, y: y - 23 },
+        thickness: 0.35,
+        color: COLORS.line,
+      });
+      y -= 27;
+    });
+
+    if (ensure(34)) {
+      tableHeading("ربحية العقود - تابع", "إجماليات العقود خلال الفترة");
+      profitabilityHeader();
+    }
+    const profitabilityTotals = input.profitability.reduce(
+      (totals, row) => ({
+        revenue: totals.revenue + row.revenueHalalas,
+        cost: totals.cost + row.costHalalas,
+        profit: totals.profit + row.profitHalalas,
+      }),
+      { revenue: 0, cost: 0, profit: 0 },
+    );
+    const totalMargin = profitabilityTotals.revenue
+      ? (profitabilityTotals.profit / profitabilityTotals.revenue) * 100
+      : 0;
+    page.drawRectangle({
+      x: PAGE.margin,
+      y: y - 25,
+      width: PAGE.width - PAGE.margin * 2,
+      height: 29,
+      color: rgb(0.91, 0.94, 0.95),
+      borderColor: COLORS.navy,
+      borderWidth: 0.6,
+    });
+    drawRight(page, "الإجمالي", y - 14, resources.bold, 8, COLORS.navy, PAGE.width - PAGE.margin - 9);
+    drawRight(page, amountLabel(profitabilityTotals.revenue), y - 14, resources.bold, 7, COLORS.navy, 315);
+    drawRight(page, amountLabel(profitabilityTotals.cost), y - 14, resources.bold, 7, COLORS.navy, 211);
+    drawRight(
+      page,
+      `${amountLabel(profitabilityTotals.profit)} (${totalMargin.toFixed(1)}%)`,
+      y - 14,
+      resources.bold,
+      7,
+      profitabilityTotals.profit < 0 ? COLORS.red : rgb(0.05, 0.48, 0.33),
+      108,
+    );
+    y -= 35;
+  }
+
+  drawEndorsement(page, resources, input.referenceCode);
+  return pdf.save();
 }
+
