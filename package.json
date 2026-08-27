@@ -28,7 +28,10 @@
     "db:import:storage-files": "node scripts/import-file-storage-to-postgres.mjs",
     "db:audit:rbac": "node scripts/audit-rbac-runtime.mjs",
     "db:audit:workforce-finance": "node scripts/audit-workforce-absence-finance.mjs",
-    "db:audit:contract-signatures": "node scripts/audit-contract-signatures.mjs"
+    "db:audit:contract-signatures": "node scripts/audit-contract-signatures.mjs",
+    "desktop:install": "npm ci --prefix desktop",
+    "desktop:check": "node --check desktop/main.mjs && node --check desktop/preload.mjs",
+    "desktop:build:windows": "npm run build:windows --prefix desktop"
   },
   "dependencies": {
     "@fontsource/cairo": "^5.3.0",
