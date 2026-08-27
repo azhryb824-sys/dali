@@ -3,8 +3,8 @@ import crypto from "node:crypto";
 
 const SYNC_INTERVAL_MS = 20_000;
 const originalFetch = globalThis.fetch.bind(globalThis);
-const privilegedActions = new Set(["approve","post","mark-paid","pay-judgment","assign-case"]);
-const privilegedUrlParts = ["/status","/accounting","/government","/legal-cases"];
+const privilegedActions = new Set(["approve","post","mark-paid","pay-judgment","assign-case","initialize","add-bank","reset-password","activate"]);
+const privilegedUrlParts = ["/status","/accounting","/government","/legal-cases","/users","/role-definitions","/access-scopes","/signed-document","/finance/posting"];
 
 function absoluteUrl(input) {
   const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -43,7 +43,7 @@ function requestAction(serialized) {
 }
 function isPrivileged(method, url, body) {
   const action = requestAction(body);
-  if (privilegedActions.has(action)) return true;
+  if (method === "DELETE" || privilegedActions.has(action)) return true;
   if (method === "PATCH" && privilegedUrlParts.some(part => url.includes(part))) return true;
   if (/\/contracts\/\d+\/status/.test(url)) return true;
   return false;
@@ -89,12 +89,28 @@ globalThis.fetch = async (input, init = {}) => {
 };
 async function flushQueue() {
   if (!navigator.onLine) return;
+  const syncState = await ipcRenderer.invoke("dali:state");
+  const registration = await originalFetch(`/api/portal/desktop/sync?deviceId=${encodeURIComponent(syncState.deviceId)}`, { credentials: "include" }).catch(() => null);
+  if (!registration?.ok) return;
   const queue = await ipcRenderer.invoke("dali:queue:list");
   for (const operation of queue) {
     try {
-      const headers = new Headers(operation.headers);
-      headers.set("x-idempotency-key", operation.idempotencyKey);
-      const response = await originalFetch(operation.url, { method: operation.method, headers, body: restoreBody(operation.body), credentials: "include" });
+      const state = await ipcRenderer.invoke("dali:state");
+      const target = new URL(operation.url);
+      const response = await originalFetch("/api/portal/desktop/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          deviceId: state.deviceId,
+          deviceName: navigator.userAgent.slice(0, 160),
+          idempotencyKey: operation.idempotencyKey,
+          method: operation.method,
+          requestPath: target.pathname + target.search,
+          headers: operation.headers,
+          body: operation.body,
+        }),
+      });
       if (response.ok) await ipcRenderer.invoke("dali:queue:done", operation.id, new Date().toISOString());
       else if ([409, 412, 422].includes(response.status)) await ipcRenderer.invoke("dali:queue:conflict", operation.id, { status: response.status, body: await response.text() });
       else if (response.status >= 400 && response.status < 500) await ipcRenderer.invoke("dali:queue:conflict", operation.id, { status: response.status, body: await response.text() });
