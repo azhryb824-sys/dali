@@ -192,20 +192,19 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     const output = await PDFDocument.create();
     const pages = Math.max(arabicPdf.getPageCount(), englishPdf.getPageCount());
     for (let index = 0; index < pages; index += 1) {
-      const page = output.addPage([PAGE.width, PAGE.height]);
-      const columnWidth = PAGE.width / 2;
+      const page = output.addPage([PAGE.width * 2, PAGE.height]);
       if (index < englishPdf.getPageCount()) {
         const [embedded] = await output.embedPdf(englishPdf, [index]);
-        page.drawPage(embedded, { x: 0, y: PAGE.height / 2, width: columnWidth, height: PAGE.height / 2 });
+        page.drawPage(embedded, { x: 0, y: 0, width: PAGE.width, height: PAGE.height });
       }
       if (index < arabicPdf.getPageCount()) {
         const [embedded] = await output.embedPdf(arabicPdf, [index]);
-        page.drawPage(embedded, { x: columnWidth, y: PAGE.height / 2, width: columnWidth, height: PAGE.height / 2 });
+        page.drawPage(embedded, { x: PAGE.width, y: 0, width: PAGE.width, height: PAGE.height });
       }
       page.drawLine({
-        start: { x: columnWidth, y: PAGE.footerTop },
-        end: { x: columnWidth, y: PAGE.height - 96 },
-        thickness: 0.8,
+        start: { x: PAGE.width, y: 0 },
+        end: { x: PAGE.width, y: PAGE.height },
+        thickness: 1.2,
         color: COLORS.navy,
       });
     }
