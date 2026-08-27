@@ -55,7 +55,6 @@ export async function POST(request: Request) {
     const photo = form.get("photo");
     const iqamaDocument = form.get("iqamaDocument");
     const ibanCertificate = form.get("ibanCertificate");
-    const workContract = form.get("workContract");
 
     if (!workerNumber || !/^\d{10}$/.test(iqamaNumber) || !/^SA\d{22}$/.test(iban) || !isSaudiBank(bankName) || !Number.isFinite(monthlySalary) || monthlySalary <= 0 || monthlySalary > 1000000 || fullName.length < 2 || !workforceNationalities.includes(nationality as (typeof workforceNationalities)[number]) || !workforceProfessions.some((item) => item.label === profession) || !validMobile(mobile) || !iqamaExpiry || !medicalInsuranceExpiry) {
       return Response.json({ error: "بيانات العامل غير مكتملة؛ رقم الإقامة 10 أرقام والآيبان السعودي يبدأ SA ويتبعه 22 رقماً" }, { status: 400 });
@@ -68,10 +67,8 @@ export async function POST(request: Request) {
     }
     if (!(iqamaDocument instanceof File) || iqamaDocument.size < 1) return Response.json({ error: "صورة الإقامة إلزامية لكل عامل" }, { status: 400 });
     if (!(ibanCertificate instanceof File) || ibanCertificate.size < 1) return Response.json({ error: "شهادة الآيبان إلزامية لكل عامل" }, { status: 400 });
-    if (isCompanySponsored && (!(workContract instanceof File) || workContract.size < 1)) return Response.json({ error: "عقد العمل إلزامي للعامل الذي على كفالة الشركة" }, { status: 400 });
 
     const pending: PendingAttachment[] = [{ documentType: "photo", requirementCode: "worker-photo", title: "صورة العامل", expiryDate: null, file: photo }, { documentType: "certificate", requirementCode: "iqama-copy", title: "صورة الإقامة", expiryDate: iqamaExpiry, file: iqamaDocument }, { documentType: "certificate", requirementCode: "iban-certificate", title: "شهادة الآيبان", expiryDate: null, file: ibanCertificate }];
-    if (isCompanySponsored && workContract instanceof File) pending.push({ documentType: "certificate", requirementCode: "work-contract", title: "عقد العمل", expiryDate: null, file: workContract });
     for (const requirement of requirementsForProfession(profession)) {
       const file = form.get(`requirement:${requirement.code}`);
       if (file instanceof File && file.size > 0) pending.push({ documentType: "certificate", requirementCode: requirement.code, title: requirement.label, expiryDate: null, file });
