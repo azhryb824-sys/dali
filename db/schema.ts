@@ -790,6 +790,7 @@ export const desktopDevices = pgTable(
     status: text("status").notNull().default("active"),
     lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     lastSyncAt: text("last_sync_at"),
+    lastActivityId: integer("last_activity_id").notNull().default(0),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
   },
