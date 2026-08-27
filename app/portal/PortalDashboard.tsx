@@ -74,7 +74,7 @@ type PortalUser = {
 type Activity = { id: number; actorEmail: string; action: string; entityType: string; entityId: string; createdAt: string };
 type EmployeeRecord = {
   id: number; employeeNumber: string; fullName: string; jobTitle: string; department: string;
-  mobile: string; email: string | null; nationalId: string | null; nationality: string | null; bankName: string | null; iban: string | null;
+  mobile: string; email: string | null; portalUserEmail: string | null; nationalId: string | null; nationality: string | null; bankName: string | null; iban: string | null;
   sponsorshipType: string; sponsorName: string | null; iqamaExpiry: string | null; workPermitExpiry: string | null; contractEndDate: string | null;
   baseSalaryHalalas: number; housingAllowanceHalalas: number; transportAllowanceHalalas: number; otherAllowanceHalalas: number;
   annualLeaveDays: number; leaveBalanceDays: number; hireDate: string; status: string; createdAt: string; updatedAt: string;
