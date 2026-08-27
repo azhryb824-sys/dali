@@ -73,7 +73,9 @@ function parseProfessions(value: unknown, legacyProfession: string, legacyCount:
       unitSalaryHalalas: Math.round(Number(record.unitSalary || 0) * 100),
       sponsorshipType: record.sponsorshipType === "other" ? "other" : "dali",
       sponsorName: record.sponsorshipType === "other" ? cleanText(record.sponsorName, 160) || null : null,
-      ajirContractStatus: record.sponsorshipType === "other" ? (record.ajirContractStatus === "without_ajir" ? "without_ajir" : "with_ajir") : "not_applicable",
+      ajirContractStatus: record.ajirContractStatus === "with_ajir" || record.ajirContractStatus === "without_ajir"
+        ? record.ajirContractStatus
+        : "not_applicable",
       workerIds,
     };
   });
@@ -139,6 +141,7 @@ export async function POST(request: Request) {
     const accommodationParty = cleanText(payload.accommodationParty, 120);
     const transportParty = cleanText(payload.transportParty, 120);
     const specialTerms = cleanText(payload.specialTerms, 2000);
+    const showPaymentSchedule = payload.showPaymentSchedule !== "false" && payload.showPaymentSchedule !== "off";
     const legacyProfession = cleanText(payload.profession, 120);
     const startDate = cleanDate(payload.startDate, true);
     const legacyWorkerCount = Number(payload.workerCount || 0);
@@ -190,7 +193,10 @@ export async function POST(request: Request) {
       if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || !Number.isInteger(item.unitSalaryHalalas) || item.unitSalaryHalalas <= 0 || item.unitSalaryHalalas > 100000000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
         return Response.json({ error: "اختر المهنة أو اكتب اسم المهنة الفعلي يدوياً عند اختيار «أخرى»، وأدخل عدد العمالة وراتب العامل الصحيح لكل مهنة" }, { status: 400 });
       }
-      if (professionInputs.some((item) => item.sponsorshipType === "other" && (!item.sponsorName || !["with_ajir", "without_ajir"].includes(item.ajirContractStatus)))) return Response.json({ error: "أكمل اسم الكفيل وحالة عقد أجير لكل مهنة على كفالة جهة أخرى" }, { status: 400 });
+      if (professionInputs.some((item) => !["with_ajir", "without_ajir", "not_applicable"].includes(item.ajirContractStatus)
+        || (item.sponsorshipType === "other" && !item.sponsorName))) {
+        return Response.json({ error: "أكمل جهة الكفالة وحالة عقد أجير لكل مهنة، ويمكن تحديد أجير أيضًا للعمالة على كفالة دالي" }, { status: 400 });
+      }
       const vatRateBpsForSchedule = vatEnabled ? Math.round(vatRate * 100) : 0;
       if (quantityMode === "fixed" && seasonType === "regular") {
         const dueDates = annualSchedule?.dueDates || [];
@@ -283,14 +289,14 @@ export async function POST(request: Request) {
       const selectedForProfession = selectedWorkers.filter((worker) => item.workerIds.includes(worker.id));
       if (selectedForProfession.some((worker) => worker.profession !== item.profession || worker.status !== "available"
         || worker.sponsorshipType !== item.sponsorshipType
-        || (item.sponsorshipType === "other" && (worker.sponsorName !== item.sponsorName || worker.ajirContractStatus !== item.ajirContractStatus)))) {
-        return Response.json({ error: `يجب أن تكون العمالة المختارة لمهنة ${item.profession} متاحة ومطابقة للمهنة والكفالة وحالة أجير` }, { status: 409 });
+        || (item.sponsorshipType === "other" && worker.sponsorName !== item.sponsorName))) {
+        return Response.json({ error: `يجب أن تكون العمالة المختارة لمهنة ${item.profession} متاحة ومطابقة للمهنة وجهة الكفالة` }, { status: 409 });
       }
     }
 
     const capacity = professionInputs.map((item) => {
       const sponsorshipMatch = (worker: typeof workers.$inferSelect) => worker.sponsorshipType === item.sponsorshipType
-        && (item.sponsorshipType !== "other" || (worker.sponsorName === item.sponsorName && worker.ajirContractStatus === item.ajirContractStatus));
+        && (item.sponsorshipType !== "other" || worker.sponsorName === item.sponsorName);
       const registeredCount = relevantWorkers.filter((worker) => worker.profession === item.profession && sponsorshipMatch(worker)).length;
       const availableCount = relevantWorkers.filter((worker) => worker.profession === item.profession && worker.status === "available" && sponsorshipMatch(worker)).length;
       return {
@@ -311,6 +317,7 @@ export async function POST(request: Request) {
     const vatHalalas = subtotalHalalas && vatRateBps ? Math.round((subtotalHalalas * vatRateBps) / 10000) : 0;
     const amountHalalas = subtotalHalalas ? subtotalHalalas + vatHalalas : undefined;
     const pdfBytes = await generateIssuedPdf({
+      approvalState: documentType === "workforce_contract" ? "draft" : undefined,
       documentType,
       referenceCode,
       clientName,
@@ -349,7 +356,7 @@ export async function POST(request: Request) {
           .filter((worker) => item.workerIds.includes(worker.id))
           .map((worker) => ({ fullName: worker.fullName, iqamaNumber: worker.iqamaNumber })),
       })),
-      paymentSchedule,
+      paymentSchedule: showPaymentSchedule ? paymentSchedule : undefined,
     }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
 
     const fileName = `${referenceCode}.pdf`;
@@ -408,7 +415,7 @@ export async function POST(request: Request) {
         sizeBytes: pdfBytes.byteLength,
         expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
         source: "generated",
-        metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, sourceRequestId, representativeRequestId, salesRepresentativeId, quoteVersionId, quantityMode, contractDirection, contractClauses: clauseInputs, allWorkersWithAjir, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, workSite, startDate, endDate, paymentTerms, paymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: "letterhead-v4-directional-contract" }),
+        metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, sourceRequestId, representativeRequestId, salesRepresentativeId, quoteVersionId, quantityMode, contractDirection, contractClauses: clauseInputs, allWorkersWithAjir, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, workSite, startDate, endDate, paymentTerms, paymentSchedule, showPaymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: "letterhead-v5-contract-controls" }),
         createdBy: access.user.email,
       }).returning();
 
@@ -441,6 +448,9 @@ export async function POST(request: Request) {
           seasonType,
           billingMode,
           firstPaymentDueDate: paymentSchedule[0]?.dueDate || null,
+          showPaymentSchedule,
+          accommodationParty: accommodationParty || null,
+          transportParty: transportParty || null,
           details,
           createdBy: access.user.email,
         }).returning();
