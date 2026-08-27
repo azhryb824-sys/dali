@@ -1643,13 +1643,17 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
     if (target <= step) { setStep(target); return; }
     if (target > step + 1) return;
     const form = document.querySelector<HTMLFormElement>(".issue-modal form");
-    const requiredFields = form ? Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input[required], select[required], textarea[required]")).filter((field) => {
-      if (field.disabled || (field instanceof HTMLInputElement && field.type === "hidden")) return false;
-      const wizardStep = field.closest<HTMLElement>(".issue-form-step");
-      if (wizardStep && !wizardStep.classList.contains("visible")) return false;
-      if (field.closest(".contract-profession-pricing") && step !== 2) return false;
-      return true;
-    }) : [];
+    const requiredFields = form ? Array.from(form.querySelectorAll("input[required], select[required], textarea[required]"))
+      .filter((field): field is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
+        field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement
+      )
+      .filter((field) => {
+        if (field.disabled || (field instanceof HTMLInputElement && field.type === "hidden")) return false;
+        const wizardStep = field.closest(".issue-form-step");
+        if (wizardStep && !wizardStep.classList.contains("visible")) return false;
+        if (field.closest(".contract-profession-pricing") && step !== 2) return false;
+        return true;
+      }) : [];
     const invalid = requiredFields.find((field) => !field.checkValidity());
     if (invalid) { invalid.reportValidity(); invalid.focus(); return; }
     if (step === 1 && seasonType === "regular" && !annualEndDate) {
