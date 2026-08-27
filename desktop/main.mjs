@@ -5,6 +5,7 @@ import { join } from "node:path";
 import crypto from "node:crypto";
 
 const PORTAL_URL = process.env.DALI_DESKTOP_URL || "https://www.dally.info/portal";
+const DESKTOP_MARKER = "dali-desktop-v1";
 let mainWindow;
 let storePath;
 let keyPath;
@@ -83,6 +84,8 @@ async function openWindow() {
     minWidth: 1024,
     minHeight: 700,
     show: false,
+    title: "نظام دالي الإداري",
+    icon: join(import.meta.dirname, "assets", "dali-icon.png"),
     backgroundColor: "#071a2b",
     webPreferences: {
       preload: join(import.meta.dirname, "preload.mjs"),
@@ -115,6 +118,13 @@ app.whenReady().then(async () => {
   await loadKey();
   if (!existsSync(storePath)) await writeStore({ deviceId: crypto.randomUUID(), cache: {}, queue: [], conflicts: [], lastSyncAt: null, serverCursor: 0 });
   registerIpc();
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    { urls: ["https://www.dally.info/*"] },
+    (details, callback) => {
+      details.requestHeaders["x-dali-desktop-app"] = DESKTOP_MARKER;
+      callback({ requestHeaders: details.requestHeaders });
+    },
+  );
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   await openWindow();
 });

@@ -1,0 +1,42 @@
+name: Build Dali Windows Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [godaddy-preview]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-windows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Build single Windows installer
+        working-directory: desktop
+        run: npm run build:windows
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $installer = Get-Item "desktop/dist/Dali-Desktop-Setup-0.1.0.exe"
+          if ($installer.Length -lt 50000000) { throw "Installer is unexpectedly small" }
+          Get-FileHash $installer.FullName -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Dali-Desktop-Setup-0.1.0
+          path: desktop/dist/Dali-Desktop-Setup-0.1.0.exe
+          if-no-files-found: error
+          retention-days: 30

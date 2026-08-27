@@ -1,6 +1,8 @@
 {
   "name": "dali-desktop",
   "version": "0.1.0",
+  "description": "تطبيق نظام دالي الإداري المتكامل",
+  "author": "Dally Corporation",
   "private": true,
   "type": "module",
   "main": "main.mjs",
@@ -9,10 +11,8 @@
     "build:windows": "electron-builder --win nsis --x64",
     "build:dir": "electron-builder --dir"
   },
-  "dependencies": {
-    "electron": "^38.0.0"
-  },
   "devDependencies": {
+    "electron": "^38.0.0",
     "electron-builder": "^26.0.12"
   },
   "build": {
@@ -28,6 +28,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "assets/dali-icon.ico",
       "target": ["nsis"]
     },
     "nsis": {
@@ -35,7 +36,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "نظام دالي الإداري"
+      "shortcutName": "نظام دالي الإداري",
+      "installerIcon": "assets/dali-icon.ico",
+      "uninstallerIcon": "assets/dali-icon.ico"
     }
   }
 }

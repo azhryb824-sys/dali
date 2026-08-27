@@ -80,6 +80,7 @@ export async function POST(request:Request){
     headers.set("origin",new URL(request.url).origin);
     headers.set("x-idempotency-key",idempotencyKey);
     headers.set("x-dali-desktop-device",deviceId);
+    headers.set("x-dali-desktop-app","dali-desktop-v1");
     const target=new URL(requestPath,new URL(request.url).origin);
     const response=await fetch(target,{method,headers,body:restoreBody(body),redirect:"manual"});
     const responseBody=(await response.text()).slice(0,2_000_000),responseHeaders=JSON.stringify([...response.headers.entries()].filter(([name])=>["content-type","location"].includes(name.toLowerCase())));

@@ -20,8 +20,21 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
+const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
+const desktopMarker = "dali-desktop-v1";
 
 export function proxy(request: NextRequest) {
+  const emergencyBrowserAccess = process.env.DALI_ALLOW_BROWSER_PORTAL === "true";
+  const desktopRequest = request.headers.get("x-dali-desktop-app") === desktopMarker;
+  if (desktopOnlyPath.test(request.nextUrl.pathname) && !desktopRequest && !emergencyBrowserAccess) {
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "النظام الإداري متاح عبر تطبيق دالي المعتمد فقط" }, { status: 403 });
+    }
+    return new NextResponse("النظام الإداري متاح عبر تطبيق دالي المعتمد فقط", {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
   const response = NextResponse.next();
   response.headers.set("content-security-policy", contentSecurityPolicy);
   response.headers.set("referrer-policy", "strict-origin-when-cross-origin");

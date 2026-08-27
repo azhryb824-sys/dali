@@ -15,6 +15,17 @@ test("desktop uses the same production portal with encrypted local persistence",
   assert.match(pkg,/nsis/);
 });
 
+test("administrative entry is desktop-only while public pages remain available",async()=>{
+  const [proxy,main,desktopPackage]=await Promise.all([read("proxy.ts"),read("desktop/main.mjs"),read("desktop/package.json")]);
+  assert.match(proxy,/desktopOnlyPath/);
+  assert.match(proxy,/x-dali-desktop-app/);
+  assert.match(proxy,/DALI_ALLOW_BROWSER_PORTAL/);
+  assert.match(main,/webRequest\.onBeforeSendHeaders/);
+  assert.match(main,/dali-desktop-v1/);
+  assert.match(desktopPackage,/dali-icon\.ico/);
+  assert.doesNotMatch(proxy,/desktopOnlyPath\s*=.*contracts\/signature/);
+});
+
 test("offline queue synchronizes every twenty seconds and server prevents duplicate writes",async()=>{
   const[preload,route,migration]=await Promise.all([read("desktop/preload.mjs"),read("app/api/portal/desktop/sync/route.ts"),read("drizzle-pg/0056_desktop_offline_sync.sql")]);
   assert.match(preload,/SYNC_INTERVAL_MS = 20_000/);
