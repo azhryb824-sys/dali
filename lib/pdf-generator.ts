@@ -759,7 +759,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     if (!cleanValue) return;
     const lines = wrapWords(resources.regular, cleanValue, 10, PAGE.width - PAGE.margin * 2);
     const height = 29 + Math.max(1, lines.length) * 16;
-    if (reserveSignatures) ensureWithSignatures(height);
+    if (reserveSignatures) ensureWithSignatures(height + 8);
     else ensure(height);
     drawRight(page, title, y, resources.bold, 10, COLORS.navy);
     y -= 20;
