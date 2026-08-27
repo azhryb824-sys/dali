@@ -22,5 +22,6 @@ test("Ajir status is always rendered per profession", () => {
   assert.match(dashboard, /حالة عقد أجير<select/);
   assert.match(dashboard, /<option value="with_ajir">بعقد أجير<\/option>/);
   assert.match(dashboard, /<option value="without_ajir">بدون عقد أجير<\/option>/);
-  assert.match(dashboard, /لا ينطبق — العامل على كفالة دالي/);
+  assert.match(dashboard, /<option value="not_applicable">لا ينطبق<\/option>/);
+  assert.match(dashboard, /يمكن تحديد حالة أجير مستقلة عن جهة الكفالة/);
 });
