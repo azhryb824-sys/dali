@@ -33,7 +33,7 @@ export async function POST(request:Request){
     const isRevenue=["workforce_invoice","invoice","progress_claim"].includes(record.category);const isExpense=["payment_voucher","worker_expense","expense","government_fee","workforce_supplier_payable"].includes(record.category);
     if(isRevenue){debitCode="1300";creditCode=record.contractId?"4000":"4100";description=`إثبات إيراد — ${record.description}`;}
     else if(record.category==="receipt_voucher"){debitCode=record.paymentMethod==="cash"?"1100":"1200";creditCode="1300";description=`تحصيل من عميل — ${record.description}`;}
-    else if(isExpense){debitCode=record.category==="worker_expense"?"5100":"5200";creditCode=record.paymentMethod==="cash"?"1100":record.paymentMethod==="bank_transfer"?"1200":"2100";description=`إثبات مصروف — ${record.description}`;}
+    else if(isExpense){debitCode=record.category==="worker_expense"?"5100":"5200";creditCode=record.paymentMethod==="cash"?"1100":["bank_transfer","cheque","payroll_file"].includes(record.paymentMethod||"")?"1200":"2100";description=`إثبات مصروف — ${record.description}`;}
     else return jsonNoStore({error:"هذه الحركة تُرحّل من وحدتها المتخصصة ولا تقبل قيدًا يدويًا هنا"},{status:409});
     let bankAccountId:number|null=null;let bankLedgerAccountId:number|null=null;
     if(debitCode==="1200"||creditCode==="1200"){if(!record.bankAccountId)return jsonNoStore({error:"اختر الحساب البنكي قبل إنشاء القيد"},{status:409});const bank=await db.query.bankAccounts.findFirst({where:and(eq(bankAccounts.id,record.bankAccountId),eq(bankAccounts.status,"active"))});if(!bank)return jsonNoStore({error:"الحساب البنكي غير صالح"},{status:409});bankAccountId=bank.id;bankLedgerAccountId=bank.ledgerAccountId;}

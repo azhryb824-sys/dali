@@ -1,8 +1,9 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { bankAccounts, chartOfAccounts, fiscalPeriods, journalEntries, journalLines } from "@/db/schema";
 import { approveJournal, createDraftJournal, postJournal } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
+import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
 
@@ -38,14 +39,29 @@ export async function GET() {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access || !(await hasPortalPermission(access, "finance", "read"))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   const db = getDb();
-  const [accounts, periods, entries, lines, banks] = await Promise.all([
+  const [accounts, periods, entries, lines, banks, postedBalances] = await Promise.all([
     db.select().from(chartOfAccounts).orderBy(chartOfAccounts.code).limit(500),
     db.select().from(fiscalPeriods).orderBy(desc(fiscalPeriods.startDate)).limit(120),
     db.select().from(journalEntries).orderBy(desc(journalEntries.entryDate), desc(journalEntries.id)).limit(300),
     db.select().from(journalLines).orderBy(desc(journalLines.id)).limit(3000),
     db.select().from(bankAccounts).orderBy(bankAccounts.accountCode).limit(100),
+    db.select({
+      accountId: journalLines.accountId,
+      bankAccountId: journalLines.bankAccountId,
+      debitHalalas: sql<number>`coalesce(sum(${journalLines.debitHalalas}), 0)`,
+      creditHalalas: sql<number>`coalesce(sum(${journalLines.creditHalalas}), 0)`,
+    }).from(journalLines).innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+      .where(eq(journalEntries.status, "posted")).groupBy(journalLines.accountId, journalLines.bankAccountId),
   ]);
-  return jsonNoStore({ accounts, periods, entries, lines, banks });
+  const cashAccount = accounts.find((account) => account.code === "1100") || null;
+  const balanceFor = (accountId: number, bankAccountId: number | null) => postedBalances
+    .filter((row) => row.accountId === accountId && row.bankAccountId === bankAccountId)
+    .reduce((sum, row) => sum + Number(row.debitHalalas) - Number(row.creditHalalas), 0);
+  return jsonNoStore({
+    accounts, periods, entries, lines,
+    treasury: cashAccount ? { accountId: cashAccount.id, accountCode: cashAccount.code, accountName: cashAccount.nameAr, balanceHalalas: balanceFor(cashAccount.id, null) } : null,
+    banks: banks.map((bank) => ({ ...bank, balanceHalalas: balanceFor(bank.ledgerAccountId, bank.id) })),
+  });
 }
 
 export async function POST(request: Request) {
@@ -83,6 +99,41 @@ export async function POST(request: Request) {
         { accountId: creditAccountId, creditHalalas: amountHalalas, description },
       ] });
       return jsonNoStore(result, { status: 201 });
+    }
+
+    if (action === "transfer-liquidity") {
+      const direction = clean(payload.direction, 20);
+      const bankAccountId = positiveId(payload.bankAccountId);
+      const amountHalalas = Math.round(Number(payload.amount) * 100);
+      const entryDate = clean(payload.entryDate, 10);
+      const reference = clean(payload.reference, 180);
+      if (!["bank_to_cash", "cash_to_bank"].includes(direction) || !bankAccountId || !/^\d{4}-\d{2}-\d{2}$/.test(entryDate) || !Number.isSafeInteger(amountHalalas) || amountHalalas <= 0) {
+        return jsonNoStore({ error: "بيانات التحويل بين البنك والخزينة غير صحيحة" }, { status: 400 });
+      }
+      const [bank, cashAccount] = await Promise.all([
+        db.query.bankAccounts.findFirst({ where: and(eq(bankAccounts.id, bankAccountId), eq(bankAccounts.status, "active")) }),
+        db.query.chartOfAccounts.findFirst({ where: and(eq(chartOfAccounts.code, "1100"), eq(chartOfAccounts.status, "active"), eq(chartOfAccounts.isPosting, true)) }),
+      ]);
+      if (!bank || !cashAccount) return jsonNoStore({ error: "الخزينة أو الحساب البنكي غير مهيأ أو غير نشط" }, { status: 409 });
+      const sourceAccountId = direction === "bank_to_cash" ? bank.ledgerAccountId : cashAccount.id;
+      const sourceBankCondition = direction === "bank_to_cash" ? eq(journalLines.bankAccountId, bank.id) : isNull(journalLines.bankAccountId);
+      const sourceLines = await db.select({ status: journalEntries.status, debitHalalas: journalLines.debitHalalas, creditHalalas: journalLines.creditHalalas })
+        .from(journalLines).innerJoin(journalEntries, eq(journalEntries.id, journalLines.journalEntryId))
+        .where(and(eq(journalLines.accountId, sourceAccountId), sourceBankCondition, inArray(journalEntries.status, ["draft", "approved", "posted"])));
+      const postedBalance = sourceLines.filter((line) => line.status === "posted").reduce((sum, line) => sum + line.debitHalalas - line.creditHalalas, 0);
+      const reservedOutgoing = sourceLines.filter((line) => line.status !== "posted").reduce((sum, line) => sum + line.creditHalalas, 0);
+      const availableHalalas = postedBalance - reservedOutgoing;
+      if (availableHalalas < amountHalalas) return jsonNoStore({ error: `الرصيد المتاح غير كافٍ. المتاح ${new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(availableHalalas / 100)}` }, { status: 409 });
+      const description = `${direction === "bank_to_cash" ? "تغذية الخزينة من" : "إيداع نقدية الخزينة في"} ${bank.bankName} — ${bank.accountCode}${reference ? ` — مرجع ${reference}` : ""}`;
+      const result = await createDraftJournal({
+        entryDate, description, sourceType: "treasury-transfer", sourceId: crypto.randomUUID(), actorEmail: access.user.email,
+        lines: direction === "bank_to_cash"
+          ? [{ accountId: cashAccount.id, debitHalalas: amountHalalas, description }, { accountId: bank.ledgerAccountId, bankAccountId: bank.id, creditHalalas: amountHalalas, description }]
+          : [{ accountId: bank.ledgerAccountId, bankAccountId: bank.id, debitHalalas: amountHalalas, description }, { accountId: cashAccount.id, creditHalalas: amountHalalas, description }],
+      });
+      await auditPortalAction({ actorEmail: access.user.email, action: "treasury-bank-transfer-created", entityType: "journal-entry", entityId: result.entry.id, after: { direction, bankAccountId: bank.id, amountHalalas, entryDate, reference, journalEntryId: result.entry.id } });
+      await emitPortalNotification({ eventType: "treasury-bank-transfer-created", title: "تحويل بين الخزينة والبنك بانتظار الاعتماد", message: `${description} — ${new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amountHalalas / 100)}`, severity: "info", module: "finance", entityType: "journal-entry", entityId: result.entry.id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
+      return jsonNoStore({ ...result, availableHalalas: availableHalalas - amountHalalas }, { status: 201 });
     }
 
     if (action === "add-bank") {

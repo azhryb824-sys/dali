@@ -38,6 +38,13 @@ test("offline queue synchronizes every twenty seconds and server prevents duplic
   assert.match(migration,/idempotency_key text NOT NULL UNIQUE/);
 });
 
+test("server changes update the current view without reloading the page",async()=>{
+  const preload=await read("desktop/preload.mjs");
+  assert.doesNotMatch(preload,/location\.reload\s*\(/);
+  assert.match(preload,/dali-server-changes/);
+  assert.match(preload,/CustomEvent/);
+});
+
 test("approvals payments posting and destructive actions cannot queue offline",async()=>{
   const[preload,route]=await Promise.all([read("desktop/preload.mjs"),read("app/api/portal/desktop/sync/route.ts")]);
   for(const action of ["approve","post","mark-paid","pay-judgment","assign-case","add-bank","reset-password"]){

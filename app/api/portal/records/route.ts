@@ -130,8 +130,9 @@ export async function POST(request: Request) {
       if (category === "worker_expense" && !subCategory) {
         return Response.json({ error: "حدد نوع مصروف العمالة" }, { status: 400 });
       }
-      if (paymentMethod === "bank_transfer") {
-        if (!bankAccountId || !Number.isInteger(bankAccountId)) return Response.json({ error: "يجب اختيار الحساب البنكي للتحويل" }, { status: 400 });
+      const bankFunded = ["bank_transfer", "cheque", "payroll_file"].includes(paymentMethod);
+      if (bankFunded) {
+        if (!bankAccountId || !Number.isInteger(bankAccountId)) return Response.json({ error: "يجب اختيار الحساب البنكي لطريقة الدفع المحددة" }, { status: 400 });
         const bank = await db.query.bankAccounts.findFirst({ where: eq(bankAccounts.id, bankAccountId) });
         if (!bank || bank.status !== "active") return Response.json({ error: "الحساب البنكي غير موجود أو غير نشط" }, { status: 400 });
       }
@@ -158,7 +159,7 @@ export async function POST(request: Request) {
         dueDate,
         workerId,
         contractId,
-        bankAccountId,
+        bankAccountId: bankFunded ? bankAccountId : null,
         periodMonth,
         subCategory,
         paymentMethod: paymentMethod || null,

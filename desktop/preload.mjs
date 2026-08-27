@@ -24,19 +24,6 @@ async function serializeBody(body) {
   }
   return null;
 }
-function restoreBody(body) {
-  if (!body) return undefined;
-  if (body.type === "text") return body.value;
-  if (body.type === "urlencoded") return new URLSearchParams(body.value);
-  if (body.type === "form") {
-    const form = new FormData();
-    for (const item of body.value) {
-      if (item.file) form.append(item.name, new File([Uint8Array.from(atob(item.value), char => char.charCodeAt(0))], item.fileName, { type: item.contentType }));
-      else form.append(item.name, item.value);
-    }
-    return form;
-  }
-}
 function requestAction(serialized) {
   if (serialized?.type !== "text") return "";
   try { return String(JSON.parse(serialized.value).action || ""); } catch { return ""; }
@@ -87,25 +74,20 @@ globalThis.fetch = async (input, init = {}) => {
     return queueMutation(method, url, init, body);
   }
 };
-function notifyServerChanges(count) {
-  window.dispatchEvent(new CustomEvent("dali-server-changes", { detail: { count } }));
-  const active = document.activeElement;
-  const userIsEditing = active && ["INPUT","TEXTAREA","SELECT"].includes(active.tagName);
-  const dialogOpen = Boolean(document.querySelector('[role="dialog"],.modal-layer,.drawer-layer'));
-  if (!userIsEditing && !dialogOpen) {
-    window.setTimeout(() => location.reload(), 250);
-    return;
-  }
+function notifyServerChanges(changes) {
+  const count = changes.length;
+  window.dispatchEvent(new CustomEvent("dali-server-changes", { detail: { count, changes } }));
   let badge = document.getElementById("dali-desktop-update-badge");
   if (!badge) {
-    badge = document.createElement("button");
+    badge = document.createElement("div");
     badge.id = "dali-desktop-update-badge";
-    badge.type = "button";
-    Object.assign(badge.style, { position:"fixed", left:"18px", bottom:"18px", zIndex:"2147483647", border:"0", borderRadius:"12px", padding:"12px 16px", background:"#d5a94e", color:"#071a2b", fontWeight:"800", cursor:"pointer" });
-    badge.addEventListener("click", () => location.reload());
+    badge.setAttribute("role", "status");
+    Object.assign(badge.style, { position:"fixed", left:"18px", bottom:"18px", zIndex:"2147483647", border:"0", borderRadius:"12px", padding:"12px 16px", background:"#d5a94e", color:"#071a2b", fontWeight:"800", pointerEvents:"none", opacity:"1", transition:"opacity .25s ease" });
     document.body.appendChild(badge);
   }
-  badge.textContent = `تحديثات متاحة (${count}) — اضغط للتحديث`;
+  badge.style.opacity = "1";
+  badge.textContent = `تم تحديث البيانات تلقائيًا (${count})`;
+  window.setTimeout(() => { if (badge) badge.style.opacity = "0"; }, 2500);
 }
 async function flushQueue() {
   if (!navigator.onLine) return;
@@ -114,7 +96,7 @@ async function flushQueue() {
   if (!registration?.ok) return;
   const serverSync = await registration.json().catch(() => null);
   if (serverSync?.cursor) await ipcRenderer.invoke("dali:cursor:set", serverSync.cursor);
-  if (serverSync?.changes?.length) notifyServerChanges(serverSync.changes.length);
+  if (serverSync?.changes?.length) notifyServerChanges(serverSync.changes);
   const queue = await ipcRenderer.invoke("dali:queue:list");
   for (const operation of queue) {
     try {
