@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, safeStorage, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session } from "electron";
+import electronUpdater from "electron-updater";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -6,10 +7,46 @@ import crypto from "node:crypto";
 
 const PORTAL_URL = process.env.DALI_DESKTOP_URL || "https://www.dally.info/portal";
 const DESKTOP_MARKER = "dali-desktop-v1";
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const { autoUpdater } = electronUpdater;
 let mainWindow;
 let storePath;
 let keyPath;
 let key;
+let updateCheckTimer;
+
+function configureAutomaticUpdates() {
+  if (!app.isPackaged) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+
+  autoUpdater.on("error", error => {
+    console.error("Dali desktop update failed:", error?.message || error);
+  });
+
+  autoUpdater.on("update-downloaded", async info => {
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "تحديث نظام دالي",
+      message: `اكتمل تنزيل الإصدار ${info.version}.`,
+      detail: "أُغلق التطبيق وثبّت التحديث الآن، أو اختر لاحقًا ليُثبّت تلقائيًا عند إغلاق التطبيق.",
+      buttons: ["إعادة التشغيل والتحديث", "لاحقًا"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (result.response === 0) autoUpdater.quitAndInstall(false, true);
+  });
+
+  const check = () => autoUpdater.checkForUpdates().catch(error => {
+    console.error("Dali desktop update check failed:", error?.message || error);
+  });
+
+  setTimeout(check, 15_000);
+  updateCheckTimer = setInterval(check, UPDATE_CHECK_INTERVAL_MS);
+}
 
 function encrypt(value) {
   const iv = crypto.randomBytes(12);
@@ -127,6 +164,10 @@ app.whenReady().then(async () => {
   );
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   await openWindow();
+  configureAutomaticUpdates();
 });
-app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("window-all-closed", () => {
+  if (updateCheckTimer) clearInterval(updateCheckTimer);
+  if (process.platform !== "darwin") app.quit();
+});
 app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) void openWindow(); });
