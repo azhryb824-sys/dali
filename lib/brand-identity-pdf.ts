@@ -3,17 +3,21 @@ import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
 import { brandIdentityAssets, type BrandIdentityAssetId } from "@/lib/brand-identity";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { cairoFontBytes } from "@/lib/cairo-font-bytes";
-import { rtlPdfDigits } from "@/lib/latin-digits";
+import { latinDigits, rtlPdfDigits } from "@/lib/latin-digits";
 
 const PAGE = { width: 595.28, height: 841.89, margin: 48 };
 const C = { navy: rgb(0, .114, .176), red: rgb(.886, .11, .145), text: rgb(.12, .17, .2), muted: rgb(.42, .48, .52), pale: rgb(.96, .97, .975) };
 
+function brandPdfText(value: string) {
+  const normalized = latinDigits(value);
+  return /^[0-9.,:/%+\-\s]+$/.test(normalized.trim()) ? normalized : rtlPdfDigits(normalized);
+}
 function width(font: PDFFont, value: string, size: number) {
-  return font.widthOfTextAtSize(rtlPdfDigits(value || " "), size);
+  return font.widthOfTextAtSize(brandPdfText(value || " "), size);
 }
 function right(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = C.text, edge = PAGE.width - PAGE.margin) {
-  const normalized = rtlPdfDigits(value);
-  page.drawText(normalized, { x: edge - width(font, normalized, size), y, font, size, color });
+  const normalized = brandPdfText(value);
+  page.drawText(normalized, { x: edge - font.widthOfTextAtSize(normalized, size), y, font, size, color });
 }
 
 function wrap(font: PDFFont, value: string, size: number, maxWidth: number) {
