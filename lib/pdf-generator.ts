@@ -221,7 +221,8 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
   const resources = await loadResources(pdf, assets);
   const centerX = PAGE.width / 2;
   const contentTop = PAGE.height - 126;
-  const contentBottom = PAGE.footerTop + 18;
+  const contentBottom = 72;
+  const signedContentBottom = PAGE.footerTop + 22;
   const outerMargin = 38;
   const gutter = 12;
   const arabicRight = PAGE.width - outerMargin;
@@ -255,8 +256,12 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     if (y - height < contentBottom) addPage();
   };
 
+  const ensureWithSignatures = (height: number) => {
+    if (y - height < signedContentBottom) addPage();
+  };
+
   const section = (arabic: string, english: string) => {
-    ensure(34);
+    ensure(82);
     page.drawRectangle({
       x: outerMargin,
       y: y - 25,
@@ -391,6 +396,7 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
     if (input.assumptions) pairedBlock("الافتراضات والاستثناءات", publicManpowerText(input.assumptions), "Assumptions and exclusions", englishText(publicManpowerText(input.assumptions)));
     if (input.terms) pairedBlock("الشروط والأحكام", publicManpowerText(input.terms), "Terms and conditions", englishText(publicManpowerText(input.terms)));
+    ensureWithSignatures(92);
     pairedBlock(
       "اعتماد العرض",
       "هذا العرض صالح خلال المدة المحددة، ويبدأ التنفيذ بعد موافقة العميل واستكمال المتطلبات النظامية والتشغيلية وإصدار العقد أو أمر الإسناد المعتمد.",
@@ -438,6 +444,7 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     );
     if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
     if (input.specialTerms) pairedBlock("الشروط الخاصة", input.specialTerms, "Special terms", englishText(input.specialTerms));
+    ensureWithSignatures(92);
     pairedBlock(
       "الاعتماد",
       "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.",
@@ -705,8 +712,15 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     y = PAGE.height - (resources.letterhead ? 148 : 128);
   }
 
+  const contentBottom = 72;
+  const signedContentBottom = PAGE.footerTop + 22;
+
   function ensure(height: number) {
-    if (y - height < PAGE.footerTop + 22) addPage();
+    if (y - height < contentBottom) addPage();
+  }
+
+  function ensureWithSignatures(height: number) {
+    if (y - height < signedContentBottom) addPage();
   }
 
   function heading(value: string, followingHeight = 52) {
@@ -740,12 +754,13 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     y -= height + 8;
   }
 
-  function paragraph(title: string, value: string) {
+  function paragraph(title: string, value: string, reserveSignatures = false) {
     const cleanValue = latinDigits(value).trim();
     if (!cleanValue) return;
     const lines = wrapWords(resources.regular, cleanValue, 10, PAGE.width - PAGE.margin * 2);
     const height = 29 + Math.max(1, lines.length) * 16;
-    ensure(height);
+    if (reserveSignatures) ensureWithSignatures(height);
+    else ensure(height);
     drawRight(page, title, y, resources.bold, 10, COLORS.navy);
     y -= 20;
     for (const line of lines) {
@@ -814,6 +829,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     paragraph,
     quotationTable,
     finish() {
+      if (y < signedContentBottom) addPage();
       if (input.approvalState === "draft") drawDraftEndorsement(page, resources, input.referenceCode);
       else if (input.documentType === "workforce_contract") drawContractSignatures(page, resources, input.referenceCode);
       else drawEndorsement(page, resources, input.referenceCode);
@@ -903,7 +919,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       if (source?.section && source.section !== currentSection) { currentSection = source.section; composer.heading(currentSection, 72); }
       composer.paragraph(title, body);
     });
-    composer.paragraph("الاعتماد", "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.");
+    composer.paragraph("الاعتماد", "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.", true);
   } else if (input.documentType === "quotation") {
     const workforcePricing = input.activityLabel === "توريد العمالة";
     const openQuantity = input.quantityMode === "open";
@@ -934,7 +950,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     if (input.paymentTerms) composer.paragraph("شروط الدفع", input.paymentTerms);
     if (input.assumptions) composer.paragraph("الافتراضات والاستثناءات", publicManpowerText(input.assumptions));
     if (input.terms) composer.paragraph("الشروط والأحكام", publicManpowerText(input.terms));
-    composer.paragraph("اعتماد العرض", "هذا العرض صالح خلال المدة المحددة أعلاه، ويبدأ التنفيذ بعد موافقة العميل واستكمال المتطلبات النظامية والتشغيلية وإصدار العقد أو أمر الإسناد المعتمد.");
+    composer.paragraph("اعتماد العرض", "هذا العرض صالح خلال المدة المحددة أعلاه، ويبدأ التنفيذ بعد موافقة العميل واستكمال المتطلبات النظامية والتشغيلية وإصدار العقد أو أمر الإسناد المعتمد.", true);
   } else {
     if (input.amountHalalas) {
       if (input.vatHalalas && input.subtotalHalalas) {
