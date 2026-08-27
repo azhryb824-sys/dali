@@ -730,6 +730,28 @@ export const legalCaseActivities = pgTable(
   ],
 );
 
+export const legalCaseActionLog = pgTable(
+  "legal_case_action_log",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "cascade" }),
+    activityId: integer("activity_id").references(() => legalCaseActivities.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    details: text("details"),
+    actorEmail: text("actor_email").notNull(),
+    actorRole: text("actor_role").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_case_action_log_record_idx").on(table.legalRecordId, table.createdAt),
+    index("legal_case_action_log_activity_idx").on(table.activityId),
+    index("legal_case_action_log_actor_idx").on(table.actorEmail, table.createdAt),
+    check("legal_case_action_log_action_check", sql`${table.action} in ('created','assigned','started','completed','cancelled','attachment_added')`),
+  ],
+);
+
 export const complianceObligations = pgTable(
   "compliance_obligations",
   {
