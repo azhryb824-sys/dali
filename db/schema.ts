@@ -755,6 +755,31 @@ export const legalCaseActionLog = pgTable(
   ],
 );
 
+export const legalJudgmentPaymentRequests = pgTable(
+  "legal_judgment_payment_requests",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "restrict" }),
+    amountHalalas: integer("amount_halalas").notNull(),
+    description: text("description").notNull(),
+    status: text("status").notNull().default("requested"),
+    requestedBy: text("requested_by").notNull(),
+    requestedAt: text("requested_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    bankAccountId: integer("bank_account_id").references(() => bankAccounts.id, { onDelete: "restrict" }),
+    journalEntryId: integer("journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
+    paidBy: text("paid_by"),
+    paidAt: text("paid_at"),
+    rejectionReason: text("rejection_reason"),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_judgment_payments_record_idx").on(table.legalRecordId, table.status),
+    uniqueIndex("legal_judgment_payments_journal_unique").on(table.journalEntryId),
+    check("legal_judgment_payments_amount_check", sql`${table.amountHalalas} > 0`),
+    check("legal_judgment_payments_status_check", sql`${table.status} in ('requested','paid','rejected','cancelled')`),
+  ],
+);
+
 export const complianceObligations = pgTable(
   "compliance_obligations",
   {
