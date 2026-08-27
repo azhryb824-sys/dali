@@ -37,7 +37,7 @@ async function loadKey() {
 }
 async function readStore() {
   try { return decrypt(JSON.parse(await readFile(storePath, "utf8"))); }
-  catch { return { deviceId: crypto.randomUUID(), cache: {}, queue: [], conflicts: [], lastSyncAt: null }; }
+  catch { return { deviceId: crypto.randomUUID(), cache: {}, queue: [], conflicts: [], lastSyncAt: null, serverCursor: 0 }; }
 }
 async function writeStore(store) {
   await writeFile(storePath, JSON.stringify(encrypt(store)), { mode: 0o600 });
@@ -51,13 +51,14 @@ async function mutateStore(handler) {
 function registerIpc() {
   ipcMain.handle("dali:state", async () => {
     const store = await readStore();
-    return { deviceId: store.deviceId, queued: store.queue.length, conflicts: store.conflicts.length, lastSyncAt: store.lastSyncAt };
+    return { deviceId: store.deviceId, queued: store.queue.length, conflicts: store.conflicts.length, lastSyncAt: store.lastSyncAt, serverCursor: store.serverCursor || 0 };
   });
   ipcMain.handle("dali:cache:get", async (_event, cacheKey) => (await readStore()).cache[cacheKey] || null);
   ipcMain.handle("dali:cache:put", async (_event, cacheKey, response) => mutateStore(store => {
     store.cache[cacheKey] = { ...response, cachedAt: new Date().toISOString() };
     return true;
   }));
+  ipcMain.handle("dali:cursor:set", async (_event, cursor) => mutateStore(store => { store.serverCursor = Math.max(store.serverCursor || 0, Number(cursor) || 0); return store.serverCursor; }));
   ipcMain.handle("dali:queue:add", async (_event, operation) => mutateStore(store => {
     if (!store.queue.some(item => item.idempotencyKey === operation.idempotencyKey)) store.queue.push(operation);
     return { queued: store.queue.length };
@@ -112,7 +113,7 @@ async function openWindow() {
 app.whenReady().then(async () => {
   storePath = join(app.getPath("userData"), "offline-store.enc");
   await loadKey();
-  if (!existsSync(storePath)) await writeStore({ deviceId: crypto.randomUUID(), cache: {}, queue: [], conflicts: [], lastSyncAt: null });
+  if (!existsSync(storePath)) await writeStore({ deviceId: crypto.randomUUID(), cache: {}, queue: [], conflicts: [], lastSyncAt: null, serverCursor: 0 });
   registerIpc();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   await openWindow();
