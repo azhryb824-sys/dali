@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { legalCaseActionLog, legalCaseActivities, legalCaseAttachments, legalRecords } from "@/db/schema";
+import { bankAccounts, chartOfAccounts, financialRecords, journalEntries, legalCaseActionLog, legalCaseActivities, legalCaseAttachments, legalJudgmentPaymentRequests, legalRecords } from "@/db/schema";
+import { createDraftJournal } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -9,26 +10,39 @@ import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest } from "@/lib/secu
 const clean=(value:unknown,max=1000)=>typeof value==="string"?value.trim().slice(0,max):"";
 type LegalActor=NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>;
 async function access(write=false){const actor=await requirePortalApiRole(["admin","manager","employee"]);return actor&&await hasPortalPermission(actor,"legal",write?"write":"read")?actor:null}
+function isOwner(actor:LegalActor){return actor.role==="admin"||actor.functionalRoles.some(role=>["system_owner","system_admin"].includes(role))}
 function isSupervisor(actor:LegalActor){return actor.role==="admin"||actor.functionalRoles.some(role=>["system_owner","system_admin","legal_supervisor"].includes(role))}
 function actorRole(actor:LegalActor){if(actor.functionalRoles.includes("legal_supervisor"))return"legal_supervisor";if(actor.functionalRoles.includes("legal_lawyer"))return"legal_lawyer";if(actor.functionalRoles.includes("lawyer"))return"lawyer";if(actor.functionalRoles.includes("system_owner"))return"system_owner";if(actor.functionalRoles.includes("system_admin")||actor.role==="admin")return"system_admin";return"legal_staff"}
 
 export async function GET(){
   const actor=await access();if(!actor)return jsonNoStore({error:"غير مصرح"},{status:403});
   const db=getDb();
-  const[cases,activities,attachments,actionLog]=await Promise.all([
+  const[cases,activities,attachments,actionLog,judgmentPayments,banks]=await Promise.all([
     db.select().from(legalRecords).orderBy(asc(legalRecords.status),asc(legalRecords.createdAt)),
     db.select().from(legalCaseActivities).orderBy(asc(legalCaseActivities.dueAt),asc(legalCaseActivities.createdAt)),
     db.select().from(legalCaseAttachments).orderBy(asc(legalCaseAttachments.createdAt)),
     db.select().from(legalCaseActionLog).orderBy(asc(legalCaseActionLog.createdAt)),
+    db.select().from(legalJudgmentPaymentRequests).orderBy(asc(legalJudgmentPaymentRequests.requestedAt)),
+    db.select().from(bankAccounts).where(eq(bankAccounts.status,"active")).orderBy(asc(bankAccounts.bankName)),
   ]);
-  return jsonNoStore({cases,activities,attachments,actionLog,currentActorEmail:actor.user.email,currentActorRole:actorRole(actor),canWrite:await hasPortalPermission(actor,"legal","write"),canApprove:await hasPortalPermission(actor,"legal","approve"),canSupervise:isSupervisor(actor)})
+  return jsonNoStore({cases,activities,attachments,actionLog,judgmentPayments,banks,currentActorEmail:actor.user.email,currentActorRole:actorRole(actor),canWrite:await hasPortalPermission(actor,"legal","write"),canApprove:await hasPortalPermission(actor,"legal","approve"),canSupervise:isSupervisor(actor),canPayJudgments:isOwner(actor)})
 }
 
 export async function POST(request:Request){
   if(rejectCrossSiteRequest(request))return jsonNoStore({error:"مصدر الطلب غير مسموح"},{status:403});
   const actor=await access(true);if(!actor)return jsonNoStore({error:"غير مصرح"},{status:403});
   const parsed=await readLimitedJson(request,10000);if(!parsed.ok)return parsed.response;
-  const body=parsed.value as Record<string,unknown>;const legalRecordId=Number(body.legalRecordId);const activityType=clean(body.activityType,30);const title=clean(body.title,180);const details=clean(body.details,5000);const priority=clean(body.priority,20)||"medium";const dueAt=clean(body.dueAt,30)||null;
+  const body=parsed.value as Record<string,unknown>;const requestAction=clean(body.action,40);
+  if(requestAction==="request-judgment-payment"){
+    const legalRecordId=Number(body.legalRecordId),amountHalalas=Math.round(Number(body.amount)*100),description=clean(body.description,1000);
+    if(!Number.isInteger(legalRecordId)||legalRecordId<1||!Number.isSafeInteger(amountHalalas)||amountHalalas<1||description.length<5)return jsonNoStore({error:"بيانات طلب سداد المحكوم به غير مكتملة"},{status:400});
+    const db=getDb();const matter=await db.query.legalRecords.findFirst({where:eq(legalRecords.id,legalRecordId)});if(!matter)return jsonNoStore({error:"الملف القانوني غير موجود"},{status:404});
+    const saved=await db.transaction(async tx=>{const[row]=await tx.insert(legalJudgmentPaymentRequests).values({legalRecordId,amountHalalas,description,requestedBy:actor.user.email}).returning();await tx.insert(legalCaseActionLog).values({legalRecordId,activityId:null,action:"created",details:`طلب سداد محكوم به بقيمة ${(amountHalalas/100).toFixed(2)} ر.س — ${description}`,actorEmail:actor.user.email,actorRole:actorRole(actor)});return row});
+    await auditPortalAction({actorEmail:actor.user.email,action:"legal-judgment-payment-requested",entityType:"legal-judgment-payment",entityId:saved.id,after:saved});
+    await emitPortalNotification({eventType:"legal-judgment-payment-requested",title:"طلب سداد محكوم به",message:`${matter.referenceCode} — ${(amountHalalas/100).toFixed(2)} ر.س`,severity:"critical",module:"legal",entityType:"legal-record",entityId:legalRecordId,actionView:"legal",targetRole:"admin"}).catch(()=>undefined);
+    return jsonNoStore({payment:saved},{status:201});
+  }
+  const legalRecordId=Number(body.legalRecordId);const activityType=clean(body.activityType,30);const title=clean(body.title,180);const details=clean(body.details,5000);const priority=clean(body.priority,20)||"medium";const dueAt=clean(body.dueAt,30)||null;
   const requestedAssignee=clean(body.assignedTo,180)||null;const assignedTo=isSupervisor(actor)?requestedAssignee:(actor.user.email||null);
   if(!Number.isInteger(legalRecordId)||legalRecordId<1||title.length<3||!["task","deadline","note","communication","hearing","settlement"].includes(activityType)||!["low","medium","high","critical"].includes(priority))return jsonNoStore({error:"بيانات نشاط القضية غير مكتملة"},{status:400});
   const db=getDb();const matter=await db.query.legalRecords.findFirst({where:eq(legalRecords.id,legalRecordId)});if(!matter)return jsonNoStore({error:"الملف القانوني غير موجود"},{status:404});
@@ -49,6 +63,23 @@ export async function PATCH(request:Request){
   const parsed=await readLimitedJson(request,5000);if(!parsed.ok)return parsed.response;
   const body=parsed.value as Record<string,unknown>;const actionRequest=clean(body.action,30);
   const db=getDb();
+  if(actionRequest==="pay-judgment"){
+    if(!isOwner(actor))return jsonNoStore({error:"تأكيد سداد المحكوم به من صلاحيات المالك أو مشرف النظام"},{status:403});
+    const paymentId=Number(body.paymentId),bankAccountId=Number(body.bankAccountId),paymentReference=clean(body.paymentReference,180);
+    const[payment,bank,expenseAccount]=await Promise.all([db.query.legalJudgmentPaymentRequests.findFirst({where:eq(legalJudgmentPaymentRequests.id,paymentId)}),db.query.bankAccounts.findFirst({where:and(eq(bankAccounts.id,bankAccountId),eq(bankAccounts.status,"active"))}),db.query.chartOfAccounts.findFirst({where:and(eq(chartOfAccounts.code,"5290"),eq(chartOfAccounts.status,"active"))})]);
+    if(!payment||payment.status!=="requested")return jsonNoStore({error:"طلب سداد المحكوم به غير متاح"},{status:409});
+    if(!bank)return jsonNoStore({error:"اختر الحساب البنكي الذي تم السداد منه"},{status:409});
+    if(!expenseAccount||!expenseAccount.isPosting)return jsonNoStore({error:"حساب الأحكام القانونية 5290 غير مهيأ"},{status:409});
+    const matter=await db.query.legalRecords.findFirst({where:eq(legalRecords.id,payment.legalRecordId)});if(!matter)return jsonNoStore({error:"الملف القانوني غير موجود"},{status:404});
+    const now=new Date().toISOString();let journalId=0,financialId=0;
+    try{
+      const[financial]=await db.insert(financialRecords).values({referenceCode:`FIN-LGL-${payment.id}`,category:"legal_judgment",subCategory:"court_judgment",description:`سداد محكوم به — ${matter.referenceCode} — ${payment.description}`,amountHalalas:payment.amountHalalas,subtotalHalalas:payment.amountHalalas,vatHalalas:0,vatRateBps:0,dueDate:now.slice(0,10),contractId:matter.contractId,paymentMethod:"bank_transfer",bankAccountId:bank.id,notes:paymentReference?`مرجع العملية: ${paymentReference}`:null,status:"paid",postingStatus:"unposted",updatedAt:now}).returning();financialId=financial.id;
+      const journal=await createDraftJournal({entryDate:now.slice(0,10),description:`سداد محكوم به — ${matter.referenceCode}`,sourceType:"financial-record",sourceId:String(financial.id),actorEmail:actor.user.email,lines:[{accountId:expenseAccount.id,debitHalalas:payment.amountHalalas,description:payment.description,contractId:matter.contractId},{accountId:bank.ledgerAccountId,bankAccountId:bank.id,creditHalalas:payment.amountHalalas,description:`سداد من ${bank.bankName}${paymentReference?` — ${paymentReference}`:""}`,contractId:matter.contractId}]});journalId=journal.entry.id;
+      const result=await db.transaction(async tx=>{await tx.update(financialRecords).set({journalEntryId:journal.entry.id,updatedAt:now}).where(eq(financialRecords.id,financial.id));const[row]=await tx.update(legalJudgmentPaymentRequests).set({status:"paid",bankAccountId:bank.id,journalEntryId:journal.entry.id,paidBy:actor.user.email,paidAt:now,updatedAt:now}).where(and(eq(legalJudgmentPaymentRequests.id,payment.id),eq(legalJudgmentPaymentRequests.status,"requested"))).returning();if(!row)throw new Error("تمت معالجة الطلب من مستخدم آخر");await tx.insert(legalCaseActionLog).values({legalRecordId:payment.legalRecordId,activityId:null,action:"completed",fromStatus:"requested",toStatus:"paid",details:`سداد المحكوم به من ${bank.bankName}; القيد ${journal.entry.entryNumber}`,actorEmail:actor.user.email,actorRole:actorRole(actor)});return{payment:row,financial,journal:journal.entry,bank}});
+      await auditPortalAction({actorEmail:actor.user.email,action:"legal-judgment-payment-paid",entityType:"legal-judgment-payment",entityId:payment.id,before:payment,after:result});
+      return jsonNoStore(result);
+    }catch(error){if(journalId)await db.delete(journalEntries).where(eq(journalEntries.id,journalId)).catch(()=>undefined);if(financialId)await db.delete(financialRecords).where(eq(financialRecords.id,financialId)).catch(()=>undefined);throw error}
+  }
   if(actionRequest==="assign-case"){
     if(!isSupervisor(actor))return jsonNoStore({error:"إسناد القضية من صلاحيات المحامي المشرف"},{status:403});
     const legalRecordId=Number(body.legalRecordId);const assignedLawyerEmail=clean(body.assignedLawyerEmail,180).toLowerCase();
