@@ -239,7 +239,6 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
   let y = contentTop;
 
   const addPage = () => {
-    if (pageNumber) drawEndorsement(page, resources, input.referenceCode);
     page = pdf.addPage([PAGE.width, PAGE.height]);
     pageNumber += 1;
     drawHeader(page, resources, bilingualHeader, pageNumber);
