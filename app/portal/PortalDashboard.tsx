@@ -1643,18 +1643,23 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
     if (target <= step) { setStep(target); return; }
     if (target > step + 1) return;
     const form = document.querySelector<HTMLFormElement>(".issue-modal form");
-    const requiredFields = form ? Array.from(form.querySelectorAll("input[required], select[required], textarea[required]"))
-      .filter((field): field is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
-        field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement
-      )
-      .filter((field) => {
-        if (field.disabled || (field instanceof HTMLInputElement && field.type === "hidden")) return false;
-        const wizardStep = field.closest(".issue-form-step");
-        if (wizardStep && !wizardStep.classList.contains("visible")) return false;
-        if (field.closest(".contract-profession-pricing") && step !== 2) return false;
-        return true;
-      }) : [];
-    const invalid = requiredFields.find((field) => !field.checkValidity());
+    type ValidatableField = {
+      disabled: boolean;
+      type?: string;
+      closest: (selector: string) => { classList: { contains: (name: string) => boolean } } | null;
+      checkValidity: () => boolean;
+      reportValidity: () => boolean;
+      focus: () => void;
+    };
+    const requiredFields = (form ? Array.from(form.querySelectorAll("input[required], select[required], textarea[required]")) : []) as unknown as ValidatableField[];
+    const activeRequiredFields = requiredFields.filter((field) => {
+      if (field.disabled || field.type === "hidden") return false;
+      const wizardStep = field.closest(".issue-form-step");
+      if (wizardStep && !wizardStep.classList.contains("visible")) return false;
+      if (field.closest(".contract-profession-pricing") && step !== 2) return false;
+      return true;
+    });
+    const invalid = activeRequiredFields.find((field) => !field.checkValidity());
     if (invalid) { invalid.reportValidity(); invalid.focus(); return; }
     if (step === 1 && seasonType === "regular" && !annualEndDate) {
       const start = form?.elements.namedItem("startDate");
