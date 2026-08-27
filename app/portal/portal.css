@@ -213,3 +213,8 @@ body:has(.modal-layer) .video-desk{visibility:hidden;pointer-events:none}
 .contractual-document-tabs button:hover{background:#f3f6f8;color:var(--admin-text,#14212b)}
 .contractual-document-tabs button.active{background:var(--admin-primary,#143c36);color:#fff;box-shadow:0 5px 14px rgba(20,60,54,.2)}
 @media(max-width:640px){.contractual-document-tabs{grid-template-columns:1fr;padding:6px}.contractual-document-tabs button{min-height:42px}}
+.letter-record-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-inline-start:auto}
+.letter-record-actions button{min-height:36px;padding:7px 12px;border:1px solid var(--admin-border,#dfe5eb);border-radius:8px;background:#fff;color:var(--admin-navy,#173440);font:inherit;font-weight:700;cursor:pointer}
+.letter-record-actions .admin-primary{background:var(--admin-primary,#143c36);border-color:var(--admin-primary,#143c36);color:#fff}
+.letter-record-actions .danger-action{border-color:#efc6c8;color:#a7282e;background:#fff7f7}
+@media(max-width:700px){.letter-record-actions{width:100%;justify-content:stretch}.letter-record-actions button{flex:1}}
