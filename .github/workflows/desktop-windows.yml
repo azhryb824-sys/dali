@@ -36,13 +36,13 @@ jobs:
           git push origin $tag
       - name: Build single Windows installer
         working-directory: desktop
-        run: npm run build:windows
+        run: npx electron-builder --win nsis --x64 --publish never
       - name: Verify installer
         shell: pwsh
         run: |
-          $installer = Get-Item "desktop/dist/Dali-Desktop-Setup-0.2.3.exe"
+          $installer = Get-Item "desktop/dist/Dali-Desktop-Setup-0.2.4.exe"
           if ($installer.Length -lt 50000000) { throw "Installer is unexpectedly small" }
-          Get-Item "desktop/dist/Dali-Desktop-Setup-0.2.3.exe.blockmap" | Out-Null
+          Get-Item "desktop/dist/Dali-Desktop-Setup-0.2.4.exe.blockmap" | Out-Null
           Get-Item "desktop/dist/latest.yml" | Out-Null
           Get-FileHash $installer.FullName -Algorithm SHA256
       - name: Publish one stable update release
@@ -61,9 +61,9 @@ jobs:
             --notes "تحديث مستقر لتطبيق نظام دالي الإداري."
       - uses: actions/upload-artifact@v4
         with:
-          name: Dali-Desktop-Setup-0.2.3
+          name: Dali-Desktop-Setup-0.2.4
           path: |
-            desktop/dist/Dali-Desktop-Setup-0.2.3.exe
+            desktop/dist/Dali-Desktop-Setup-0.2.4.exe
             desktop/dist/latest.yml
             desktop/dist/*.blockmap
           if-no-files-found: error
