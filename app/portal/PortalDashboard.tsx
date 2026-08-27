@@ -1162,7 +1162,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
 
         {view === "workforce-supervision" && canAccessContracts && canAccess("workforce") && <WorkforceSupervisionWorkspace contracts={contracts} professions={contractProfessions} assignments={contractAssignments} workers={workers} onOpenContract={setSelectedContractId}/>}
 
-        {view === "contractual-documents" && canAccessContracts && <><ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={canManageDocuments} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract",quoteId)}/><LetterPdfLibrary/></>}
+        {view === "contractual-documents" && canAccessContracts && <><ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={canManageDocuments} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract",quoteId)} onCreateQuotation={() => openIssueDocument("quotation")}/><LetterPdfLibrary/></>}
 
         {view === "documents" && canAccessDocuments && <DocumentCenter
           documents={documents.filter((item) => !["quotation","workforce_contract","contract","letter"].includes(item.documentType || ""))}
