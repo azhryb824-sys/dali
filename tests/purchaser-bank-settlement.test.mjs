@@ -13,7 +13,7 @@ test("purchaser contract payments require an active bank and create a settlement
   assert.match(route, /sourceType:"contract-payment-settlement"/);
   assert.match(route, /accountId:payable\.id,debitHalalas:financial\.amountHalalas/);
   assert.match(route, /accountId:bank\.ledgerAccountId,bankAccountId:bank\.id,creditHalalas:financial\.amountHalalas/);
-  assert.match(route, /paymentMethod:"bank_transfer",bankAccountId:bank\.id/);
+  assert.match(route, /\["bank_transfer","cash","cheque"\]\.includes\(paymentMethod\)/);\n  assert.match(route, /paymentMethod,bankAccountId:bank\?\.id\|\|null/);
 });
 
 test("purchaser settlement is exposed through a bank-selection system form", async () => {
