@@ -780,6 +780,50 @@ export const legalJudgmentPaymentRequests = pgTable(
   ],
 );
 
+export const desktopDevices = pgTable(
+  "desktop_devices",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email").notNull(),
+    deviceName: text("device_name"),
+    platform: text("platform").notNull().default("windows"),
+    status: text("status").notNull().default("active"),
+    lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    lastSyncAt: text("last_sync_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("desktop_devices_user_status_idx").on(table.userEmail, table.status),
+    check("desktop_devices_status_check", sql`${table.status} in ('active','revoked')`),
+  ],
+);
+
+export const desktopSyncOperations = pgTable(
+  "desktop_sync_operations",
+  {
+    id: serial("id").primaryKey(),
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    deviceId: text("device_id").notNull().references(() => desktopDevices.id, { onDelete: "restrict" }),
+    userEmail: text("user_email").notNull(),
+    method: text("method").notNull(),
+    requestPath: text("request_path").notNull(),
+    status: text("status").notNull().default("processing"),
+    responseStatus: integer("response_status"),
+    responseHeadersJson: text("response_headers_json"),
+    responseBody: text("response_body"),
+    errorMessage: text("error_message"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    index("desktop_sync_operations_device_idx").on(table.deviceId, table.createdAt),
+    index("desktop_sync_operations_user_idx").on(table.userEmail, table.createdAt),
+    check("desktop_sync_operations_method_check", sql`${table.method} in ('POST','PATCH','DELETE')`),
+    check("desktop_sync_operations_status_check", sql`${table.status} in ('processing','completed','failed','conflict')`),
+  ],
+);
+
 export const complianceObligations = pgTable(
   "compliance_obligations",
   {
