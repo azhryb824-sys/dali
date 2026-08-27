@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.desktop_devices (
   status text NOT NULL DEFAULT 'active',
   last_seen_at text NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
   last_sync_at text,
+  last_activity_id integer NOT NULL DEFAULT 0,
   created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
   updated_at text NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
   CONSTRAINT desktop_devices_status_check CHECK (status IN ('active','revoked'))
