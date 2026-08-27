@@ -94,7 +94,7 @@ test("legacy generated PDFs are rebuilt with the current template when accessed"
   assert.match(regeneration, /CURRENT_ISSUED_PDF_TEMPLATE/);
   assert.match(regeneration, /document\.source !== "generated"/);
   assert.match(regeneration, /BUCKET\.put\(document\.storageKey/);
-  assert.match(generation, /templateVersion: "letterhead-v4-directional-contract"/);
+  assert.match(generation, /templateVersion: "letterhead-v5-contract-controls"/);
 });
 
 test("documents center uses the complete canonical quotation form instead of the generic issuer", async () => {
