@@ -180,21 +180,277 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
 }
 
 async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: CompanyAsset[]) {
-  const [arabicBytes, englishBytes] = await Promise.all([
-    generateIssuedPdf({ ...input, pdfLanguage: "ar" }, assets),
-    createEnglishIssuedPdf({ ...input, pdfLanguage: "ar" }, assets),
-  ]);
-  const [arabicPdf, englishPdf] = await Promise.all([PDFDocument.load(arabicBytes), PDFDocument.load(englishBytes)]);
-  const output = await PDFDocument.create();
-  const pages = Math.max(arabicPdf.getPageCount(), englishPdf.getPageCount());
-  for (let index = 0; index < pages; index += 1) {
-    const page = output.addPage([PAGE.width * 2, PAGE.height]);
-    if (index < englishPdf.getPageCount()) { const [embedded] = await output.embedPdf(englishPdf, [index]); page.drawPage(embedded, { x: 0, y: 0, width: PAGE.width, height: PAGE.height }); }
-    if (index < arabicPdf.getPageCount()) { const [embedded] = await output.embedPdf(arabicPdf, [index]); page.drawPage(embedded, { x: PAGE.width, y: 0, width: PAGE.width, height: PAGE.height }); }
-    page.drawLine({ start: { x: PAGE.width, y: 0 }, end: { x: PAGE.width, y: PAGE.height }, thickness: 1.2, color: COLORS.navy });
+  if (!["workforce_contract", "quotation"].includes(input.documentType)) {
+    const [arabicBytes, englishBytes] = await Promise.all([
+      generateIssuedPdf({ ...input, pdfLanguage: "ar" }, assets),
+      createEnglishIssuedPdf({ ...input, pdfLanguage: "ar" }, assets),
+    ]);
+    const [arabicPdf, englishPdf] = await Promise.all([
+      PDFDocument.load(arabicBytes),
+      PDFDocument.load(englishBytes),
+    ]);
+    const output = await PDFDocument.create();
+    const pages = Math.max(arabicPdf.getPageCount(), englishPdf.getPageCount());
+    for (let index = 0; index < pages; index += 1) {
+      const page = output.addPage([PAGE.width, PAGE.height]);
+      const columnWidth = PAGE.width / 2;
+      if (index < englishPdf.getPageCount()) {
+        const [embedded] = await output.embedPdf(englishPdf, [index]);
+        page.drawPage(embedded, { x: 0, y: PAGE.height / 2, width: columnWidth, height: PAGE.height / 2 });
+      }
+      if (index < arabicPdf.getPageCount()) {
+        const [embedded] = await output.embedPdf(arabicPdf, [index]);
+        page.drawPage(embedded, { x: columnWidth, y: PAGE.height / 2, width: columnWidth, height: PAGE.height / 2 });
+      }
+      page.drawLine({
+        start: { x: columnWidth, y: PAGE.footerTop },
+        end: { x: columnWidth, y: PAGE.height - 96 },
+        thickness: 0.8,
+        color: COLORS.navy,
+      });
+    }
+    output.setTitle(`${englishDocumentLabels[input.documentType]} | ${issuedDocumentLabels[input.documentType]} - ${input.referenceCode}`);
+    return output.save();
   }
-  output.setTitle(`${englishDocumentLabels[input.documentType]} | ${issuedDocumentLabels[input.documentType]} - ${input.referenceCode}`);
-  return output.save();
+
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(`${englishDocumentLabels[input.documentType]} | ${issuedDocumentLabels[input.documentType]} - ${input.referenceCode}`);
+  pdf.setAuthor("شركة دالي للتشغيل والصيانة");
+  pdf.setCreator("النظام الإداري لشركة دالي للتشغيل والصيانة");
+  pdf.setCreationDate(new Date());
+
+  const resources = await loadResources(pdf, assets);
+  const centerX = PAGE.width / 2;
+  const contentTop = PAGE.height - 126;
+  const contentBottom = PAGE.footerTop + 18;
+  const outerMargin = 38;
+  const gutter = 12;
+  const arabicRight = PAGE.width - outerMargin;
+  const arabicLeft = centerX + gutter;
+  const englishLeft = outerMargin;
+  const englishRight = centerX - gutter;
+  const columnWidth = englishRight - englishLeft;
+  const bilingualHeader: IssuedDocumentInput = {
+    ...input,
+    title: `${issuedDocumentLabels[input.documentType]} | ${englishDocumentLabels[input.documentType]}`,
+  };
+
+  let page!: PDFPage;
+  let pageNumber = 0;
+  let y = contentTop;
+
+  const addPage = () => {
+    if (pageNumber) drawEndorsement(page, resources, input.referenceCode);
+    page = pdf.addPage([PAGE.width, PAGE.height]);
+    pageNumber += 1;
+    drawHeader(page, resources, bilingualHeader, pageNumber);
+    page.drawLine({
+      start: { x: centerX, y: contentBottom },
+      end: { x: centerX, y: contentTop + 8 },
+      thickness: 0.9,
+      color: COLORS.navy,
+    });
+    y = contentTop;
+  };
+
+  const ensure = (height: number) => {
+    if (y - height < contentBottom) addPage();
+  };
+
+  const section = (arabic: string, english: string) => {
+    ensure(34);
+    page.drawRectangle({
+      x: outerMargin,
+      y: y - 25,
+      width: PAGE.width - outerMargin * 2,
+      height: 29,
+      color: COLORS.navy,
+    });
+    drawRight(page, arabic, y - 14, resources.bold, 10, rgb(1, 1, 1), arabicRight - 7);
+    drawLeft(page, english, y - 14, resources.latinBold, 9, rgb(1, 1, 1), englishLeft + 7);
+    y -= 36;
+  };
+
+  const pairedBlock = (
+    arabicLabel: string,
+    arabicValue: string,
+    englishLabel: string,
+    englishValue: string,
+    emphasized = false,
+  ) => {
+    const arValue = latinDigits(arabicValue || "غير محدد");
+    const enValue = latinDigits(englishValue || "Not specified");
+    const arLines = wrapWords(resources.regular, arValue, 7.2, columnWidth - 20);
+    const enLines = wrapWords(resources.latinRegular, enValue, 7.1, columnWidth - 20);
+    const lines = Math.max(arLines.length, enLines.length, 1);
+    const height = 26 + lines * 10;
+    ensure(height + 4);
+
+    page.drawRectangle({
+      x: outerMargin,
+      y: y - height + 5,
+      width: PAGE.width - outerMargin * 2,
+      height,
+      color: emphasized ? rgb(0.94, 0.96, 0.97) : COLORS.pale,
+      borderColor: emphasized ? COLORS.navy : COLORS.line,
+      borderWidth: emphasized ? 0.7 : 0.45,
+    });
+    drawRight(page, arabicLabel, y - 8, resources.bold, 7.2, COLORS.red, arabicRight - 7);
+    drawLeft(page, englishLabel, y - 8, resources.latinBold, 7, COLORS.red, englishLeft + 7);
+    arLines.forEach((line, index) =>
+      drawRight(page, line, y - 22 - index * 10, resources.regular, 7.2, COLORS.text, arabicRight - 7),
+    );
+    enLines.forEach((line, index) =>
+      drawLeft(page, line, y - 22 - index * 10, resources.latinRegular, 7.1, COLORS.text, englishLeft + 7),
+    );
+    y -= height + 4;
+  };
+
+  const moneyEnglish = (halalas?: number) =>
+    `${((halalas || 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} SAR`;
+
+  addPage();
+  section(issuedDocumentLabels[input.documentType], englishDocumentLabels[input.documentType]);
+  pairedBlock("المرجع", input.referenceCode, "Reference", input.referenceCode, true);
+  pairedBlock("تاريخ الإصدار", dateLabel(input.issueDate), "Issue date", input.issueDate);
+  pairedBlock("العميل / الجهة", input.clientName, "Client / Entity", englishText(input.clientName));
+  if (input.clientCr) pairedBlock("السجل التجاري", input.clientCr, "Commercial registration", input.clientCr);
+  if (input.clientVat) pairedBlock("الرقم الضريبي", input.clientVat, "VAT number", input.clientVat);
+  if (input.clientAddress) pairedBlock("العنوان الوطني", input.clientAddress, "National address", englishText(input.clientAddress));
+  if (input.clientRepresentative) {
+    pairedBlock(
+      "ممثل العميل",
+      `${input.clientRepresentative}${input.clientRepresentativeTitle ? ` - ${input.clientRepresentativeTitle}` : ""}`,
+      "Client representative",
+      `${englishText(input.clientRepresentative)}${input.clientRepresentativeTitle ? ` - ${englishText(input.clientRepresentativeTitle)}` : ""}`,
+    );
+  }
+  if (input.workSite) pairedBlock("موقع تقديم الخدمة", input.workSite, "Service location", englishText(input.workSite));
+  if (input.startDate || input.endDate) {
+    pairedBlock(
+      "مدة العقد",
+      `من ${dateLabel(input.startDate)} إلى ${dateLabel(input.endDate)}`,
+      "Contract term",
+      `${input.startDate || "-"} to ${input.endDate || "-"}`,
+    );
+  }
+
+  if (input.documentType === "quotation") {
+    section(
+      input.activityLabel === "توريد العمالة" ? "بيان العمالة والمهن والأسعار" : "الخدمات والأسعار",
+      input.activityLabel === "توريد العمالة" ? "Manpower, Professions and Pricing" : "Services and Pricing",
+    );
+    const quotationItems = input.quotationItems?.length
+      ? input.quotationItems
+      : [{
+          description: input.details,
+          quantity: 1,
+          durationMonths: 1,
+          unitPriceHalalas: input.subtotalHalalas || input.amountHalalas || 0,
+          lineTotalHalalas: input.subtotalHalalas || input.amountHalalas || 0,
+          notes: null,
+        }];
+    quotationItems.forEach((item, index) => {
+      const quantityAr = input.quantityMode === "open" ? "مفتوح" : String(item.quantity);
+      const quantityEn = input.quantityMode === "open" ? "Open" : String(item.quantity);
+      pairedBlock(
+        `البند ${index + 1}`,
+        `${publicManpowerText(item.description)} | الكمية: ${quantityAr} | المدة: ${item.durationMonths} شهر | سعر الوحدة: ${moneyLabel(item.unitPriceHalalas)} | الإجمالي: ${moneyLabel(item.lineTotalHalalas)}${item.notes ? ` | ${publicManpowerText(item.notes)}` : ""}`,
+        `Item ${index + 1}`,
+        `${englishText(publicManpowerText(item.description))} | Qty: ${quantityEn} | Duration: ${item.durationMonths} month(s) | Unit price: ${moneyEnglish(item.unitPriceHalalas)} | Total: ${moneyEnglish(item.lineTotalHalalas)}${item.notes ? ` | ${englishText(publicManpowerText(item.notes))}` : ""}`,
+      );
+    });
+
+    if (input.quantityMode === "open") {
+      pairedBlock(
+        "آلية الاحتساب",
+        `الكميات مفتوحة ولا تمثل التزاماً بعدد أو قيمة إجمالية. تطبق ضريبة القيمة المضافة بنسبة ${(input.vatRateBps || 0) / 100}% على الفواتير الفعلية.`,
+        "Calculation method",
+        `Quantities are open and do not represent a committed total quantity or value. VAT at ${(input.vatRateBps || 0) / 100}% applies to actual invoices.`,
+        true,
+      );
+    } else {
+      section("الملخص المالي", "Financial Summary");
+      pairedBlock("الإجمالي قبل الخصم والضريبة", moneyLabel(input.subtotalHalalas), "Subtotal", moneyEnglish(input.subtotalHalalas));
+      if (input.discountHalalas) pairedBlock("الخصم", moneyLabel(input.discountHalalas), "Discount", moneyEnglish(input.discountHalalas));
+      if (input.vatHalalas) {
+        pairedBlock(
+          `ضريبة القيمة المضافة (${(input.vatRateBps || 0) / 100}%)`,
+          moneyLabel(input.vatHalalas),
+          `VAT (${(input.vatRateBps || 0) / 100}%)`,
+          moneyEnglish(input.vatHalalas),
+        );
+      }
+      pairedBlock("الإجمالي النهائي", moneyLabel(input.amountHalalas), "Grand total", moneyEnglish(input.amountHalalas), true);
+      if (input.amountHalalas) {
+        pairedBlock("الإجمالي كتابة", halalasToArabicWords(input.amountHalalas), "Amount in words", moneyEnglish(input.amountHalalas));
+      }
+    }
+
+    section("الشروط والتفاصيل", "Terms and Details");
+    pairedBlock("نطاق العرض", publicManpowerText(input.details), "Scope", englishText(publicManpowerText(input.details)));
+    if (input.expiryDate) pairedBlock("صلاحية العرض", dateLabel(input.expiryDate), "Quotation validity", input.expiryDate);
+    if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
+    if (input.assumptions) pairedBlock("الافتراضات والاستثناءات", publicManpowerText(input.assumptions), "Assumptions and exclusions", englishText(publicManpowerText(input.assumptions)));
+    if (input.terms) pairedBlock("الشروط والأحكام", publicManpowerText(input.terms), "Terms and conditions", englishText(publicManpowerText(input.terms)));
+    pairedBlock(
+      "اعتماد العرض",
+      "هذا العرض صالح خلال المدة المحددة، ويبدأ التنفيذ بعد موافقة العميل واستكمال المتطلبات النظامية والتشغيلية وإصدار العقد أو أمر الإسناد المعتمد.",
+      "Quotation approval",
+      "This quotation remains valid for the stated period. Work starts after client approval, completion of regulatory and operational requirements, and issuance of the approved contract or assignment order.",
+      true,
+    );
+  } else {
+    section("نطاق التعاقد", "Contract Scope");
+    const professions = input.professions?.length
+      ? input.professions.map((item) => `${item.profession}: ${input.quantityMode === "open" ? "عدد مفتوح" : item.requiredCount}`).join(" | ")
+      : input.profession
+        ? `${input.profession}: ${input.workerCount || 0}`
+        : "حسب النطاق المعتمد";
+    pairedBlock("المهن والأعداد المطلوبة", professions, "Required professions and quantities", englishText(professions));
+    pairedBlock("نطاق العمل", publicManpowerText(input.details), "Scope of work", englishText(publicManpowerText(input.details)));
+
+    if (input.amountHalalas) {
+      section("القيمة والدفعات", "Value and Payments");
+      pairedBlock("القيمة التعاقدية", moneyLabel(input.amountHalalas), "Contract value", moneyEnglish(input.amountHalalas), true);
+      pairedBlock("القيمة كتابة", halalasToArabicWords(input.amountHalalas), "Amount in words", moneyEnglish(input.amountHalalas));
+    }
+    if (input.paymentSchedule?.length) {
+      input.paymentSchedule.forEach((payment, index) =>
+        pairedBlock(
+          `الدفعة ${index + 1}`,
+          `${payment.title} | الاستحقاق: ${dateLabel(payment.dueDate)} | النسبة: ${(payment.percentageBps / 100).toFixed(2)}% | القيمة: ${moneyLabel(payment.amountHalalas)}`,
+          `Installment ${index + 1}`,
+          `${englishText(payment.title)} | Due: ${payment.dueDate} | Percentage: ${(payment.percentageBps / 100).toFixed(2)}% | Amount: ${moneyEnglish(payment.amountHalalas)}`,
+        ),
+      );
+    }
+
+    section("الشروط والأحكام", "Terms and Conditions");
+    const selectedClauses = input.contractClauses?.length
+      ? input.contractClauses.filter((item) => item.included)
+      : defaultWorkforceContractClauses(input.contractDirection || "dali_supplier", false);
+    selectedClauses.forEach((item, index) =>
+      pairedBlock(
+        `${index + 1}. ${item.title}`,
+        item.body,
+        `${index + 1}. ${item.titleEn || englishText(item.title)}`,
+        item.bodyEn || englishText(item.body),
+      ),
+    );
+    if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
+    if (input.specialTerms) pairedBlock("الشروط الخاصة", input.specialTerms, "Special terms", englishText(input.specialTerms));
+    pairedBlock(
+      "الاعتماد",
+      "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.",
+      "Approval",
+      "This contract is issued electronically and becomes effective only after approval and signature by both parties. Its appendices, schedules and linked versions form an integral part of it.",
+      true,
+    );
+  }
+
+  drawEndorsement(page, resources, input.referenceCode);
+  return pdf.save();
 }
 
 export type CompanyAsset = {
