@@ -2,12 +2,18 @@
 -- Additive only: existing contracts, quotes, legal files, documents and accounting records remain unchanged.
 
 ALTER TABLE public.workforce_contracts
-  ADD COLUMN IF NOT EXISTS show_payment_schedule boolean NOT NULL DEFAULT true,
-  ADD COLUMN IF NOT EXISTS accommodation_party text,
+  ADD COLUMN IF NOT EXISTS show_payment_schedule boolean NOT NULL DEFAULT true;
+
+ALTER TABLE public.workforce_contracts
+  ADD COLUMN IF NOT EXISTS accommodation_party text;
+
+ALTER TABLE public.workforce_contracts
   ADD COLUMN IF NOT EXISTS transport_party text;
 
 ALTER TABLE public.quote_versions
-  ADD COLUMN IF NOT EXISTS accommodation_party text,
+  ADD COLUMN IF NOT EXISTS accommodation_party text;
+
+ALTER TABLE public.quote_versions
   ADD COLUMN IF NOT EXISTS transport_party text;
 
 CREATE TABLE IF NOT EXISTS public.legal_case_attachments (
