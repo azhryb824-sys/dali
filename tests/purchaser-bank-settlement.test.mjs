@@ -33,6 +33,6 @@ test("bank settlement reference is additive and migration-backed", async () => {
   ]);
   assert.match(schema, /paymentJournalEntryId:\s*integer\("payment_journal_entry_id"\)/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS payment_journal_entry_id integer/i);
-  assert.match(migration, /REFERENCES public\.journal_entries\(id\) ON DELETE RESTRICT/i);
+  assert.match(migration, /REFERENCES\s+public\.journal_entries\(id\)\s+ON DELETE RESTRICT/i);
   assert.doesNotMatch(migration, /DROP TABLE|DELETE FROM|TRUNCATE/i);
 });
