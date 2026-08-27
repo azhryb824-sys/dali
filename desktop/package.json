@@ -1,0 +1,41 @@
+{
+  "name": "dali-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "build:windows": "electron-builder --win nsis --x64",
+    "build:dir": "electron-builder --dir"
+  },
+  "dependencies": {
+    "electron": "^38.0.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "sa.dally.desktop",
+    "productName": "نظام دالي الإداري",
+    "artifactName": "Dali-Desktop-Setup-${version}.${ext}",
+    "asar": true,
+    "files": [
+      "main.mjs",
+      "preload.mjs",
+      "offline.html",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "نظام دالي الإداري"
+    }
+  }
+}
