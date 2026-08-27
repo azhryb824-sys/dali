@@ -100,7 +100,7 @@ test("workforce supervision has a dedicated permission-protected navigation and 
   assert.match(dashboard,/إدارة الإشراف على العمالة/);
   assert.match(dashboard,/view === "workforce-supervision"/);
   assert.match(dashboard,/canAccessContracts && canAccess\("workforce"\)/);
-  assert.match(workspace,/فتح إدارة الإسناد والإعادة/);
+  assert.match(workspace,/إدارة العمالة والغياب/);
   assert.match(workspace,/contractProfessionId/);
   assert.match(workspace,/item\.status==="active"/);
 });
