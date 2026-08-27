@@ -34,7 +34,9 @@ test("owner and system administrator can set a temporary password for another us
   assert.match(adminReset,/mustChangePassword: true/);assert.match(adminReset,/passwordChangedAt: null/);
   assert.match(adminReset,/revokePortalSessionsForUser\(email, "administrator-password-reset"\)/);
   assert.doesNotMatch(adminReset,/after: \{[^}]*temporaryPassword/);
-  assert.match(users,/\/api\/portal\/users\/password/);assert.match(users,/كلمة مرور مؤقتة/);
+  assert.match(users,/\/api\/portal\/users\/password/);assert.match(users,/إعادة تعيين كلمة المرور/);
+  assert.match(users,/temporaryPasswordConfirmation/);assert.match(users,/temporaryPasswordsMatch/);
+  assert.match(users,/!self && !passwordResetOpen/);assert.match(users,/setPasswordResetOpen\(true\)/);
   assert.match(login,/credential\.mustChangePassword/);assert.match(login,/first=1/);
   assert.match(reset,/mustChangePassword: false/);assert.match(reset,/passwordChangedAt: now/);
   assert.match(styles,/\.user-password-reset/);
