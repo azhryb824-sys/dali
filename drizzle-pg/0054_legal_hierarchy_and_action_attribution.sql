@@ -1,6 +1,13 @@
 -- Legal supervision hierarchy and immutable action attribution.
 -- Additive only: no users, roles, cases, activities, attachments, or permissions are deleted.
 
+ALTER TABLE public.legal_records
+  ADD COLUMN IF NOT EXISTS assigned_lawyer_email text;
+ALTER TABLE public.legal_records
+  ADD COLUMN IF NOT EXISTS assigned_by text;
+ALTER TABLE public.legal_records
+  ADD COLUMN IF NOT EXISTS assigned_at text;
+
 CREATE TABLE IF NOT EXISTS public.legal_case_action_log (
   id serial PRIMARY KEY,
   legal_record_id integer NOT NULL REFERENCES public.legal_records(id) ON DELETE CASCADE,
