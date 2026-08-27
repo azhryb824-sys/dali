@@ -34,14 +34,14 @@ jobs:
       - name: Verify installer
         shell: pwsh
         run: |
-          $installer = Get-Item "desktop/dist/Dali-Desktop-Setup-0.2.0.exe"
+          $installer = Get-Item "desktop/dist/Dali-Desktop-Setup-0.2.1.exe"
           if ($installer.Length -lt 50000000) { throw "Installer is unexpectedly small" }
           Get-FileHash $installer.FullName -Algorithm SHA256
       - uses: actions/upload-artifact@v4
         with:
-          name: Dali-Desktop-Setup-0.2.0
+          name: Dali-Desktop-Setup-0.2.1
           path: |
-            desktop/dist/Dali-Desktop-Setup-0.2.0.exe
+            desktop/dist/Dali-Desktop-Setup-0.2.1.exe
             desktop/dist/latest.yml
             desktop/dist/*.blockmap
           if-no-files-found: error
