@@ -87,11 +87,34 @@ globalThis.fetch = async (input, init = {}) => {
     return queueMutation(method, url, init, body);
   }
 };
+function notifyServerChanges(count) {
+  window.dispatchEvent(new CustomEvent("dali-server-changes", { detail: { count } }));
+  const active = document.activeElement;
+  const userIsEditing = active && ["INPUT","TEXTAREA","SELECT"].includes(active.tagName);
+  const dialogOpen = Boolean(document.querySelector('[role="dialog"],.modal-layer,.drawer-layer'));
+  if (!userIsEditing && !dialogOpen) {
+    window.setTimeout(() => location.reload(), 250);
+    return;
+  }
+  let badge = document.getElementById("dali-desktop-update-badge");
+  if (!badge) {
+    badge = document.createElement("button");
+    badge.id = "dali-desktop-update-badge";
+    badge.type = "button";
+    Object.assign(badge.style, { position:"fixed", left:"18px", bottom:"18px", zIndex:"2147483647", border:"0", borderRadius:"12px", padding:"12px 16px", background:"#d5a94e", color:"#071a2b", fontWeight:"800", cursor:"pointer" });
+    badge.addEventListener("click", () => location.reload());
+    document.body.appendChild(badge);
+  }
+  badge.textContent = `تحديثات متاحة (${count}) — اضغط للتحديث`;
+}
 async function flushQueue() {
   if (!navigator.onLine) return;
   const syncState = await ipcRenderer.invoke("dali:state");
-  const registration = await originalFetch(`/api/portal/desktop/sync?deviceId=${encodeURIComponent(syncState.deviceId)}`, { credentials: "include" }).catch(() => null);
+  const registration = await originalFetch(`/api/portal/desktop/sync?deviceId=${encodeURIComponent(syncState.deviceId)}&cursor=${syncState.serverCursor || 0}`, { credentials: "include" }).catch(() => null);
   if (!registration?.ok) return;
+  const serverSync = await registration.json().catch(() => null);
+  if (serverSync?.cursor) await ipcRenderer.invoke("dali:cursor:set", serverSync.cursor);
+  if (serverSync?.changes?.length) notifyServerChanges(serverSync.changes.length);
   const queue = await ipcRenderer.invoke("dali:queue:list");
   for (const operation of queue) {
     try {
