@@ -51,3 +51,12 @@ test("worker creation no longer requests or requires a work contract", async () 
   assert.doesNotMatch(route, /form\.get\("workContract"\)/);
   assert.doesNotMatch(route, /عقد العمل إلزامي للعامل/);
 });
+test("contract wizard validates only the active step before purchaser payment tab", async () => {
+  const dashboard = await read("app/portal/PortalDashboard.tsx");
+  assert.match(dashboard, /field\.closest<HTMLElement>\("\.issue-form-step"\)/);
+  assert.match(dashboard, /!wizardStep\.classList\.contains\("visible"\)/);
+  assert.match(dashboard, /field\.closest\("\.contract-profession-pricing"\) && step !== 2/);
+  assert.doesNotMatch(dashboard, /field\.offsetParent !== null/);
+  assert.match(dashboard, /دالي مشتري العمالة — عقد تكلفة مع مورّد/);
+  assert.match(dashboard, /اختيار الأسماء اختياري/);
+});
