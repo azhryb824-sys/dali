@@ -681,6 +681,27 @@ export const legalRecords = pgTable(
   ],
 );
 
+export const legalCaseAttachments = pgTable(
+  "legal_case_attachments",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    fileName: text("file_name").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    validationStatus: text("validation_status").notNull().default("validated"),
+    validationDetails: text("validation_details"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_case_attachments_record_idx").on(table.legalRecordId, table.createdAt),
+    check("legal_case_attachments_size_check", sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 20971520`),
+  ],
+);
+
 export const legalCaseActivities = pgTable(
   "legal_case_activities",
   {
@@ -1124,6 +1145,9 @@ export const workforceContracts = pgTable(
     seasonType: text("season_type").notNull().default("regular"),
     billingMode: text("billing_mode").notNull().default("monthly"),
     firstPaymentDueDate: text("first_payment_due_date"),
+    showPaymentSchedule: boolean("show_payment_schedule").notNull().default(true),
+    accommodationParty: text("accommodation_party"),
+    transportParty: text("transport_party"),
     details: text("details").notNull(),
     status: text("status").notNull().default("draft"),
     versionNumber: integer("version_number").notNull().default(1),
@@ -1456,6 +1480,8 @@ export const quoteVersions = pgTable(
     quantityMode: text("quantity_mode").notNull().default("fixed"),
     seasonType: text("season_type").notNull().default("regular"),
     paymentScheduleJson: text("payment_schedule_json"),
+    accommodationParty: text("accommodation_party"),
+    transportParty: text("transport_party"),
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
     assumptions: text("assumptions"),
     terms: text("terms"),
