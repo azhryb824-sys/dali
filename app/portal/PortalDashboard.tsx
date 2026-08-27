@@ -1225,7 +1225,16 @@ function UserAccessCard({ user, self, busy, onSave, onResetPassword }: {
   const [department, setDepartment] = useState<PortalDepartment>(user.department as PortalDepartment);
   const [status, setStatus] = useState<"active" | "pending" | "suspended">(user.status as "active" | "pending" | "suspended");
   const [reason, setReason] = useState("");
+  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [temporaryPasswordConfirmation, setTemporaryPasswordConfirmation] = useState("");
+  const temporaryPasswordStrong = temporaryPassword.length >= 12
+    && temporaryPassword.length <= 128
+    && /[a-z]/.test(temporaryPassword)
+    && /[A-Z]/.test(temporaryPassword)
+    && /\d/.test(temporaryPassword)
+    && /[^A-Za-z0-9]/.test(temporaryPassword);
+  const temporaryPasswordsMatch = temporaryPassword === temporaryPasswordConfirmation;
   const requestComplete = Boolean(user.requestSubmittedAt && user.termsAcceptedAt);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1241,7 +1250,16 @@ function UserAccessCard({ user, self, busy, onSave, onResetPassword }: {
         <label>الحالة<select value={status} disabled={self || busy} onChange={(event) => setStatus(event.target.value as "active" | "pending" | "suspended")}><option value="active" disabled={!requestComplete && user.status !== "active"}>نشط</option><option value="pending">قيد الاعتماد</option><option value="suspended">موقوف</option></select></label>
       </div>
       {!self && <div className="user-access-decision"><label>سبب القرار أو التغيير<textarea value={reason} onChange={(event) => setReason(event.target.value)} required minLength={10} maxLength={1000} rows={2} placeholder="اكتب مبررًا واضحًا يظهر في سجل التدقيق."/></label><button className="admin-primary" disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ القرار الأمني"}</button></div>}
-      {!self && <div className="user-password-reset"><label>كلمة مرور مؤقتة<input value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} type="password" minLength={12} maxLength={128} autoComplete="new-password" dir="ltr" placeholder="12 خانة: كبير وصغير ورقم ورمز"/></label><button type="button" className="admin-secondary" disabled={busy || temporaryPassword.length < 12} onClick={() => void onResetPassword(user.email, temporaryPassword).then((saved) => { if (saved) setTemporaryPassword(""); })}>{busy ? "جارٍ الحفظ..." : "إعادة تعيين كلمة المرور"}</button><small>تُبطل الجلسات الحالية، وتصبح هذه كلمة مؤقتة يجب تغييرها عند أول دخول.</small></div>}
+      {!self && !passwordResetOpen && <div className="user-password-reset-trigger"><button type="button" className="admin-secondary" disabled={busy} onClick={() => setPasswordResetOpen(true)}>إعادة تعيين كلمة المرور</button><small>متاح للمالك ومشرف النظام وفق الصلاحية، ويُلزم المستخدم بتغييرها عند أول دخول.</small></div>}
+      {!self && passwordResetOpen && <div className="user-password-reset" role="group" aria-label={`إعادة تعيين كلمة مرور ${user.displayName}`}>
+        <div className="user-password-reset-head"><strong>تعيين كلمة مرور مؤقتة</strong><button type="button" className="admin-link" disabled={busy} onClick={() => { setPasswordResetOpen(false); setTemporaryPassword(""); setTemporaryPasswordConfirmation(""); }}>إلغاء</button></div>
+        <label>كلمة المرور المؤقتة<input value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} type="password" minLength={12} maxLength={128} autoComplete="new-password" dir="ltr" placeholder="12 خانة: كبير وصغير ورقم ورمز"/></label>
+        <label>تأكيد كلمة المرور المؤقتة<input value={temporaryPasswordConfirmation} onChange={(event) => setTemporaryPasswordConfirmation(event.target.value)} type="password" minLength={12} maxLength={128} autoComplete="new-password" dir="ltr" placeholder="أعد إدخال كلمة المرور المؤقتة"/></label>
+        {!temporaryPasswordStrong && temporaryPassword.length > 0 && <small className="form-error">يجب أن تتكون من 12 خانة على الأقل وتشمل حرفًا كبيرًا وصغيرًا ورقمًا ورمزًا.</small>}
+        {temporaryPasswordConfirmation.length > 0 && !temporaryPasswordsMatch && <small className="form-error">كلمتا المرور غير متطابقتين.</small>}
+        <button type="button" className="admin-secondary" disabled={busy || !temporaryPasswordStrong || !temporaryPasswordsMatch} onClick={() => void onResetPassword(user.email, temporaryPassword).then((saved) => { if (saved) { setTemporaryPassword(""); setTemporaryPasswordConfirmation(""); setPasswordResetOpen(false); } })}>{busy ? "جارٍ الحفظ..." : "حفظ كلمة المرور المؤقتة"}</button>
+        <small>سيتم إبطال جلسات المستخدم الحالية فورًا، ولن تُحفظ كلمة المرور بنصها في سجل التدقيق.</small>
+      </div>}
       {self && <p className="self-access-note">لا يمكن تعديل صلاحية حسابك من جلستك الحالية؛ يمنع ذلك الرفع الذاتي للصلاحيات أو تعطيل حساب مدير النظام بالخطأ.</p>}
     </form>
   </article>;
