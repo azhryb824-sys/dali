@@ -47,9 +47,26 @@ export async function PATCH(request:Request){
   if(rejectCrossSiteRequest(request))return jsonNoStore({error:"مصدر الطلب غير مسموح"},{status:403});
   const actor=await access(true);if(!actor)return jsonNoStore({error:"غير مصرح"},{status:403});
   const parsed=await readLimitedJson(request,5000);if(!parsed.ok)return parsed.response;
-  const body=parsed.value as Record<string,unknown>;const id=Number(body.id);const status=clean(body.status,20);
+  const body=parsed.value as Record<string,unknown>;const actionRequest=clean(body.action,30);
+  const db=getDb();
+  if(actionRequest==="assign-case"){
+    if(!isSupervisor(actor))return jsonNoStore({error:"إسناد القضية من صلاحيات المحامي المشرف"},{status:403});
+    const legalRecordId=Number(body.legalRecordId);const assignedLawyerEmail=clean(body.assignedLawyerEmail,180).toLowerCase();
+    if(!Number.isInteger(legalRecordId)||legalRecordId<1||!assignedLawyerEmail.includes("@"))return jsonNoStore({error:"اختر بريد المحامي المستلم للقضية"},{status:400});
+    const beforeCase=await db.query.legalRecords.findFirst({where:eq(legalRecords.id,legalRecordId)});if(!beforeCase)return jsonNoStore({error:"الملف القانوني غير موجود"},{status:404});
+    const now=new Date().toISOString();
+    const updatedCase=await db.transaction(async tx=>{
+      const[row]=await tx.update(legalRecords).set({assignedLawyerEmail,assignedBy:actor.user.email,assignedAt:now,updatedAt:now}).where(eq(legalRecords.id,legalRecordId)).returning();
+      await tx.insert(legalCaseActionLog).values({legalRecordId,activityId:null,action:"assigned",fromStatus:null,toStatus:null,details:`إسناد القضية إلى المحامي ${assignedLawyerEmail}`,actorEmail:actor.user.email,actorRole:actorRole(actor)});
+      return row;
+    });
+    await auditPortalAction({actorEmail:actor.user.email,action:"legal-case-assigned",entityType:"legal-record",entityId:legalRecordId,before:beforeCase,after:updatedCase});
+    await emitPortalNotification({eventType:"legal-case-assigned",title:"أُسند ملف قانوني إليك",message:`${updatedCase.referenceCode} — ${updatedCase.title}`,severity:"info",module:"legal",entityType:"legal-record",entityId:legalRecordId,actionView:"legal",targetEmail:assignedLawyerEmail}).catch(()=>undefined);
+    return jsonNoStore({case:updatedCase});
+  }
+  const id=Number(body.id);const status=clean(body.status,20);
   if(!Number.isInteger(id)||id<1||!["open","in_progress","completed","cancelled"].includes(status))return jsonNoStore({error:"الحالة غير صحيحة"},{status:400});
-  const db=getDb();const before=await db.query.legalCaseActivities.findFirst({where:eq(legalCaseActivities.id,id)});if(!before)return jsonNoStore({error:"الإجراء غير موجود"},{status:404});
+  const before=await db.query.legalCaseActivities.findFirst({where:eq(legalCaseActivities.id,id)});if(!before)return jsonNoStore({error:"الإجراء غير موجود"},{status:404});
   if(!isSupervisor(actor)&&before.assignedTo?.toLowerCase()!==actor.user.email.toLowerCase()&&before.createdBy.toLowerCase()!==actor.user.email.toLowerCase())return jsonNoStore({error:"المحامي الفرعي يستطيع تحديث الإجراءات المسندة إليه فقط"},{status:403});
   if(status==="cancelled"&&!isSupervisor(actor))return jsonNoStore({error:"إلغاء الإجراء من صلاحيات المحامي المشرف"},{status:403});
   const now=new Date().toISOString();const action=status==="in_progress"?"started":status==="completed"?"completed":status==="cancelled"?"cancelled":"assigned";
