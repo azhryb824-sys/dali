@@ -231,6 +231,7 @@ async function embedImage(pdf: PDFDocument, bytes: Uint8Array, contentType: stri
 }
 
 const rtlFonts = new WeakSet<PDFFont>();
+const latinFontByRtlFont = new WeakMap<PDFFont, PDFFont>();
 
 async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<PdfResources> {
   pdf.registerFontkit(fontkit);
@@ -249,6 +250,8 @@ async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<
 
   rtlFonts.add(regular);
   rtlFonts.add(bold);
+  latinFontByRtlFont.set(regular, latinRegular);
+  latinFontByRtlFont.set(bold, latinBold);
 
   const runtime = getRuntimeEnv();
 
@@ -311,17 +314,26 @@ function printableText(font: PDFFont, value: string, preserveSpacing = false) {
   return preserveSpacing ? text : text.replace(/\s{2,}/g, " ").trim();
 }
 
+function drawingFont(font: PDFFont, value: string) {
+  const normalized = latinDigits(value).trim();
+  const numericOnly = normalized.length > 0 && /^[0-9.,:/%+\-\s]+$/.test(normalized);
+  return rtlFonts.has(font) && numericOnly ? latinFontByRtlFont.get(font) || font : font;
+}
+
 function textWidth(font: PDFFont, value: string, size: number) {
-  return font.widthOfTextAtSize(printableText(font, value), size);
+  const selected = drawingFont(font, value);
+  return selected.widthOfTextAtSize(printableText(selected, value), size);
 }
 
 function drawRight(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, right = PAGE.width - PAGE.margin) {
-  const text = printableText(font, value);
-  page.drawText(text, { x: right - textWidth(font, text, size), y, font, size, color });
+  const selected = drawingFont(font, value);
+  const text = printableText(selected, value);
+  page.drawText(text, { x: right - selected.widthOfTextAtSize(text, size), y, font: selected, size, color });
 }
 
 function drawLeft(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, left = PAGE.margin) {
-  page.drawText(printableText(font, value), { x: left, y, font, size, color });
+  const selected = drawingFont(font, value);
+  page.drawText(printableText(selected, value), { x: left, y, font: selected, size, color });
 }
 
 function wrapWords(font: PDFFont, value: string, size: number, maxWidth: number) {
@@ -475,7 +487,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
   }
 
   function paragraph(title: string, value: string) {
-    const cleanValue = printableText(resources.regular, value).trim();
+    const cleanValue = latinDigits(value).trim();
     if (!cleanValue) return;
     const lines = wrapWords(resources.regular, cleanValue, 10, PAGE.width - PAGE.margin * 2);
     const height = 29 + Math.max(1, lines.length) * 16;
