@@ -32,7 +32,7 @@ jobs:
           $tag = "v$version"
           git fetch --tags origin
           if (git tag --list $tag) { throw "Release tag $tag already exists; increase the desktop version." }
-          git tag -a $tag $env:GITHUB_SHA -m "Dali Desktop $version"
+          git tag $tag $env:GITHUB_SHA
           git push origin $tag
       - name: Build single Windows installer
         working-directory: desktop
