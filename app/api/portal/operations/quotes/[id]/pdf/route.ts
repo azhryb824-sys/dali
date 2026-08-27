@@ -72,6 +72,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     vatHalalas,
     amountHalalas: totalHalalas,
     paymentTerms: quote.terms || undefined,
+    accommodationParty: quote.accommodationParty === "dali" ? "توفره دالي" : quote.accommodationParty === "counterparty" ? "يوفره الطرف الثاني" : undefined,
+    transportParty: quote.transportParty === "dali" ? "توفره دالي" : quote.transportParty === "counterparty" ? "يوفره الطرف الآخر" : undefined,
     paymentSchedule,
     assumptions: details.assumptions || undefined,
     terms: "الأسعار خاصة بنطاق العمل والكميات والمدة المحددة. أي أعمال أو كميات إضافية تستلزم عرضًا أو ملحقًا مستقلًا. يخضع بدء الخدمة لتوفر الموارد واعتماد العميل والمتطلبات النظامية.",
