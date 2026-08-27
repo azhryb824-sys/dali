@@ -638,6 +638,7 @@ export const contractPaymentSchedules = pgTable(
     referredAt: text("referred_at"),
     invoiceDocumentId: integer("invoice_document_id").references(() => companyDocuments.id, { onDelete: "restrict" }),
     financialRecordId: integer("financial_record_id").references(() => financialRecords.id, { onDelete: "restrict" }),
+    paymentJournalEntryId: integer("payment_journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
     invoicedBy: text("invoiced_by"),
     invoicedAt: text("invoiced_at"),
     paidAt: text("paid_at"),
