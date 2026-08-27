@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, net, safeStorage, session } from "electron";
+import { app, BrowserWindow, ipcMain, safeStorage, session } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -87,7 +87,7 @@ async function openWindow() {
       preload: join(import.meta.dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
       spellcheck: true,
     },
   });
@@ -104,7 +104,9 @@ async function openWindow() {
     const snapshot = join(app.getPath("userData"), "portal-snapshot.mhtml");
     await mainWindow.webContents.savePage(snapshot, "MHTML").catch(() => undefined);
   } catch {
-    await mainWindow.loadFile(join(import.meta.dirname, "offline.html"));
+    const snapshot = join(app.getPath("userData"), "portal-snapshot.mhtml");
+    if (existsSync(snapshot)) await mainWindow.loadFile(snapshot).catch(() => mainWindow.loadFile(join(import.meta.dirname, "offline.html")));
+    else await mainWindow.loadFile(join(import.meta.dirname, "offline.html"));
   }
 }
 app.whenReady().then(async () => {
