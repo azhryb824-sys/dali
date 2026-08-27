@@ -151,20 +151,29 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
   }
 
   if (action === "create-quote") {
-    const opportunityId = integer(payload.opportunityId, 1);
+    let opportunityId = integer(payload.opportunityId, 1);
+    const directClientName = text(payload.clientName, 180);
     const issueDate = date(payload.issueDate);
     const validUntil = date(payload.validUntil);
     const rawItems = Array.isArray(payload.items) ? payload.items : [];
     const activityLabel = text(payload.activityLabel, 120);
     const workSite = text(payload.workSite, 180);
+    const accommodationParty = payload.accommodationParty === "dali" ? "dali" : payload.accommodationParty === "counterparty" ? "counterparty" : null;
+    const transportParty = payload.transportParty === "dali" ? "dali" : payload.transportParty === "counterparty" ? "counterparty" : null;
     const vatRate = Number(payload.vatRate || 0);
     const quantityMode = payload.quantityMode === "open" ? "open" : "fixed";
     const seasonType = payload.seasonType === "ramadan" || payload.seasonType === "hajj" ? payload.seasonType : "regular";
     const paymentSchedule = parsePaymentSchedule(payload.paymentSchedule);
-    if (!opportunityId || !issueDate || !validUntil || validUntil < issueDate || !rawItems.length || activityLabel.length < 3 || workSite.length < 2 || !Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100) throw new Error("بيانات عرض السعر غير مكتملة");
+    if ((!opportunityId && directClientName.length < 2) || !issueDate || !validUntil || validUntil < issueDate || !rawItems.length || activityLabel.length < 3 || workSite.length < 2 || !accommodationParty || !transportParty || !Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100) throw new Error("أكمل اسم العميل وبيانات عرض السعر والسكن والنقل");
     if (quantityMode === "fixed" && seasonType !== "regular" && !validateSeasonalSchedule(paymentSchedule)) throw new Error("عروض موسمي الحج ورمضان تتطلب دفعات بمواعيد صحيحة ومجموع نسب 100%");
-    const opportunity = await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, opportunityId) });
-    if (!opportunity) throw new Error("الفرصة غير موجودة");
+    let opportunity = opportunityId ? await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, opportunityId) }) : null;
+    if (!opportunity && directClientName) {
+      let client = await db.query.clients.findFirst({ where: eq(clients.legalName, directClientName) });
+      if (!client) [client] = await db.insert(clients).values({ clientCode: code("CLI"), legalName: directClientName, city: text(payload.clientCity, 100) || "مكة المكرمة", status: "prospect", ownerEmail: actor, createdBy: actor }).returning();
+      [opportunity] = await db.insert(salesOpportunities).values({ opportunityCode: code("OPP"), clientId: client.id, title: `${activityLabel} - ${directClientName}`, stage: "proposal", expectedValueHalalas: 0, probability: 50, ownerEmail: actor, createdBy: actor }).returning();
+      opportunityId = opportunity.id;
+    }
+    if (!opportunity) throw new Error("الفرصة أو اسم العميل غير موجود");
     const normalizedItems = rawItems.slice(0, 50).map((raw, index) => {
       const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
       const profession = text(item.profession, 120);
@@ -174,9 +183,9 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
       const unitPriceHalalas = Math.round((Number(item.unitPrice) || 0) * 100);
       const sponsorshipType = item.sponsorshipType === "dali" ? "dali" : item.sponsorshipType === "other" ? "other" : null;
       const sponsorName = sponsorshipType === "other" ? text(item.sponsorName, 160) : null;
-      const ajirContractStatus = sponsorshipType === "dali" ? "not_applicable" : item.ajirContractStatus === "with_ajir" ? "with_ajir" : item.ajirContractStatus === "without_ajir" ? "without_ajir" : null;
+      const ajirContractStatus = item.ajirContractStatus === "with_ajir" ? "with_ajir" : item.ajirContractStatus === "without_ajir" ? "without_ajir" : "not_applicable";
       if (!profession || quantity === null || (quantityMode === "fixed" && quantity < 1) || !durationMonths || unitPriceHalalas < 1) throw new Error(`بيانات البند ${index + 1} غير صحيحة`);
-      if (sponsorshipType === "other" && (!sponsorName || !ajirContractStatus)) throw new Error(`أكمل اسم الكفيل وحالة عقد أجير في البند ${index + 1}`);
+      if (sponsorshipType === "other" && !sponsorName) throw new Error(`أكمل اسم الكفيل في البند ${index + 1}`);
       const normalizedQuantity = quantityMode === "open" ? 0 : quantity;
       return { profession, quantity: normalizedQuantity, durationMonths, unitPriceHalalas, lineTotalHalalas: normalizedQuantity * durationMonths * unitPriceHalalas, notes: text(item.notes, 500) || null, sponsorshipType, sponsorName, ajirContractStatus, sortOrder: index };
     });
@@ -184,7 +193,7 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     const discountHalalas = Math.min(subtotalHalalas, Math.max(0, Math.round((Number(payload.discount) || 0) * 100)));
     const vatHalalas = Math.round((subtotalHalalas - discountHalalas) * vatRate / 100);
     const assumptions = [`النشاط: ${activityLabel}`, `موقع الخدمة: ${workSite}`, `الضريبة: ${vatRate}`, text(payload.assumptions, 2500)].filter(Boolean).join("\n");
-    const [quote] = await db.insert(quoteVersions).values({ quoteCode: code("QUO"), opportunityId, versionNumber: 1, status: "draft", issueDate, validUntil, quantityMode, seasonType, paymentScheduleJson: paymentSchedule.length ? JSON.stringify(paymentSchedule) : null, vatRateBps: Math.round(vatRate * 100), subtotalHalalas, discountHalalas, totalHalalas: subtotalHalalas - discountHalalas + vatHalalas, assumptions, terms: text(payload.terms, 3000) || null, createdBy: actor }).returning();
+    const [quote] = await db.insert(quoteVersions).values({ quoteCode: code("QUO"), opportunityId, versionNumber: 1, status: "draft", issueDate, validUntil, quantityMode, seasonType, paymentScheduleJson: paymentSchedule.length ? JSON.stringify(paymentSchedule) : null, accommodationParty, transportParty, vatRateBps: Math.round(vatRate * 100), subtotalHalalas, discountHalalas, totalHalalas: subtotalHalalas - discountHalalas + vatHalalas, assumptions, terms: text(payload.terms, 3000) || null, createdBy: actor }).returning();
     try {
       await db.insert(quoteItems).values(normalizedItems.map((item) => ({ ...item, quoteVersionId: quote.id })));
     } catch (error) {
@@ -213,7 +222,7 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
     const validUntil = date(payload.validUntil) || defaultExpiry;
     if (validUntil < issueDate) throw new Error("تاريخ صلاحية النسخة الجديدة غير صحيح");
     const versionNumber = Math.max(...existingVersions.map((item) => item.versionNumber), source.versionNumber) + 1;
-    const [quote] = await db.insert(quoteVersions).values({ quoteCode: source.quoteCode, opportunityId: source.opportunityId, versionNumber, status: "draft", issueDate, validUntil, quantityMode: source.quantityMode, seasonType: source.seasonType, paymentScheduleJson: source.paymentScheduleJson, vatRateBps: source.vatRateBps, subtotalHalalas: source.subtotalHalalas, discountHalalas: source.discountHalalas, totalHalalas: source.totalHalalas, assumptions: source.assumptions, terms: source.terms, createdBy: actor }).returning();
+    const [quote] = await db.insert(quoteVersions).values({ quoteCode: source.quoteCode, opportunityId: source.opportunityId, versionNumber, status: "draft", issueDate, validUntil, quantityMode: source.quantityMode, seasonType: source.seasonType, paymentScheduleJson: source.paymentScheduleJson, accommodationParty: source.accommodationParty, transportParty: source.transportParty, vatRateBps: source.vatRateBps, subtotalHalalas: source.subtotalHalalas, discountHalalas: source.discountHalalas, totalHalalas: source.totalHalalas, assumptions: source.assumptions, terms: source.terms, createdBy: actor }).returning();
     try {
       await db.insert(quoteItems).values(sourceItems.map((item) => ({ quoteVersionId: quote.id, profession: item.profession, quantity: item.quantity, durationMonths: item.durationMonths, unitPriceHalalas: item.unitPriceHalalas, lineTotalHalalas: item.lineTotalHalalas, notes: item.notes, sponsorshipType: item.sponsorshipType, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus, sortOrder: item.sortOrder })));
       await db.update(quoteVersions).set({ status: "superseded", updatedAt: new Date().toISOString(), recordVersion: source.recordVersion + 1 }).where(and(eq(quoteVersions.id, source.id), eq(quoteVersions.recordVersion, source.recordVersion)));
