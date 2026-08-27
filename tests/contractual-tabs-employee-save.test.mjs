@@ -26,7 +26,9 @@ test("contractual documents use dedicated tabs and the canonical quotation modal
   assert.match(billing, /اعتماد العقد/);
   assert.match(workspace, /activeTab==="letters"/);
   assert.match(workspace, /letter\.status==="draft"/);
-  assert.match(workspace, /اعتماد/);
+  assert.match(workspace, /اعتماد الخطاب/);
+  assert.match(workspace, /letter-record-actions/);
+  assert.match(workspace, /contracts\.map\(item=>item\.id\)\.join\(","\)/);
 });
 
 test("employee creation filters linked accounts and saves employee documents atomically", async () => {
