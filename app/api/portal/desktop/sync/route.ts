@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, gt } from "drizzle-orm";
 import { getDb } from "@/db";
-import { desktopDevices, desktopSyncOperations } from "@/db/schema";
+import { desktopDevices, desktopSyncOperations, portalActivity } from "@/db/schema";
 import { requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
 
@@ -41,13 +41,15 @@ function restoreBody(body:{type?:string;value?:unknown}|null){
 
 export async function GET(request:Request){
   const access=await requirePortalApiRole(["admin","manager","employee"]);if(!access)return jsonNoStore({error:"غير مصرح"},{status:403});
-  const deviceId=clean(new URL(request.url).searchParams.get("deviceId"),80);
+  const url=new URL(request.url),deviceId=clean(url.searchParams.get("deviceId"),80),cursor=Math.max(0,Number(url.searchParams.get("cursor")||0)||0);
   if(!DEVICE_PATTERN.test(deviceId))return jsonNoStore({error:"معرّف الجهاز غير صحيح"},{status:400});
   const db=getDb();const device=await db.query.desktopDevices.findFirst({where:and(eq(desktopDevices.id,deviceId),eq(desktopDevices.userEmail,access.user.email))});
   if(device?.status==="revoked")return jsonNoStore({error:"تم إلغاء اعتماد هذا الجهاز"},{status:403});
   const now=new Date().toISOString();
-  await db.insert(desktopDevices).values({id:deviceId,userEmail:access.user.email,deviceName:clean(request.headers.get("x-dali-device-name"),160)||null,lastSeenAt:now,lastSyncAt:now,updatedAt:now}).onConflictDoUpdate({target:desktopDevices.id,set:{userEmail:access.user.email,lastSeenAt:now,lastSyncAt:now,updatedAt:now}});
-  return jsonNoStore({status:"ok",serverTime:now,deviceId,intervalSeconds:20,privilegedOperationsRequireOnline:true});
+  const changes=await db.select({id:portalActivity.id,action:portalActivity.action,entityType:portalActivity.entityType,entityId:portalActivity.entityId,createdAt:portalActivity.createdAt}).from(portalActivity).where(gt(portalActivity.id,cursor)).orderBy(asc(portalActivity.id)).limit(500);
+  const nextCursor=changes.length?changes[changes.length-1].id:cursor;
+  await db.insert(desktopDevices).values({id:deviceId,userEmail:access.user.email,deviceName:clean(request.headers.get("x-dali-device-name"),160)||null,lastSeenAt:now,lastSyncAt:now,lastActivityId:nextCursor,updatedAt:now}).onConflictDoUpdate({target:desktopDevices.id,set:{userEmail:access.user.email,lastSeenAt:now,lastSyncAt:now,lastActivityId:nextCursor,updatedAt:now}});
+  return jsonNoStore({status:"ok",serverTime:now,deviceId,cursor:nextCursor,changes,hasMore:changes.length===500,intervalSeconds:20,privilegedOperationsRequireOnline:true});
 }
 
 export async function POST(request:Request){
