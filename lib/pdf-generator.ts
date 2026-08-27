@@ -454,7 +454,8 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     );
   }
 
-  drawEndorsement(page, resources, input.referenceCode);
+  if (input.approvalState === "approved") drawContractSignatures(page, resources, input.referenceCode, input.clientName);
+  else drawDraftEndorsement(page, resources, input.referenceCode);
   return pdf.save();
 }
 
@@ -667,7 +668,7 @@ function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: 
   }
 }
 
-function drawContractSignatures(page: PDFPage, resources: PdfResources, referenceCode: string) {
+function drawContractSignatures(page: PDFPage, resources: PdfResources, referenceCode: string, clientName: string) {
   const gap = 12;
   const cardWidth = (PAGE.width - PAGE.margin * 2 - gap) / 2;
   const cardBottom = 96;
@@ -684,7 +685,7 @@ function drawContractSignatures(page: PDFPage, resources: PdfResources, referenc
   const signatureScale = Math.min(112 / resources.signature.width, 48 / resources.signature.height);
   page.drawImage(resources.stamp, { x: rightCardX + cardWidth - 86, y: cardBottom + 15, width: resources.stamp.width * stampScale, height: resources.stamp.height * stampScale });
   page.drawImage(resources.signature, { x: rightCardX + 16, y: cardBottom + 18, width: resources.signature.width * signatureScale, height: resources.signature.height * signatureScale });
-  drawRight(page, "الطرف الثاني", cardBottom + cardHeight - 22, resources.bold, 8, COLORS.navy, leftCardX + cardWidth - 12);
+  drawRight(page, `الطرف الثاني - ${clientName}`, cardBottom + cardHeight - 22, resources.bold, 8, COLORS.navy, leftCardX + cardWidth - 12);
   drawRight(page, "الاسم:", cardBottom + 68, resources.regular, 8, COLORS.muted, leftCardX + cardWidth - 12);
   page.drawLine({ start: { x: leftCardX + 12, y: cardBottom + 62 }, end: { x: leftCardX + cardWidth - 52, y: cardBottom + 62 }, thickness: 0.7, color: COLORS.muted });
   drawRight(page, "الصفة:", cardBottom + 42, resources.regular, 8, COLORS.muted, leftCardX + cardWidth - 12);
@@ -831,7 +832,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     finish() {
       if (y < signedContentBottom) addPage();
       if (input.approvalState === "draft") drawDraftEndorsement(page, resources, input.referenceCode);
-      else if (input.documentType === "workforce_contract") drawContractSignatures(page, resources, input.referenceCode);
+      else if (input.documentType === "workforce_contract") drawContractSignatures(page, resources, input.referenceCode, input.clientName);
       else drawEndorsement(page, resources, input.referenceCode);
     },
   };
