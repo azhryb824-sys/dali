@@ -50,6 +50,7 @@ export type IssuedDocumentInput = {
   professions?: Array<{
     profession: string;
     requiredCount: number;
+    unitSalaryHalalas?: number;
     sponsorshipType?: "dali" | "other" | null;
     sponsorName?: string | null;
     ajirContractStatus?: "not_applicable" | "with_ajir" | "without_ajir" | null;
@@ -128,6 +129,8 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
   if (input.clientVat) row("VAT number", input.clientVat);
   if (input.clientAddress) row("National address", englishText(input.clientAddress));
   if (input.workSite) row("Service location", englishText(input.workSite));
+  if (input.accommodationParty) row("Accommodation", englishText(input.accommodationParty));
+  if (input.transportParty) row("Transportation", englishText(input.transportParty));
   if (input.startDate || input.endDate) row("Term", `${input.startDate || "-"} to ${input.endDate || "-"}`);
   if (input.quotationItems?.length) {
     heading("Items and Pricing");
@@ -392,6 +395,8 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
 
     section("الشروط والتفاصيل", "Terms and Details");
     pairedBlock("نطاق العرض", publicManpowerText(input.details), "Scope", englishText(publicManpowerText(input.details)));
+    if (input.accommodationParty) pairedBlock("السكن", input.accommodationParty, "Accommodation", englishText(input.accommodationParty));
+    if (input.transportParty) pairedBlock("النقل", input.transportParty, "Transportation", englishText(input.transportParty));
     if (input.expiryDate) pairedBlock("صلاحية العرض", dateLabel(input.expiryDate), "Quotation validity", input.expiryDate);
     if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
     if (input.assumptions) pairedBlock("الافتراضات والاستثناءات", publicManpowerText(input.assumptions), "Assumptions and exclusions", englishText(publicManpowerText(input.assumptions)));
@@ -407,12 +412,14 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
   } else {
     section("نطاق التعاقد", "Contract Scope");
     const professions = input.professions?.length
-      ? input.professions.map((item) => `${item.profession}: ${input.quantityMode === "open" ? "عدد مفتوح" : item.requiredCount}`).join(" | ")
+      ? input.professions.map((item) => `${item.profession}: ${input.quantityMode === "open" ? "عدد مفتوح" : item.requiredCount}${item.unitSalaryHalalas ? ` | راتب العامل: ${moneyLabel(item.unitSalaryHalalas)}` : ""}`).join(" | ")
       : input.profession
         ? `${input.profession}: ${input.workerCount || 0}`
         : "حسب النطاق المعتمد";
     pairedBlock("المهن والأعداد المطلوبة", professions, "Required professions and quantities", englishText(professions));
     pairedBlock("نطاق العمل", publicManpowerText(input.details), "Scope of work", englishText(publicManpowerText(input.details)));
+    if (input.accommodationParty) pairedBlock("السكن", input.accommodationParty, "Accommodation", englishText(input.accommodationParty));
+    if (input.transportParty) pairedBlock("النقل", input.transportParty, "Transportation", englishText(input.transportParty));
 
     if (input.amountHalalas) {
       section("القيمة والدفعات", "Value and Payments");
@@ -864,7 +871,11 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       ? input.professions
       : [{ profession: input.profession || "عمالة فنية وإنشائية", requiredCount: input.workerCount || 0, assignedWorkers: [] }];
     const professionSummary = professions
-      .map((item) => input.quantityMode === "open" ? `${item.profession}: العدد مفتوح بحسب طلبات الإسناد` : `${item.profession}: ${item.requiredCount} عامل/فني`)
+      .map((item) => {
+        const quantity = input.quantityMode === "open" ? "العدد مفتوح بحسب طلبات الإسناد" : `${item.requiredCount} عامل/فني`;
+        const salary = item.unitSalaryHalalas ? ` — راتب العامل ${moneyLabel(item.unitSalaryHalalas)}` : "";
+        return `${item.profession}: ${quantity}${salary}`;
+      })
       .join("\n");
     const assignedSummary = professions
       .flatMap((item) => (item.assignedWorkers || []).map((worker) => `${item.profession} — ${worker.fullName}${worker.iqamaNumber ? ` — إقامة ${worker.iqamaNumber}` : ""}`))
@@ -877,6 +888,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     composer.pair("العنوان التشغيلي", "مكة المكرمة – المملكة العربية السعودية", "الرقم الضريبي للطرف الثاني", input.clientVat || "غير محدد");
     composer.heading("نطاق التعاقد");
     composer.field("موقع العمل", input.workSite || "حسب توجيه العميل المعتمد");
+    if (input.accommodationParty || input.transportParty) composer.pair("السكن", input.accommodationParty || "غير محدد", "النقل", input.transportParty || "غير محدد");
     composer.field("المهن والأعداد المطلوبة", professionSummary);
     if (assignedSummary) composer.field("العمالة المسندة عند الإصدار", assignedSummary);
     else composer.field("العمالة المسندة عند الإصدار", "لم تُحدَّد أسماء العمالة عند الإصدار، ويجوز استكمال الإسناد لاحقاً من النظام وفق العدد المطلوب لكل مهنة.");
@@ -936,6 +948,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
         }];
     if (input.activityLabel) composer.field("نشاط العرض", input.activityLabel);
     if (input.workSite) composer.field("موقع تقديم الخدمة", input.workSite);
+    if (input.accommodationParty || input.transportParty) composer.pair("السكن", input.accommodationParty || "غير محدد", "النقل", input.transportParty || "غير محدد");
     composer.paragraph("نطاق العرض", publicManpowerText(input.details));
     composer.heading(workforcePricing ? "بيان العمالة والمهن والرواتب" : "جدول الخدمات والأسعار");
     composer.quotationTable(quotationItems, workforcePricing, openQuantity);
