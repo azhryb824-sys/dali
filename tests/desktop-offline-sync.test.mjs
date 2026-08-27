@@ -18,8 +18,9 @@ test("desktop uses the same production portal with encrypted local persistence",
 test("offline queue synchronizes every twenty seconds and server prevents duplicate writes",async()=>{
   const[preload,route,migration]=await Promise.all([read("desktop/preload.mjs"),read("app/api/portal/desktop/sync/route.ts"),read("drizzle-pg/0056_desktop_offline_sync.sql")]);
   assert.match(preload,/SYNC_INTERVAL_MS = 20_000/);
-  assert.match(preload,/x-idempotency-key/);
+  assert.match(preload,/idempotencyKey: operation\.idempotencyKey/);
   assert.match(preload,/\/api\/portal\/desktop\/sync/);
+  assert.match(route,/headers\.set\("x-idempotency-key",idempotencyKey\)/);
   assert.match(route,/idempotencyKey/);
   assert.match(route,/desktopSyncOperations\.idempotencyKey/);
   assert.match(route,/x-dali-idempotent-replay/);
