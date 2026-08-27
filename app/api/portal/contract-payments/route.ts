@@ -21,9 +21,9 @@ export async function GET(){
   await db.update(contractPaymentSchedules).set({status:"due",updatedAt:new Date().toISOString()}).where(and(eq(contractPaymentSchedules.status,"scheduled"),lte(contractPaymentSchedules.dueDate,today)));
   const due=await db.select().from(contractPaymentSchedules).where(and(eq(contractPaymentSchedules.status,"due"),lte(contractPaymentSchedules.dueDate,today)));
   for(const payment of due)await issueDueContractInvoice(payment.id,"system@dally-corporation.com").catch(async error=>{await emitPortalNotification({eventType:"contract-payment-auto-invoice-failed",title:"تعذر إنشاء فاتورة دفعة مستحقة",message:`الدفعة ${payment.id} — ${error instanceof Error?error.message:"خطأ غير معروف"}`,severity:"critical",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance",dedupeKey:`auto-invoice-failed:${payment.id}:${payment.dueDate}`}).catch(()=>undefined)});
-  const [contracts,payments,contacts,banks]=await Promise.all([db.select().from(workforceContracts).orderBy(asc(workforceContracts.startDate)),db.select().from(contractPaymentSchedules).orderBy(asc(contractPaymentSchedules.dueDate),asc(contractPaymentSchedules.installmentNumber)),db.select().from(clientContacts),db.select().from(bankAccounts).where(eq(bankAccounts.status,"active")).orderBy(asc(bankAccounts.bankName))]);
+  const [contracts,payments,contacts,banks,paymentAccounts]=await Promise.all([db.select().from(workforceContracts).orderBy(asc(workforceContracts.startDate)),db.select().from(contractPaymentSchedules).orderBy(asc(contractPaymentSchedules.dueDate),asc(contractPaymentSchedules.installmentNumber)),db.select().from(clientContacts),db.select().from(bankAccounts).where(eq(bankAccounts.status,"active")).orderBy(asc(bankAccounts.bankName)),db.select().from(chartOfAccounts).where(and(eq(chartOfAccounts.status,"active"),eq(chartOfAccounts.accountType,"asset"),eq(chartOfAccounts.isPosting,true))).orderBy(asc(chartOfAccounts.code))]);
   const clientMobiles=Object.fromEntries(contacts.filter(item=>item.mobile).sort((a,b)=>Number(b.isPrimary)-Number(a.isPrimary)).map(item=>[item.clientId,item.mobile]));
-  return jsonNoStore({contracts,payments,clientMobiles,banks,canManageContracts:owner(access)||await hasPortalPermission(access,"contracts","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","approve")||await hasPortalPermission(access,"finance","write"),canReferLegal:owner(access)});
+  return jsonNoStore({contracts,payments,clientMobiles,banks,paymentAccounts,canManageContracts:owner(access)||await hasPortalPermission(access,"contracts","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","approve")||await hasPortalPermission(access,"finance","write"),canReferLegal:owner(access)});
 }
 
 export async function POST(request:Request){
@@ -64,22 +64,27 @@ export async function PATCH(request:Request){
     if(!financial)return jsonNoStore({error:"السجل المالي المرتبط غير موجود"},{status:404});
     if(contract.contractDirection!=="dali_purchaser")return jsonNoStore({error:"تحصيل عقد البيع يُسجّل من مسار سند القبض، وليس كسداد مورّد"},{status:409});
     if(financial.postingStatus!=="posted")return jsonNoStore({error:"يجب اعتماد وترحيل قيد استحقاق المورد قبل تسجيل السداد البنكي"},{status:409});
-    const bankAccountId=positiveId(body.bankAccountId);if(!bankAccountId)return jsonNoStore({error:"اختر الحساب البنكي الذي تم السداد منه"},{status:400});
-    const bank=await db.query.bankAccounts.findFirst({where:and(eq(bankAccounts.id,bankAccountId),eq(bankAccounts.status,"active"))});
-    if(!bank)return jsonNoStore({error:"الحساب البنكي غير موجود أو غير نشط"},{status:409});
+    const paymentMethod=cleanText(body.paymentMethod,30);if(!["bank_transfer","cash","cheque"].includes(paymentMethod))return jsonNoStore({error:"اختر طريقة دفع صحيحة"},{status:400});
+    const paymentReference=cleanText(body.paymentReference,180);
+    const bankAccountId=positiveId(body.bankAccountId);const paymentAccountId=positiveId(body.paymentAccountId);
+    const bank=paymentMethod==="cash"?null:await db.query.bankAccounts.findFirst({where:and(eq(bankAccounts.id,bankAccountId),eq(bankAccounts.status,"active"))});
+    if(paymentMethod!=="cash"&&!bank)return jsonNoStore({error:"اختر الحساب البنكي المرتبط بطريقة الدفع"},{status:409});
+    const cashAccount=paymentMethod==="cash"?await db.query.chartOfAccounts.findFirst({where:and(eq(chartOfAccounts.id,paymentAccountId),eq(chartOfAccounts.status,"active"),eq(chartOfAccounts.accountType,"asset"),eq(chartOfAccounts.isPosting,true))}):null;
+    if(paymentMethod==="cash"&&!cashAccount)return jsonNoStore({error:"اختر حساب الصندوق النقدي من دليل الحسابات"},{status:409});
     const payable=await db.query.chartOfAccounts.findFirst({where:and(eq(chartOfAccounts.code,"2100"),eq(chartOfAccounts.status,"active"))});
     if(!payable||!payable.isPosting)return jsonNoStore({error:"حساب ذمم الموردين 2100 غير مهيأ للترحيل"},{status:409});
-    const journal=await createDraftJournal({entryDate:now.slice(0,10),description:`سداد مورد — ${contract.referenceCode} — ${payment.title}`,sourceType:"contract-payment-settlement",sourceId:String(payment.id),actorEmail:access.user.email,lines:[
+    const creditAccountId=bank?.ledgerAccountId||cashAccount!.id;const methodLabel=paymentMethod==="bank_transfer"?"تحويل بنكي":paymentMethod==="cheque"?"شيك":"نقدي";
+    const journal=await createDraftJournal({entryDate:now.slice(0,10),description:`سداد مورد (${methodLabel}) — ${contract.referenceCode} — ${payment.title}`,sourceType:"contract-payment-settlement",sourceId:String(payment.id),actorEmail:access.user.email,lines:[
       {accountId:payable.id,debitHalalas:financial.amountHalalas,description:`تسوية ذمة المورد — ${contract.clientName}`,contractId:contract.id},
-      {accountId:bank.ledgerAccountId,bankAccountId:bank.id,creditHalalas:financial.amountHalalas,description:`سداد من ${bank.bankName} — ${bank.accountCode}`,contractId:contract.id},
+      {accountId:creditAccountId,bankAccountId:bank?.id||null,creditHalalas:financial.amountHalalas,description:`سداد ${methodLabel}${bank?` من ${bank.bankName} — ${bank.accountCode}`:" من الصندوق"}${paymentReference?` — المرجع: ${paymentReference}`:""}`,contractId:contract.id},
     ]});
     try{
       const [updated]=await db.update(contractPaymentSchedules).set({status:"paid",paymentJournalEntryId:journal.entry.id,paidAt:now,updatedAt:now}).where(and(eq(contractPaymentSchedules.id,payment.id),eq(contractPaymentSchedules.status,"invoiced"))).returning();
       if(!updated)throw new Error("تغيرت حالة الدفعة");
-      await db.update(financialRecords).set({status:"paid",paymentMethod:"bank_transfer",bankAccountId:bank.id,updatedAt:now}).where(eq(financialRecords.id,payment.financialRecordId));
-      await auditPortalAction({actorEmail:access.user.email,action:"supplier-contract-payment-recorded",entityType:"contract-payment",entityId:payment.id,before:payment,after:{...updated,bankAccountId:bank.id,paymentJournalEntryId:journal.entry.id},correlationId:requestCorrelationId(request)});
-      await emitPortalNotification({eventType:"supplier-contract-payment-recorded",title:"سُجل سداد مستحق مورّد",message:`${contract.referenceCode} - ${contract.clientName} - ${payment.title} - ${bank.bankName}. القيد بانتظار الاعتماد والترحيل.`,severity:"info",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"finance",targetDepartment:"finance"}).catch(()=>undefined);
-      return jsonNoStore({payment:updated,journal:journal.entry,bank});
+      await db.update(financialRecords).set({status:"paid",paymentMethod,bankAccountId:bank?.id||null,notes:[financial.notes,paymentReference?`مرجع السداد: ${paymentReference}`:""].filter(Boolean).join("\n")||null,updatedAt:now}).where(eq(financialRecords.id,payment.financialRecordId));
+      await auditPortalAction({actorEmail:access.user.email,action:"supplier-contract-payment-recorded",entityType:"contract-payment",entityId:payment.id,before:payment,after:{...updated,paymentMethod,bankAccountId:bank?.id||null,paymentAccountId:cashAccount?.id||null,paymentReference,paymentJournalEntryId:journal.entry.id},correlationId:requestCorrelationId(request)});
+      await emitPortalNotification({eventType:"supplier-contract-payment-recorded",title:"سُجل سداد مستحق مورّد",message:`${contract.referenceCode} - ${contract.clientName} - ${payment.title} - ${methodLabel}${bank?` - ${bank.bankName}`:""}. القيد بانتظار الاعتماد والترحيل.`,severity:"info",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"finance",targetDepartment:"finance"}).catch(()=>undefined);
+      return jsonNoStore({payment:updated,journal:journal.entry,bank,paymentMethod,paymentAccount:cashAccount});
     }catch(error){await db.delete(journalEntries).where(eq(journalEntries.id,journal.entry.id)).catch(()=>undefined);throw error}
   }
   if(action==="refer-legal"){
