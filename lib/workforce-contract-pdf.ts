@@ -15,6 +15,7 @@ type ContractMetadata = {
   accommodationParty?: string;
   transportParty?: string;
   specialTerms?: string;
+  showPaymentSchedule?: boolean;
 };
 
 export async function regenerateWorkforceContractPdf(documentId: number, pdfLanguage: "ar" | "bilingual" = "ar") {
@@ -44,6 +45,7 @@ export async function regenerateWorkforceContractPdf(documentId: number, pdfLang
   const printableClauses = clauses.length ? parseWorkforceContractClauses(clauses.map((clause)=>({ section:clause.section, sectionEn:clause.sectionEn, title:clause.title, titleEn:clause.titleEn, body:clause.body, bodyEn:clause.bodyEn, included:clause.isIncluded })),contractDirection,allWorkersWithAjir) : defaultWorkforceContractClauses(contractDirection,allWorkersWithAjir);
   const pdfBytes = await generateIssuedPdf({
     pdfLanguage,
+    approvalState: contract.approvedBy && ["approved", "sent", "signed", "active", "suspended", "expired", "terminated"].includes(contract.status) ? "approved" : "draft",
     documentType: "workforce_contract",
     referenceCode: contract.referenceCode,
     clientName: contract.clientName,
@@ -64,12 +66,13 @@ export async function regenerateWorkforceContractPdf(documentId: number, pdfLang
     paymentTerms: metadata.paymentTerms,
     workingHours: metadata.workingHours,
     weeklyOff: metadata.weeklyOff,
-    accommodationParty: metadata.accommodationParty,
-    transportParty: metadata.transportParty,
+    accommodationParty: contract.accommodationParty || metadata.accommodationParty,
+    transportParty: contract.transportParty || metadata.transportParty,
     specialTerms: metadata.specialTerms,
     professions: professions.map((profession) => ({
       profession: profession.profession,
       requiredCount: profession.requiredCount,
+      unitSalaryHalalas: profession.unitSalaryHalalas,
       sponsorshipType: profession.sponsorshipType as "dali" | "other" | null,
       sponsorName: profession.sponsorName,
       ajirContractStatus: profession.ajirContractStatus as "not_applicable" | "with_ajir" | "without_ajir" | null,
@@ -79,7 +82,9 @@ export async function regenerateWorkforceContractPdf(documentId: number, pdfLang
         .filter((worker): worker is NonNullable<typeof worker> => Boolean(worker))
         .map((worker) => ({ fullName: worker.fullName, iqamaNumber: worker.iqamaNumber })),
     })),
-    paymentSchedule: paymentSchedule.sort((a, b) => a.installmentNumber - b.installmentNumber).map((payment) => ({ title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas })),
+    paymentSchedule: (contract.showPaymentSchedule ?? metadata.showPaymentSchedule ?? true)
+      ? paymentSchedule.sort((a, b) => a.installmentNumber - b.installmentNumber).map((payment) => ({ title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas }))
+      : undefined,
   }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
 
   if (pdfLanguage === "ar") {
