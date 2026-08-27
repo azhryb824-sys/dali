@@ -23,9 +23,13 @@ test("all programmatic PDF generators enforce Latin numerals", () => {
   assert.match(issued, /cairoFontBytes\("arabicRegular"\)/);
   assert.doesNotMatch(issued, /latinFontByFont/);
   assert.match(issued, /rtlFonts\.add\(regular\)/);
+  assert.match(issued, /latinFontByRtlFont\.set\(regular, latinRegular\)/);
+  assert.match(issued, /numericOnly/);
+  assert.match(issued, /const cleanValue = latinDigits\(value\)\.trim\(\)/);
   assert.match(issued, /rtlPdfDigits\(value\)/);
   assert.doesNotMatch(issued, /٠١٢٣٤٥٦٧٨٩/);
   assert.match(brand, /cairoFontBytes\("arabicRegular"\)/);
+  assert.match(brand, /brandPdfText/);
   assert.doesNotMatch(brand, /latinFontByFont/);
   assert.match(fonts, /DaliArabic-Regular\.ttf/);
   assert.match(fonts, /DaliArabic-Bold\.ttf/);
