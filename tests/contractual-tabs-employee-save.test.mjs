@@ -15,14 +15,14 @@ test("contractual documents use dedicated tabs and the canonical quotation modal
   assert.match(workspace, />عروض الأسعار<\/button>/);
   assert.match(workspace, />الخطابات<\/button>/);
   assert.match(workspace, /onCreateQuotation=\{onCreateQuotation\}/);
-  assert.match(operations, /onCreateQuotation\?\(\)/);
+  assert.match(operations, /onClick=\{onCreateQuotation\}>إنشاء عرض سعر/);
   assert.match(dashboard, /onCreateQuotation=\{\(\)=>openIssueDocument\("quotation"\)\}/);
   assert.match(dashboard, /issueReturnView === "contractual-documents"/);
-  assert.match(operations, />اعتماد عرض السعر<\\/button>/);
-  assert.match(operations, /tab === "contracts".*<ContractBillingWorkspace\\/>/s);
+  assert.match(operations, />اعتماد عرض السعر<\/button>/);
+  assert.match(operations, /tab === "contracts".*<ContractBillingWorkspace\/>/s);
   const billing = await read("app/portal/ContractBillingWorkspace.tsx");
-  assert.match(billing, />اعتماد العقد<\\/button>/);
-  assert.match(workspace, /activeTab==="letters".*letter\.status==="draft".*>اعتماد<\\/button>/s);
+  assert.match(billing, />اعتماد العقد<\/button>/);
+  assert.match(workspace, /activeTab==="letters".*letter\.status==="draft".*>اعتماد<\/button>/s);
 });
 
 test("employee creation filters linked accounts and saves employee documents atomically", async () => {
