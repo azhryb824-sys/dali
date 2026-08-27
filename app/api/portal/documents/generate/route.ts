@@ -349,6 +349,7 @@ export async function POST(request: Request) {
       professions: professionInputs.map((item) => ({
         profession: item.profession,
         requiredCount: item.requiredCount,
+        unitSalaryHalalas: item.unitSalaryHalalas,
         sponsorshipType: item.sponsorshipType,
         sponsorName: item.sponsorName,
         ajirContractStatus: item.ajirContractStatus,
