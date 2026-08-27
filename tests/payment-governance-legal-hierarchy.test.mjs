@@ -1,0 +1,60 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const read=(path)=>readFile(path,"utf8");
+
+test("legal roles are separated without deleting legacy roles",async()=>{
+  const migration=await read("drizzle-pg/0054_legal_hierarchy_and_action_attribution.sql");
+  assert.match(migration,/legal_supervisor/);
+  assert.match(migration,/legal_lawyer/);
+  assert.match(migration,/legal\.approve/);
+  assert.doesNotMatch(migration,/DELETE\s+FROM\s+public\.portal_roles|DROP\s+TABLE/i);
+});
+
+test("each legal case shows its assigned lawyer and immutable actor history",async()=>{
+  const[schema,route,ui]=await Promise.all([read("db/schema.ts"),read("app/api/portal/legal-cases/route.ts"),read("app/portal/LegalCaseWorkspace.tsx")]);
+  for(const field of ["assignedLawyerEmail","assignedBy","assignedAt","legalCaseActionLog"])assert.match(schema,new RegExp(field));
+  assert.match(route,/actionRequest==="assign-case"/);
+  assert.match(route,/إسناد القضية من صلاحيات المحامي المشرف/);
+  assert.match(route,/actorEmail:actor\.user\.email,actorRole:actorRole\(actor\)/);
+  assert.match(route,/المحامي الفرعي يستطيع تحديث الإجراءات المسندة إليه فقط/);
+  assert.match(ui,/المحامي المستلم للقضية/);
+  assert.match(ui,/سجل منفذي الإجراءات/);
+  assert.match(ui,/log\.actorEmail/);
+});
+
+test("legal judgment payment is owner-confirmed and posts only to legal judgment expense",async()=>{
+  const[route,ui,migration]=await Promise.all([read("app/api/portal/legal-cases/route.ts"),read("app/portal/LegalCaseWorkspace.tsx"),read("drizzle-pg/0054_legal_hierarchy_and_action_attribution.sql")]);
+  assert.match(route,/requestAction==="request-judgment-payment"/);
+  assert.match(route,/actionRequest==="pay-judgment"/);
+  assert.match(route,/if\(!isOwner\(actor\)\)/);
+  assert.match(route,/eq\(chartOfAccounts\.code,"5290"\)/);
+  assert.match(route,/category:"legal_judgment"/);
+  assert.match(route,/sourceType:"financial-record"/);
+  assert.match(route,/bank\.ledgerAccountId/);
+  assert.match(ui,/طلبات سداد المحكوم به/);
+  assert.match(ui,/تم السداد وإنشاء القيد/);
+  assert.match(migration,/5290','مصروفات وأحكام قانونية/);
+});
+
+test("government service payment remains isolated and uses its own bank journal",async()=>{
+  const[route,ui,migration]=await Promise.all([read("app/api/portal/government/route.ts"),read("app/portal/GovernmentAffairsWorkspace.tsx"),read("drizzle-pg/0055_government_payment_bank_settlements.sql")]);
+  assert.match(route,/category:"government_fee"/);
+  assert.match(route,/subCategory:"government_services"/);
+  assert.match(route,/eq\(chartOfAccounts\.code,"5280"\)/);
+  assert.match(route,/سداد خدمة حكومية/);
+  assert.match(route,/bankAccountId:bank\.id/);
+  assert.match(ui,/تأكيد سداد خدمة حكومية/);
+  assert.match(ui,/مدين رسوم وخدمات حكومية، ودائن البنك المختار/);
+  assert.match(migration,/5280','رسوم وخدمات حكومية/);
+  assert.doesNotMatch(route,/legal_judgment|workforce_supplier_payable/);
+});
+
+test("supplier, government and legal payments use distinct accounting sources",async()=>{
+  const[supplier,government,legal]=await Promise.all([read("app/api/portal/contract-payments/route.ts"),read("app/api/portal/government/route.ts"),read("app/api/portal/legal-cases/route.ts")]);
+  assert.match(supplier,/sourceType:"contract-payment-settlement"/);
+  assert.match(supplier,/accountId:payable\.id/);
+  assert.match(government,/eq\(chartOfAccounts\.code,"5280"\)/);
+  assert.match(legal,/eq\(chartOfAccounts\.code,"5290"\)/);
+});
