@@ -5,11 +5,11 @@ import test from "node:test";
 const read=(path)=>readFile(path,"utf8");
 
 test("legal roles are separated without deleting legacy roles",async()=>{
-  const migration=await read("drizzle-pg/0054_legal_hierarchy_and_action_attribution.sql");
+  const [migration,policy]=await Promise.all([read("drizzle-pg/0054_legal_hierarchy_and_action_attribution.sql"),read("drizzle-pg/0057_legal_supervisor_separation_of_duties.sql")]);
   assert.match(migration,/legal_supervisor/);
   assert.match(migration,/legal_lawyer/);
-  assert.match(migration,/legal\.approve/);
-  assert.doesNotMatch(migration,/DELETE\s+FROM\s+public\.portal_roles|DROP\s+TABLE/i);
+  assert.match(policy,/permission <> 'legal\.approve'/);
+  assert.doesNotMatch(migration+policy,/DELETE\s+FROM\s+public\.portal_roles|DROP\s+TABLE/i);
 });
 
 test("each legal case shows its assigned lawyer and immutable actor history",async()=>{
