@@ -319,6 +319,81 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
   const moneyEnglish = (halalas?: number) =>
     `${((halalas || 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} SAR`;
 
+  const bilingualWorkforceTable = (rows: Array<{
+    professionAr: string;
+    professionEn: string;
+    quantityAr: string;
+    quantityEn: string;
+    unitPriceHalalas?: number;
+  }>) => {
+    const tableX = outerMargin;
+    const widths = [157, 58, 104, 100, 100];
+    const headers = [
+      ["المهنة", "Profession"],
+      ["العدد", "Qty"],
+      ["سعر العامل", "Worker price"],
+      ["السكن", "Accommodation"],
+      ["النقل", "Transportation"],
+    ] as const;
+    const headerHeight = 43;
+
+    const drawTableHeader = () => {
+      ensure(headerHeight + 8);
+      let x = tableX;
+      headers.forEach(([arabic, english], index) => {
+        page.drawRectangle({ x, y: y - headerHeight, width: widths[index], height: headerHeight, color: COLORS.navy, borderColor: rgb(1, 1, 1), borderWidth: 0.45 });
+        const center = x + widths[index] / 2;
+        drawCentered(page, arabic, y - 17, resources.bold, 7.1, rgb(1, 1, 1), center);
+        drawCentered(page, english, y - 31, resources.latinBold, 6.3, rgb(1, 1, 1), center);
+        x += widths[index];
+      });
+      y -= headerHeight;
+    };
+
+    drawTableHeader();
+    rows.forEach((row, rowIndex) => {
+      const priceAr = row.unitPriceHalalas ? moneyLabel(row.unitPriceHalalas) : "غير محدد";
+      const priceEn = row.unitPriceHalalas ? moneyEnglish(row.unitPriceHalalas) : "Not specified";
+      const cells = [
+        [row.professionAr, row.professionEn],
+        [row.quantityAr, row.quantityEn],
+        [priceAr, priceEn],
+        [input.accommodationParty || "غير محدد", englishText(input.accommodationParty)],
+        [input.transportParty || "غير محدد", englishText(input.transportParty)],
+      ];
+      const wrapped = cells.map(([arabic, english], index) => ({
+        arabic: wrapWords(resources.regular, latinDigits(arabic), 6.3, widths[index] - 12).slice(0, 2),
+        english: wrapWords(resources.latinRegular, latinDigits(english), 5.8, widths[index] - 12).slice(0, 2),
+      }));
+      const lineCount = Math.max(...wrapped.map((cell) => cell.arabic.length + cell.english.length));
+      const rowHeight = Math.max(48, 15 + lineCount * 9);
+      if (y - rowHeight < contentBottom) {
+        addPage();
+        drawTableHeader();
+      }
+      let x = tableX;
+      wrapped.forEach((cell, index) => {
+        page.drawRectangle({
+          x,
+          y: y - rowHeight,
+          width: widths[index],
+          height: rowHeight,
+          color: rowIndex % 2 === 0 ? rgb(0.98, 0.985, 0.988) : COLORS.pale,
+          borderColor: COLORS.line,
+          borderWidth: 0.55,
+        });
+        const center = x + widths[index] / 2;
+        let textY = y - 16;
+        cell.arabic.forEach((line) => { drawCentered(page, line, textY, resources.regular, 6.3, COLORS.text, center); textY -= 9; });
+        textY -= 2;
+        cell.english.forEach((line) => { drawCentered(page, line, textY, resources.latinRegular, 5.8, COLORS.muted, center); textY -= 8; });
+        x += widths[index];
+      });
+      y -= rowHeight;
+    });
+    y -= 10;
+  };
+
   const bilingualSignaturePage = () => {
     addPage();
     section("صفحة التوقيعات", "Signature Page");
@@ -423,16 +498,25 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
           lineTotalHalalas: input.subtotalHalalas || input.amountHalalas || 0,
           notes: null,
         }];
-    quotationItems.forEach((item, index) => {
-      const quantityAr = input.quantityMode === "open" ? "مفتوح" : String(item.quantity);
-      const quantityEn = input.quantityMode === "open" ? "Open" : String(item.quantity);
-      pairedBlock(
-        `البند ${index + 1}`,
-        `${publicManpowerText(item.description)} | العدد: ${quantityAr} | ${input.activityLabel === "توريد العمالة" ? `سعر العامل: ${moneyLabel(item.unitPriceHalalas)} | السكن: ${input.accommodationParty || "غير محدد"} | النقل: ${input.transportParty || "غير محدد"}` : `المدة: ${item.durationMonths} شهر | سعر الوحدة: ${moneyLabel(item.unitPriceHalalas)} | الإجمالي: ${moneyLabel(item.lineTotalHalalas)}`}${item.notes ? ` | ${publicManpowerText(item.notes)}` : ""}`,
-        `Item ${index + 1}`,
-        `${englishText(publicManpowerText(item.description))} | Qty: ${quantityEn} | Duration: ${item.durationMonths} month(s) | Unit price: ${moneyEnglish(item.unitPriceHalalas)} | Total: ${moneyEnglish(item.lineTotalHalalas)}${item.notes ? ` | ${englishText(publicManpowerText(item.notes))}` : ""}`,
-      );
-    });
+    const workforceQuotation = input.activityLabel === "توريد العمالة" || quotationItems.some((item) => item.sponsorshipType === "dali" || item.sponsorshipType === "other");
+    if (workforceQuotation) {
+      bilingualWorkforceTable(quotationItems.map((item) => ({
+        professionAr: publicManpowerText(item.description),
+        professionEn: englishText(publicManpowerText(item.description)),
+        quantityAr: input.quantityMode === "open" ? "مفتوح" : String(item.quantity),
+        quantityEn: input.quantityMode === "open" ? "Open" : String(item.quantity),
+        unitPriceHalalas: item.unitPriceHalalas,
+      })));
+    } else {
+      quotationItems.forEach((item, index) => {
+        pairedBlock(
+          `البند ${index + 1}`,
+          `${publicManpowerText(item.description)} | المدة: ${item.durationMonths} شهر | سعر الوحدة: ${moneyLabel(item.unitPriceHalalas)} | الإجمالي: ${moneyLabel(item.lineTotalHalalas)}${item.notes ? ` | ${publicManpowerText(item.notes)}` : ""}`,
+          `Item ${index + 1}`,
+          `${englishText(publicManpowerText(item.description))} | Duration: ${item.durationMonths} month(s) | Unit price: ${moneyEnglish(item.unitPriceHalalas)} | Total: ${moneyEnglish(item.lineTotalHalalas)}${item.notes ? ` | ${englishText(publicManpowerText(item.notes))}` : ""}`,
+        );
+      });
+    }
 
     if (input.quantityMode === "open") {
       pairedBlock(
@@ -479,11 +563,15 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
   } else {
     section("نطاق التعاقد", "Contract Scope");
     const professions = input.professions?.length
-      ? input.professions.map((item) => `${item.profession}: ${input.quantityMode === "open" ? "عدد مفتوح" : item.requiredCount}${item.unitSalaryHalalas ? ` | سعر العامل: ${moneyLabel(item.unitSalaryHalalas)}` : ""} | السكن: ${input.accommodationParty || "غير محدد"} | النقل: ${input.transportParty || "غير محدد"}`).join(" | ")
-      : input.profession
-        ? `${input.profession}: ${input.workerCount || 0}`
-        : "حسب النطاق المعتمد";
-    pairedBlock("المهن والأعداد المطلوبة", professions, "Required professions and quantities", englishText(professions));
+      ? input.professions
+      : [{ profession: input.profession || "حسب النطاق المعتمد", requiredCount: input.workerCount || 0, unitSalaryHalalas: 0 }];
+    bilingualWorkforceTable(professions.map((item) => ({
+      professionAr: item.profession,
+      professionEn: englishText(item.profession),
+      quantityAr: input.quantityMode === "open" ? "مفتوح" : String(item.requiredCount),
+      quantityEn: input.quantityMode === "open" ? "Open" : String(item.requiredCount),
+      unitPriceHalalas: item.unitSalaryHalalas,
+    })));
     pairedBlock("نطاق العمل", publicManpowerText(input.details), "Scope of work", englishText(publicManpowerText(input.details)));
     if (input.accommodationParty) pairedBlock("السكن", input.accommodationParty, "Accommodation", englishText(input.accommodationParty));
     if (input.transportParty) pairedBlock("النقل", input.transportParty, "Transportation", englishText(input.transportParty));
@@ -671,6 +759,12 @@ function drawRight(page: PDFPage, value: string, y: number, font: PDFFont, size:
 function drawLeft(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color = COLORS.text, left = PAGE.margin) {
   const selected = drawingFont(font, value);
   page.drawText(printableText(selected, value), { x: left, y, font: selected, size, color });
+}
+
+function drawCentered(page: PDFPage, value: string, y: number, font: PDFFont, size: number, color: ReturnType<typeof rgb>, center: number) {
+  const selected = drawingFont(font, value);
+  const text = printableText(selected, value);
+  page.drawText(text, { x: center - selected.widthOfTextAtSize(text, size) / 2, y, font: selected, size, color });
 }
 
 function wrapWords(font: PDFFont, value: string, size: number, maxWidth: number) {
