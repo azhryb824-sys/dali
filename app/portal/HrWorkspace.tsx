@@ -16,7 +16,7 @@ const money = (halalas: number) => new Intl.NumberFormat("ar-SA", { style: "curr
 const labels: Record<string, string> = { draft: "مسودة", approved: "معتمد", processing: "قيد الصرف", paid: "مدفوع", cancelled: "ملغى", bonus: "مكافأة", advance: "سلفة", deduction: "خصم", allowance: "بدل", salary_adjustment: "تعديل راتب", leave: "إجازة", return_from_leave: "عودة من إجازة", suspension: "إيقاف", termination: "إنهاء خدمة", note: "ملاحظة" };
 const isCurrentEmployee = (employee: Employee) => !["ended", "suspended"].includes(employee.status.trim().toLowerCase());
 
-export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; isAdmin: boolean }) {
+export default function HrWorkspace({ canWrite, isAdmin, generalOnly=false }: { canWrite: boolean; isAdmin: boolean; generalOnly?: boolean }) {
   const [data, setData] = useState<HrData>({ employees: [], movements: [], runs: [], items: [],documents:[],leaves:[],attendance:[],users:[] });
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
@@ -71,7 +71,7 @@ export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; 
   const expiringDocuments=data.documents.filter(item=>item.expiryDate&&item.expiryDate<=thirtyDaysFromToday&&item.expiryDate>=today);
   const pendingLeaves=data.leaves.filter(item=>item.status==="pending");const todayAttendance=data.attendance.filter(item=>item.attendanceDate===today);
 
-  return <section className="hr-workspace">
+  return <section className={`hr-workspace ${generalOnly?"hr-general-only":""}`}>
     <header className="hr-heading"><div><span>الموارد البشرية والرواتب</span><h2>الملفات الوظيفية ومسير الرواتب</h2><p>الرواتب لا تُصرف مباشرة؛ تمر بالإنشاء والاعتماد وقيد الاستحقاق وقيد الصرف ثم الإغلاق.</p></div><strong>{money(totalMonthly)}<small>التكلفة الشهرية الأساسية</small></strong></header>
     {notice && <div className="operations-notice" role="status">{notice}</div>}
     <div className="hr-metrics"><article><span>على رأس العمل</span><b>{activeStaff.length}</b><small>موظف نشط</small></article><article><span>مرتبطون بحسابات النظام</span><b>{activeStaff.filter(item=>item.portalUserEmail).length}</b><small>هوية وظيفية موحّدة</small></article><article><span>طلبات تنتظر الاعتماد</span><b>{pendingLeaves.length}</b><small>إجازات معلّقة</small></article><article><span>وثائق تنتهي خلال 30 يوماً</span><b>{expiringDocuments.length}</b><small>تحتاج متابعة</small></article><article><span>حضور اليوم</span><b>{todayAttendance.filter(item=>item.status==="present").length}/{activeStaff.length}</b><small>سجل يومي</small></article><article><span>ملفات بنكية مكتملة</span><b>{activeStaff.filter((item) => item.iban).length}</b><small>جاهزة للتحويل</small></article></div>

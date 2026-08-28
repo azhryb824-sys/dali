@@ -22,3 +22,21 @@ test("contract, employee and legal records expose expandable cards", () => {
   assert.match(dashboard, /فتح واستعراض الملف/);
   assert.match(dashboard, /legal-record-card/);
 });
+
+test("employee-specific records stay inside the employee card while general HR lists remain", () => {
+  const profile = readFileSync("app/portal/EmployeeProfileWorkspace.tsx", "utf8");
+  const hr = readFileSync("app/portal/HrWorkspace.tsx", "utf8");
+  assert.match(dashboard, /EmployeeProfileWorkspace employeeId=\{item\.id\}/);
+  assert.match(dashboard, /HrWorkspace[^>]+generalOnly/);
+  assert.match(profile, /الراتب والرواتب/);
+  assert.match(profile, /\['movements','الحركات'\]/);
+  assert.match(profile, /\['leaves','الإجازات'\]/);
+  assert.match(profile, /الرصيد الحالي/);
+  assert.match(profile, /إرسال طلب الإجازة للاعتماد/);
+  assert.match(profile, /الحضور/);
+  assert.match(profile, /الوثائق/);
+  assert.match(profile, /الأداء والخصومات/);
+  assert.match(hr, /hr-general-only/);
+  assert.match(hr, /إنشاء مسير رواتب شهري/);
+  assert.match(hr, /مركز الموافقات والتنبيهات/);
+});
