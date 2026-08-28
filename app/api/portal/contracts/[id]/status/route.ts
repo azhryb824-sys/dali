@@ -1,6 +1,7 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clients, companyDocuments, contractPaymentSchedules, contractSignatureRequests, contractProfessions, contractWorkerAssignments, documentStamps, financialRecords, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { clients, companyDocuments, contractPaymentSchedules, contractSignatureRequests, contractProfessions, contractWorkerAssignments, documentStamps, financialRecords, journalEntries, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { createReversalDraft } from "@/lib/accounting";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -138,34 +139,53 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), inArray(contractPaymentSchedules.status, ["scheduled", "due", "referred"])));
       if (reasonCode !== "late_payment") {
         await db.update(financialRecords).set({ status: "cancelled", postingStatus: "not_applicable", notes: `أُلغي تبعًا لإلغاء العقد ${contract.referenceCode}: ${reason}`.slice(0,1000), updatedAt: now }).where(and(eq(financialRecords.contractId, id), eq(financialRecords.postingStatus, "unposted"), inArray(financialRecords.status, ["pending","due"])));
+        await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), eq(contractPaymentSchedules.status, "invoiced")));
       }
       const assignments = await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), inArray(contractWorkerAssignments.status, ["planned", "active"])));
       for (const assignment of assignments) {
         await db.update(contractWorkerAssignments).set({ status: "released", releasedAt: now }).where(eq(contractWorkerAssignments.id, assignment.id));
         await db.update(workers).set({ status: "available", beneficiaryName: null, clientSite: "غير مسند", assignmentStartDate: null, updatedAt: now }).where(eq(workers.id, assignment.workerId));
       }
-      const [client, documents, payments, finances, professions, allAssignments] = await Promise.all([
+      const [client, documents, finances, professions, allAssignments] = await Promise.all([
         contract.clientId ? db.query.clients.findFirst({ where: eq(clients.id, contract.clientId) }) : Promise.resolve(null),
         db.select().from(companyDocuments).where(or(eq(companyDocuments.id, contract.documentId), eq(companyDocuments.counterparty, contract.clientName))),
-        db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id)),
         db.select().from(financialRecords).where(eq(financialRecords.contractId, id)),
         db.select().from(contractProfessions).where(eq(contractProfessions.contractId, id)),
         db.select().from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, id)),
       ]);
       const assignedWorkerIds = [...new Set(allAssignments.map((item) => item.workerId))];
       const linkedWorkers = assignedWorkerIds.length ? await db.select().from(workers).where(inArray(workers.id, assignedWorkerIds)) : [];
-      const caseSnapshot = { capturedAt: now, cancellation: { status, reason, referredBy: access.user.email }, client, contract: updated, documents, payments, finances, professions, assignments: allAssignments, workers: linkedWorkers };
+      const reversalDraftIds: number[] = [];
+      if (status === "cancelled" && reasonCode !== "late_payment") {
+        for (const finance of finances) {
+          if (!finance.journalEntryId) continue;
+          const journal = await db.query.journalEntries.findFirst({ where: eq(journalEntries.id, finance.journalEntryId) });
+          if (!journal) continue;
+          const cancellationNote = `أُلغي تبعًا لإلغاء العقد ${contract.referenceCode}: ${reason}`.slice(0, 1000);
+          if (["draft", "approved"].includes(journal.status)) {
+            await db.update(journalEntries).set({ status: "void", voidReason: cancellationNote, updatedAt: now }).where(and(eq(journalEntries.id, journal.id), inArray(journalEntries.status, ["draft", "approved"])));
+            await db.update(financialRecords).set({ status: "cancelled", postingStatus: "not_applicable", notes: cancellationNote, updatedAt: now }).where(eq(financialRecords.id, finance.id));
+          } else if (journal.status === "posted") {
+            const reversal = await createReversalDraft(journal.id, access.user.email, `إلغاء العقد ${contract.referenceCode}`);
+            reversalDraftIds.push(reversal.entry.id);
+            await db.update(financialRecords).set({ status: "cancelled", notes: `${cancellationNote}\nقيد العكس المسودة: ${reversal.entry.entryNumber}`.slice(0, 1000), updatedAt: now }).where(eq(financialRecords.id, finance.id));
+          }
+        }
+      }
+      const finalFinances = await db.select().from(financialRecords).where(eq(financialRecords.contractId, id));
+      const finalPayments = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id));
+      const caseSnapshot = { capturedAt: now, cancellation: { status, reason, referredBy: access.user.email, reversalDraftIds }, client, contract: updated, documents, payments: finalPayments, finances: finalFinances, professions, assignments: allAssignments, workers: linkedWorkers };
       const legalReference = `LGL-CAN-${contract.referenceCode}`.slice(0, 120);
       const [createdLegal] = await db.insert(legalRecords).values({ referenceCode: legalReference, category: "case", title: `${status === "terminated" ? "إنهاء" : "إلغاء"} العقد ${contract.referenceCode}`, counterparty: contract.clientName, clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), expiryDate: null, status: "reviewing" }).onConflictDoNothing().returning();
       let legal = createdLegal || await db.query.legalRecords.findFirst({ where: eq(legalRecords.referenceCode, legalReference) });
       if (legal && !createdLegal) [legal] = await db.update(legalRecords).set({ clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), status: "reviewing", updatedAt: now }).where(eq(legalRecords.id, legal.id)).returning();
       if (legal) {
         if(createdLegal)await db.insert(legalCaseActivities).values([{legalRecordId:legal.id,activityType:"task",title:"مراجعة العقد وسبب الإلغاء",details:"مراجعة البنود والإشعارات والمراسلات وتحديد المركز النظامي.",priority:"high",status:"open",assignedTo:null,createdBy:access.user.email},{legalRecordId:legal.id,activityType:"task",title:"مطابقة الرصيد المالي والفواتير",details:"مطابقة الدفعات المسددة والمستحقة والفواتير والقيود قبل أي مطالبة.",priority:"high",status:"open",assignedTo:null,createdBy:access.user.email},{legalRecordId:legal.id,activityType:"deadline",title:"تحديد مهلة الإشعار أو المطالبة",details:"تحديد الموعد وفق العقد والأنظمة بعد مراجعة قانونية بشرية.",priority:"critical",status:"open",dueAt:new Date(Date.now()+3*86400000).toISOString(),assignedTo:null,createdBy:access.user.email}]);
-        await auditPortalAction({ actorEmail: access.user.email, action: "contract-cancellation-referred-legal", entityType: "legal-record", entityId: legal.id, after: { ...legal, snapshotCounts: { documents: documents.length, payments: payments.length, finances: finances.length, workers: linkedWorkers.length } }, reason });
-        await emitPortalNotification({ eventType: "contract-cancellation-referred-legal", title: "ملف عميل كامل محال للشؤون القانونية", message: `${contract.referenceCode} — ${contract.clientName} — ${documents.length} مستندات، ${finances.length} سجلات مالية، ${payments.length} دفعات.`, severity: "critical", module: "legal", entityType: "legal-record", entityId: legal.id, actionView: "legal", targetDepartment: "legal" }).catch(() => undefined);
+        await auditPortalAction({ actorEmail: access.user.email, action: "contract-cancellation-referred-legal", entityType: "legal-record", entityId: legal.id, after: { ...legal, snapshotCounts: { documents: documents.length, payments: finalPayments.length, finances: finalFinances.length, workers: linkedWorkers.length } }, reason });
+        await emitPortalNotification({ eventType: "contract-cancellation-referred-legal", title: "ملف عميل كامل محال للشؤون القانونية", message: `${contract.referenceCode} — ${contract.clientName} — ${documents.length} مستندات، ${finalFinances.length} سجلات مالية، ${finalPayments.length} دفعات.`, severity: "critical", module: "legal", entityType: "legal-record", entityId: legal.id, actionView: "legal", targetDepartment: "legal" }).catch(() => undefined);
       }
-      const accountingReviewCount = finances.filter((item) => item.postingStatus === "draft" || item.postingStatus === "posted").length;
-      if (accountingReviewCount) await emitPortalNotification({ eventType: "contract-cancellation-accounting-review", title: "مراجعة محاسبية لازمة لإلغاء عقد", message: `${contract.referenceCode} — يوجد ${accountingReviewCount} سجل مالي بقيد مسودة أو مرحّل؛ يلزم إصدار عكس أو تسوية دون حذف الأثر التاريخي.`, severity: "critical", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
+      const accountingReviewCount = finalFinances.filter((item) => item.postingStatus === "draft" || item.postingStatus === "posted").length;
+      if (accountingReviewCount || reversalDraftIds.length) await emitPortalNotification({ eventType: "contract-cancellation-accounting-review", title: "مراجعة محاسبية لازمة لإلغاء عقد", message: `${contract.referenceCode} — أُنشئ ${reversalDraftIds.length} قيد عكسي مسودة، ويوجد ${accountingReviewCount} سجل مالي يحتاج متابعة الاعتماد والترحيل دون حذف الأثر التاريخي.`, severity: "critical", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
     }
     if (status === "active") {
       try {

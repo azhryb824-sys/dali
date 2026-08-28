@@ -920,7 +920,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
       const result = await readApiJson(response) as { contract?: WorkforceContract; error?: string; signatureUploadUrl?: string };
       if (!response.ok || !result.contract) throw new Error(result.error || "تعذّر تحديث حالة العقد");
       setContracts((items) => items.map((item) => item.id === contractId ? result.contract as WorkforceContract : item));
-      router.refresh();
+      window.dispatchEvent(new CustomEvent("dali-contract-updated", { detail: { contract: result.contract } }));
       if (status === "approved") {
         if (!result.signatureUploadUrl) throw new Error("تم الاعتماد لكن لم يُنشأ رابط رفع النسخة الموقعة");
         await navigator.clipboard.writeText(result.signatureUploadUrl);

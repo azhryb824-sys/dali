@@ -44,6 +44,7 @@ export async function createDraftJournal(input: {
   sourceType: string;
   sourceId?: string | null;
   actorEmail: string;
+  reversalOfId?: number | null;
   lines: JournalLineInput[];
 }) {
   const totals = validateBalancedJournal(input.lines);
@@ -73,6 +74,7 @@ export async function createDraftJournal(input: {
     description: input.description.trim().slice(0, 500),
     sourceType: input.sourceType.trim().slice(0, 80),
     sourceId: input.sourceId?.trim().slice(0, 120) || null,
+    reversalOfId: input.reversalOfId || null,
     createdBy: input.actorEmail,
     updatedAt: now,
   }).returning();
@@ -101,6 +103,39 @@ export async function createDraftJournal(input: {
   return { entry, totals };
 }
 
+export async function createReversalDraft(entryId: number, actorEmail: string, reason: string) {
+  const db = getDb();
+  const original = await db.query.journalEntries.findFirst({ where: eq(journalEntries.id, entryId) });
+  if (!original || original.status !== "posted") throw new Error("لا يمكن عكس قيد غير مرحّل");
+  const existing = await db.query.journalEntries.findFirst({
+    where: and(eq(journalEntries.reversalOfId, entryId), inArray(journalEntries.status, ["draft", "approved", "posted"])),
+  });
+  if (existing) return { entry: existing, created: false };
+  const lines = await db.select().from(journalLines).where(eq(journalLines.journalEntryId, entryId));
+  const result = await createDraftJournal({
+    entryDate: new Date().toISOString().slice(0, 10),
+    description: `عكس ${original.entryNumber} — ${reason}`.slice(0, 500),
+    sourceType: "journal-reversal",
+    sourceId: String(entryId),
+    reversalOfId: entryId,
+    actorEmail,
+    lines: lines.map((line) => ({
+      accountId: line.accountId,
+      bankAccountId: line.bankAccountId,
+      description: `عكس: ${line.description || original.description}`.slice(0, 300),
+      debitHalalas: line.creditHalalas,
+      creditHalalas: line.debitHalalas,
+      clientId: line.clientId,
+      contractId: line.contractId,
+      workerId: line.workerId,
+      employeeId: line.employeeId,
+      costCenterCode: line.costCenterCode,
+    })),
+  });
+  await emitPortalNotification({ eventType: "journal-reversal-created", title: "قيد عكسي بانتظار الاعتماد", message: `${result.entry.entryNumber} — عكس ${original.entryNumber}.`, severity: "warning", module: "finance", entityType: "journal-entry", entityId: result.entry.id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
+  return { ...result, created: true };
+}
+
 export async function postJournal(entryId: number, actorEmail: string) {
   const db = getDb();
   const entry = await db.query.journalEntries.findFirst({ where: eq(journalEntries.id, entryId) });
@@ -117,6 +152,12 @@ export async function postJournal(entryId: number, actorEmail: string) {
   if (posted.sourceType === "financial-record" && posted.sourceId && /^\d+$/.test(posted.sourceId)) {
     await db.update(financialRecords).set({ postingStatus: "posted", postedAt: posted.postedAt, updatedAt: now })
       .where(and(eq(financialRecords.id, Number(posted.sourceId)), eq(financialRecords.journalEntryId, posted.id)));
+  }
+  if (posted.reversalOfId) {
+    await db.update(journalEntries).set({ status: "reversed", updatedAt: now })
+      .where(and(eq(journalEntries.id, posted.reversalOfId), eq(journalEntries.status, "posted")));
+    await db.update(financialRecords).set({ postingStatus: "reversed", updatedAt: now })
+      .where(eq(financialRecords.journalEntryId, posted.reversalOfId));
   }
   await auditPortalAction({ actorEmail, action: "journal-entry-posted", entityType: "journal-entry", entityId: posted.id, before: entry, after: posted });
   await emitPortalNotification({ eventType: "journal-entry-posted", title: "تم ترحيل قيد محاسبي", message: `${posted.entryNumber} — ${posted.description}.`, severity: "success", module: "finance", entityType: "journal-entry", entityId: posted.id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
