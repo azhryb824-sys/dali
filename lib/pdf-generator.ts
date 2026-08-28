@@ -319,6 +319,69 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
   const moneyEnglish = (halalas?: number) =>
     `${((halalas || 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} SAR`;
 
+  const bilingualSignaturePage = () => {
+    addPage();
+    section("صفحة التوقيعات", "Signature Page");
+    pairedBlock(
+      "الطرف الأول",
+      "شركة دالي للتشغيل والصيانة",
+      "First Party",
+      "Dali Operations & Maintenance Co.",
+      true,
+    );
+    pairedBlock(
+      "الطرف الثاني / العميل",
+      input.clientName,
+      "Second Party / Client",
+      input.clientName,
+      true,
+    );
+
+    const blockTop = y - 4;
+    const blockBottom = 270;
+    const blockHeight = blockTop - blockBottom;
+    page.drawRectangle({
+      x: outerMargin,
+      y: blockBottom,
+      width: PAGE.width - outerMargin * 2,
+      height: blockHeight,
+      color: COLORS.pale,
+      borderColor: COLORS.navy,
+      borderWidth: 0.8,
+    });
+    page.drawLine({ start: { x: centerX, y: blockBottom }, end: { x: centerX, y: blockTop }, thickness: 0.9, color: COLORS.navy });
+
+    drawRight(page, "إقرار وتوقيع الطرفين", blockTop - 22, resources.bold, 10, COLORS.navy, arabicRight - 7);
+    drawLeft(page, "Parties' Acknowledgment and Signatures", blockTop - 22, resources.latinBold, 8.5, COLORS.navy, englishLeft + 7);
+    drawRight(page, `الطرف الأول: شركة دالي للتشغيل والصيانة`, blockTop - 50, resources.bold, 7.5, COLORS.text, arabicRight - 7);
+    drawLeft(page, "First Party: Dali Operations & Maintenance Co.", blockTop - 50, resources.latinBold, 7.2, COLORS.text, englishLeft + 7);
+    drawRight(page, `الطرف الثاني: ${input.clientName}`, blockTop - 76, resources.bold, 7.5, COLORS.text, arabicRight - 7);
+    drawLeft(page, `Second Party / Client: ${input.clientName}`, blockTop - 76, resources.latinBold, 7.2, COLORS.text, englishLeft + 7);
+
+    const lineStart = blockTop - 112;
+    const arLabels = ["اسم ممثل العميل", "الصفة", "التوقيع", "التاريخ"];
+    const enLabels = ["Client representative name", "Title", "Signature", "Date"];
+    arLabels.forEach((label, index) => {
+      const lineY = lineStart - index * 35;
+      drawRight(page, `${label}:`, lineY + 7, resources.regular, 7.2, COLORS.muted, arabicRight - 7);
+      page.drawLine({ start: { x: arabicLeft + 7, y: lineY }, end: { x: arabicRight - 82, y: lineY }, thickness: 0.55, color: COLORS.muted });
+      drawLeft(page, `${enLabels[index]}:`, lineY + 7, resources.latinRegular, 7, COLORS.muted, englishLeft + 7);
+      page.drawLine({ start: { x: englishLeft + 88, y: lineY }, end: { x: englishRight - 7, y: lineY }, thickness: 0.55, color: COLORS.muted });
+    });
+
+    if (input.approvalState === "approved") {
+      const stampScale = Math.min(70 / resources.stamp.width, 54 / resources.stamp.height);
+      const signatureScale = Math.min(104 / resources.signature.width, 43 / resources.signature.height);
+      page.drawImage(resources.stamp, { x: arabicRight - 78, y: blockBottom + 18, width: resources.stamp.width * stampScale, height: resources.stamp.height * stampScale });
+      page.drawImage(resources.signature, { x: arabicLeft + 10, y: blockBottom + 22, width: resources.signature.width * signatureScale, height: resources.signature.height * signatureScale });
+      drawRight(page, "ختم وتوقيع الطرف الأول المعتمدان", blockBottom + 10, resources.regular, 6.8, COLORS.muted, arabicRight - 7);
+      drawLeft(page, "Approved First Party stamp and signature", blockBottom + 10, resources.latinRegular, 6.6, COLORS.muted, englishLeft + 7);
+    } else {
+      drawRight(page, "مسودة غير معتمدة ولا تحمل ختماً أو توقيعاً", blockBottom + 28, resources.bold, 8, COLORS.red, arabicRight - 7);
+      drawLeft(page, "Unapproved draft — no stamp or signature", blockBottom + 28, resources.latinBold, 7.5, COLORS.red, englishLeft + 7);
+    }
+  };
+
   addPage();
   section(issuedDocumentLabels[input.documentType], englishDocumentLabels[input.documentType]);
   pairedBlock("المرجع", input.referenceCode, "Reference", input.referenceCode, true);
@@ -465,7 +528,8 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     );
   }
 
-  if (input.approvalState === "approved") drawContractSignatures(page, resources, input.referenceCode, input.clientName);
+  if (input.documentType === "workforce_contract") bilingualSignaturePage();
+  else if (input.approvalState === "approved") drawEndorsement(page, resources, input.referenceCode);
   else drawDraftEndorsement(page, resources, input.referenceCode);
   return pdf.save();
 }
@@ -888,9 +952,6 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     const professions = input.professions?.length
       ? input.professions
       : [{ profession: input.profession || "عمالة فنية وإنشائية", requiredCount: input.workerCount || 0, assignedWorkers: [] }];
-    const assignedSummary = professions
-      .flatMap((item) => (item.assignedWorkers || []).map((worker) => `${item.profession} — ${worker.fullName}${worker.iqamaNumber ? ` — إقامة ${worker.iqamaNumber}` : ""}`))
-      .join("\n");
     const daliPurchaser = input.contractDirection === "dali_purchaser";
     composer.paragraph("تمهيد", daliPurchaser ? `لما كانت شركة دالي بحاجة إلى توفير قوى عاملة لأعمالها ومواقعها، وأبدى الطرف الثاني استعداده لتوريد العمالة وفق المهن والأعداد المعتمدة؛ فقد اتفق الطرفان على إبرام هذا العقد، ويعد التمهيد والملاحق جزءاً لا يتجزأ منه.` : `لما كانت شركة دالي متخصصة في توفير وتشغيل القوى العاملة وخدمات التشغيل والصيانة، ورغب الطرف الثاني في الاستفادة من هذه الخدمات؛ فقد اتفق الطرفان على إبرام هذا العقد، ويعد التمهيد والملاحق جزءاً لا يتجزأ منه.`);
     composer.heading("بيانات طرفي العقد");
@@ -901,8 +962,6 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     composer.field("موقع العمل", input.workSite || "حسب توجيه العميل المعتمد");
     composer.heading("جدول المهن والأسعار والخدمات");
     composer.quotationTable(professions.map((item) => ({ description: item.profession, quantity: item.requiredCount, durationMonths: 1, unitPriceHalalas: item.unitSalaryHalalas || 0, lineTotalHalalas: 0, notes: null })), true, input.quantityMode === "open");
-    if (assignedSummary) composer.field("العمالة المسندة عند الإصدار", assignedSummary);
-    else composer.field("العمالة المسندة عند الإصدار", "لم تُحدَّد أسماء العمالة عند الإصدار، ويجوز استكمال الإسناد لاحقاً من النظام وفق العدد المطلوب لكل مهنة.");
     composer.field("مدة العقد", `من ${dateLabel(input.startDate)} إلى ${dateLabel(input.endDate)}`);
     if (input.quantityMode === "open") composer.paragraph("آلية القيمة والضريبة", `هذا عقد بعدد مفتوح ولا يقرر قيمة إجمالية عند الإصدار. تحتسب الفواتير على العدد الفعلي والخدمة المنفذة، وتطبق ضريبة القيمة المضافة بنسبة ${arabicDigits((input.vatRateBps || 0) / 100)}٪ على كل فاتورة فعلية.`);
     else {
