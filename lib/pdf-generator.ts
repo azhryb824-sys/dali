@@ -361,7 +361,7 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
       const quantityEn = input.quantityMode === "open" ? "Open" : String(item.quantity);
       pairedBlock(
         `البند ${index + 1}`,
-        `${publicManpowerText(item.description)} | الكمية: ${quantityAr} | المدة: ${item.durationMonths} شهر | سعر الوحدة: ${moneyLabel(item.unitPriceHalalas)} | الإجمالي: ${moneyLabel(item.lineTotalHalalas)}${item.notes ? ` | ${publicManpowerText(item.notes)}` : ""}`,
+        `${publicManpowerText(item.description)} | العدد: ${quantityAr} | ${input.activityLabel === "توريد العمالة" ? `سعر العامل: ${moneyLabel(item.unitPriceHalalas)} | السكن: ${input.accommodationParty || "غير محدد"} | النقل: ${input.transportParty || "غير محدد"}` : `المدة: ${item.durationMonths} شهر | سعر الوحدة: ${moneyLabel(item.unitPriceHalalas)} | الإجمالي: ${moneyLabel(item.lineTotalHalalas)}`}${item.notes ? ` | ${publicManpowerText(item.notes)}` : ""}`,
         `Item ${index + 1}`,
         `${englishText(publicManpowerText(item.description))} | Qty: ${quantityEn} | Duration: ${item.durationMonths} month(s) | Unit price: ${moneyEnglish(item.unitPriceHalalas)} | Total: ${moneyEnglish(item.lineTotalHalalas)}${item.notes ? ` | ${englishText(publicManpowerText(item.notes))}` : ""}`,
       );
@@ -412,7 +412,7 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
   } else {
     section("نطاق التعاقد", "Contract Scope");
     const professions = input.professions?.length
-      ? input.professions.map((item) => `${item.profession}: ${input.quantityMode === "open" ? "عدد مفتوح" : item.requiredCount}${item.unitSalaryHalalas ? ` | راتب العامل: ${moneyLabel(item.unitSalaryHalalas)}` : ""}`).join(" | ")
+      ? input.professions.map((item) => `${item.profession}: ${input.quantityMode === "open" ? "عدد مفتوح" : item.requiredCount}${item.unitSalaryHalalas ? ` | سعر العامل: ${moneyLabel(item.unitSalaryHalalas)}` : ""} | السكن: ${input.accommodationParty || "غير محدد"} | النقل: ${input.transportParty || "غير محدد"}`).join(" | ")
       : input.profession
         ? `${input.profession}: ${input.workerCount || 0}`
         : "حسب النطاق المعتمد";
@@ -798,15 +798,23 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
   }
 
   function quotationTable(items: NonNullable<IssuedDocumentInput["quotationItems"]>, workforcePricing = false, openQuantity = false) {
-    const columns = { description: PAGE.width - PAGE.margin - 10, quantity: 302, duration: 242, unit: 173, total: 93 };
+    const columns = workforcePricing
+      ? { description: PAGE.width - PAGE.margin - 10, quantity: 382, duration: 0, unit: 292, total: 0, accommodation: 184, transport: 86 }
+      : { description: PAGE.width - PAGE.margin - 10, quantity: 302, duration: 242, unit: 173, total: 93, accommodation: 0, transport: 0 };
     const header = () => {
       ensure(34);
       page.drawRectangle({ x: PAGE.margin, y: y - 23, width: PAGE.width - PAGE.margin * 2, height: 28, color: COLORS.navy });
       drawRight(page, "الخدمة / البند", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.description);
       drawRight(page, openQuantity ? "العدد" : "الكمية", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.quantity);
-      drawRight(page, "المدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.duration);
-      drawRight(page, workforcePricing ? "راتب العامل" : "سعر الوحدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.unit);
-      if (!workforcePricing) drawRight(page, "الإجمالي", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.total);
+      if (workforcePricing) {
+        drawRight(page, "سعر العامل", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.unit);
+        drawRight(page, "السكن", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.accommodation);
+        drawRight(page, "النقل", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.transport);
+      } else {
+        drawRight(page, "المدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.duration);
+        drawRight(page, "سعر الوحدة", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.unit);
+        drawRight(page, "الإجمالي", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.total);
+      }
       y -= 31;
     };
     header();
@@ -819,9 +827,14 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
       if (index % 2 === 0) page.drawRectangle({ x: PAGE.margin, y: y - height + 5, width: PAGE.width - PAGE.margin * 2, height, color: COLORS.pale });
       lines.forEach((line, lineIndex) => drawRight(page, line, y - 9 - lineIndex * 12, resources.regular, 8, COLORS.text, columns.description));
       drawRight(page, openQuantity ? "مفتوح" : arabicDigits(item.quantity), y - 9, resources.regular, 8, COLORS.text, columns.quantity);
-      drawRight(page, `${arabicDigits(item.durationMonths)} شهر`, y - 9, resources.regular, 8, COLORS.text, columns.duration);
       drawRight(page, moneyLabel(item.unitPriceHalalas), y - 9, resources.regular, 7.5, COLORS.text, columns.unit);
-      if (!workforcePricing) drawRight(page, moneyLabel(item.lineTotalHalalas), y - 9, resources.bold, 7.5, COLORS.navy, columns.total);
+      if (workforcePricing) {
+        drawRight(page, input.accommodationParty || "غير محدد", y - 9, resources.regular, 7.5, COLORS.text, columns.accommodation);
+        drawRight(page, input.transportParty || "غير محدد", y - 9, resources.regular, 7.5, COLORS.text, columns.transport);
+      } else {
+        drawRight(page, `${arabicDigits(item.durationMonths)} شهر`, y - 9, resources.regular, 8, COLORS.text, columns.duration);
+        drawRight(page, moneyLabel(item.lineTotalHalalas), y - 9, resources.bold, 7.5, COLORS.navy, columns.total);
+      }
       page.drawLine({ start: { x: PAGE.margin, y: y - height + 5 }, end: { x: PAGE.width - PAGE.margin, y: y - height + 5 }, thickness: 0.45, color: COLORS.line });
       y -= height;
     });
@@ -870,13 +883,6 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     const professions = input.professions?.length
       ? input.professions
       : [{ profession: input.profession || "عمالة فنية وإنشائية", requiredCount: input.workerCount || 0, assignedWorkers: [] }];
-    const professionSummary = professions
-      .map((item) => {
-        const quantity = input.quantityMode === "open" ? "العدد مفتوح بحسب طلبات الإسناد" : `${item.requiredCount} عامل/فني`;
-        const salary = item.unitSalaryHalalas ? ` — راتب العامل ${moneyLabel(item.unitSalaryHalalas)}` : "";
-        return `${item.profession}: ${quantity}${salary}`;
-      })
-      .join("\n");
     const assignedSummary = professions
       .flatMap((item) => (item.assignedWorkers || []).map((worker) => `${item.profession} — ${worker.fullName}${worker.iqamaNumber ? ` — إقامة ${worker.iqamaNumber}` : ""}`))
       .join("\n");
@@ -888,8 +894,8 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     composer.pair("العنوان التشغيلي", "مكة المكرمة – المملكة العربية السعودية", "الرقم الضريبي للطرف الثاني", input.clientVat || "غير محدد");
     composer.heading("نطاق التعاقد");
     composer.field("موقع العمل", input.workSite || "حسب توجيه العميل المعتمد");
-    if (input.accommodationParty || input.transportParty) composer.pair("السكن", input.accommodationParty || "غير محدد", "النقل", input.transportParty || "غير محدد");
-    composer.field("المهن والأعداد المطلوبة", professionSummary);
+    composer.heading("جدول المهن والأسعار والخدمات");
+    composer.quotationTable(professions.map((item) => ({ description: item.profession, quantity: item.requiredCount, durationMonths: 1, unitPriceHalalas: item.unitSalaryHalalas || 0, lineTotalHalalas: 0, notes: null })), true, input.quantityMode === "open");
     if (assignedSummary) composer.field("العمالة المسندة عند الإصدار", assignedSummary);
     else composer.field("العمالة المسندة عند الإصدار", "لم تُحدَّد أسماء العمالة عند الإصدار، ويجوز استكمال الإسناد لاحقاً من النظام وفق العدد المطلوب لكل مهنة.");
     composer.field("مدة العقد", `من ${dateLabel(input.startDate)} إلى ${dateLabel(input.endDate)}`);
@@ -948,9 +954,8 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
         }];
     if (input.activityLabel) composer.field("نشاط العرض", input.activityLabel);
     if (input.workSite) composer.field("موقع تقديم الخدمة", input.workSite);
-    if (input.accommodationParty || input.transportParty) composer.pair("السكن", input.accommodationParty || "غير محدد", "النقل", input.transportParty || "غير محدد");
     composer.paragraph("نطاق العرض", publicManpowerText(input.details));
-    composer.heading(workforcePricing ? "بيان العمالة والمهن والرواتب" : "جدول الخدمات والأسعار");
+    composer.heading(workforcePricing ? "جدول المهن والأسعار والخدمات" : "جدول الخدمات والأسعار");
     composer.quotationTable(quotationItems, workforcePricing, openQuantity);
     if (openQuantity) composer.paragraph("آلية الاحتساب", `الكميات مفتوحة ولا تمثل التزاماً بعدد أو قيمة إجمالية. تطبق ضريبة القيمة المضافة بنسبة ${arabicDigits((input.vatRateBps || 0) / 100)}٪ على قيمة الفواتير الفعلية بحسب العمالة أو الأعمال المنفذة.`);
     if (!workforcePricing && !openQuantity) {
@@ -1331,4 +1336,3 @@ export async function generateFinancialReportPdf(input: FinancialReportPdfInput,
   drawEndorsement(page, resources, input.referenceCode);
   return pdf.save();
 }
-
