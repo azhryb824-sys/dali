@@ -26,12 +26,11 @@ export default function LegalCaseWorkspace() {
   }, []);
 
   useEffect(() => {
-    void load().catch((error) => setNotice(error instanceof Error ? error.message : "تعذر التحميل"));
+    const timer = window.setTimeout(() => {
+      void load().catch((error) => setNotice(error instanceof Error ? error.message : "تعذر التحميل"));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
-
-  useEffect(() => {
-    setDecisionReason("");
-  }, [selected]);
 
   const matter = data?.cases.find((item) => item.id === selected);
   const activities = useMemo(
@@ -144,7 +143,10 @@ export default function LegalCaseWorkspace() {
               <button
                 key={item.id}
                 className={selected === item.id ? "active" : ""}
-                onClick={() => setSelected(item.id)}
+                onClick={() => {
+                  setSelected(item.id);
+                  setDecisionReason("");
+                }}
               >
                 <strong>{item.referenceCode}</strong>
                 <span>{item.counterparty}</span>
