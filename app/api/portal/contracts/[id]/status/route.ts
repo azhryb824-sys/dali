@@ -153,7 +153,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         assignments,
         workers: linkedWorkers,
       };
-      const suffix = now.replace(/\D/g, "").slice(-12);
+      const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
       const legalReference = `LGL-CAN-${contract.referenceCode}-${suffix}`.slice(0, 120);
       const legal = await db.transaction(async (tx) => {
         const [created] = await tx
@@ -268,6 +268,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             .where(and(eq(legalRecords.id, legalRecordId), eq(legalRecords.status, "reviewing")))
             .returning();
           if (!closed) throw new Error("تغيرت حالة الملف قبل حفظ القرار");
+          await tx
+            .update(legalCaseActivities)
+            .set({ status: "cancelled", completedAt: now, updatedAt: now })
+            .where(
+              and(
+                eq(legalCaseActivities.legalRecordId, legalRecordId),
+                inArray(legalCaseActivities.status, ["open", "in_progress"]),
+              ),
+            );
           const [activity] = await tx
             .insert(legalCaseActivities)
             .values({
@@ -344,21 +353,38 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
               inArray(contractWorkerAssignments.status, ["planned", "active"]),
             ),
           );
+        let releasedAssignments = 0;
         for (const assignment of assignments) {
-          await tx
+          const [released] = await tx
             .update(contractWorkerAssignments)
             .set({ status: "released", releasedAt: now })
-            .where(eq(contractWorkerAssignments.id, assignment.id));
-          await tx
-            .update(workers)
-            .set({
-              status: "available",
-              beneficiaryName: null,
-              clientSite: "غير مسند",
-              assignmentStartDate: null,
-              updatedAt: now,
-            })
-            .where(eq(workers.id, assignment.workerId));
+            .where(
+              and(
+                eq(contractWorkerAssignments.id, assignment.id),
+                inArray(contractWorkerAssignments.status, ["planned", "active"]),
+              ),
+            )
+            .returning();
+          if (!released) continue;
+          releasedAssignments += 1;
+          if (assignment.status === "active") {
+            await tx
+              .update(workers)
+              .set({
+                status: "available",
+                beneficiaryName: null,
+                clientSite: "غير مسند",
+                assignmentStartDate: null,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(workers.id, assignment.workerId),
+                  eq(workers.status, "assigned"),
+                  eq(workers.beneficiaryName, contract.clientName),
+                ),
+              );
+          }
         }
         const [closed] = await tx
           .update(legalRecords)
@@ -366,6 +392,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           .where(and(eq(legalRecords.id, legalRecordId), eq(legalRecords.status, "reviewing")))
           .returning();
         if (!closed) throw new Error("تغيرت حالة الملف القانوني قبل حفظ القرار");
+        await tx
+          .update(legalCaseActivities)
+          .set({ status: "cancelled", completedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(legalCaseActivities.legalRecordId, legalRecordId),
+              inArray(legalCaseActivities.status, ["open", "in_progress"]),
+            ),
+          );
         const [activity] = await tx
           .insert(legalCaseActivities)
           .values({
@@ -381,7 +416,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             updatedAt: now,
           })
           .returning();
-        return { updated, closed, activity, releasedAssignments: assignments.length };
+        return { updated, closed, activity, releasedAssignments };
       });
 
       const correlationId = await recordStatusChange({
