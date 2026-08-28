@@ -20,12 +20,14 @@ test("contract cancellation is referred to legal before the contract status chan
   assert.match(statusApi, /fileSnapshotJson: JSON\.stringify\(caseSnapshot\)/);
   assert.match(statusApi, /pendingLegalDecision: true/);
   assert.match(statusApi, /يجب إحالة طلب الإلغاء إلى القانونية أولًا/);
+  assert.match(statusApi, /لا يمكن تغيير حالة العقد أثناء مراجعة طلب إلغائه/);
   assert.match(statusApi, /crypto\.randomUUID\(\)/);
   assert.match(referralsApi, /contract-cancellation/);
   assert.match(referralsApi, /eq\(legalRecords\.status, "reviewing"\)/);
   assert.match(referralsApi, /canReadFinance/);
   assert.match(styles, /\.contract-cancellation-backdrop/);
   assert.match(styles, /\.pending-legal-action/);
+  assert.match(styles, /article:has\(\.contract-legal-status\)/);
 });
 
 test("legal users can inspect the contract and attachments before approving or rejecting cancellation", async () => {
