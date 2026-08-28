@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { companyDocuments, contractClauses, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, workforceContracts } from "@/db/schema";
+import { companyDocuments, contractClauses, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, legalRecords, workforceContracts } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -9,9 +9,29 @@ import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
 
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 
+type PortalDb = ReturnType<typeof getDb>;
+
 async function access() {
   const actor = await requirePortalApiRole(["admin", "manager", "employee"]);
   return actor && await hasPortalPermission(actor, "workforce", "write") ? actor : null;
+}
+
+function isCancellationReview(fileSnapshotJson: string | null) {
+  if (!fileSnapshotJson) return false;
+  try {
+    const snapshot = JSON.parse(fileSnapshotJson) as { request?: { type?: string } };
+    return snapshot.request?.type === "contract-cancellation";
+  } catch {
+    return false;
+  }
+}
+
+async function hasPendingCancellation(db: PortalDb, contractId: number) {
+  const matters = await db
+    .select({ fileSnapshotJson: legalRecords.fileSnapshotJson })
+    .from(legalRecords)
+    .where(and(eq(legalRecords.contractId, contractId), eq(legalRecords.status, "reviewing")));
+  return matters.some((matter) => isCancellationReview(matter.fileSnapshotJson));
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -22,6 +42,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const db = getDb();
   const contract = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.id, id) });
   if (!contract) return jsonNoStore({ error: "العقد غير موجود" }, { status: 404 });
+  if (await hasPendingCancellation(db, id)) {
+    return jsonNoStore({ error: "لا يمكن تعديل العقد أثناء مراجعة طلب إلغائه لدى الشؤون القانونية" }, { status: 409 });
+  }
   if (["active", "suspended", "expired", "terminated", "superseded"].includes(contract.status)) return jsonNoStore({ error: "لا يمكن تعديل عقد بدأت آثاره التشغيلية أو المالية؛ أنشئ ملحقًا أو إصدارًا جديدًا" }, { status: 409 });
   const payload = await request.json() as Record<string, unknown>;
   const startDate = clean(payload.startDate, 10) || contract.startDate;
@@ -54,6 +77,9 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   const db = getDb();
   const contract = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.id, id) });
   if (!contract) return jsonNoStore({ error: "العقد غير موجود" }, { status: 404 });
+  if (await hasPendingCancellation(db, id)) {
+    return jsonNoStore({ error: "لا يمكن حذف العقد أثناء مراجعة طلب إلغائه لدى الشؤون القانونية" }, { status: 409 });
+  }
   if (contract.approvedBy || contract.status !== "draft") return jsonNoStore({ error: contract.status === "active" ? "لا يمكن حذف عقد ساري ومعتمد" : "لا يمكن حذف العقد بعد دخوله مسار الاعتماد؛ أعده للمسودة أو ألغِه وفق الصلاحية", code: "CONTRACT_DELETE_BLOCKED" }, { status: 409 });
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, contract.documentId) });
   await db.transaction(async (tx) => {
