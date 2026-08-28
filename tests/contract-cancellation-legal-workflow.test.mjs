@@ -54,3 +54,18 @@ test("legal users can inspect the contract and attachments before approving or r
   assert.match(styles, /\.legal-attachment-list/);
   assert.match(styles, /\.legal-open-contract/);
 });
+
+test("pending cancellation freezes the contract and grants legal review access to its document", async () => {
+  const [contractApi, documentApi] = await Promise.all([
+    source("app/api/portal/contracts/[id]/route.ts"),
+    source("app/api/portal/documents/[id]/route.ts"),
+  ]);
+
+  assert.match(contractApi, /hasPendingCancellation/);
+  assert.match(contractApi, /لا يمكن تعديل العقد أثناء مراجعة طلب إلغائه/);
+  assert.match(contractApi, /لا يمكن حذف العقد أثناء مراجعة طلب إلغائه/);
+  assert.match(documentApi, /hasPortalPermission\(access, "legal", "read"\)/);
+  assert.match(documentApi, /eq\(legalRecords\.status, "reviewing"\)/);
+  assert.match(documentApi, /contract-regenerated-for-legal-review/);
+  assert.match(documentApi, /إحالته رسميًا للمراجعة القانونية/);
+});
