@@ -9,7 +9,7 @@ import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelatio
 const positiveId=(value:unknown)=>{const n=Number(value);return Number.isSafeInteger(n)&&n>0?n:0};
 const clean=(value:unknown,max:number)=>typeof value==="string"?value.trim().slice(0,max):"";
 const chargeableDays=(start:string,end:string)=>{let count=0,cursor=new Date(`${start}T12:00:00Z`),last=new Date(`${end}T12:00:00Z`);while(cursor<=last){if(cursor.getUTCDay()!==5)count++;cursor=new Date(cursor.getTime()+86400000)}return count};
-const owner=(access:NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>)=>access.role==="admin"||access.functionalRoles.includes("system_owner")||access.functionalRoles.includes("system_admin");
+const owner=(access:NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>)=>access.role==="admin"||access.functionalRoles.some(role=>["system_owner","system_admin","workforce_supervisor","workforce_operations_manager"].includes(role));
 
 export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   const access=await requirePortalApiRole(["admin","manager","employee"]);
@@ -24,7 +24,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   const access=await requirePortalApiRole(["admin","manager","employee"]);
   if(!access||!owner(access))return jsonNoStore({error:"تسجيل غياب العمالة والخصم من صلاحيات المالك أو مشرف النظام فقط"},{status:403});
   const parsed=await readLimitedJson(request,4000);if(!parsed.ok)return parsed.response;
-  const body=parsed.value as Record<string,unknown>,contractId=positiveId((await params).id),workerId=positiveId(body.workerId)||null,contractProfessionId=positiveId(body.contractProfessionId),absenceDate=clean(body.absenceDate,10),absenceEndDate=clean(body.absenceEndDate,10)||absenceDate,notes=clean(body.notes,1000),requestedCount=positiveId(body.absentCount)||1;
+  const body=parsed.value as Record<string,unknown>,contractId=positiveId((await params).id),workerId=positiveId(body.workerId)||null,replacementWorkerId=positiveId(body.replacementWorkerId)||null,contractProfessionId=positiveId(body.contractProfessionId),absenceDate=clean(body.absenceDate,10),absenceEndDate=clean(body.absenceEndDate,10)||absenceDate,notes=clean(body.notes,1000),requestedCount=positiveId(body.absentCount)||1;
   if(!contractId||!contractProfessionId||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(absenceDate)||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(absenceEndDate)||absenceEndDate<absenceDate||absenceEndDate.slice(0,7)!==absenceDate.slice(0,7))return jsonNoStore({error:"فترة الغياب غير صحيحة أو تمتد بين شهرين"},{status:400});
   const db=getDb(),contract=await db.query.workforceContracts.findFirst({where:eq(workforceContracts.id,contractId)}),profession=await db.query.contractProfessions.findFirst({where:eq(contractProfessions.id,contractProfessionId)});
   if(!contract||!profession||profession.contractId!==contractId)return jsonNoStore({error:"العقد أو المهنة غير موجودة"},{status:404});
@@ -42,19 +42,24 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
     const active=await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId,contractId),eq(contractWorkerAssignments.contractProfessionId,contractProfessionId),eq(contractWorkerAssignments.status,"active")));
     if(requestedCount>active.length)return jsonNoStore({error:"عدد المتغيبين أكبر من عدد العمالة المسندة للمهنة"},{status:409});
   }
+  if(replacementWorkerId){
+    if(!workerId||replacementWorkerId===workerId)return jsonNoStore({error:"حدد العامل المتغيب وعاملًا بديلًا مختلفًا"},{status:400});
+    const replacement=await db.query.workers.findFirst({where:eq(workers.id,replacementWorkerId)});
+    if(!replacement||replacement.status!=="available"||replacement.profession!==profession.profession||replacement.sponsorshipType!==profession.sponsorshipType||(profession.sponsorshipType==="other"&&replacement.sponsorName!==profession.sponsorName))return jsonNoStore({error:"العامل البديل غير متاح أو لا يطابق المهنة والكفالة"},{status:409});
+  }
   const monthlyRate=profession.actualSalaryHalalas>0?profession.actualSalaryHalalas:selectedWorker?.monthlySalaryHalalas||0;
-  const dailyRateHalalas=Math.round(monthlyRate/30);if(dailyRateHalalas<1)return jsonNoStore({error:"راتب المهنة غير مسجل ولا يمكن حساب اليومية"},{status:409});
-  const deductionHalalas=dailyRateHalalas*absentCount,dedupeKey=workerId?`${contractId}:${absenceDate}:${absenceEndDate}:worker:${workerId}`:`${contractId}:${absenceDate}:${absenceEndDate}:profession:${contractProfessionId}`;
+  const dailyRateHalalas=Math.round(monthlyRate/30),clientDailyRateHalalas=Math.round(profession.unitSalaryHalalas/30);if(dailyRateHalalas<1||clientDailyRateHalalas<1)return jsonNoStore({error:"الراتب الفعلي أو سعر العامل غير مسجل ولا يمكن حساب اليومية"},{status:409});
+  const deductionHalalas=dailyRateHalalas*absentCount,clientDeductionHalalas=replacementWorkerId?0:clientDailyRateHalalas*absentCount,dedupeKey=workerId?`${contractId}:${absenceDate}:${absenceEndDate}:worker:${workerId}`:`${contractId}:${absenceDate}:${absenceEndDate}:profession:${contractProfessionId}`;
   try{
     const now=new Date().toISOString();
     const result=await db.transaction(async tx=>{
-      const[updatedPayment]=await tx.update(contractPaymentSchedules).set({absenceDeductionHalalas:sql`${contractPaymentSchedules.absenceDeductionHalalas} + ${deductionHalalas}`,updatedAt:now}).where(and(eq(contractPaymentSchedules.id,payment.id),sql`${contractPaymentSchedules.absenceDeductionHalalas} + ${deductionHalalas} <= ${contractPaymentSchedules.subtotalHalalas}`)).returning();
+      const[updatedPayment]=await tx.update(contractPaymentSchedules).set({absenceDeductionHalalas:sql`${contractPaymentSchedules.absenceDeductionHalalas} + ${clientDeductionHalalas}`,updatedAt:now}).where(and(eq(contractPaymentSchedules.id,payment.id),sql`${contractPaymentSchedules.absenceDeductionHalalas} + ${clientDeductionHalalas} <= ${contractPaymentSchedules.subtotalHalalas}`)).returning();
       if(!updatedPayment)throw new Error("DEDUCTION_EXCEEDS_PAYMENT");
-      const[absence]=await tx.insert(contractWorkerAbsences).values({contractId,paymentScheduleId:payment.id,workerId,contractProfessionId,profession:profession.profession,absenceDate,absenceEndDate,chargeableDays:workDays,absentCount,dailyRateHalalas,deductionHalalas,notes:notes||null,dedupeKey,recordedBy:access.user.email,updatedAt:now}).returning();
+      const[absence]=await tx.insert(contractWorkerAbsences).values({contractId,paymentScheduleId:payment.id,workerId,replacementWorkerId,contractProfessionId,profession:profession.profession,absenceDate,absenceEndDate,chargeableDays:workDays,absentCount,dailyRateHalalas,deductionHalalas,clientDailyRateHalalas,clientDeductionHalalas,notes:notes||null,dedupeKey,recordedBy:access.user.email,updatedAt:now}).returning();
       return{absence,payment:updatedPayment};
     });
     await auditPortalAction({actorEmail:access.user.email,action:"contract-worker-absence-recorded",entityType:"contract-worker-absence",entityId:result.absence.id,after:result.absence,correlationId:requestCorrelationId(request)});
-    await emitPortalNotification({eventType:"contract-worker-absence-recorded",title:"سُجل غياب وخصم على دفعة عقد",message:`${contract.referenceCode} — ${profession.profession} — ${absentCount} × ${(dailyRateHalalas/100).toFixed(2)} ر.س — شهر ${periodMonth}.`,severity:"warning",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"finance",targetDepartment:"finance"}).catch(()=>undefined);
+    await emitPortalNotification({eventType:"contract-worker-absence-recorded",title:replacementWorkerId?"سُجل غياب مع عامل بديل":"سُجل غياب وخصم على دفعة عقد",message:`${contract.referenceCode} — ${profession.profession} — ${workDays} يوم مستحق دون الجمعة — خصم العامل ${(deductionHalalas/100).toFixed(2)} ر.س — خصم العميل ${(clientDeductionHalalas/100).toFixed(2)} ر.س.`,severity:"warning",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"finance",targetDepartment:"finance"}).catch(()=>undefined);
     return jsonNoStore(result,{status:201});
   }catch(error){
     const message=error instanceof Error?error.message:"";
@@ -71,7 +76,7 @@ export async function DELETE(request:Request,{params}:{params:Promise<{id:string
   const db=getDb(),absence=await db.query.contractWorkerAbsences.findFirst({where:eq(contractWorkerAbsences.id,absenceId)});if(!absence||absence.contractId!==contractId||absence.status!=="active")return jsonNoStore({error:"قيد الغياب غير موجود أو ملغى"},{status:404});
   const payment=await db.query.contractPaymentSchedules.findFirst({where:eq(contractPaymentSchedules.id,absence.paymentScheduleId)});if(!payment||payment.invoiceDocumentId||payment.financialRecordId)return jsonNoStore({error:"لا يمكن إلغاء الخصم بعد إصدار الفاتورة"},{status:409});
   const now=new Date().toISOString();
-  const result=await db.transaction(async tx=>{const[voided]=await tx.update(contractWorkerAbsences).set({status:"void",voidedBy:access.user.email,voidedAt:now,updatedAt:now}).where(and(eq(contractWorkerAbsences.id,absenceId),eq(contractWorkerAbsences.status,"active"))).returning();if(!voided)throw new Error("ABSENCE_CHANGED");const[updatedPayment]=await tx.update(contractPaymentSchedules).set({absenceDeductionHalalas:sql`greatest(0,${contractPaymentSchedules.absenceDeductionHalalas} - ${absence.deductionHalalas})`,updatedAt:now}).where(eq(contractPaymentSchedules.id,payment.id)).returning();return{absence:voided,payment:updatedPayment};});
+  const result=await db.transaction(async tx=>{const[voided]=await tx.update(contractWorkerAbsences).set({status:"void",voidedBy:access.user.email,voidedAt:now,updatedAt:now}).where(and(eq(contractWorkerAbsences.id,absenceId),eq(contractWorkerAbsences.status,"active"))).returning();if(!voided)throw new Error("ABSENCE_CHANGED");const[updatedPayment]=await tx.update(contractPaymentSchedules).set({absenceDeductionHalalas:sql`greatest(0,${contractPaymentSchedules.absenceDeductionHalalas} - ${absence.clientDeductionHalalas})`,updatedAt:now}).where(eq(contractPaymentSchedules.id,payment.id)).returning();return{absence:voided,payment:updatedPayment};});
   await auditPortalAction({actorEmail:access.user.email,action:"contract-worker-absence-voided",entityType:"contract-worker-absence",entityId:absenceId,before:absence,after:result.absence,correlationId:requestCorrelationId(request)});
   return jsonNoStore(result);
 }

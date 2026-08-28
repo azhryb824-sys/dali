@@ -23,4 +23,7 @@ test("absence ranges exclude Friday and use actual salary",()=>{
   assert.match(route,/getUTCDay\(\)!==5/);
   assert.match(route,/profession\.actualSalaryHalalas/);
   assert.match(route,/absenceEndDate/);
+  assert.match(route,/clientDailyRateHalalas/);
+  assert.match(route,/replacementWorkerId\?0:/);
+  assert.match(route,/workforce_supervisor/);
 });

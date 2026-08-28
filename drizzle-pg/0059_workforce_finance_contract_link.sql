@@ -17,6 +17,18 @@ ADD COLUMN IF NOT EXISTS absence_end_date text;
 ALTER TABLE public.contract_worker_absences
 ADD COLUMN IF NOT EXISTS chargeable_days integer NOT NULL DEFAULT 1;
 
+ALTER TABLE public.contract_worker_absences
+ADD COLUMN IF NOT EXISTS replacement_worker_id integer;
+
+ALTER TABLE public.contract_worker_absences
+ADD COLUMN IF NOT EXISTS client_daily_rate_halalas integer NOT NULL DEFAULT 0;
+
+ALTER TABLE public.contract_worker_absences
+ADD COLUMN IF NOT EXISTS client_deduction_halalas integer NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS contract_worker_absences_replacement_idx
+ON public.contract_worker_absences (replacement_worker_id);
+
 INSERT INTO private.__dali_migrations (name)
 VALUES ('0059_workforce_finance_contract_link.sql')
 ON CONFLICT (name) DO NOTHING;
