@@ -189,6 +189,8 @@ async function createRecord(action: string, payload: Record<string, unknown>, ac
       const normalizedQuantity = quantityMode === "open" ? 0 : quantity;
       return { profession, quantity: normalizedQuantity, durationMonths, unitPriceHalalas, lineTotalHalalas: normalizedQuantity * durationMonths * unitPriceHalalas, notes: text(item.notes, 500) || null, sponsorshipType, sponsorName, ajirContractStatus, sortOrder: index };
     });
+    const allocationKeys = normalizedItems.map((item) => [item.profession, item.sponsorshipType || "", item.sponsorName || "", item.ajirContractStatus].join("::"));
+    if (activityLabel === "توريد العمالة" && new Set(allocationKeys).size !== allocationKeys.length) throw new Error("لا تكرر توزيع المهنة والكفيل وحالة أجير نفسه؛ اجمع العدد في بند واحد");
     const subtotalHalalas = normalizedItems.reduce((sum, item) => sum + item.lineTotalHalalas, 0);
     const discountHalalas = Math.min(subtotalHalalas, Math.max(0, Math.round((Number(payload.discount) || 0) * 100)));
     const vatHalalas = Math.round((subtotalHalalas - discountHalalas) * vatRate / 100);

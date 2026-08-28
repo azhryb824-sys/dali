@@ -40,7 +40,7 @@ const prefixes: Record<IssuedDocumentType, string> = {
   official_letter: "LTR",
 };
 
-type ProfessionInput = { profession: string; requiredCount: number; unitSalaryHalalas: number; sponsorshipType: "dali" | "other"; sponsorName: string | null; ajirContractStatus: "not_applicable" | "with_ajir" | "without_ajir"; workerIds: number[] };
+type ProfessionInput = { profession: string; requiredCount: number; unitSalaryHalalas: number; actualSalaryHalalas: number; sponsorshipType: "dali" | "other"; sponsorName: string | null; ajirContractStatus: "not_applicable" | "with_ajir" | "without_ajir"; workerIds: number[] };
 type PaymentInput = { title: string; dueDate: string; percentageBps: number; subtotalHalalas: number; vatHalalas: number; amountHalalas: number; billingBasis: "monthly_salary" | "seasonal_percentage"; servicePeriod: string | null };
 
 function isDocumentType(value: string): value is IssuedDocumentType {
@@ -67,10 +67,12 @@ function parseProfessions(value: unknown, legacyProfession: string, legacyCount:
     const workerIds = Array.isArray(record.workerIds)
       ? Array.from(new Set(record.workerIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)))
       : [];
+    const unitSalaryHalalas = Math.round(Number(record.unitSalary || 0) * 100);
     return {
       profession: cleanText(record.profession, 120),
       requiredCount: Number(record.requiredCount ?? record.count ?? 0),
-      unitSalaryHalalas: Math.round(Number(record.unitSalary || 0) * 100),
+      unitSalaryHalalas,
+      actualSalaryHalalas: Math.round(Number(record.actualSalary ?? record.unitSalary ?? 0) * 100),
       sponsorshipType: record.sponsorshipType === "other" ? "other" : "dali",
       sponsorName: record.sponsorshipType === "other" ? cleanText(record.sponsorName, 160) || null : null,
       ajirContractStatus: record.ajirContractStatus === "with_ajir" || record.ajirContractStatus === "without_ajir"
@@ -186,11 +188,14 @@ export async function POST(request: Request) {
       : [];
     if (documentType === "workforce_contract") {
       if (seasonType === "regular" && !annualSchedule?.endDate) return Response.json({ error: "تاريخ بداية العقد السنوي غير صحيح" }, { status: 400 });
-      const uniqueLabels = new Set(professionInputs.map((item) => item.profession));
-      if (!workSite || !startDate || !endDate || endDate < startDate || !professionInputs.length || uniqueLabels.size !== professionInputs.length) {
-        return Response.json({ error: "أكمل موقع العمل ومدة العقد وأضف كل مهنة مرة واحدة" }, { status: 400 });
+      const allocationKeys = professionInputs.map((item) => [item.profession, item.sponsorshipType, item.sponsorName || "", item.ajirContractStatus].join("::"));
+      if (!workSite || !startDate || !endDate || endDate < startDate || !professionInputs.length) {
+        return Response.json({ error: "أكمل موقع العمل ومدة العقد وأضف المهن وتوزيعات الكفالة" }, { status: 400 });
       }
-      if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || !Number.isInteger(item.unitSalaryHalalas) || item.unitSalaryHalalas <= 0 || item.unitSalaryHalalas > 100000000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
+      if (new Set(allocationKeys).size !== allocationKeys.length) {
+        return Response.json({ error: "لا تكرر توزيع المهنة والكفيل وحالة أجير نفسه؛ عدّل العدد في التوزيع الموجود" }, { status: 400 });
+      }
+      if (professionInputs.some((item) => item.profession.length < 2 || item.profession === "أخرى" || !Number.isInteger(item.requiredCount) || (quantityMode === "fixed" ? item.requiredCount < 1 : item.requiredCount !== 0) || item.requiredCount > 100000 || !Number.isInteger(item.unitSalaryHalalas) || item.unitSalaryHalalas <= 0 || item.unitSalaryHalalas > 100000000 || !Number.isInteger(item.actualSalaryHalalas) || item.actualSalaryHalalas <= 0 || item.actualSalaryHalalas > 100000000 || (quantityMode === "fixed" && item.workerIds.length > item.requiredCount) || (quantityMode === "open" && item.workerIds.length > 0))) {
         return Response.json({ error: "اختر المهنة أو اكتب اسم المهنة الفعلي يدوياً عند اختيار «أخرى»، وأدخل عدد العمالة وراتب العامل الصحيح لكل مهنة" }, { status: 400 });
       }
       if (professionInputs.some((item) => !["with_ajir", "without_ajir", "not_applicable"].includes(item.ajirContractStatus)
@@ -260,7 +265,8 @@ export async function POST(request: Request) {
     const sourceOpportunity = sourceQuote ? await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, sourceQuote.opportunityId) }) : null;
     const sourceQuoteItems = sourceQuote ? await db.select().from(quoteItems).where(eq(quoteItems.quoteVersionId, sourceQuote.id)) : [];
     if (sourceQuote && (!sourceOpportunity || !sourceQuoteItems.length)) return Response.json({ error: "بيانات عرض السعر المرتبط غير مكتملة" }, { status: 409 });
-    if (sourceQuote && (sourceQuote.quantityMode === "open" ? professionInputs.some(item => item.requiredCount !== 0) : sourceQuoteItems.some(item => !professionInputs.some(profession => profession.profession === item.profession && profession.requiredCount === item.quantity)))) return Response.json({ error: "مهن وأعداد العقد لا تطابق عرض السعر المقبول" }, { status: 409 });
+    if (sourceQuote && (sourceQuote.quantityMode === "open" ? professionInputs.some(item => item.requiredCount !== 0) : sourceQuoteItems.some(item => !professionInputs.some(profession => profession.profession === item.profession && profession.requiredCount === item.quantity && profession.sponsorshipType === item.sponsorshipType && profession.sponsorName === item.sponsorName && profession.ajirContractStatus === item.ajirContractStatus)))) return Response.json({ error: "مهن وأعداد وتوزيعات الكفالة في العقد لا تطابق عرض السعر المقبول" }, { status: 409 });
+    if (sourceQuote && professionInputs.length !== sourceQuoteItems.length) return Response.json({ error: "عدد توزيعات المهن والكفلاء في العقد لا يطابق عرض السعر المقبول" }, { status: 409 });
     if (sourceQuote && sourceQuoteItems.some((quoteItem) => !professionInputs.some((profession) =>
       profession.profession === quoteItem.profession
       && profession.sponsorshipType === quoteItem.sponsorshipType
@@ -461,7 +467,7 @@ export async function POST(request: Request) {
         for (const uploaded of uploadedClientFiles) {
           await tx.insert(companyDocuments).values({ referenceCode: makeReference("CLD"), title: `${uploaded.label} - ${clientName}`, category: "certificate", documentType: uploaded.kind, counterparty: clientName, fileName: uploaded.fileName, storageKey: uploaded.storageKey, contentType: uploaded.contentType, sizeBytes: uploaded.sizeBytes, source: "uploaded", validationStatus: "signature-validated", validationDetails: uploaded.validationDetails, metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, clientName, contractId: contract.id, contractReference: contract.referenceCode, documentKind: uploaded.kind }), createdBy: access.user.email });
         }
-        professionRecords = await tx.insert(contractProfessions).values(professionInputs.map((item) => ({ contractId: contract!.id, profession: item.profession, requiredCount: item.requiredCount, unitSalaryHalalas: item.unitSalaryHalalas, sponsorshipType: item.sponsorshipType, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus }))).returning();
+        professionRecords = await tx.insert(contractProfessions).values(professionInputs.map((item) => ({ contractId: contract!.id, profession: item.profession, requiredCount: item.requiredCount, unitSalaryHalalas: item.unitSalaryHalalas, actualSalaryHalalas: item.actualSalaryHalalas, sponsorshipType: item.sponsorshipType, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus }))).returning();
         for (const professionRecord of professionRecords) {
           const input = professionInputs.find((item) => item.profession === professionRecord.profession)!;
           if (!input.workerIds.length) continue;

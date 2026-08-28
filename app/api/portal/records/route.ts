@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { bankAccounts, contractWorkerAssignments, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { bankAccounts, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification, type NotificationModule, type NotificationSeverity } from "@/lib/portal-notifications";
 import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
@@ -16,11 +16,11 @@ const entityStatuses: Record<RecordEntity, Set<string>> = {
 };
 
 const financeCategories = new Set([
-  "worker_salary", "worker_advance", "worker_deduction", "worker_expense",
+  "worker_salary", "worker_advance", "worker_deduction", "worker_violation", "worker_expense",
   "workforce_invoice", "receipt_voucher", "payment_voucher", "progress_claim",
   "invoice", "expense", "payroll", "advance",
 ]);
-const workerFinanceCategories = new Set(["worker_salary", "worker_advance", "worker_deduction", "worker_expense"]);
+const workerFinanceCategories = new Set(["worker_salary", "worker_advance", "worker_deduction", "worker_violation", "worker_expense"]);
 const paymentMethods = new Set(["bank_transfer", "cash", "cheque", "payroll_file", "other", ""]);
 const legalCategories = new Set(["contract", "case", "license", "compliance"]);
 
@@ -137,6 +137,7 @@ export async function POST(request: Request) {
         if (!bank || bank.status !== "active") return Response.json({ error: "الحساب البنكي غير موجود أو غير نشط" }, { status: 400 });
       }
       let selectedWorker: typeof workers.$inferSelect | null = null;
+      let linkedPaymentScheduleId: number | null = null;
       if (workerId) {
         selectedWorker = await db.query.workers.findFirst({ where: eq(workers.id, workerId) }) || null;
         if (!selectedWorker || selectedWorker.archivedAt) return Response.json({ error: "العامل المحدد غير موجود أو مؤرشف" }, { status: 404 });
@@ -149,7 +150,12 @@ export async function POST(request: Request) {
         if (!contractId) return Response.json({ error: "يجب ربط راتب العامل بالعقد المستفيد" }, { status: 400 });
         const assignment = await db.query.contractWorkerAssignments.findFirst({ where: and(eq(contractWorkerAssignments.workerId, workerId!), eq(contractWorkerAssignments.contractId, contractId), eq(contractWorkerAssignments.status, "active")) });
         if (!assignment) return Response.json({ error: "العامل غير مسند فعليًا إلى العقد المحدد" }, { status: 409 });
-        if (!selectedWorker?.monthlySalaryHalalas || Math.round(amount * 100) !== selectedWorker.monthlySalaryHalalas) return Response.json({ error: "قيمة الراتب يجب أن تطابق الراتب الشهري المعتمد في ملف العامل" }, { status: 409 });
+        const profession = await db.query.contractProfessions.findFirst({ where: eq(contractProfessions.id, assignment.contractProfessionId) });
+        const actualSalaryHalalas = profession?.actualSalaryHalalas || selectedWorker?.monthlySalaryHalalas || 0;
+        if (!actualSalaryHalalas || Math.round(amount * 100) !== actualSalaryHalalas) return Response.json({ error: "قيمة الراتب يجب أن تطابق الراتب الفعلي المعتمد في توزيع مهنة العقد" }, { status: 409 });
+        const payment = await db.query.contractPaymentSchedules.findFirst({ where: and(eq(contractPaymentSchedules.contractId, contractId), eq(contractPaymentSchedules.servicePeriod, periodMonth!)) });
+        if (!payment || payment.status !== "paid") return Response.json({ error: "لا يستحق راتب العامل قبل سداد دفعة العقد المرتبطة بالشهر" }, { status: 409 });
+        linkedPaymentScheduleId = payment.id;
       }
       const [saved] = await db.insert(financialRecords).values({
         referenceCode: code("FIN"),
@@ -159,6 +165,7 @@ export async function POST(request: Request) {
         dueDate,
         workerId,
         contractId,
+        contractPaymentScheduleId: linkedPaymentScheduleId,
         bankAccountId: bankFunded ? bankAccountId : null,
         periodMonth,
         subCategory,
