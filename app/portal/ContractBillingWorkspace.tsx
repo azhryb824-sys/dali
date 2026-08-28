@@ -112,7 +112,10 @@ export default function ContractBillingWorkspace() {
   }, []);
 
   useEffect(() => {
-    void load().catch((error) => setNotice(error instanceof Error ? error.message : "تعذر التحميل"));
+    const timer = window.setTimeout(() => {
+      void load().catch((error) => setNotice(error instanceof Error ? error.message : "تعذر التحميل"));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
 
   useEffect(() => {
