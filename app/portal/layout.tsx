@@ -3,6 +3,8 @@ import "./portal.css";
 import "./approval-actions.css";
 import "./enhancements.css";
 import "./contract-lifecycle.css";
+import "./contract-cancellation.css";
+import "./legal-contract-case.css";
 import "./hr-workspace.css";
 import "./hr-enterprise.css";
 import "./compliance-workspace.css";
