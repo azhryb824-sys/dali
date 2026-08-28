@@ -20,7 +20,7 @@ export const issuedDocumentLabels = {
 export type IssuedDocumentType = keyof typeof issuedDocumentLabels;
 
 export type IssuedDocumentInput = {
-  pdfLanguage?: "ar" | "bilingual";
+  pdfLanguage?: "ar" | "en" | "bilingual";
   approvalState?: "draft" | "approved";
   documentType: IssuedDocumentType;
   referenceCode: string;
@@ -99,6 +99,8 @@ function englishText(value?: string | null) {
     [/توريد العمالة/g, "Manpower supply"], [/التشغيل والصيانة/g, "Operations and maintenance"], [/المقاولات/g, "Contracting"], [/الخدمات الموسمية/g, "Seasonal services"],
     [/عامل نظافة/g, "Cleaner"], [/عامل/g, "Worker"], [/مشرف/g, "Supervisor"], [/فني/g, "Technician"], [/كهربائي/g, "Electrician"], [/سباك/g, "Plumber"],
     [/الدفعة الأولى/g, "First installment"], [/الدفعة الثانية/g, "Second installment"], [/الدفعة/g, "Installment"], [/موسم الحج/g, "Hajj season"], [/موسم رمضان/g, "Ramadan season"],
+    [/فاتورة/g, "Invoice"], [/استحقاق مورّد/g, "Supplier payable"], [/العقد/g, "contract"], [/عقد شراء العمالة/g, "manpower purchase contract"],
+    [/خصم غياب العمالة قبل الضريبة/g, "Manpower absence deduction before VAT"], [/من عقد/g, "under contract"], [/رقم/g, "No."],
     [/مكة المكرمة/g, "Makkah"], [/المشاعر المقدسة/g, "Holy Sites"], [/الرياض/g, "Riyadh"], [/المملكة العربية السعودية/g, "Kingdom of Saudi Arabia"],
     [/شركة الكفيل/g, "Sponsor Company"], [/شركة العميل التجريبية/g, "Sample Client Company"],
   ];
@@ -125,6 +127,8 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
   header();
   heading(englishDocumentLabels[input.documentType]);
   row("Reference", input.referenceCode); row("Issue date", input.issueDate); row("Client / Entity", input.clientName);
+  row("Document title", englishText(input.title));
+  if (input.expiryDate) row("Due date", input.expiryDate);
   if (input.clientCr) row("Commercial registration", input.clientCr);
   if (input.clientVat) row("VAT number", input.clientVat);
   if (input.clientAddress) row("National address", englishText(input.clientAddress));
@@ -859,6 +863,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
 }
 
 export async function generateIssuedPdf(input: IssuedDocumentInput, assets: CompanyAsset[]) {
+  if (input.pdfLanguage === "en") return createEnglishIssuedPdf(input, assets);
   if (input.pdfLanguage === "bilingual") {
     const incompleteClause = input.documentType === "workforce_contract" && input.contractClauses
       ?.filter((item) => item.included)

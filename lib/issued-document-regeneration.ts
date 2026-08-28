@@ -15,7 +15,7 @@ function record(value: string | null) {
 function text(value: unknown) { return typeof value === "string" && value.trim() ? value.trim() : undefined; }
 function number(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : undefined; }
 
-export async function regenerateIssuedDocumentPdf(documentId: number, pdfLanguage: "ar" | "bilingual" = "ar") {
+export async function regenerateIssuedDocumentPdf(documentId: number, pdfLanguage: "ar" | "en" | "bilingual" = "ar") {
   const db = getDb();
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, documentId) });
   if (!document || document.source !== "generated" || !document.documentType) return null;

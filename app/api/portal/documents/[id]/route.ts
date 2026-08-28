@@ -18,7 +18,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, id) });
   if (!document || document.status !== "active") return Response.json({ error: "المستند غير موجود" }, { status: 404 });
   const inline = new URL(request.url).searchParams.get("inline") === "1";
-  const pdfLanguage = new URL(request.url).searchParams.get("language") === "bilingual" ? "bilingual" : "ar";
+  const requestedLanguage = new URL(request.url).searchParams.get("language");
+  const pdfLanguage = requestedLanguage === "en" ? "en" : requestedLanguage === "bilingual" ? "bilingual" : "ar";
   if (document.source === "generated" && document.documentType === "workforce_contract") {
     const regenerated = await regenerateIssuedDocumentPdf(id, pdfLanguage);
     if (!regenerated) return Response.json({ error: "تعذّر إعادة إنشاء العقد" }, { status: 404 });

@@ -18,7 +18,7 @@ type ContractMetadata = {
   showPaymentSchedule?: boolean;
 };
 
-export async function regenerateWorkforceContractPdf(documentId: number, pdfLanguage: "ar" | "bilingual" = "ar") {
+export async function regenerateWorkforceContractPdf(documentId: number, pdfLanguage: "ar" | "en" | "bilingual" = "ar") {
   const db = getDb();
   const [document, contract, assets] = await Promise.all([
     db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, documentId) }),
