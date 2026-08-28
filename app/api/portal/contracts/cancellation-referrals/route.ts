@@ -32,7 +32,9 @@ function readRequest(fileSnapshotJson: string | null) {
 
 export async function GET() {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "workforce", "read"))) {
+  const canReadWorkforce = access ? await hasPortalPermission(access, "workforce", "read") : false;
+  const canReadFinance = access ? await hasPortalPermission(access, "finance", "read") : false;
+  if (!access || (!canReadWorkforce && !canReadFinance)) {
     return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   }
 
