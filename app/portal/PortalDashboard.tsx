@@ -144,6 +144,7 @@ const recordStatus: Record<RecordEntity, Record<string, string>> = {
   legal: { active: "ساري", reviewing: "قيد المراجعة", renewal: "يحتاج إلى تجديد", closed: "مغلق" },
   workforce: { available: "متاح", assigned: "على رأس مشروع", leave: "في إجازة", suspended: "موقوف" },
 };
+const isCurrentEmployee = (employee: EmployeeRecord) => !["ended", "suspended"].includes(employee.status.trim().toLowerCase());
 const roleLabels: Record<PortalRole, string> = { admin: "مدير النظام", manager: "الإدارة", employee: "موظف" };
 const functionalRoleLabels: Record<string, string> = {
   system_owner: "مالك النظام", system_admin: "مسؤول النظام", executive: "الإدارة التنفيذية",
@@ -1077,7 +1078,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "overview" && <>
           <div className="content-heading"><div><p className="admin-eyebrow">مركز العمليات</p><h1>مرحباً، {currentUser.displayName.split(" ")[0]}</h1><span>{currentUser.functionalRoles.length ? `مساحة عمل مهيأة لصلاحيات: ${activeRoleLabel}.` : currentUser.role === "employee" ? `مساحة عملك في قسم ${departmentLabels[currentUser.department]}.` : "متابعة موحّدة لأعمال الشركة من لوحة واحدة."}</span></div><time>{new Intl.DateTimeFormat("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}</time></div>
           <section className="metric-grid module-metrics">
-            {canAccess("employees") && <button onClick={() => changeView("employees")}><span className="metric-icon red"><Icon name="employees" /></span><p>الموظفون<strong>{employees.length}</strong></p><small>{employees.filter((item) => item.status === "active").length} على رأس العمل</small></button>}
+            {canAccess("employees") && <button onClick={() => changeView("employees")}><span className="metric-icon red"><Icon name="employees" /></span><p>الموظفون<strong>{employees.length}</strong></p><small>{employees.filter(isCurrentEmployee).length} على رأس العمل</small></button>}
             {canAccess("finance") && <button onClick={() => changeView("finance")}><span className="metric-icon navy"><Icon name="finance" /></span><p>السجلات المالية<strong>{finance.length}</strong></p><small>{formatMoney(financialTotal)} إجمالي مسجّل</small></button>}
             {canAccess("legal") && <button onClick={() => changeView("legal")}><span className="metric-icon sand"><Icon name="legal" /></span><p>الملفات القانونية<strong>{legal.length}</strong></p><small>{legalAlerts} تنبيه خلال 45 يوماً</small></button>}
             {canAccess("workforce") && <button onClick={() => changeView("workforce")}><span className="metric-icon green"><Icon name="workforce" /></span><p>العمالة<strong>{workers.length}</strong></p><small>{workers.filter((item) => item.status === "available").length} متاح · {activeBeneficiaries} جهة مستفيدة</small></button>}
@@ -1135,7 +1136,7 @@ export default function PortalDashboard({ currentUser, initialRequests, initialR
         {view === "conversations" && canAccess("workforce") && <ServiceRatingsPanel/>}
 
         {view === "employees" && canAccess("employees") && <ModuleSection eyebrow="الموارد البشرية" title="إدارة الموظفين" description="ملفات الموظفين وحالتهم الوظيفية وبيانات الالتحاق." actionLabel="إضافة موظف" canWrite={canWrite} onAdd={() => setModal("employees")}>
-          <section className="metric-grid compact-metrics"><Metric label="إجمالي الموظفين" value={employees.length} note="جميع الملفات المسجّلة"/><Metric label="على رأس العمل" value={employees.filter((item) => item.status === "active").length} note="حسابات نشطة"/><Metric label="في إجازة" value={employees.filter((item) => item.status === "leave").length} note="إجازات حالية"/><Metric label="ملفات موقوفة" value={employees.filter((item) => ["suspended", "ended"].includes(item.status)).length} note="تحتاج إلى متابعة"/></section>
+          <section className="metric-grid compact-metrics"><Metric label="إجمالي الموظفين" value={employees.length} note="جميع الملفات المسجّلة"/><Metric label="على رأس العمل" value={employees.filter(isCurrentEmployee).length} note="ملفات وظيفية قائمة"/><Metric label="في إجازة" value={employees.filter((item) => item.status === "leave").length} note="إجازات حالية"/><Metric label="ملفات موقوفة" value={employees.filter((item) => ["suspended", "ended"].includes(item.status.trim().toLowerCase())).length} note="تحتاج إلى متابعة"/></section>
           <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث باسم الموظف أو الرقم أو المسمى"><EmployeeTable records={employees} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} onUpdate={updateEmployeeCompliance} onDelete={deleteEmployee}/></ManagementPanel>
           <HrWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin}/>
         </ModuleSection>}

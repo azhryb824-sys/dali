@@ -1,7 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
-
+import { useDesktopLiveRefresh } from "@/lib/use-desktop-live-refresh";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -14,6 +14,7 @@ type HrData = { employees: Employee[]; movements: Movement[]; runs: PayrollRun[]
 
 const money = (halalas: number) => new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(halalas / 100);
 const labels: Record<string, string> = { draft: "مسودة", approved: "معتمد", processing: "قيد الصرف", paid: "مدفوع", cancelled: "ملغى", bonus: "مكافأة", advance: "سلفة", deduction: "خصم", allowance: "بدل", salary_adjustment: "تعديل راتب", leave: "إجازة", return_from_leave: "عودة من إجازة", suspension: "إيقاف", termination: "إنهاء خدمة", note: "ملاحظة" };
+const isCurrentEmployee = (employee: Employee) => !["ended", "suspended"].includes(employee.status.trim().toLowerCase());
 
 export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; isAdmin: boolean }) {
   const [data, setData] = useState<HrData>({ employees: [], movements: [], runs: [], items: [],documents:[],leaves:[],attendance:[],users:[] });
@@ -25,6 +26,7 @@ export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; 
     if (!response.ok) throw new Error(result.error || "تعذّر تحميل الموارد البشرية");
     setData(result);
   }, []);
+  useDesktopLiveRefresh(load);
   useEffect(() => {
     const controller = new AbortController();
     void fetch("/api/portal/hr", { cache: "no-store", signal: controller.signal })
@@ -37,7 +39,7 @@ export default function HrWorkspace({ canWrite, isAdmin }: { canWrite: boolean; 
     return () => controller.abort();
   }, []);
 
-  const activeStaff = data.employees.filter((item) => item.status === "active");
+  const activeStaff = data.employees.filter(isCurrentEmployee);
   const totalMonthly = useMemo(() => activeStaff.reduce((sum, item) => sum + item.baseSalaryHalalas + item.housingAllowanceHalalas + item.transportAllowanceHalalas + item.otherAllowanceHalalas, 0), [activeStaff]);
 
   async function action(method: "POST" | "PATCH", payload: Record<string, unknown>, key: string) {
