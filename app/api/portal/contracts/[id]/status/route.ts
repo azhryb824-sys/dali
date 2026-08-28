@@ -465,6 +465,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
     }
 
+    const reviewingCancellationCases = await db
+      .select({ fileSnapshotJson: legalRecords.fileSnapshotJson })
+      .from(legalRecords)
+      .where(and(eq(legalRecords.contractId, id), eq(legalRecords.status, "reviewing")));
+    if (reviewingCancellationCases.some((item) => Boolean(readCancellationRequest(item.fileSnapshotJson)))) {
+      return jsonNoStore(
+        { error: "لا يمكن تغيير حالة العقد أثناء مراجعة طلب إلغائه لدى الشؤون القانونية" },
+        { status: 409 },
+      );
+    }
+
     const status = clean(payload.status, 30);
     if (["cancelled", "terminated"].includes(status)) {
       return jsonNoStore({ error: "يجب إحالة طلب الإلغاء إلى القانونية أولًا ثم إصدار القرار من لوحة القانونية" }, { status: 409 });
