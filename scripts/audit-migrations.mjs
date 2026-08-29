@@ -52,8 +52,12 @@ for (const match of sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)?\s+(?:public\.)
   if (!columns) continue;
   for (const column of match[2].matchAll(/(?:^|,)\s*"?([a-z0-9_]+)"?\s+(?:serial|integer|text|boolean|timestamp|json|numeric|uuid|bigint|date|varchar)/gim)) columns.add(column[1]);
 }
-for (const match of sql.matchAll(/ALTER TABLE\s+(?:public\.)?"?([a-z0-9_]+)"?\s+ADD COLUMN(?: IF NOT EXISTS)?\s+"?([a-z0-9_]+)"?/gi)) {
-  available.get(match[1])?.add(match[2]);
+for (const statement of sql.matchAll(/ALTER TABLE\s+(?:public\.)?"?([a-z0-9_]+)"?\s+([\s\S]*?);/gi)) {
+  const columns = available.get(statement[1]);
+  if (!columns) continue;
+  for (const addition of statement[2].matchAll(/(?:^|,)\s*ADD COLUMN(?: IF NOT EXISTS)?\s+"?([a-z0-9_]+)"?/gi)) {
+    columns.add(addition[1]);
+  }
 }
 
 const missing = [];
@@ -71,4 +75,3 @@ if (destructive.length) throw new Error(`Destructive migrations require manual r
 
 const legacySelfRecording = [...sql.matchAll(/INSERT\s+INTO\s+private\.__dali_migrations/gi)].length;
 console.log(JSON.stringify({ status: "ok", tables: expected.size, migrationFiles: files.length, missingColumns: 0, destructiveMigrations: 0, legacySelfRecordingStatementsHandledByRunner: legacySelfRecording }));
-
