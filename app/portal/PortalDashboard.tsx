@@ -579,7 +579,7 @@ function workerRequirementStatus(worker: WorkerRecord, attachments: WorkerAttach
 function sponsorshipMatches(worker: WorkerRecord, requirement: Pick<ContractProfession, "sponsorshipType" | "sponsorName" | "ajirContractStatus">) {
   if (!requirement.sponsorshipType) return true;
   if (worker.sponsorshipType !== requirement.sponsorshipType) return false;
-  return requirement.sponsorshipType !== "other" || worker.sponsorName === requirement.sponsorName;
+  return requirement.sponsorshipType !== "other" || !requirement.sponsorName || worker.sponsorName === requirement.sponsorName;
 }
 function sponsorshipLabel(value: Pick<WorkerRecord, "sponsorshipType" | "sponsorName" | "ajirContractStatus">) {
   if (value.sponsorshipType === "dali") return "على كفالة شركة دالي";
@@ -3995,6 +3995,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
       profession: string;
       quantity: number;
       unitPriceHalalas?: number;
+      actualSalaryHalalas?: number;
       sponsorshipType?: "dali" | "other" | null;
       sponsorName?: string | null;
       ajirContractStatus?: "not_applicable" | "with_ajir" | "without_ajir" | null;
@@ -4077,6 +4078,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
             profession: string;
             quantity: number;
             unitPriceHalalas: number;
+            actualSalaryHalalas: number;
             sponsorshipType?: "dali" | "other" | null;
             sponsorName?: string | null;
             ajirContractStatus?: "not_applicable" | "with_ajir" | "without_ajir" | null;
@@ -4112,6 +4114,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
                     profession: item.profession,
                     quantity: item.quantity,
                     unitPriceHalalas: item.unitPriceHalalas,
+                    actualSalaryHalalas: item.actualSalaryHalalas,
                     sponsorshipType: item.sponsorshipType,
                     sponsorName: item.sponsorName,
                     ajirContractStatus: item.ajirContractStatus,
@@ -4208,6 +4211,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
           profession: item.profession,
           requiredCount: quote.quantityMode === "open" ? 0 : Math.max(1, item.quantity),
           unitSalary: (item.unitPriceHalalas || 0) / 100,
+          actualSalary: (item.actualSalaryHalalas || 0) / 100,
           sponsorshipType: item.sponsorshipType || "dali",
           sponsorName: item.sponsorName || "",
           ajirContractStatus: item.ajirContractStatus || "not_applicable",
@@ -4335,7 +4339,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
     const form = event.currentTarget;
     setSubmissionError("");
     if (isContract) {
-      const invalidProfession = professions.find((item) => (item.profession === "أخرى" && (item.customProfession || "").trim().length < 2) || !Number.isFinite(item.unitSalary) || (item.unitSalary || 0) <= 0 || !Number.isFinite(item.actualSalary) || (item.actualSalary || 0) <= 0 || !["not_applicable", "with_ajir", "without_ajir"].includes(item.ajirContractStatus) || (item.sponsorshipType === "other" && (item.sponsorName || "").trim().length < 2));
+      const invalidProfession = professions.find((item) => (item.profession === "أخرى" && (item.customProfession || "").trim().length < 2) || !Number.isFinite(item.unitSalary) || (item.unitSalary || 0) <= 0 || !Number.isFinite(item.actualSalary) || (item.actualSalary || 0) < 0 || !["not_applicable", "with_ajir", "without_ajir"].includes(item.ajirContractStatus));
       if (invalidProfession) {
         showContractValidationError(2, "أكمل المهنة والراتب وجهة الكفالة وحالة عقد أجير لكل مهنة.");
         return;
@@ -4507,6 +4511,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
           profession: item.profession,
           requiredCount: quote.quantityMode === "open" ? 0 : Math.max(1, item.quantity),
           unitSalary: (item.unitPriceHalalas || 0) / 100,
+          actualSalary: (item.actualSalaryHalalas || 0) / 100,
           sponsorshipType: item.sponsorshipType || "dali",
           sponsorName: item.sponsorName || "",
           ajirContractStatus: item.ajirContractStatus || "not_applicable",
@@ -4903,9 +4908,9 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
                       <input required type="number" min="0.01" max="1000000" step="0.01" value={item.unitSalary || ""} onChange={(event) => setProfessionSalary(item.key, Number(event.target.value))} />
                     </label>
                     <label>
-                      الراتب الفعلي للعامل شهريًا (ريال)
-                      <input required type="number" min="0.01" max="1000000" step="0.01" value={item.actualSalary || ""} onChange={(event) => setProfessionActualSalary(item.key, Number(event.target.value))} />
-                      <small>لا ينشأ استحقاق الراتب إلا للعامل المسند إلى عقد فعّال.</small>
+                      الراتب الفعلي للعامل شهريًا (اختياري)
+                      <input type="number" min="0" max="1000000" step="0.01" value={item.actualSalary || ""} onChange={(event) => setProfessionActualSalary(item.key, Number(event.target.value))} />
+                      <small>يمكن إضافته لاحقًا، ولا ينشأ استحقاق راتب عند تركه فارغًا.</small>
                     </label>
                     <label>
                       جهة الكفالة
@@ -4940,7 +4945,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
               </div>
               <div className="worker-selection-groups">
                 {capacity.map((item) => {
-                  const candidates = workers.filter((worker) => worker.profession === item.profession && worker.status === "available" && worker.sponsorshipType === item.sponsorshipType && (item.sponsorshipType !== "other" || worker.sponsorName === item.sponsorName));
+                  const candidates = workers.filter((worker) => worker.profession === item.profession && worker.status === "available" && worker.sponsorshipType === item.sponsorshipType && (item.sponsorshipType !== "other" || !item.sponsorName || worker.sponsorName === item.sponsorName));
                   const selected = selectedWorkers[item.key] || [];
                   return (
                     <section key={item.key}>

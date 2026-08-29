@@ -39,7 +39,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     sponsorName: item.sponsorshipType === "other" ? clean(item.sponsorName, 180) : null,
     ajirContractStatus: ["with_ajir", "without_ajir"].includes(String(item.ajirContractStatus)) ? String(item.ajirContractStatus) : "not_applicable",
   })) || null;
-  if (editedProfessions && (!editedProfessions.length || editedProfessions.some((item) => !item.profession || (contract.quantityMode !== "open" && item.requiredCount < 1) || item.unitSalaryHalalas < 1 || (item.sponsorshipType === "other" && !item.sponsorName)))) return jsonNoStore({ error: "أكمل المهنة والعدد وسعر العامل وبيانات الكفالة لكل صف" }, { status: 400 });
+  if (editedProfessions && (!editedProfessions.length || editedProfessions.some((item) => !item.profession || (contract.quantityMode !== "open" && item.requiredCount < 1) || item.unitSalaryHalalas < 1 || item.actualSalaryHalalas < 0))) return jsonNoStore({ error: "أكمل المهنة والعدد وسعر العامل لكل صف" }, { status: 400 });
   if (editedProfessions && new Set(editedProfessions.map((item) => `${item.profession}|${item.sponsorshipType}|${item.sponsorName || ""}|${item.ajirContractStatus}`)).size !== editedProfessions.length) return jsonNoStore({ error: "يوجد تكرار في توزيع المهنة والكفيل وأجير" }, { status: 400 });
   const paymentPayload = Array.isArray(payload.paymentSchedule) ? payload.paymentSchedule as Array<Record<string, unknown>> : null;
   const editedPayments = paymentPayload?.map((item) => ({ id: Number(item.id), title: clean(item.title, 160), dueDate: cleanDate(item.dueDate), percentageBps: Math.round(Number(item.percentageBps)) })) || null;

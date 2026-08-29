@@ -76,11 +76,11 @@ test("sponsorship and Ajir status remain operationally consistent but private in
     for(const code of [workersRoute,operationsRoute,contractRoute,portal,operations,schema])assert.match(code,new RegExp(field));
   }
   assert.match(workersRoute,/const ajirContractStatus = "not_applicable"/);assert.doesNotMatch(workersRoute,/worker-without-ajir/);
-  assert.match(operationsRoute,/أكمل اسم الكفيل/);assert.match(operationsRoute,/not_applicable/);assert.match(contractRoute,/تطابق عرض السعر المقبول/);
+  assert.doesNotMatch(operations,/اسم الكفيل/);assert.match(operationsRoute,/actualSalaryHalalas/);assert.match(operationsRoute,/not_applicable/);assert.match(contractRoute,/تطابق عرض السعر المقبول/);
   assert.match(assignmentRoute,/جهة كفالة العامل لا تطابق جهة الكفالة المعتمدة في العقد/);assert.doesNotMatch(assignmentRoute,/worker\.ajirContractStatus !== profession\.ajirContractStatus/);assert.match(portal,/sponsorshipMatches/);
   for(const label of ["بعقد أجير","بدون عقد أجير"]){assert.match(portal,new RegExp(label));assert.match(operations,new RegExp(label));}
   assert.match(pdf,/publicManpowerText\(item\.notes\)/);assert.match(pdf,/publicManpowerText\(input\.details\)/);assert.doesNotMatch(pdf,/const sponsorship = item\.sponsorshipType/);
-  assert.match(portal,/اسم الكفيل/);assert.match(operations,/اسم الكفيل/);
+  assert.match(portal,/اسم الكفيل/);assert.match(operations,/الراتب الفعلي للعامل/);
   assert.match(migration,/workers_sponsorship_consistency_check/);assert.match(migration,/quote_items_sponsorship_consistency_check/);assert.match(migration,/contract_professions_sponsorship_consistency_check/);
 });
 
@@ -161,7 +161,7 @@ test("sales and purchasing representatives follow owner-controlled request workf
 
 test("quotation approval works for owner and system admin accounts",async()=>{
   const[api,workspace]=await Promise.all([source("app/api/portal/operations/route.ts"),source("app/portal/OperationsWorkspace.tsx")]);
-  assert.match(api,/access\.role === "admin" \|\| access\.functionalRoles\.some/);
+  assert.match(api,/access\.role === "admin"\s*\|\|\s*access\.functionalRoles\.some/);
   assert.match(workspace,/const canApproveQuotes = isOwner \|\| isAdmin/);
-  assert.match(workspace,/canApproveQuotes && \["draft","pending_approval"\]/);
+  assert.match(workspace,/canApproveQuotes\s*&&\s*\["draft",\s*"pending_approval"\]/);
 });

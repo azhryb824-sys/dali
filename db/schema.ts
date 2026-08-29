@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  pgTable,
+  serial,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const workforceRequests = pgTable(
   "workforce_requests",
@@ -34,8 +43,12 @@ export const workforceRequests = pgTable(
     idempotencyKey: text("idempotency_key").unique(),
     privacyNoticeVersion: text("privacy_notice_version"),
     privacyAcknowledgedAt: text("privacy_acknowledged_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
@@ -49,16 +62,23 @@ export const workforceRequestAttachments = pgTable(
   "workforce_request_attachments",
   {
     id: serial("id").primaryKey(),
-    requestId: integer("request_id").notNull().references(() => workforceRequests.id, { onDelete: "cascade" }),
+    requestId: integer("request_id")
+      .notNull()
+      .references(() => workforceRequests.id, { onDelete: "cascade" }),
     fileName: text("file_name").notNull(),
     storageKey: text("storage_key").notNull().unique(),
     contentType: text("content_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workforce_request_attachments_request_idx").on(table.requestId),
-    check("workforce_request_attachments_size_check", sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 10485760`),
+    check(
+      "workforce_request_attachments_size_check",
+      sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 10485760`,
+    ),
   ],
 );
 
@@ -89,14 +109,20 @@ export const visitorConversations = pgTable(
     ratedAt: text("rated_at"),
     privacyNoticeVersion: text("privacy_notice_version"),
     privacyAcknowledgedAt: text("privacy_acknowledged_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("visitor_conversations_status_idx").on(table.status),
     index("visitor_conversations_updated_at_idx").on(table.updatedAt),
     index("visitor_conversations_assigned_to_idx").on(table.assignedTo),
-    index("visitor_conversations_related_request_idx").on(table.relatedRequestId),
+    index("visitor_conversations_related_request_idx").on(
+      table.relatedRequestId,
+    ),
     index("visitor_conversations_source_hash_idx").on(table.sourceHash),
   ],
 );
@@ -113,10 +139,15 @@ export const visitorMessages = pgTable(
     clientMessageId: text("client_message_id").unique(),
     readByVisitorAt: text("read_by_visitor_at"),
     readByStaffAt: text("read_by_staff_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("visitor_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+    index("visitor_messages_conversation_created_idx").on(
+      table.conversationId,
+      table.createdAt,
+    ),
     index("visitor_messages_sender_type_idx").on(table.senderType),
     index("visitor_messages_staff_read_idx").on(table.readByStaffAt),
   ],
@@ -128,7 +159,9 @@ export const portalSettings = pgTable(
     key: text("key").primaryKey(),
     valueJson: text("value_json").notNull(),
     updatedBy: text("updated_by").notNull(),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("portal_settings_updated_at_idx").on(table.updatedAt)],
 );
@@ -147,8 +180,12 @@ export const workforceRequestReplies = pgTable(
     providerMessageId: text("provider_message_id"),
     failureReason: text("failure_reason"),
     sentAt: text("sent_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workforce_request_replies_request_id_idx").on(table.requestId),
@@ -175,8 +212,12 @@ export const portalUsers = pgTable(
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
     suspendedAt: text("suspended_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     lastLoginAt: text("last_login_at"),
     lastActivityAt: text("last_activity_at"),
   },
@@ -194,15 +235,21 @@ export const portalAuthCredentials = pgTable(
     email: text("email").notNull().unique(),
     displayName: text("display_name").notNull(),
     passwordHash: text("password_hash").notNull(),
-    mustChangePassword: boolean("must_change_password").notNull().default(false),
+    mustChangePassword: boolean("must_change_password")
+      .notNull()
+      .default(false),
     passwordChangedAt: text("password_changed_at"),
     mfaSecretEncrypted: text("mfa_secret_encrypted"),
     mfaEnabledAt: text("mfa_enabled_at"),
     mfaRecoveryHashesJson: text("mfa_recovery_hashes_json"),
     mfaRecoveryGeneratedAt: text("mfa_recovery_generated_at"),
     mfaLastVerifiedAt: text("mfa_last_verified_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("portal_auth_credentials_email_idx").on(table.email)],
 );
@@ -212,7 +259,11 @@ export const portalMfaChallenges = pgTable(
   {
     id: text("id").primaryKey(),
     tokenHash: text("token_hash").notNull().unique(),
-    identifier: text("identifier").notNull().references(() => portalAuthCredentials.identifier, { onDelete: "cascade" }),
+    identifier: text("identifier")
+      .notNull()
+      .references(() => portalAuthCredentials.identifier, {
+        onDelete: "cascade",
+      }),
     purpose: text("purpose").notNull(),
     pendingSecretEncrypted: text("pending_secret_encrypted"),
     pendingRecoveryHashesJson: text("pending_recovery_hashes_json"),
@@ -221,13 +272,21 @@ export const portalMfaChallenges = pgTable(
     attempts: integer("attempts").notNull().default(0),
     expiresAt: text("expires_at").notNull(),
     usedAt: text("used_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("portal_mfa_challenges_identifier_idx").on(table.identifier),
     index("portal_mfa_challenges_expires_idx").on(table.expiresAt),
-    check("portal_mfa_challenges_purpose_check", sql`${table.purpose} in ('verify', 'enroll')`),
-    check("portal_mfa_challenges_attempts_check", sql`${table.attempts} >= 0 and ${table.attempts} <= 8`),
+    check(
+      "portal_mfa_challenges_purpose_check",
+      sql`${table.purpose} in ('verify', 'enroll')`,
+    ),
+    check(
+      "portal_mfa_challenges_attempts_check",
+      sql`${table.attempts} >= 0 and ${table.attempts} <= 8`,
+    ),
   ],
 );
 
@@ -235,13 +294,22 @@ export const passwordResetTokens = pgTable(
   "password_reset_tokens",
   {
     tokenHash: text("token_hash").primaryKey(),
-    identifier: text("identifier").notNull().references(() => portalAuthCredentials.identifier, { onDelete: "cascade" }),
+    identifier: text("identifier")
+      .notNull()
+      .references(() => portalAuthCredentials.identifier, {
+        onDelete: "cascade",
+      }),
     email: text("email").notNull(),
     expiresAt: text("expires_at").notNull(),
     usedAt: text("used_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
-  (table) => [index("password_reset_tokens_identifier_idx").on(table.identifier), index("password_reset_tokens_expires_idx").on(table.expiresAt)],
+  (table) => [
+    index("password_reset_tokens_identifier_idx").on(table.identifier),
+    index("password_reset_tokens_expires_idx").on(table.expiresAt),
+  ],
 );
 
 export const portalSessions = pgTable(
@@ -249,11 +317,15 @@ export const portalSessions = pgTable(
   {
     id: text("id").primaryKey(),
     tokenHash: text("token_hash").notNull().unique(),
-    userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => portalUsers.email, { onDelete: "cascade" }),
     status: text("status").notNull().default("active"),
     userAgentHash: text("user_agent_hash").notNull(),
     sourceHash: text("source_hash"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     lastActivityAt: text("last_activity_at").notNull(),
     idleExpiresAt: text("idle_expires_at").notNull(),
     absoluteExpiresAt: text("absolute_expires_at").notNull(),
@@ -263,22 +335,35 @@ export const portalSessions = pgTable(
   (table) => [
     index("portal_sessions_user_status_idx").on(table.userEmail, table.status),
     index("portal_sessions_idle_expires_idx").on(table.idleExpiresAt),
-    check("portal_sessions_status_check", sql`${table.status} in ('active', 'revoked', 'expired')`),
+    check(
+      "portal_sessions_status_check",
+      sql`${table.status} in ('active', 'revoked', 'expired')`,
+    ),
   ],
 );
 
 export const portalUserPresence = pgTable(
   "portal_user_presence",
   {
-    userEmail: text("user_email").primaryKey().references(() => portalUsers.email, { onDelete: "cascade" }),
+    userEmail: text("user_email")
+      .primaryKey()
+      .references(() => portalUsers.email, { onDelete: "cascade" }),
     availability: text("availability").notNull().default("online"),
     currentInterviewId: text("current_interview_id"),
     lastSeenAt: text("last_seen_at").notNull(),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("portal_user_presence_availability_idx").on(table.availability, table.lastSeenAt),
-    check("portal_user_presence_availability_check", sql`${table.availability} in ('online','busy','away','offline')`),
+    index("portal_user_presence_availability_idx").on(
+      table.availability,
+      table.lastSeenAt,
+    ),
+    check(
+      "portal_user_presence_availability_check",
+      sql`${table.availability} in ('online','busy','away','offline')`,
+    ),
   ],
 );
 
@@ -287,11 +372,15 @@ export const videoInterviews = pgTable(
   {
     id: text("id").primaryKey(),
     referenceCode: text("reference_code").notNull().unique(),
-    conversationId: text("conversation_id").notNull().references(() => visitorConversations.id, { onDelete: "cascade" }),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => visitorConversations.id, { onDelete: "cascade" }),
     roomName: text("room_name").notNull().unique(),
     provider: text("provider").notNull().default("jitsi"),
     status: text("status").notNull().default("requested"),
-    assignedTo: text("assigned_to").references(() => portalUsers.email, { onDelete: "set null" }),
+    assignedTo: text("assigned_to").references(() => portalUsers.email, {
+      onDelete: "set null",
+    }),
     requestedAt: text("requested_at").notNull(),
     acceptedAt: text("accepted_at"),
     startedAt: text("started_at"),
@@ -304,14 +393,30 @@ export const videoInterviews = pgTable(
     transferCount: integer("transfer_count").notNull().default(0),
     lastTransferredBy: text("last_transferred_by"),
     transferReason: text("transfer_reason"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("video_interviews_conversation_idx").on(table.conversationId, table.createdAt),
-    index("video_interviews_assignee_status_idx").on(table.assignedTo, table.status),
-    index("video_interviews_status_requested_idx").on(table.status, table.requestedAt),
-    check("video_interviews_status_check", sql`${table.status} in ('requested','ringing','active','transferred','completed','cancelled','expired')`),
+    index("video_interviews_conversation_idx").on(
+      table.conversationId,
+      table.createdAt,
+    ),
+    index("video_interviews_assignee_status_idx").on(
+      table.assignedTo,
+      table.status,
+    ),
+    index("video_interviews_status_requested_idx").on(
+      table.status,
+      table.requestedAt,
+    ),
+    check(
+      "video_interviews_status_check",
+      sql`${table.status} in ('requested','ringing','active','transferred','completed','cancelled','expired')`,
+    ),
   ],
 );
 
@@ -319,14 +424,23 @@ export const videoInterviewTransfers = pgTable(
   "video_interview_transfers",
   {
     id: serial("id").primaryKey(),
-    interviewId: text("interview_id").notNull().references(() => videoInterviews.id, { onDelete: "cascade" }),
+    interviewId: text("interview_id")
+      .notNull()
+      .references(() => videoInterviews.id, { onDelete: "cascade" }),
     fromEmail: text("from_email"),
     toEmail: text("to_email").notNull(),
     transferredBy: text("transferred_by").notNull(),
     reason: text("reason"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
-  (table) => [index("video_interview_transfers_interview_idx").on(table.interviewId, table.createdAt)],
+  (table) => [
+    index("video_interview_transfers_interview_idx").on(
+      table.interviewId,
+      table.createdAt,
+    ),
+  ],
 );
 
 export const employees = pgTable(
@@ -339,7 +453,10 @@ export const employees = pgTable(
     department: text("department").notNull(),
     mobile: text("mobile").notNull(),
     email: text("email"),
-    portalUserEmail: text("portal_user_email").references(() => portalUsers.email, { onDelete: "set null" }),
+    portalUserEmail: text("portal_user_email").references(
+      () => portalUsers.email,
+      { onDelete: "set null" },
+    ),
     managerId: integer("manager_id"),
     workLocation: text("work_location"),
     employmentType: text("employment_type").notNull().default("full_time"),
@@ -354,9 +471,15 @@ export const employees = pgTable(
     bankName: text("bank_name"),
     iban: text("iban"),
     baseSalaryHalalas: integer("base_salary_halalas").notNull().default(0),
-    housingAllowanceHalalas: integer("housing_allowance_halalas").notNull().default(0),
-    transportAllowanceHalalas: integer("transport_allowance_halalas").notNull().default(0),
-    otherAllowanceHalalas: integer("other_allowance_halalas").notNull().default(0),
+    housingAllowanceHalalas: integer("housing_allowance_halalas")
+      .notNull()
+      .default(0),
+    transportAllowanceHalalas: integer("transport_allowance_halalas")
+      .notNull()
+      .default(0),
+    otherAllowanceHalalas: integer("other_allowance_halalas")
+      .notNull()
+      .default(0),
     annualLeaveDays: integer("annual_leave_days").notNull().default(21),
     leaveBalanceDays: integer("leave_balance_days").notNull().default(21),
     hireDate: text("hire_date").notNull(),
@@ -366,163 +489,364 @@ export const employees = pgTable(
     terminationDate: text("termination_date"),
     terminationReason: text("termination_reason"),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("employees_status_idx").on(table.status),
     index("employees_department_idx").on(table.department),
     uniqueIndex("employees_portal_user_unique").on(table.portalUserEmail),
     index("employees_manager_idx").on(table.managerId),
-    index("employees_compliance_expiry_idx").on(table.iqamaExpiry, table.workPermitExpiry, table.contractEndDate),
-    check("employees_sponsorship_type_check", sql`${table.sponsorshipType} in ('dali','other')`),
-    check("employees_sponsor_consistency_check", sql`(${table.sponsorshipType} = 'dali' and ${table.sponsorName} is null) or (${table.sponsorshipType} = 'other' and length(trim(${table.sponsorName})) >= 2)`),
+    index("employees_compliance_expiry_idx").on(
+      table.iqamaExpiry,
+      table.workPermitExpiry,
+      table.contractEndDate,
+    ),
+    check(
+      "employees_sponsorship_type_check",
+      sql`${table.sponsorshipType} in ('dali','other')`,
+    ),
+    check(
+      "employees_sponsor_consistency_check",
+      sql`(${table.sponsorshipType} = 'dali' and ${table.sponsorName} is null) or (${table.sponsorshipType} = 'other' and length(trim(${table.sponsorName})) >= 2)`,
+    ),
   ],
 );
 
-export const employeeDocuments = pgTable("employee_documents", {
-  id: serial("id").primaryKey(), employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
-  documentType: text("document_type").notNull(), documentNumber: text("document_number"), issueDate: text("issue_date"), expiryDate: text("expiry_date"),
-  fileName: text("file_name"), storageKey: text("storage_key"), status: text("status").notNull().default("valid"), notes: text("notes"),
-  createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [index("employee_documents_employee_idx").on(table.employeeId), index("employee_documents_expiry_idx").on(table.expiryDate), check("employee_documents_status_check", sql`${table.status} in ('valid','expiring','expired','archived')`)]);
+export const employeeDocuments = pgTable(
+  "employee_documents",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "cascade" }),
+    documentType: text("document_type").notNull(),
+    documentNumber: text("document_number"),
+    issueDate: text("issue_date"),
+    expiryDate: text("expiry_date"),
+    fileName: text("file_name"),
+    storageKey: text("storage_key"),
+    status: text("status").notNull().default("valid"),
+    notes: text("notes"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("employee_documents_employee_idx").on(table.employeeId),
+    index("employee_documents_expiry_idx").on(table.expiryDate),
+    check(
+      "employee_documents_status_check",
+      sql`${table.status} in ('valid','expiring','expired','archived')`,
+    ),
+  ],
+);
 
-export const employeeLeaveRequests = pgTable("employee_leave_requests", {
-  id: serial("id").primaryKey(), employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }), leaveType: text("leave_type").notNull(),
-  startDate: text("start_date").notNull(), endDate: text("end_date").notNull(), days: integer("days").notNull(), reason: text("reason"), status: text("status").notNull().default("pending"),
-  requestedBy: text("requested_by").notNull(), decidedBy: text("decided_by"), decisionNote: text("decision_note"), decidedAt: text("decided_at"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [index("employee_leave_status_idx").on(table.employeeId, table.status), check("employee_leave_status_check", sql`${table.status} in ('pending','approved','rejected','cancelled')`), check("employee_leave_days_check", sql`${table.days} > 0`)]);
+export const employeeLeaveRequests = pgTable(
+  "employee_leave_requests",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
+    leaveType: text("leave_type").notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    days: integer("days").notNull(),
+    reason: text("reason"),
+    status: text("status").notNull().default("pending"),
+    requestedBy: text("requested_by").notNull(),
+    decidedBy: text("decided_by"),
+    decisionNote: text("decision_note"),
+    decidedAt: text("decided_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("employee_leave_status_idx").on(table.employeeId, table.status),
+    check(
+      "employee_leave_status_check",
+      sql`${table.status} in ('pending','approved','rejected','cancelled')`,
+    ),
+    check("employee_leave_days_check", sql`${table.days} > 0`),
+  ],
+);
 
-export const employeeAttendance = pgTable("employee_attendance", {
-  id: serial("id").primaryKey(), employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }), attendanceDate: text("attendance_date").notNull(),
-  checkInAt: text("check_in_at"), checkOutAt: text("check_out_at"), status: text("status").notNull().default("present"), lateMinutes: integer("late_minutes").notNull().default(0), overtimeMinutes: integer("overtime_minutes").notNull().default(0), notes: text("notes"),
-  createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [uniqueIndex("employee_attendance_day_unique").on(table.employeeId, table.attendanceDate), index("employee_attendance_date_idx").on(table.attendanceDate), check("employee_attendance_status_check", sql`${table.status} in ('present','absent','leave','sick','remote','holiday')`)]);
+export const employeeAttendance = pgTable(
+  "employee_attendance",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
+    attendanceDate: text("attendance_date").notNull(),
+    checkInAt: text("check_in_at"),
+    checkOutAt: text("check_out_at"),
+    status: text("status").notNull().default("present"),
+    lateMinutes: integer("late_minutes").notNull().default(0),
+    overtimeMinutes: integer("overtime_minutes").notNull().default(0),
+    notes: text("notes"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    uniqueIndex("employee_attendance_day_unique").on(
+      table.employeeId,
+      table.attendanceDate,
+    ),
+    index("employee_attendance_date_idx").on(table.attendanceDate),
+    check(
+      "employee_attendance_status_check",
+      sql`${table.status} in ('present','absent','leave','sick','remote','holiday')`,
+    ),
+  ],
+);
 
-export const portalAttendancePolicies = pgTable("portal_attendance_policies", {
-  userEmail: text("user_email").primaryKey().references(() => portalUsers.email, { onDelete: "cascade" }),
-  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
-  trackingEnabled: boolean("tracking_enabled").notNull().default(false),
-  timezone: text("timezone").notNull().default("Asia/Riyadh"),
-  workdaysJson: text("workdays_json").notNull().default("[0,1,2,3,4]"),
-  shiftStart: text("shift_start").notNull().default("08:00"),
-  shiftEnd: text("shift_end").notNull().default("17:00"),
-  requiredMinutes: integer("required_minutes").notNull().default(480),
-  graceMinutes: integer("grace_minutes").notNull().default(10),
-  activatedBy: text("activated_by").notNull(),
-  activationReason: text("activation_reason").notNull(),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [
-  index("portal_attendance_policies_enabled_idx").on(table.trackingEnabled),
-  uniqueIndex("portal_attendance_policies_employee_idx").on(table.employeeId),
-  check("portal_attendance_required_minutes_check", sql`${table.requiredMinutes} between 1 and 720`),
-  check("portal_attendance_grace_minutes_check", sql`${table.graceMinutes} between 0 and 120`),
-]);
+export const portalAttendancePolicies = pgTable(
+  "portal_attendance_policies",
+  {
+    userEmail: text("user_email")
+      .primaryKey()
+      .references(() => portalUsers.email, { onDelete: "cascade" }),
+    employeeId: integer("employee_id").references(() => employees.id, {
+      onDelete: "set null",
+    }),
+    trackingEnabled: boolean("tracking_enabled").notNull().default(false),
+    timezone: text("timezone").notNull().default("Asia/Riyadh"),
+    workdaysJson: text("workdays_json").notNull().default("[0,1,2,3,4]"),
+    shiftStart: text("shift_start").notNull().default("08:00"),
+    shiftEnd: text("shift_end").notNull().default("17:00"),
+    requiredMinutes: integer("required_minutes").notNull().default(480),
+    graceMinutes: integer("grace_minutes").notNull().default(10),
+    activatedBy: text("activated_by").notNull(),
+    activationReason: text("activation_reason").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("portal_attendance_policies_enabled_idx").on(table.trackingEnabled),
+    uniqueIndex("portal_attendance_policies_employee_idx").on(table.employeeId),
+    check(
+      "portal_attendance_required_minutes_check",
+      sql`${table.requiredMinutes} between 1 and 720`,
+    ),
+    check(
+      "portal_attendance_grace_minutes_check",
+      sql`${table.graceMinutes} between 0 and 120`,
+    ),
+  ],
+);
 
-export const portalAttendanceSessions = pgTable("portal_attendance_sessions", {
-  sessionId: text("session_id").primaryKey().references(() => portalSessions.id, { onDelete: "cascade" }),
-  userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
-  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
-  workDate: text("work_date").notNull(),
-  loginAt: text("login_at").notNull(),
-  lastActivityAt: text("last_activity_at").notNull(),
-  logoutAt: text("logout_at"),
-  durationMinutes: integer("duration_minutes").notNull().default(0),
-  status: text("status").notNull().default("active"),
-  closeReason: text("close_reason"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [
-  index("portal_attendance_sessions_user_date_idx").on(table.userEmail, table.workDate),
-  index("portal_attendance_sessions_employee_date_idx").on(table.employeeId, table.workDate),
-  index("portal_attendance_sessions_status_idx").on(table.status, table.lastActivityAt),
-  check("portal_attendance_sessions_status_check", sql`${table.status} in ('active','closed','auto_closed')`),
-  check("portal_attendance_duration_check", sql`${table.durationMinutes} >= 0`),
-]);
+export const portalAttendanceSessions = pgTable(
+  "portal_attendance_sessions",
+  {
+    sessionId: text("session_id")
+      .primaryKey()
+      .references(() => portalSessions.id, { onDelete: "cascade" }),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => portalUsers.email, { onDelete: "cascade" }),
+    employeeId: integer("employee_id").references(() => employees.id, {
+      onDelete: "set null",
+    }),
+    workDate: text("work_date").notNull(),
+    loginAt: text("login_at").notNull(),
+    lastActivityAt: text("last_activity_at").notNull(),
+    logoutAt: text("logout_at"),
+    durationMinutes: integer("duration_minutes").notNull().default(0),
+    status: text("status").notNull().default("active"),
+    closeReason: text("close_reason"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("portal_attendance_sessions_user_date_idx").on(
+      table.userEmail,
+      table.workDate,
+    ),
+    index("portal_attendance_sessions_employee_date_idx").on(
+      table.employeeId,
+      table.workDate,
+    ),
+    index("portal_attendance_sessions_status_idx").on(
+      table.status,
+      table.lastActivityAt,
+    ),
+    check(
+      "portal_attendance_sessions_status_check",
+      sql`${table.status} in ('active','closed','auto_closed')`,
+    ),
+    check(
+      "portal_attendance_duration_check",
+      sql`${table.durationMinutes} >= 0`,
+    ),
+  ],
+);
 
-export const attendanceDeductionProposals = pgTable("attendance_deduction_proposals", {
-  id: serial("id").primaryKey(),
-  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
-  periodMonth: text("period_month").notNull(),
-  requiredMinutes: integer("required_minutes").notNull(),
-  workedMinutes: integer("worked_minutes").notNull(),
-  excusedMinutes: integer("excused_minutes").notNull().default(0),
-  missingMinutes: integer("missing_minutes").notNull(),
-  grossSalaryHalalas: integer("gross_salary_halalas").notNull(),
-  calculatedAmountHalalas: integer("calculated_amount_halalas").notNull(),
-  cappedAmountHalalas: integer("capped_amount_halalas").notNull(),
-  status: text("status").notNull().default("draft"),
-  writtenConsentConfirmed: boolean("written_consent_confirmed").notNull().default(false),
-  legalBasis: text("legal_basis"),
-  calculationJson: text("calculation_json").notNull(),
-  createdBy: text("created_by").notNull(),
-  reviewedBy: text("reviewed_by"),
-  reviewedAt: text("reviewed_at"),
-  approvedBy: text("approved_by"),
-  approvedAt: text("approved_at"),
-  movementId: integer("movement_id"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [
-  uniqueIndex("attendance_deduction_employee_month_unique").on(table.employeeId, table.periodMonth),
-  index("attendance_deduction_status_idx").on(table.status),
-  check("attendance_deduction_status_check", sql`${table.status} in ('draft','hr_review','finance_approved','rejected','posted')`),
-  check("attendance_deduction_amounts_check", sql`${table.requiredMinutes} >= 0 and ${table.workedMinutes} >= 0 and ${table.excusedMinutes} >= 0 and ${table.missingMinutes} >= 0 and ${table.calculatedAmountHalalas} >= 0 and ${table.cappedAmountHalalas} >= 0`),
-]);
+export const attendanceDeductionProposals = pgTable(
+  "attendance_deduction_proposals",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
+    periodMonth: text("period_month").notNull(),
+    requiredMinutes: integer("required_minutes").notNull(),
+    workedMinutes: integer("worked_minutes").notNull(),
+    excusedMinutes: integer("excused_minutes").notNull().default(0),
+    missingMinutes: integer("missing_minutes").notNull(),
+    grossSalaryHalalas: integer("gross_salary_halalas").notNull(),
+    calculatedAmountHalalas: integer("calculated_amount_halalas").notNull(),
+    cappedAmountHalalas: integer("capped_amount_halalas").notNull(),
+    status: text("status").notNull().default("draft"),
+    writtenConsentConfirmed: boolean("written_consent_confirmed")
+      .notNull()
+      .default(false),
+    legalBasis: text("legal_basis"),
+    calculationJson: text("calculation_json").notNull(),
+    createdBy: text("created_by").notNull(),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: text("reviewed_at"),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    movementId: integer("movement_id"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    uniqueIndex("attendance_deduction_employee_month_unique").on(
+      table.employeeId,
+      table.periodMonth,
+    ),
+    index("attendance_deduction_status_idx").on(table.status),
+    check(
+      "attendance_deduction_status_check",
+      sql`${table.status} in ('draft','hr_review','finance_approved','rejected','posted')`,
+    ),
+    check(
+      "attendance_deduction_amounts_check",
+      sql`${table.requiredMinutes} >= 0 and ${table.workedMinutes} >= 0 and ${table.excusedMinutes} >= 0 and ${table.missingMinutes} >= 0 and ${table.calculatedAmountHalalas} >= 0 and ${table.cappedAmountHalalas} >= 0`,
+    ),
+  ],
+);
 
-export const employeePerformanceReviews = pgTable("employee_performance_reviews", {
-  id: serial("id").primaryKey(),
-  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
-  periodStart: text("period_start").notNull(),
-  periodEnd: text("period_end").notNull(),
-  roleKey: text("role_key").notNull(),
-  status: text("status").notNull().default("draft"),
-  goalsScore: integer("goals_score").notNull(),
-  qualityScore: integer("quality_score").notNull(),
-  timelinessScore: integer("timeliness_score").notNull(),
-  collaborationScore: integer("collaboration_score").notNull(),
-  complianceScore: integer("compliance_score").notNull(),
-  attendanceScore: integer("attendance_score"),
-  overallScore: integer("overall_score").notNull(),
-  weightsJson: text("weights_json").notNull(),
-  evidenceJson: text("evidence_json").notNull(),
-  managerComment: text("manager_comment"),
-  employeeComment: text("employee_comment"),
-  reviewerEmail: text("reviewer_email").notNull(),
-  calibratedBy: text("calibrated_by"),
-  calibratedAt: text("calibrated_at"),
-  acknowledgedAt: text("acknowledged_at"),
-  appealText: text("appeal_text"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [
-  index("employee_performance_period_idx").on(table.employeeId, table.periodEnd),
-  index("employee_performance_status_idx").on(table.status),
-  check("employee_performance_status_check", sql`${table.status} in ('draft','manager_review','hr_calibration','final','appealed')`),
-  check("employee_performance_scores_check", sql`${table.goalsScore} between 0 and 100 and ${table.qualityScore} between 0 and 100 and ${table.timelinessScore} between 0 and 100 and ${table.collaborationScore} between 0 and 100 and ${table.complianceScore} between 0 and 100 and (${table.attendanceScore} is null or ${table.attendanceScore} between 0 and 100) and ${table.overallScore} between 0 and 100`),
-]);
+export const employeePerformanceReviews = pgTable(
+  "employee_performance_reviews",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
+    periodStart: text("period_start").notNull(),
+    periodEnd: text("period_end").notNull(),
+    roleKey: text("role_key").notNull(),
+    status: text("status").notNull().default("draft"),
+    goalsScore: integer("goals_score").notNull(),
+    qualityScore: integer("quality_score").notNull(),
+    timelinessScore: integer("timeliness_score").notNull(),
+    collaborationScore: integer("collaboration_score").notNull(),
+    complianceScore: integer("compliance_score").notNull(),
+    attendanceScore: integer("attendance_score"),
+    overallScore: integer("overall_score").notNull(),
+    weightsJson: text("weights_json").notNull(),
+    evidenceJson: text("evidence_json").notNull(),
+    managerComment: text("manager_comment"),
+    employeeComment: text("employee_comment"),
+    reviewerEmail: text("reviewer_email").notNull(),
+    calibratedBy: text("calibrated_by"),
+    calibratedAt: text("calibrated_at"),
+    acknowledgedAt: text("acknowledged_at"),
+    appealText: text("appeal_text"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("employee_performance_period_idx").on(
+      table.employeeId,
+      table.periodEnd,
+    ),
+    index("employee_performance_status_idx").on(table.status),
+    check(
+      "employee_performance_status_check",
+      sql`${table.status} in ('draft','manager_review','hr_calibration','final','appealed')`,
+    ),
+    check(
+      "employee_performance_scores_check",
+      sql`${table.goalsScore} between 0 and 100 and ${table.qualityScore} between 0 and 100 and ${table.timelinessScore} between 0 and 100 and ${table.collaborationScore} between 0 and 100 and ${table.complianceScore} between 0 and 100 and (${table.attendanceScore} is null or ${table.attendanceScore} between 0 and 100) and ${table.overallScore} between 0 and 100`,
+    ),
+  ],
+);
 
 export const employeeMovements = pgTable(
   "employee_movements",
   {
     id: serial("id").primaryKey(),
-    employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
     movementType: text("movement_type").notNull(),
     effectiveDate: text("effective_date").notNull(),
     amountHalalas: integer("amount_halalas").notNull().default(0),
     description: text("description").notNull(),
     status: text("status").notNull().default("approved"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("employee_movements_employee_date_idx").on(table.employeeId, table.effectiveDate),
-    index("employee_movements_type_status_idx").on(table.movementType, table.status),
-    check("employee_movements_type_check", sql`${table.movementType} in ('salary_adjustment','allowance','bonus','advance','deduction','leave','return_from_leave','suspension','termination','note')`),
-    check("employee_movements_status_check", sql`${table.status} in ('draft','approved','cancelled')`),
+    index("employee_movements_employee_date_idx").on(
+      table.employeeId,
+      table.effectiveDate,
+    ),
+    index("employee_movements_type_status_idx").on(
+      table.movementType,
+      table.status,
+    ),
+    check(
+      "employee_movements_type_check",
+      sql`${table.movementType} in ('salary_adjustment','allowance','bonus','advance','deduction','leave','return_from_leave','suspension','termination','note')`,
+    ),
+    check(
+      "employee_movements_status_check",
+      sql`${table.status} in ('draft','approved','cancelled')`,
+    ),
     check("employee_movements_amount_check", sql`${table.amountHalalas} >= 0`),
   ],
 );
@@ -536,7 +860,9 @@ export const payrollRuns = pgTable(
     paymentDate: text("payment_date").notNull(),
     status: text("status").notNull().default("draft"),
     totalGrossHalalas: integer("total_gross_halalas").notNull().default(0),
-    totalDeductionsHalalas: integer("total_deductions_halalas").notNull().default(0),
+    totalDeductionsHalalas: integer("total_deductions_halalas")
+      .notNull()
+      .default(0),
     totalNetHalalas: integer("total_net_halalas").notNull().default(0),
     journalEntryId: integer("journal_entry_id"),
     paymentJournalEntryId: integer("payment_journal_entry_id"),
@@ -545,13 +871,26 @@ export const payrollRuns = pgTable(
     approvedAt: text("approved_at"),
     paidBy: text("paid_by"),
     paidAt: text("paid_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("payroll_runs_status_payment_idx").on(table.status, table.paymentDate),
-    check("payroll_runs_status_check", sql`${table.status} in ('draft','approved','processing','paid','cancelled')`),
-    check("payroll_runs_totals_check", sql`${table.totalGrossHalalas} >= 0 and ${table.totalDeductionsHalalas} >= 0 and ${table.totalNetHalalas} >= 0`),
+    index("payroll_runs_status_payment_idx").on(
+      table.status,
+      table.paymentDate,
+    ),
+    check(
+      "payroll_runs_status_check",
+      sql`${table.status} in ('draft','approved','processing','paid','cancelled')`,
+    ),
+    check(
+      "payroll_runs_totals_check",
+      sql`${table.totalGrossHalalas} >= 0 and ${table.totalDeductionsHalalas} >= 0 and ${table.totalNetHalalas} >= 0`,
+    ),
   ],
 );
 
@@ -559,20 +898,32 @@ export const payrollItems = pgTable(
   "payroll_items",
   {
     id: serial("id").primaryKey(),
-    payrollRunId: integer("payroll_run_id").notNull().references(() => payrollRuns.id, { onDelete: "cascade" }),
-    employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "restrict" }),
+    payrollRunId: integer("payroll_run_id")
+      .notNull()
+      .references(() => payrollRuns.id, { onDelete: "cascade" }),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
     baseSalaryHalalas: integer("base_salary_halalas").notNull(),
     allowancesHalalas: integer("allowances_halalas").notNull().default(0),
     bonusHalalas: integer("bonus_halalas").notNull().default(0),
     deductionsHalalas: integer("deductions_halalas").notNull().default(0),
     netPayHalalas: integer("net_pay_halalas").notNull(),
     notes: text("notes"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("payroll_items_run_employee_idx").on(table.payrollRunId, table.employeeId),
+    uniqueIndex("payroll_items_run_employee_idx").on(
+      table.payrollRunId,
+      table.employeeId,
+    ),
     index("payroll_items_employee_idx").on(table.employeeId),
-    check("payroll_items_amounts_check", sql`${table.baseSalaryHalalas} >= 0 and ${table.allowancesHalalas} >= 0 and ${table.bonusHalalas} >= 0 and ${table.deductionsHalalas} >= 0 and ${table.netPayHalalas} >= 0`),
+    check(
+      "payroll_items_amounts_check",
+      sql`${table.baseSalaryHalalas} >= 0 and ${table.allowancesHalalas} >= 0 and ${table.bonusHalalas} >= 0 and ${table.deductionsHalalas} >= 0 and ${table.netPayHalalas} >= 0`,
+    ),
   ],
 );
 
@@ -601,8 +952,12 @@ export const financialRecords = pgTable(
     paymentMethod: text("payment_method"),
     notes: text("notes"),
     status: text("status").notNull().default("pending"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("financial_records_status_idx").on(table.status),
@@ -610,12 +965,17 @@ export const financialRecords = pgTable(
     index("financial_records_category_idx").on(table.category),
     index("financial_records_worker_id_idx").on(table.workerId),
     index("financial_records_contract_id_idx").on(table.contractId),
-    index("financial_records_contract_payment_idx").on(table.contractPaymentScheduleId),
+    index("financial_records_contract_payment_idx").on(
+      table.contractPaymentScheduleId,
+    ),
     index("financial_records_document_id_idx").on(table.documentId),
     index("financial_records_bank_account_id_idx").on(table.bankAccountId),
     index("financial_records_period_month_idx").on(table.periodMonth),
     index("financial_records_posting_status_idx").on(table.postingStatus),
-    check("financial_records_posting_status_check", sql`${table.postingStatus} in ('unposted','draft','posted','reversed','not_applicable')`),
+    check(
+      "financial_records_posting_status_check",
+      sql`${table.postingStatus} in ('unposted','draft','posted','reversed','not_applicable')`,
+    ),
   ],
 );
 
@@ -623,37 +983,70 @@ export const contractPaymentSchedules = pgTable(
   "contract_payment_schedules",
   {
     id: serial("id").primaryKey(),
-    contractId: integer("contract_id").notNull().references(() => workforceContracts.id, { onDelete: "cascade" }),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => workforceContracts.id, { onDelete: "cascade" }),
     installmentNumber: integer("installment_number").notNull(),
     title: text("title").notNull(),
     dueDate: text("due_date").notNull(),
     percentageBps: integer("percentage_bps").notNull(),
     amountHalalas: integer("amount_halalas").notNull(),
-    absenceDeductionHalalas: integer("absence_deduction_halalas").notNull().default(0),
+    absenceDeductionHalalas: integer("absence_deduction_halalas")
+      .notNull()
+      .default(0),
     subtotalHalalas: integer("subtotal_halalas").notNull().default(0),
     vatHalalas: integer("vat_halalas").notNull().default(0),
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
-    billingBasis: text("billing_basis").notNull().default("seasonal_percentage"),
+    billingBasis: text("billing_basis")
+      .notNull()
+      .default("seasonal_percentage"),
     servicePeriod: text("service_period"),
     status: text("status").notNull().default("scheduled"),
     referredBy: text("referred_by"),
     referredAt: text("referred_at"),
-    invoiceDocumentId: integer("invoice_document_id").references(() => companyDocuments.id, { onDelete: "restrict" }),
-    financialRecordId: integer("financial_record_id").references(() => financialRecords.id, { onDelete: "restrict" }),
-    paymentJournalEntryId: integer("payment_journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
+    invoiceDocumentId: integer("invoice_document_id").references(
+      () => companyDocuments.id,
+      { onDelete: "restrict" },
+    ),
+    financialRecordId: integer("financial_record_id").references(
+      () => financialRecords.id,
+      { onDelete: "restrict" },
+    ),
+    paymentJournalEntryId: integer("payment_journal_entry_id").references(
+      () => journalEntries.id,
+      { onDelete: "restrict" },
+    ),
     invoicedBy: text("invoiced_by"),
     invoicedAt: text("invoiced_at"),
     paidAt: text("paid_at"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("contract_payment_schedules_contract_installment_unique").on(table.contractId, table.installmentNumber),
-    uniqueIndex("contract_payment_schedules_invoice_unique").on(table.invoiceDocumentId),
-    index("contract_payment_schedules_due_status_idx").on(table.dueDate, table.status),
-    check("contract_payment_schedules_status_check", sql`${table.status} in ('scheduled','due','referred','invoiced','paid','cancelled')`),
-    check("contract_payment_schedules_amount_check", sql`${table.amountHalalas} > 0 and ${table.percentageBps} > 0 and ${table.percentageBps} <= 10000`),
+    uniqueIndex("contract_payment_schedules_contract_installment_unique").on(
+      table.contractId,
+      table.installmentNumber,
+    ),
+    uniqueIndex("contract_payment_schedules_invoice_unique").on(
+      table.invoiceDocumentId,
+    ),
+    index("contract_payment_schedules_due_status_idx").on(
+      table.dueDate,
+      table.status,
+    ),
+    check(
+      "contract_payment_schedules_status_check",
+      sql`${table.status} in ('scheduled','due','referred','invoiced','paid','cancelled')`,
+    ),
+    check(
+      "contract_payment_schedules_amount_check",
+      sql`${table.amountHalalas} > 0 and ${table.percentageBps} > 0 and ${table.percentageBps} <= 10000`,
+    ),
   ],
 );
 
@@ -676,8 +1069,12 @@ export const legalRecords = pgTable(
     assignedAt: text("assigned_at"),
     expiryDate: text("expiry_date"),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("legal_records_status_idx").on(table.status),
@@ -691,7 +1088,9 @@ export const legalCaseAttachments = pgTable(
   "legal_case_attachments",
   {
     id: serial("id").primaryKey(),
-    legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "cascade" }),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     fileName: text("file_name").notNull(),
     storageKey: text("storage_key").notNull().unique(),
@@ -700,11 +1099,19 @@ export const legalCaseAttachments = pgTable(
     validationStatus: text("validation_status").notNull().default("validated"),
     validationDetails: text("validation_details"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("legal_case_attachments_record_idx").on(table.legalRecordId, table.createdAt),
-    check("legal_case_attachments_size_check", sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 20971520`),
+    index("legal_case_attachments_record_idx").on(
+      table.legalRecordId,
+      table.createdAt,
+    ),
+    check(
+      "legal_case_attachments_size_check",
+      sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 20971520`,
+    ),
   ],
 );
 
@@ -712,7 +1119,9 @@ export const legalCaseActivities = pgTable(
   "legal_case_activities",
   {
     id: serial("id").primaryKey(),
-    legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "cascade" }),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "cascade" }),
     activityType: text("activity_type").notNull().default("task"),
     title: text("title").notNull(),
     details: text("details"),
@@ -722,16 +1131,29 @@ export const legalCaseActivities = pgTable(
     assignedTo: text("assigned_to"),
     completedAt: text("completed_at"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("legal_case_activities_case_idx").on(table.legalRecordId),
     index("legal_case_activities_due_idx").on(table.dueAt),
     index("legal_case_activities_status_idx").on(table.status),
-    check("legal_case_activities_type_check", sql`${table.activityType} in ('task','deadline','note','communication','hearing','settlement')`),
-    check("legal_case_activities_priority_check", sql`${table.priority} in ('low','medium','high','critical')`),
-    check("legal_case_activities_status_check", sql`${table.status} in ('open','in_progress','completed','cancelled')`),
+    check(
+      "legal_case_activities_type_check",
+      sql`${table.activityType} in ('task','deadline','note','communication','hearing','settlement')`,
+    ),
+    check(
+      "legal_case_activities_priority_check",
+      sql`${table.priority} in ('low','medium','high','critical')`,
+    ),
+    check(
+      "legal_case_activities_status_check",
+      sql`${table.status} in ('open','in_progress','completed','cancelled')`,
+    ),
   ],
 );
 
@@ -739,21 +1161,37 @@ export const legalCaseActionLog = pgTable(
   "legal_case_action_log",
   {
     id: serial("id").primaryKey(),
-    legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "cascade" }),
-    activityId: integer("activity_id").references(() => legalCaseActivities.id, { onDelete: "set null" }),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "cascade" }),
+    activityId: integer("activity_id").references(
+      () => legalCaseActivities.id,
+      { onDelete: "set null" },
+    ),
     action: text("action").notNull(),
     fromStatus: text("from_status"),
     toStatus: text("to_status"),
     details: text("details"),
     actorEmail: text("actor_email").notNull(),
     actorRole: text("actor_role").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("legal_case_action_log_record_idx").on(table.legalRecordId, table.createdAt),
+    index("legal_case_action_log_record_idx").on(
+      table.legalRecordId,
+      table.createdAt,
+    ),
     index("legal_case_action_log_activity_idx").on(table.activityId),
-    index("legal_case_action_log_actor_idx").on(table.actorEmail, table.createdAt),
-    check("legal_case_action_log_action_check", sql`${table.action} in ('created','assigned','started','completed','cancelled','attachment_added')`),
+    index("legal_case_action_log_actor_idx").on(
+      table.actorEmail,
+      table.createdAt,
+    ),
+    check(
+      "legal_case_action_log_action_check",
+      sql`${table.action} in ('created','assigned','started','completed','cancelled','attachment_added')`,
+    ),
   ],
 );
 
@@ -761,24 +1199,47 @@ export const legalJudgmentPaymentRequests = pgTable(
   "legal_judgment_payment_requests",
   {
     id: serial("id").primaryKey(),
-    legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "restrict" }),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "restrict" }),
     amountHalalas: integer("amount_halalas").notNull(),
     description: text("description").notNull(),
     status: text("status").notNull().default("requested"),
     requestedBy: text("requested_by").notNull(),
-    requestedAt: text("requested_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    bankAccountId: integer("bank_account_id").references(() => bankAccounts.id, { onDelete: "restrict" }),
-    journalEntryId: integer("journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
+    requestedAt: text("requested_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    bankAccountId: integer("bank_account_id").references(
+      () => bankAccounts.id,
+      { onDelete: "restrict" },
+    ),
+    journalEntryId: integer("journal_entry_id").references(
+      () => journalEntries.id,
+      { onDelete: "restrict" },
+    ),
     paidBy: text("paid_by"),
     paidAt: text("paid_at"),
     rejectionReason: text("rejection_reason"),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("legal_judgment_payments_record_idx").on(table.legalRecordId, table.status),
-    uniqueIndex("legal_judgment_payments_journal_unique").on(table.journalEntryId),
-    check("legal_judgment_payments_amount_check", sql`${table.amountHalalas} > 0`),
-    check("legal_judgment_payments_status_check", sql`${table.status} in ('requested','paid','rejected','cancelled')`),
+    index("legal_judgment_payments_record_idx").on(
+      table.legalRecordId,
+      table.status,
+    ),
+    uniqueIndex("legal_judgment_payments_journal_unique").on(
+      table.journalEntryId,
+    ),
+    check(
+      "legal_judgment_payments_amount_check",
+      sql`${table.amountHalalas} > 0`,
+    ),
+    check(
+      "legal_judgment_payments_status_check",
+      sql`${table.status} in ('requested','paid','rejected','cancelled')`,
+    ),
   ],
 );
 
@@ -790,15 +1251,24 @@ export const desktopDevices = pgTable(
     deviceName: text("device_name"),
     platform: text("platform").notNull().default("windows"),
     status: text("status").notNull().default("active"),
-    lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    lastSeenAt: text("last_seen_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     lastSyncAt: text("last_sync_at"),
     lastActivityId: integer("last_activity_id").notNull().default(0),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("desktop_devices_user_status_idx").on(table.userEmail, table.status),
-    check("desktop_devices_status_check", sql`${table.status} in ('active','revoked')`),
+    check(
+      "desktop_devices_status_check",
+      sql`${table.status} in ('active','revoked')`,
+    ),
   ],
 );
 
@@ -807,7 +1277,9 @@ export const desktopSyncOperations = pgTable(
   {
     id: serial("id").primaryKey(),
     idempotencyKey: text("idempotency_key").notNull().unique(),
-    deviceId: text("device_id").notNull().references(() => desktopDevices.id, { onDelete: "restrict" }),
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => desktopDevices.id, { onDelete: "restrict" }),
     userEmail: text("user_email").notNull(),
     method: text("method").notNull(),
     requestPath: text("request_path").notNull(),
@@ -816,14 +1288,28 @@ export const desktopSyncOperations = pgTable(
     responseHeadersJson: text("response_headers_json"),
     responseBody: text("response_body"),
     errorMessage: text("error_message"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     completedAt: text("completed_at"),
   },
   (table) => [
-    index("desktop_sync_operations_device_idx").on(table.deviceId, table.createdAt),
-    index("desktop_sync_operations_user_idx").on(table.userEmail, table.createdAt),
-    check("desktop_sync_operations_method_check", sql`${table.method} in ('POST','PATCH','DELETE')`),
-    check("desktop_sync_operations_status_check", sql`${table.status} in ('processing','completed','failed','conflict')`),
+    index("desktop_sync_operations_device_idx").on(
+      table.deviceId,
+      table.createdAt,
+    ),
+    index("desktop_sync_operations_user_idx").on(
+      table.userEmail,
+      table.createdAt,
+    ),
+    check(
+      "desktop_sync_operations_method_check",
+      sql`${table.method} in ('POST','PATCH','DELETE')`,
+    ),
+    check(
+      "desktop_sync_operations_status_check",
+      sql`${table.status} in ('processing','completed','failed','conflict')`,
+    ),
   ],
 );
 
@@ -842,21 +1328,46 @@ export const complianceObligations = pgTable(
     riskLevel: text("risk_level").notNull().default("medium"),
     status: text("status").notNull().default("active"),
     documentId: integer("document_id"),
-    legalRecordId: integer("legal_record_id").references(() => legalRecords.id, { onDelete: "set null" }),
+    legalRecordId: integer("legal_record_id").references(
+      () => legalRecords.id,
+      { onDelete: "set null" },
+    ),
     notes: text("notes"),
     createdBy: text("created_by").notNull(),
     reviewedBy: text("reviewed_by"),
     reviewedAt: text("reviewed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("compliance_obligations_expiry_status_idx").on(table.expiryDate, table.status),
-    index("compliance_obligations_category_risk_idx").on(table.category, table.riskLevel),
-    check("compliance_obligations_category_check", sql`${table.category} in ('license','certificate','insurance','labor','tax','municipal','contractual','data_protection','safety','other')`),
-    check("compliance_obligations_risk_check", sql`${table.riskLevel} in ('low','medium','high','critical')`),
-    check("compliance_obligations_status_check", sql`${table.status} in ('draft','active','under_review','renewal','expired','suspended','closed')`),
-    check("compliance_obligations_reminder_check", sql`${table.reminderDays} between 1 and 365`),
+    index("compliance_obligations_expiry_status_idx").on(
+      table.expiryDate,
+      table.status,
+    ),
+    index("compliance_obligations_category_risk_idx").on(
+      table.category,
+      table.riskLevel,
+    ),
+    check(
+      "compliance_obligations_category_check",
+      sql`${table.category} in ('license','certificate','insurance','labor','tax','municipal','contractual','data_protection','safety','other')`,
+    ),
+    check(
+      "compliance_obligations_risk_check",
+      sql`${table.riskLevel} in ('low','medium','high','critical')`,
+    ),
+    check(
+      "compliance_obligations_status_check",
+      sql`${table.status} in ('draft','active','under_review','renewal','expired','suspended','closed')`,
+    ),
+    check(
+      "compliance_obligations_reminder_check",
+      sql`${table.reminderDays} between 1 and 365`,
+    ),
   ],
 );
 
@@ -864,17 +1375,27 @@ export const complianceReviews = pgTable(
   "compliance_reviews",
   {
     id: serial("id").primaryKey(),
-    obligationId: integer("obligation_id").notNull().references(() => complianceObligations.id, { onDelete: "cascade" }),
+    obligationId: integer("obligation_id")
+      .notNull()
+      .references(() => complianceObligations.id, { onDelete: "cascade" }),
     reviewDate: text("review_date").notNull(),
     outcome: text("outcome").notNull(),
     notes: text("notes").notNull(),
     nextReviewDate: text("next_review_date"),
     reviewedBy: text("reviewed_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("compliance_reviews_obligation_date_idx").on(table.obligationId, table.reviewDate),
-    check("compliance_reviews_outcome_check", sql`${table.outcome} in ('compliant','action_required','renewal_required','non_compliant','closed')`),
+    index("compliance_reviews_obligation_date_idx").on(
+      table.obligationId,
+      table.reviewDate,
+    ),
+    check(
+      "compliance_reviews_outcome_check",
+      sql`${table.outcome} in ('compliant','action_required','renewal_required','non_compliant','closed')`,
+    ),
   ],
 );
 
@@ -891,12 +1412,19 @@ export const governmentSites = pgTable(
     status: text("status").notNull().default("active"),
     createdBy: text("created_by").notNull(),
     updatedBy: text("updated_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("government_sites_status_name_idx").on(table.status, table.name),
-    check("government_sites_status_check", sql`${table.status} in ('active','inactive','archived')`),
+    check(
+      "government_sites_status_check",
+      sql`${table.status} in ('active','inactive','archived')`,
+    ),
   ],
 );
 
@@ -905,7 +1433,10 @@ export const governmentPaymentRequests = pgTable(
   {
     id: serial("id").primaryKey(),
     referenceCode: text("reference_code").notNull().unique(),
-    governmentSiteId: integer("government_site_id").references(() => governmentSites.id, { onDelete: "set null" }),
+    governmentSiteId: integer("government_site_id").references(
+      () => governmentSites.id,
+      { onDelete: "set null" },
+    ),
     serviceName: text("service_name").notNull(),
     amountHalalas: integer("amount_halalas").notNull(),
     sadadNumber: text("sadad_number").notNull(),
@@ -916,19 +1447,37 @@ export const governmentPaymentRequests = pgTable(
     requestedBy: text("requested_by").notNull(),
     paidBy: text("paid_by"),
     paidAt: text("paid_at"),
-    financialRecordId: integer("financial_record_id").references(() => financialRecords.id, { onDelete: "restrict" }),
+    financialRecordId: integer("financial_record_id").references(
+      () => financialRecords.id,
+      { onDelete: "restrict" },
+    ),
     paymentMethod: text("payment_method"),
     paymentReference: text("payment_reference"),
-    bankAccountId: integer("bank_account_id").references(() => bankAccounts.id, { onDelete: "restrict" }),
-    journalEntryId: integer("journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    bankAccountId: integer("bank_account_id").references(
+      () => bankAccounts.id,
+      { onDelete: "restrict" },
+    ),
+    journalEntryId: integer("journal_entry_id").references(
+      () => journalEntries.id,
+      { onDelete: "restrict" },
+    ),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("government_payments_status_due_idx").on(table.status, table.dueDate),
-    uniqueIndex("government_payments_financial_unique").on(table.financialRecordId),
+    uniqueIndex("government_payments_financial_unique").on(
+      table.financialRecordId,
+    ),
     check("government_payments_amount_check", sql`${table.amountHalalas} > 0`),
-    check("government_payments_status_check", sql`${table.status} in ('pending','paid','cancelled')`),
+    check(
+      "government_payments_status_check",
+      sql`${table.status} in ('pending','paid','cancelled')`,
+    ),
   ],
 );
 
@@ -945,15 +1494,28 @@ export const portalTasks = pgTable(
     createdBy: text("created_by").notNull(),
     completedBy: text("completed_by"),
     completedAt: text("completed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("portal_tasks_creator_status_idx").on(table.createdBy, table.status),
     index("portal_tasks_due_status_idx").on(table.dueAt, table.status),
-    check("portal_tasks_priority_check", sql`${table.priority} in ('low','normal','high','urgent')`),
-    check("portal_tasks_visibility_check", sql`${table.visibility} in ('private','assigned')`),
-    check("portal_tasks_status_check", sql`${table.status} in ('open','completed','cancelled')`),
+    check(
+      "portal_tasks_priority_check",
+      sql`${table.priority} in ('low','normal','high','urgent')`,
+    ),
+    check(
+      "portal_tasks_visibility_check",
+      sql`${table.visibility} in ('private','assigned')`,
+    ),
+    check(
+      "portal_tasks_status_check",
+      sql`${table.status} in ('open','completed','cancelled')`,
+    ),
   ],
 );
 
@@ -961,16 +1523,27 @@ export const portalTaskAssignees = pgTable(
   "portal_task_assignees",
   {
     id: serial("id").primaryKey(),
-    taskId: integer("task_id").notNull().references(() => portalTasks.id, { onDelete: "cascade" }),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => portalTasks.id, { onDelete: "cascade" }),
     userEmail: text("user_email").notNull(),
     status: text("status").notNull().default("open"),
     reminderAcknowledgedAt: text("reminder_acknowledged_at"),
     completedAt: text("completed_at"),
   },
   (table) => [
-    uniqueIndex("portal_task_assignees_unique").on(table.taskId, table.userEmail),
-    index("portal_task_assignees_user_status_idx").on(table.userEmail, table.status),
-    check("portal_task_assignees_status_check", sql`${table.status} in ('open','completed')`),
+    uniqueIndex("portal_task_assignees_unique").on(
+      table.taskId,
+      table.userEmail,
+    ),
+    index("portal_task_assignees_user_status_idx").on(
+      table.userEmail,
+      table.status,
+    ),
+    check(
+      "portal_task_assignees_status_check",
+      sql`${table.status} in ('open','completed')`,
+    ),
   ],
 );
 
@@ -983,18 +1556,30 @@ export const officialLetters = pgTable(
     recipient: text("recipient").notNull(),
     body: text("body").notNull(),
     status: text("status").notNull().default("draft"),
-    stampId: integer("stamp_id").references(() => documentStamps.id, { onDelete: "restrict" }),
+    stampId: integer("stamp_id").references(() => documentStamps.id, {
+      onDelete: "restrict",
+    }),
     cancellationReason: text("cancellation_reason"),
     documentId: integer("document_id"),
     createdBy: text("created_by").notNull(),
     cancelledBy: text("cancelled_by"),
     cancelledAt: text("cancelled_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("official_letters_status_updated_idx").on(table.status, table.updatedAt),
-    check("official_letters_status_check", sql`${table.status} in ('draft','approved','sent','cancelled')`),
+    index("official_letters_status_updated_idx").on(
+      table.status,
+      table.updatedAt,
+    ),
+    check(
+      "official_letters_status_check",
+      sql`${table.status} in ('draft','approved','sent','cancelled')`,
+    ),
   ],
 );
 
@@ -1010,11 +1595,17 @@ export const workers = pgTable(
     mobile: text("mobile"),
     iban: text("iban"),
     bankName: text("bank_name"),
-    monthlySalaryHalalas: integer("monthly_salary_halalas").notNull().default(0),
-    isCompanySponsored: boolean("is_company_sponsored").notNull().default(false),
+    monthlySalaryHalalas: integer("monthly_salary_halalas")
+      .notNull()
+      .default(0),
+    isCompanySponsored: boolean("is_company_sponsored")
+      .notNull()
+      .default(false),
     sponsorshipType: text("sponsorship_type").notNull().default("other"),
     sponsorName: text("sponsor_name"),
-    ajirContractStatus: text("ajir_contract_status").notNull().default("without_ajir"),
+    ajirContractStatus: text("ajir_contract_status")
+      .notNull()
+      .default("without_ajir"),
     archivedAt: text("archived_at"),
     archivedBy: text("archived_by"),
     archiveReason: text("archive_reason"),
@@ -1026,8 +1617,12 @@ export const workers = pgTable(
     status: text("status").notNull().default("available"),
     clientId: integer("client_id"),
     workOrderId: integer("work_order_id"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workers_status_idx").on(table.status),
@@ -1053,7 +1648,9 @@ export const workerAttachments = pgTable(
     validationStatus: text("validation_status").notNull().default("legacy"),
     validationDetails: text("validation_details"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("worker_attachments_worker_id_idx").on(table.workerId),
@@ -1075,7 +1672,9 @@ export const portalActivity = pgTable(
     correlationId: text("correlation_id"),
     source: text("source").notNull().default("portal"),
     ipHash: text("ip_hash"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("portal_activity_created_at_idx").on(table.createdAt)],
 );
@@ -1098,13 +1697,22 @@ export const portalNotifications = pgTable(
     dedupeKey: text("dedupe_key").unique(),
     source: text("source").notNull().default("event"),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("portal_notifications_status_created_idx").on(table.status, table.createdAt),
+    index("portal_notifications_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
     index("portal_notifications_module_idx").on(table.module),
-    index("portal_notifications_target_department_idx").on(table.targetDepartment),
+    index("portal_notifications_target_department_idx").on(
+      table.targetDepartment,
+    ),
     index("portal_notifications_target_email_idx").on(table.targetEmail),
   ],
 );
@@ -1115,11 +1723,16 @@ export const portalNotificationReads = pgTable(
     id: serial("id").primaryKey(),
     notificationId: integer("notification_id").notNull(),
     userEmail: text("user_email").notNull(),
-    readAt: text("read_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    readAt: text("read_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     dismissedAt: text("dismissed_at"),
   },
   (table) => [
-    uniqueIndex("portal_notification_reads_user_notification_unique").on(table.notificationId, table.userEmail),
+    uniqueIndex("portal_notification_reads_user_notification_unique").on(
+      table.notificationId,
+      table.userEmail,
+    ),
     index("portal_notification_reads_user_idx").on(table.userEmail),
   ],
 );
@@ -1146,8 +1759,12 @@ export const companyDocuments = pgTable(
     retentionUntil: text("retention_until"),
     lockedUntil: text("locked_until"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("company_documents_category_idx").on(table.category),
@@ -1168,7 +1785,9 @@ export const documentShareLinks = pgTable(
     downloadCount: integer("download_count").notNull().default(0),
     lastAccessedAt: text("last_accessed_at"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("document_share_links_document_id_idx").on(table.documentId),
@@ -1192,13 +1811,23 @@ export const contractSignatureRequests = pgTable(
     uploadedAt: text("uploaded_at"),
     uploadedSourceHash: text("uploaded_source_hash"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("contract_signature_requests_contract_idx").on(table.contractId, table.createdAt),
+    index("contract_signature_requests_contract_idx").on(
+      table.contractId,
+      table.createdAt,
+    ),
     index("contract_signature_requests_expires_idx").on(table.expiresAt),
-    check("contract_signature_requests_status_check", sql`${table.status} in ('pending','uploaded','revoked','expired')`),
+    check(
+      "contract_signature_requests_status_check",
+      sql`${table.status} in ('pending','uploaded','revoked','expired')`,
+    ),
   ],
 );
 
@@ -1213,18 +1842,67 @@ export const companyAssets = pgTable(
     validationStatus: text("validation_status").notNull().default("legacy"),
     validationDetails: text("validation_details"),
     uploadedBy: text("uploaded_by").notNull(),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("company_assets_updated_at_idx").on(table.updatedAt)],
 );
 
-export const documentStamps = pgTable("document_stamps", {
-  id: serial("id").primaryKey(), name: text("name").notNull(), storageKey: text("storage_key").notNull().unique(), fileName: text("file_name").notNull(), contentType: text("content_type").notNull(), sizeBytes: integer("size_bytes").notNull(), active: boolean("active").notNull().default(true), createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [index("document_stamps_active_idx").on(table.active, table.updatedAt)]);
+export const documentStamps = pgTable(
+  "document_stamps",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    active: boolean("active").notNull().default(true),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("document_stamps_active_idx").on(table.active, table.updatedAt),
+  ],
+);
 
-export const documentDrafts = pgTable("document_drafts", {
-  id: serial("id").primaryKey(), documentType: text("document_type").notNull(), title: text("title").notNull().default("مسودة غير مكتملة"), payloadJson: text("payload_json").notNull(), completionPercent: integer("completion_percent").notNull().default(0), ownerEmail: text("owner_email").notNull(), createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-}, table => [index("document_drafts_owner_type_idx").on(table.ownerEmail, table.documentType), check("document_drafts_type_check", sql`${table.documentType} in ('workforce_contract','quotation','official_letter')`), check("document_drafts_completion_check", sql`${table.completionPercent} between 0 and 100`)]);
+export const documentDrafts = pgTable(
+  "document_drafts",
+  {
+    id: serial("id").primaryKey(),
+    documentType: text("document_type").notNull(),
+    title: text("title").notNull().default("مسودة غير مكتملة"),
+    payloadJson: text("payload_json").notNull(),
+    completionPercent: integer("completion_percent").notNull().default(0),
+    ownerEmail: text("owner_email").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("document_drafts_owner_type_idx").on(
+      table.ownerEmail,
+      table.documentType,
+    ),
+    check(
+      "document_drafts_type_check",
+      sql`${table.documentType} in ('workforce_contract','quotation','official_letter')`,
+    ),
+    check(
+      "document_drafts_completion_check",
+      sql`${table.completionPercent} between 0 and 100`,
+    ),
+  ],
+);
 
 export const workforceContracts = pgTable(
   "workforce_contracts",
@@ -1241,13 +1919,17 @@ export const workforceContracts = pgTable(
     startDate: text("start_date").notNull(),
     endDate: text("end_date").notNull(),
     amountHalalas: integer("amount_halalas").notNull().default(0),
-    contractDirection: text("contract_direction").notNull().default("dali_supplier"),
+    contractDirection: text("contract_direction")
+      .notNull()
+      .default("dali_supplier"),
     quantityMode: text("quantity_mode").notNull().default("fixed"),
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
     seasonType: text("season_type").notNull().default("regular"),
     billingMode: text("billing_mode").notNull().default("monthly"),
     firstPaymentDueDate: text("first_payment_due_date"),
-    showPaymentSchedule: boolean("show_payment_schedule").notNull().default(true),
+    showPaymentSchedule: boolean("show_payment_schedule")
+      .notNull()
+      .default(true),
     accommodationParty: text("accommodation_party"),
     transportParty: text("transport_party"),
     details: text("details").notNull(),
@@ -1257,7 +1939,9 @@ export const workforceContracts = pgTable(
     amendmentType: text("amendment_type"),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
-    stampId: integer("stamp_id").references(() => documentStamps.id, { onDelete: "restrict" }),
+    stampId: integer("stamp_id").references(() => documentStamps.id, {
+      onDelete: "restrict",
+    }),
     signedAt: text("signed_at"),
     effectiveAt: text("effective_at"),
     suspendedAt: text("suspended_at"),
@@ -1267,12 +1951,19 @@ export const workforceContracts = pgTable(
     supplierId: integer("supplier_id"),
     opportunityId: integer("opportunity_id"),
     quoteVersionId: integer("quote_version_id"),
-    sourceRequestId: integer("source_request_id").references(() => workforceRequests.id, { onDelete: "set null" }),
+    sourceRequestId: integer("source_request_id").references(
+      () => workforceRequests.id,
+      { onDelete: "set null" },
+    ),
     salesRepresentativeId: integer("sales_representative_id"),
     representativeRequestId: integer("representative_request_id"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workforce_contracts_client_name_idx").on(table.clientName),
@@ -1280,15 +1971,36 @@ export const workforceContracts = pgTable(
     index("workforce_contracts_end_date_idx").on(table.endDate),
     index("workforce_contracts_parent_idx").on(table.parentContractId),
     index("workforce_contracts_source_request_idx").on(table.sourceRequestId),
-    index("workforce_contracts_sales_representative_idx").on(table.salesRepresentativeId),
+    index("workforce_contracts_sales_representative_idx").on(
+      table.salesRepresentativeId,
+    ),
     index("workforce_contracts_supplier_idx").on(table.supplierId),
-    index("workforce_contracts_representative_request_idx").on(table.representativeRequestId),
-    uniqueIndex("workforce_contracts_quote_version_unique").on(table.quoteVersionId),
-    check("workforce_contracts_quantity_mode_check", sql`${table.quantityMode} in ('fixed','open')`),
-    check("workforce_contracts_direction_check", sql`${table.contractDirection} in ('dali_supplier','dali_purchaser')`),
-    check("workforce_contracts_season_type_check", sql`${table.seasonType} in ('regular','ramadan','hajj')`),
-    check("workforce_contracts_billing_mode_check", sql`${table.billingMode} in ('monthly','seasonal_installments','actual_usage')`),
-    check("workforce_contracts_status_check", sql`${table.status} in ('draft','internal_review','legal_review','approved','sent','signed','active','suspended','expired','terminated','cancelled','superseded')`),
+    index("workforce_contracts_representative_request_idx").on(
+      table.representativeRequestId,
+    ),
+    uniqueIndex("workforce_contracts_quote_version_unique").on(
+      table.quoteVersionId,
+    ),
+    check(
+      "workforce_contracts_quantity_mode_check",
+      sql`${table.quantityMode} in ('fixed','open')`,
+    ),
+    check(
+      "workforce_contracts_direction_check",
+      sql`${table.contractDirection} in ('dali_supplier','dali_purchaser')`,
+    ),
+    check(
+      "workforce_contracts_season_type_check",
+      sql`${table.seasonType} in ('regular','ramadan','hajj')`,
+    ),
+    check(
+      "workforce_contracts_billing_mode_check",
+      sql`${table.billingMode} in ('monthly','seasonal_installments','actual_usage')`,
+    ),
+    check(
+      "workforce_contracts_status_check",
+      sql`${table.status} in ('draft','internal_review','legal_review','approved','sent','signed','active','suspended','expired','terminated','cancelled','superseded')`,
+    ),
   ],
 );
 
@@ -1296,7 +2008,9 @@ export const contractClauses = pgTable(
   "contract_clauses",
   {
     id: serial("id").primaryKey(),
-    contractId: integer("contract_id").notNull().references(() => workforceContracts.id, { onDelete: "cascade" }),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => workforceContracts.id, { onDelete: "cascade" }),
     clauseNumber: integer("clause_number").notNull(),
     title: text("title").notNull(),
     titleEn: text("title_en"),
@@ -1306,11 +2020,18 @@ export const contractClauses = pgTable(
     sectionEn: text("section_en"),
     isOptional: boolean("is_optional").notNull().default(false),
     isIncluded: boolean("is_included").notNull().default(true),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("contract_clauses_number_unique").on(table.contractId, table.clauseNumber),
+    uniqueIndex("contract_clauses_number_unique").on(
+      table.contractId,
+      table.clauseNumber,
+    ),
     index("contract_clauses_contract_idx").on(table.contractId),
   ],
 );
@@ -1327,10 +2048,18 @@ export const contractProfessions = pgTable(
     sponsorshipType: text("sponsorship_type"),
     sponsorName: text("sponsor_name"),
     ajirContractStatus: text("ajir_contract_status"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("contract_professions_contract_sponsor_allocation_unique").on(table.contractId, table.profession, table.sponsorshipType, table.sponsorName, table.ajirContractStatus),
+    uniqueIndex("contract_professions_contract_sponsor_allocation_unique").on(
+      table.contractId,
+      table.profession,
+      table.sponsorshipType,
+      table.sponsorName,
+      table.ajirContractStatus,
+    ),
     index("contract_professions_contract_id_idx").on(table.contractId),
     index("contract_professions_profession_idx").on(table.profession),
   ],
@@ -1345,13 +2074,20 @@ export const contractWorkerAssignments = pgTable(
     workerId: integer("worker_id").notNull(),
     status: text("status").notNull().default("active"),
     assignedBy: text("assigned_by").notNull(),
-    assignedAt: text("assigned_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    assignedAt: text("assigned_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     releasedAt: text("released_at"),
   },
   (table) => [
-    uniqueIndex("contract_worker_assignments_contract_worker_unique").on(table.contractId, table.workerId),
+    uniqueIndex("contract_worker_assignments_contract_worker_unique").on(
+      table.contractId,
+      table.workerId,
+    ),
     index("contract_worker_assignments_contract_id_idx").on(table.contractId),
-    index("contract_worker_assignments_profession_id_idx").on(table.contractProfessionId),
+    index("contract_worker_assignments_profession_id_idx").on(
+      table.contractProfessionId,
+    ),
     index("contract_worker_assignments_worker_id_idx").on(table.workerId),
     index("contract_worker_assignments_status_idx").on(table.status),
   ],
@@ -1361,11 +2097,22 @@ export const contractWorkerAbsences = pgTable(
   "contract_worker_absences",
   {
     id: serial("id").primaryKey(),
-    contractId: integer("contract_id").notNull().references(() => workforceContracts.id, { onDelete: "cascade" }),
-    paymentScheduleId: integer("payment_schedule_id").notNull().references(() => contractPaymentSchedules.id, { onDelete: "restrict" }),
-    workerId: integer("worker_id").references(() => workers.id, { onDelete: "restrict" }),
-    replacementWorkerId: integer("replacement_worker_id").references(() => workers.id, { onDelete: "restrict" }),
-    contractProfessionId: integer("contract_profession_id").notNull().references(() => contractProfessions.id, { onDelete: "restrict" }),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => workforceContracts.id, { onDelete: "cascade" }),
+    paymentScheduleId: integer("payment_schedule_id")
+      .notNull()
+      .references(() => contractPaymentSchedules.id, { onDelete: "restrict" }),
+    workerId: integer("worker_id").references(() => workers.id, {
+      onDelete: "restrict",
+    }),
+    replacementWorkerId: integer("replacement_worker_id").references(
+      () => workers.id,
+      { onDelete: "restrict" },
+    ),
+    contractProfessionId: integer("contract_profession_id")
+      .notNull()
+      .references(() => contractProfessions.id, { onDelete: "restrict" }),
     profession: text("profession").notNull(),
     absenceDate: text("absence_date").notNull(),
     absenceEndDate: text("absence_end_date"),
@@ -1373,24 +2120,43 @@ export const contractWorkerAbsences = pgTable(
     absentCount: integer("absent_count").notNull().default(1),
     dailyRateHalalas: integer("daily_rate_halalas").notNull(),
     deductionHalalas: integer("deduction_halalas").notNull(),
-    clientDailyRateHalalas: integer("client_daily_rate_halalas").notNull().default(0),
-    clientDeductionHalalas: integer("client_deduction_halalas").notNull().default(0),
+    clientDailyRateHalalas: integer("client_daily_rate_halalas")
+      .notNull()
+      .default(0),
+    clientDeductionHalalas: integer("client_deduction_halalas")
+      .notNull()
+      .default(0),
     status: text("status").notNull().default("active"),
     notes: text("notes"),
     dedupeKey: text("dedupe_key").notNull().unique(),
     recordedBy: text("recorded_by").notNull(),
     voidedBy: text("voided_by"),
     voidedAt: text("voided_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("contract_worker_absences_contract_date_idx").on(table.contractId, table.absenceDate),
+    index("contract_worker_absences_contract_date_idx").on(
+      table.contractId,
+      table.absenceDate,
+    ),
     index("contract_worker_absences_payment_idx").on(table.paymentScheduleId),
     index("contract_worker_absences_worker_idx").on(table.workerId),
-    index("contract_worker_absences_replacement_idx").on(table.replacementWorkerId),
-    check("contract_worker_absences_count_check", sql`${table.absentCount} > 0 and ${table.dailyRateHalalas} > 0 and ${table.deductionHalalas} = ${table.absentCount} * ${table.dailyRateHalalas}`),
-    check("contract_worker_absences_status_check", sql`${table.status} in ('active','void')`),
+    index("contract_worker_absences_replacement_idx").on(
+      table.replacementWorkerId,
+    ),
+    check(
+      "contract_worker_absences_count_check",
+      sql`${table.absentCount} > 0 and ${table.dailyRateHalalas} > 0 and ${table.deductionHalalas} = ${table.absentCount} * ${table.dailyRateHalalas}`,
+    ),
+    check(
+      "contract_worker_absences_status_check",
+      sql`${table.status} in ('active','void')`,
+    ),
   ],
 );
 
@@ -1408,11 +2174,18 @@ export const clients = pgTable(
     address: text("address"),
     status: text("status").notNull().default("prospect"),
     ownerEmail: text("owner_email"),
-    sourceRequestId: integer("source_request_id").references(() => workforceRequests.id, { onDelete: "set null" }),
+    sourceRequestId: integer("source_request_id").references(
+      () => workforceRequests.id,
+      { onDelete: "set null" },
+    ),
     salesRepresentativeId: integer("sales_representative_id"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
@@ -1421,7 +2194,10 @@ export const clients = pgTable(
     index("clients_owner_idx").on(table.ownerEmail),
     index("clients_source_request_idx").on(table.sourceRequestId),
     index("clients_sales_representative_idx").on(table.salesRepresentativeId),
-    check("clients_status_check", sql`${table.status} in ('prospect', 'active', 'inactive', 'blocked')`),
+    check(
+      "clients_status_check",
+      sql`${table.status} in ('prospect', 'active', 'inactive', 'blocked')`,
+    ),
   ],
 );
 
@@ -1439,20 +2215,79 @@ export const salesRepresentatives = pgTable(
     representativeType: text("representative_type").notNull().default("sales"),
     status: text("status").notNull().default("active"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("sales_representatives_status_idx").on(table.status),
     index("sales_representatives_name_idx").on(table.fullName),
-    check("sales_representatives_commission_check", sql`${table.commissionBps} between 0 and 10000`),
-    check("sales_representatives_status_check", sql`${table.status} in ('active','inactive','suspended')`),
-    check("sales_representatives_type_check", sql`${table.representativeType} in ('sales','purchasing')`),
+    check(
+      "sales_representatives_commission_check",
+      sql`${table.commissionBps} between 0 and 10000`,
+    ),
+    check(
+      "sales_representatives_status_check",
+      sql`${table.status} in ('active','inactive','suspended')`,
+    ),
+    check(
+      "sales_representatives_type_check",
+      sql`${table.representativeType} in ('sales','purchasing')`,
+    ),
   ],
 );
 
-export const representativeRequests = pgTable("representative_requests",{
-  id:serial("id").primaryKey(),requestCode:text("request_code").notNull().unique(),representativeId:integer("representative_id").notNull().references(()=>salesRepresentatives.id,{onDelete:"restrict"}),requestType:text("request_type").notNull(),clientName:text("client_name"),clientMobile:text("client_mobile"),workSite:text("work_site"),title:text("title").notNull(),details:text("details").notNull(),itemsJson:text("items_json"),estimatedAmountHalalas:integer("estimated_amount_halalas").notNull().default(0),status:text("status").notNull().default("submitted"),decisionReason:text("decision_reason"),decidedBy:text("decided_by"),decidedAt:text("decided_at"),quoteVersionId:integer("quote_version_id").references(()=>quoteVersions.id,{onDelete:"set null"}),createdBy:text("created_by").notNull(),createdAt:text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),updatedAt:text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`)},table=>[index("representative_requests_rep_idx").on(table.representativeId),index("representative_requests_status_idx").on(table.status),index("representative_requests_type_idx").on(table.requestType),check("representative_requests_type_check",sql`${table.requestType} in ('sales','purchase')`),check("representative_requests_status_check",sql`${table.status} in ('submitted','changes_requested','approved','rejected','converted')`)]);
+export const representativeRequests = pgTable(
+  "representative_requests",
+  {
+    id: serial("id").primaryKey(),
+    requestCode: text("request_code").notNull().unique(),
+    representativeId: integer("representative_id")
+      .notNull()
+      .references(() => salesRepresentatives.id, { onDelete: "restrict" }),
+    requestType: text("request_type").notNull(),
+    clientName: text("client_name"),
+    clientMobile: text("client_mobile"),
+    workSite: text("work_site"),
+    title: text("title").notNull(),
+    details: text("details").notNull(),
+    itemsJson: text("items_json"),
+    estimatedAmountHalalas: integer("estimated_amount_halalas")
+      .notNull()
+      .default(0),
+    status: text("status").notNull().default("submitted"),
+    decisionReason: text("decision_reason"),
+    decidedBy: text("decided_by"),
+    decidedAt: text("decided_at"),
+    quoteVersionId: integer("quote_version_id").references(
+      () => quoteVersions.id,
+      { onDelete: "set null" },
+    ),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("representative_requests_rep_idx").on(table.representativeId),
+    index("representative_requests_status_idx").on(table.status),
+    index("representative_requests_type_idx").on(table.requestType),
+    check(
+      "representative_requests_type_check",
+      sql`${table.requestType} in ('sales','purchase')`,
+    ),
+    check(
+      "representative_requests_status_check",
+      sql`${table.status} in ('submitted','changes_requested','approved','rejected','converted')`,
+    ),
+  ],
+);
 
 export const suppliers = pgTable(
   "suppliers",
@@ -1468,13 +2303,20 @@ export const suppliers = pgTable(
     address: text("address"),
     status: text("status").notNull().default("active"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("suppliers_name_idx").on(table.legalName),
     index("suppliers_status_idx").on(table.status),
-    check("suppliers_status_check", sql`${table.status} in ('active','inactive','blocked')`),
+    check(
+      "suppliers_status_check",
+      sql`${table.status} in ('active','inactive','blocked')`,
+    ),
   ],
 );
 
@@ -1485,10 +2327,18 @@ export const purchaseInvoices = pgTable(
     referenceCode: text("reference_code").notNull().unique(),
     supplierInvoiceNumber: text("supplier_invoice_number").notNull(),
     expenseType: text("expense_type").notNull().default("supplier_invoice"),
-    supplierId: integer("supplier_id").references(() => suppliers.id, { onDelete: "restrict" }),
-    employeeId: integer("employee_id").references(() => employees.id, { onDelete: "restrict" }),
-    contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
-    documentId: integer("document_id").notNull().references(() => companyDocuments.id, { onDelete: "restrict" }),
+    supplierId: integer("supplier_id").references(() => suppliers.id, {
+      onDelete: "restrict",
+    }),
+    employeeId: integer("employee_id").references(() => employees.id, {
+      onDelete: "restrict",
+    }),
+    contractId: integer("contract_id").references(() => workforceContracts.id, {
+      onDelete: "restrict",
+    }),
+    documentId: integer("document_id")
+      .notNull()
+      .references(() => companyDocuments.id, { onDelete: "restrict" }),
     invoiceDate: text("invoice_date").notNull(),
     dueDate: text("due_date").notNull(),
     description: text("description").notNull(),
@@ -1496,26 +2346,51 @@ export const purchaseInvoices = pgTable(
     vatHalalas: integer("vat_halalas").notNull().default(0),
     totalHalalas: integer("total_halalas").notNull(),
     status: text("status").notNull().default("draft"),
-    journalEntryId: integer("journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
-    paymentJournalEntryId: integer("payment_journal_entry_id").references(() => journalEntries.id, { onDelete: "restrict" }),
+    journalEntryId: integer("journal_entry_id").references(
+      () => journalEntries.id,
+      { onDelete: "restrict" },
+    ),
+    paymentJournalEntryId: integer("payment_journal_entry_id").references(
+      () => journalEntries.id,
+      { onDelete: "restrict" },
+    ),
     postingStatus: text("posting_status").notNull().default("unposted"),
     createdBy: text("created_by").notNull(),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
     paidBy: text("paid_by"),
     paidAt: text("paid_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("purchase_invoice_supplier_number_unique").on(table.supplierId, table.supplierInvoiceNumber),
+    uniqueIndex("purchase_invoice_supplier_number_unique").on(
+      table.supplierId,
+      table.supplierInvoiceNumber,
+    ),
     index("purchase_invoices_due_status_idx").on(table.dueDate, table.status),
     index("purchase_invoices_supplier_idx").on(table.supplierId),
     index("purchase_invoices_employee_idx").on(table.employeeId),
-    check("purchase_invoices_type_check", sql`${table.expenseType} in ('supplier_invoice','employee_expense')`),
-    check("purchase_invoices_status_check", sql`${table.status} in ('draft','approved','posted','payment_pending','paid','cancelled')`),
-    check("purchase_invoices_posting_check", sql`${table.postingStatus} in ('unposted','draft','posted','reversed')`),
-    check("purchase_invoices_amount_check", sql`${table.subtotalHalalas} >= 0 and ${table.vatHalalas} >= 0 and ${table.totalHalalas} = ${table.subtotalHalalas} + ${table.vatHalalas}`),
+    check(
+      "purchase_invoices_type_check",
+      sql`${table.expenseType} in ('supplier_invoice','employee_expense')`,
+    ),
+    check(
+      "purchase_invoices_status_check",
+      sql`${table.status} in ('draft','approved','posted','payment_pending','paid','cancelled')`,
+    ),
+    check(
+      "purchase_invoices_posting_check",
+      sql`${table.postingStatus} in ('unposted','draft','posted','reversed')`,
+    ),
+    check(
+      "purchase_invoices_amount_check",
+      sql`${table.subtotalHalalas} >= 0 and ${table.vatHalalas} >= 0 and ${table.totalHalalas} = ${table.subtotalHalalas} + ${table.vatHalalas}`,
+    ),
   ],
 );
 
@@ -1523,20 +2398,29 @@ export const clientContacts = pgTable(
   "client_contacts",
   {
     id: serial("id").primaryKey(),
-    clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
     fullName: text("full_name").notNull(),
     jobTitle: text("job_title"),
     mobile: text("mobile"),
     email: text("email"),
     preferredChannel: text("preferred_channel").notNull().default("either"),
     isPrimary: boolean("is_primary").notNull().default(false),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("client_contacts_client_idx").on(table.clientId),
     index("client_contacts_email_idx").on(table.email),
-    check("client_contacts_channel_check", sql`${table.preferredChannel} in ('phone', 'email', 'either', 'whatsapp')`),
+    check(
+      "client_contacts_channel_check",
+      sql`${table.preferredChannel} in ('phone', 'email', 'either', 'whatsapp')`,
+    ),
   ],
 );
 
@@ -1545,31 +2429,57 @@ export const salesOpportunities = pgTable(
   {
     id: serial("id").primaryKey(),
     opportunityCode: text("opportunity_code").notNull().unique(),
-    clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
-    contactId: integer("contact_id").references(() => clientContacts.id, { onDelete: "set null" }),
-    sourceRequestId: integer("source_request_id").references(() => workforceRequests.id, { onDelete: "set null" }),
-    salesRepresentativeId: integer("sales_representative_id").references(() => salesRepresentatives.id, { onDelete: "set null" }),
+    clientId: integer("client_id").references(() => clients.id, {
+      onDelete: "set null",
+    }),
+    contactId: integer("contact_id").references(() => clientContacts.id, {
+      onDelete: "set null",
+    }),
+    sourceRequestId: integer("source_request_id").references(
+      () => workforceRequests.id,
+      { onDelete: "set null" },
+    ),
+    salesRepresentativeId: integer("sales_representative_id").references(
+      () => salesRepresentatives.id,
+      { onDelete: "set null" },
+    ),
     title: text("title").notNull(),
     stage: text("stage").notNull().default("new"),
-    expectedValueHalalas: integer("expected_value_halalas").notNull().default(0),
+    expectedValueHalalas: integer("expected_value_halalas")
+      .notNull()
+      .default(0),
     expectedCloseDate: text("expected_close_date"),
     probability: integer("probability").notNull().default(10),
     ownerEmail: text("owner_email").notNull(),
     lossReason: text("loss_reason"),
     notes: text("notes"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
     index("sales_opportunities_client_idx").on(table.clientId),
     index("sales_opportunities_stage_idx").on(table.stage),
     index("sales_opportunities_owner_idx").on(table.ownerEmail),
-    index("sales_opportunities_representative_idx").on(table.salesRepresentativeId),
-    uniqueIndex("sales_opportunities_source_request_unique").on(table.sourceRequestId),
-    check("sales_opportunities_stage_check", sql`${table.stage} in ('new', 'qualified', 'proposal', 'negotiation', 'won', 'lost')`),
-    check("sales_opportunities_probability_check", sql`${table.probability} between 0 and 100`),
+    index("sales_opportunities_representative_idx").on(
+      table.salesRepresentativeId,
+    ),
+    uniqueIndex("sales_opportunities_source_request_unique").on(
+      table.sourceRequestId,
+    ),
+    check(
+      "sales_opportunities_stage_check",
+      sql`${table.stage} in ('new', 'qualified', 'proposal', 'negotiation', 'won', 'lost')`,
+    ),
+    check(
+      "sales_opportunities_probability_check",
+      sql`${table.probability} between 0 and 100`,
+    ),
   ],
 );
 
@@ -1578,7 +2488,9 @@ export const quoteVersions = pgTable(
   {
     id: serial("id").primaryKey(),
     quoteCode: text("quote_code").notNull(),
-    opportunityId: integer("opportunity_id").notNull().references(() => salesOpportunities.id, { onDelete: "cascade" }),
+    opportunityId: integer("opportunity_id")
+      .notNull()
+      .references(() => salesOpportunities.id, { onDelete: "cascade" }),
     versionNumber: integer("version_number").notNull().default(1),
     status: text("status").notNull().default("draft"),
     issueDate: text("issue_date").notNull(),
@@ -1597,25 +2509,45 @@ export const quoteVersions = pgTable(
     approvalReason: text("approval_reason"),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
-    stampId: integer("stamp_id").references(() => documentStamps.id, { onDelete: "restrict" }),
+    stampId: integer("stamp_id").references(() => documentStamps.id, {
+      onDelete: "restrict",
+    }),
     acceptedAt: text("accepted_at"),
     clientDecisionBy: text("client_decision_by"),
     clientDecisionReason: text("client_decision_reason"),
     clientDecisionAt: text("client_decision_at"),
-    documentId: integer("document_id").references(() => companyDocuments.id, { onDelete: "set null" }),
+    documentId: integer("document_id").references(() => companyDocuments.id, {
+      onDelete: "set null",
+    }),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     recordVersion: integer("record_version").notNull().default(1),
   },
   (table) => [
-    uniqueIndex("quote_versions_code_version_unique").on(table.quoteCode, table.versionNumber),
+    uniqueIndex("quote_versions_code_version_unique").on(
+      table.quoteCode,
+      table.versionNumber,
+    ),
     index("quote_versions_opportunity_idx").on(table.opportunityId),
     index("quote_versions_status_idx").on(table.status),
     index("quote_versions_valid_until_idx").on(table.validUntil),
-    check("quote_versions_status_check", sql`${table.status} in ('draft', 'pending_approval', 'approved', 'sent', 'accepted', 'rejected', 'expired', 'superseded', 'cancelled')`),
-    check("quote_versions_quantity_mode_check", sql`${table.quantityMode} in ('fixed','open')`),
-    check("quote_versions_season_type_check", sql`${table.seasonType} in ('regular','ramadan','hajj')`),
+    check(
+      "quote_versions_status_check",
+      sql`${table.status} in ('draft', 'pending_approval', 'approved', 'sent', 'accepted', 'rejected', 'expired', 'superseded', 'cancelled')`,
+    ),
+    check(
+      "quote_versions_quantity_mode_check",
+      sql`${table.quantityMode} in ('fixed','open')`,
+    ),
+    check(
+      "quote_versions_season_type_check",
+      sql`${table.seasonType} in ('regular','ramadan','hajj')`,
+    ),
   ],
 );
 
@@ -1623,11 +2555,14 @@ export const quoteItems = pgTable(
   "quote_items",
   {
     id: serial("id").primaryKey(),
-    quoteVersionId: integer("quote_version_id").notNull().references(() => quoteVersions.id, { onDelete: "cascade" }),
+    quoteVersionId: integer("quote_version_id")
+      .notNull()
+      .references(() => quoteVersions.id, { onDelete: "cascade" }),
     profession: text("profession").notNull(),
     quantity: integer("quantity").notNull(),
     durationMonths: integer("duration_months").notNull().default(1),
     unitPriceHalalas: integer("unit_price_halalas").notNull(),
+    actualSalaryHalalas: integer("actual_salary_halalas").notNull().default(0),
     lineTotalHalalas: integer("line_total_halalas").notNull(),
     notes: text("notes"),
     sponsorshipType: text("sponsorship_type"),
@@ -1647,9 +2582,16 @@ export const workOrders = pgTable(
   {
     id: serial("id").primaryKey(),
     workOrderCode: text("work_order_code").notNull().unique(),
-    clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "restrict" }),
-    contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "set null" }),
-    quoteVersionId: integer("quote_version_id").references(() => quoteVersions.id, { onDelete: "set null" }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    contractId: integer("contract_id").references(() => workforceContracts.id, {
+      onDelete: "set null",
+    }),
+    quoteVersionId: integer("quote_version_id").references(
+      () => quoteVersions.id,
+      { onDelete: "set null" },
+    ),
     title: text("title").notNull(),
     workSite: text("work_site").notNull(),
     startDate: text("start_date").notNull(),
@@ -1658,8 +2600,12 @@ export const workOrders = pgTable(
     status: text("status").notNull().default("planned"),
     notes: text("notes"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
@@ -1667,7 +2613,10 @@ export const workOrders = pgTable(
     index("work_orders_contract_idx").on(table.contractId),
     index("work_orders_status_idx").on(table.status),
     index("work_orders_dates_idx").on(table.startDate, table.endDate),
-    check("work_orders_status_check", sql`${table.status} in ('planned', 'staffing', 'active', 'paused', 'completed', 'cancelled')`),
+    check(
+      "work_orders_status_check",
+      sql`${table.status} in ('planned', 'staffing', 'active', 'paused', 'completed', 'cancelled')`,
+    ),
   ],
 );
 
@@ -1675,7 +2624,9 @@ export const workOrderRequirements = pgTable(
   "work_order_requirements",
   {
     id: serial("id").primaryKey(),
-    workOrderId: integer("work_order_id").notNull().references(() => workOrders.id, { onDelete: "cascade" }),
+    workOrderId: integer("work_order_id")
+      .notNull()
+      .references(() => workOrders.id, { onDelete: "cascade" }),
     profession: text("profession").notNull(),
     requiredCount: integer("required_count").notNull(),
     filledCount: integer("filled_count").notNull().default(0),
@@ -1684,9 +2635,16 @@ export const workOrderRequirements = pgTable(
     endTime: text("end_time"),
   },
   (table) => [
-    uniqueIndex("work_order_requirements_unique").on(table.workOrderId, table.profession, table.shiftName),
+    uniqueIndex("work_order_requirements_unique").on(
+      table.workOrderId,
+      table.profession,
+      table.shiftName,
+    ),
     index("work_order_requirements_order_idx").on(table.workOrderId),
-    check("work_order_requirements_count_check", sql`${table.requiredCount} > 0 and ${table.filledCount} >= 0`),
+    check(
+      "work_order_requirements_count_check",
+      sql`${table.requiredCount} > 0 and ${table.filledCount} >= 0`,
+    ),
   ],
 );
 
@@ -1695,8 +2653,12 @@ export const timesheets = pgTable(
   {
     id: serial("id").primaryKey(),
     timesheetCode: text("timesheet_code").notNull().unique(),
-    workOrderId: integer("work_order_id").notNull().references(() => workOrders.id, { onDelete: "restrict" }),
-    clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "restrict" }),
+    workOrderId: integer("work_order_id")
+      .notNull()
+      .references(() => workOrders.id, { onDelete: "restrict" }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
     periodStart: text("period_start").notNull(),
     periodEnd: text("period_end").notNull(),
     status: text("status").notNull().default("draft"),
@@ -1706,15 +2668,26 @@ export const timesheets = pgTable(
     approvedAt: text("approved_at"),
     rejectionReason: text("rejection_reason"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
-    uniqueIndex("timesheets_order_period_unique").on(table.workOrderId, table.periodStart, table.periodEnd),
+    uniqueIndex("timesheets_order_period_unique").on(
+      table.workOrderId,
+      table.periodStart,
+      table.periodEnd,
+    ),
     index("timesheets_client_idx").on(table.clientId),
     index("timesheets_status_idx").on(table.status),
-    check("timesheets_status_check", sql`${table.status} in ('draft', 'submitted', 'approved', 'rejected', 'invoiced')`),
+    check(
+      "timesheets_status_check",
+      sql`${table.status} in ('draft', 'submitted', 'approved', 'rejected', 'invoiced')`,
+    ),
   ],
 );
 
@@ -1722,8 +2695,12 @@ export const timeEntries = pgTable(
   "time_entries",
   {
     id: serial("id").primaryKey(),
-    timesheetId: integer("timesheet_id").notNull().references(() => timesheets.id, { onDelete: "cascade" }),
-    workerId: integer("worker_id").notNull().references(() => workers.id, { onDelete: "restrict" }),
+    timesheetId: integer("timesheet_id")
+      .notNull()
+      .references(() => timesheets.id, { onDelete: "cascade" }),
+    workerId: integer("worker_id")
+      .notNull()
+      .references(() => workers.id, { onDelete: "restrict" }),
     workDate: text("work_date").notNull(),
     regularMinutes: integer("regular_minutes").notNull().default(0),
     overtimeMinutes: integer("overtime_minutes").notNull().default(0),
@@ -1731,10 +2708,20 @@ export const timeEntries = pgTable(
     notes: text("notes"),
   },
   (table) => [
-    uniqueIndex("time_entries_sheet_worker_date_unique").on(table.timesheetId, table.workerId, table.workDate),
+    uniqueIndex("time_entries_sheet_worker_date_unique").on(
+      table.timesheetId,
+      table.workerId,
+      table.workDate,
+    ),
     index("time_entries_worker_idx").on(table.workerId),
-    check("time_entries_minutes_check", sql`${table.regularMinutes} >= 0 and ${table.overtimeMinutes} >= 0`),
-    check("time_entries_attendance_check", sql`${table.attendanceStatus} in ('present', 'absent', 'leave', 'sick', 'holiday')`),
+    check(
+      "time_entries_minutes_check",
+      sql`${table.regularMinutes} >= 0 and ${table.overtimeMinutes} >= 0`,
+    ),
+    check(
+      "time_entries_attendance_check",
+      sql`${table.attendanceStatus} in ('present', 'absent', 'leave', 'sick', 'holiday')`,
+    ),
   ],
 );
 
@@ -1752,12 +2739,17 @@ export const workflowApprovals = pgTable(
     decisionBy: text("decision_by"),
     decisionReason: text("decision_reason"),
     decidedAt: text("decided_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("workflow_approvals_entity_idx").on(table.entityType, table.entityId),
     index("workflow_approvals_status_idx").on(table.status),
-    check("workflow_approvals_status_check", sql`${table.status} in ('pending', 'approved', 'rejected', 'cancelled')`),
+    check(
+      "workflow_approvals_status_check",
+      sql`${table.status} in ('pending', 'approved', 'rejected', 'cancelled')`,
+    ),
   ],
 );
 
@@ -1772,10 +2764,16 @@ export const workflowStatusHistory = pgTable(
     reason: text("reason"),
     actorEmail: text("actor_email").notNull(),
     correlationId: text("correlation_id").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("workflow_status_history_entity_idx").on(table.entityType, table.entityId, table.createdAt),
+    index("workflow_status_history_entity_idx").on(
+      table.entityType,
+      table.entityId,
+      table.createdAt,
+    ),
     index("workflow_status_history_correlation_idx").on(table.correlationId),
   ],
 );
@@ -1790,15 +2788,28 @@ export const integrationOutbox = pgTable(
     payloadJson: text("payload_json").notNull(),
     status: text("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
-    availableAt: text("available_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    availableAt: text("available_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     processedAt: text("processed_at"),
     lastError: text("last_error"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("integration_outbox_status_available_idx").on(table.status, table.availableAt),
-    index("integration_outbox_aggregate_idx").on(table.aggregateType, table.aggregateId),
-    check("integration_outbox_status_check", sql`${table.status} in ('pending', 'processing', 'processed', 'failed')`),
+    index("integration_outbox_status_available_idx").on(
+      table.status,
+      table.availableAt,
+    ),
+    index("integration_outbox_aggregate_idx").on(
+      table.aggregateType,
+      table.aggregateId,
+    ),
+    check(
+      "integration_outbox_status_check",
+      sql`${table.status} in ('pending', 'processing', 'processed', 'failed')`,
+    ),
   ],
 );
 
@@ -1809,7 +2820,9 @@ export const publicRateLimits = pgTable(
     windowStartedAt: text("window_started_at").notNull(),
     requestCount: integer("request_count").notNull().default(0),
     blockedUntil: text("blocked_until"),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("public_rate_limits_updated_idx").on(table.updatedAt)],
 );
@@ -1824,13 +2837,20 @@ export const operationRequests = pgTable(
     responseJson: text("response_json"),
     errorMessage: text("error_message"),
     expiresAt: text("expires_at").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("operation_requests_actor_idx").on(table.actorEmail, table.createdAt),
     index("operation_requests_expiry_idx").on(table.expiresAt),
-    check("operation_requests_status_check", sql`${table.status} in ('processing', 'completed', 'failed')`),
+    check(
+      "operation_requests_status_check",
+      sql`${table.status} in ('processing', 'completed', 'failed')`,
+    ),
   ],
 );
 
@@ -1838,20 +2858,31 @@ export const clientPortalUsers = pgTable(
   "client_portal_users",
   {
     email: text("email").primaryKey(),
-    clientId: integer("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    clientId: integer("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
     status: text("status").notNull().default("pending"),
     canApproveQuotes: boolean("can_approve_quotes").notNull().default(false),
-    canApproveTimesheets: boolean("can_approve_timesheets").notNull().default(false),
+    canApproveTimesheets: boolean("can_approve_timesheets")
+      .notNull()
+      .default(false),
     invitedBy: text("invited_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     lastLoginAt: text("last_login_at"),
   },
   (table) => [
     index("client_portal_users_client_idx").on(table.clientId),
     index("client_portal_users_status_idx").on(table.status),
-    check("client_portal_users_status_check", sql`${table.status} in ('pending', 'active', 'suspended')`),
+    check(
+      "client_portal_users_status_check",
+      sql`${table.status} in ('pending', 'active', 'suspended')`,
+    ),
   ],
 );
 
@@ -1859,18 +2890,27 @@ export const workerPortalUsers = pgTable(
   "worker_portal_users",
   {
     email: text("email").primaryKey(),
-    workerId: integer("worker_id").notNull().references(() => workers.id, { onDelete: "cascade" }),
+    workerId: integer("worker_id")
+      .notNull()
+      .references(() => workers.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
     status: text("status").notNull().default("pending"),
     invitedBy: text("invited_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     lastLoginAt: text("last_login_at"),
   },
   (table) => [
     uniqueIndex("worker_portal_users_worker_unique").on(table.workerId),
     index("worker_portal_users_status_idx").on(table.status),
-    check("worker_portal_users_status_check", sql`${table.status} in ('pending', 'active', 'suspended')`),
+    check(
+      "worker_portal_users_status_check",
+      sql`${table.status} in ('pending', 'active', 'suspended')`,
+    ),
   ],
 );
 
@@ -1878,18 +2918,30 @@ export const portalUserPermissions = pgTable(
   "portal_user_permissions",
   {
     id: serial("id").primaryKey(),
-    userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => portalUsers.email, { onDelete: "cascade" }),
     resource: text("resource").notNull(),
     action: text("action").notNull(),
     scope: text("scope").notNull().default("department"),
     allowed: boolean("allowed").notNull().default(true),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("portal_user_permissions_unique").on(table.userEmail, table.resource, table.action, table.scope),
+    uniqueIndex("portal_user_permissions_unique").on(
+      table.userEmail,
+      table.resource,
+      table.action,
+      table.scope,
+    ),
     index("portal_user_permissions_user_idx").on(table.userEmail),
-    check("portal_user_permissions_scope_check", sql`${table.scope} in ('own', 'department', 'all')`),
+    check(
+      "portal_user_permissions_scope_check",
+      sql`${table.scope} in ('own', 'department', 'all')`,
+    ),
   ],
 );
 
@@ -1903,12 +2955,19 @@ export const portalRoles = pgTable(
     protected: boolean("protected").notNull().default(false),
     active: boolean("active").notNull().default(true),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("portal_roles_active_idx").on(table.active),
-    check("portal_roles_key_check", sql`${table.roleKey} ~ '^[a-z][a-z0-9_]{2,63}$'`),
+    check(
+      "portal_roles_key_check",
+      sql`${table.roleKey} ~ '^[a-z][a-z0-9_]{2,63}$'`,
+    ),
   ],
 );
 
@@ -1926,13 +2985,23 @@ export const dataSubjectRequests = pgTable(
     assignedTo: text("assigned_to"),
     dueAt: text("due_at").notNull(),
     completedAt: text("completed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("data_subject_requests_status_due_idx").on(table.status, table.dueAt),
-    check("data_subject_requests_type_check", sql`${table.requestType} in ('access', 'correction', 'deletion', 'withdraw_consent', 'complaint')`),
-    check("data_subject_requests_status_check", sql`${table.status} in ('received', 'verifying', 'processing', 'completed', 'rejected')`),
+    check(
+      "data_subject_requests_type_check",
+      sql`${table.requestType} in ('access', 'correction', 'deletion', 'withdraw_consent', 'complaint')`,
+    ),
+    check(
+      "data_subject_requests_status_check",
+      sql`${table.status} in ('received', 'verifying', 'processing', 'completed', 'rejected')`,
+    ),
   ],
 );
 
@@ -1952,14 +3021,24 @@ export const capacityPlans = pgTable(
     status: text("status").notNull().default("planning"),
     ownerEmail: text("owner_email").notNull(),
     notes: text("notes"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("capacity_plans_season_idx").on(table.seasonName),
     index("capacity_plans_dates_idx").on(table.startDate, table.endDate),
-    check("capacity_plans_counts_check", sql`${table.requiredCount} > 0 and ${table.availableCount} >= 0 and ${table.reservedCount} >= 0`),
-    check("capacity_plans_status_check", sql`${table.status} in ('planning', 'approved', 'active', 'completed', 'cancelled')`),
+    check(
+      "capacity_plans_counts_check",
+      sql`${table.requiredCount} > 0 and ${table.availableCount} >= 0 and ${table.reservedCount} >= 0`,
+    ),
+    check(
+      "capacity_plans_status_check",
+      sql`${table.status} in ('planning', 'approved', 'active', 'completed', 'cancelled')`,
+    ),
   ],
 );
 
@@ -1977,15 +3056,31 @@ export const chartOfAccounts = pgTable(
     isPosting: boolean("is_posting").notNull().default(true),
     isSystem: boolean("is_system").notNull().default(false),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("chart_of_accounts_parent_idx").on(table.parentId),
-    index("chart_of_accounts_type_status_idx").on(table.accountType, table.status),
-    check("chart_of_accounts_type_check", sql`${table.accountType} in ('asset','liability','equity','revenue','expense')`),
-    check("chart_of_accounts_balance_check", sql`${table.normalBalance} in ('debit','credit')`),
-    check("chart_of_accounts_status_check", sql`${table.status} in ('active','inactive')`),
+    index("chart_of_accounts_type_status_idx").on(
+      table.accountType,
+      table.status,
+    ),
+    check(
+      "chart_of_accounts_type_check",
+      sql`${table.accountType} in ('asset','liability','equity','revenue','expense')`,
+    ),
+    check(
+      "chart_of_accounts_balance_check",
+      sql`${table.normalBalance} in ('debit','credit')`,
+    ),
+    check(
+      "chart_of_accounts_status_check",
+      sql`${table.status} in ('active','inactive')`,
+    ),
   ],
 );
 
@@ -2000,12 +3095,20 @@ export const fiscalPeriods = pgTable(
     status: text("status").notNull().default("open"),
     closedBy: text("closed_by"),
     closedAt: text("closed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("fiscal_periods_dates_idx").on(table.startDate, table.endDate),
-    check("fiscal_periods_status_check", sql`${table.status} in ('future','open','soft_closed','closed')`),
-    check("fiscal_periods_date_check", sql`${table.endDate} >= ${table.startDate}`),
+    check(
+      "fiscal_periods_status_check",
+      sql`${table.status} in ('future','open','soft_closed','closed')`,
+    ),
+    check(
+      "fiscal_periods_date_check",
+      sql`${table.endDate} >= ${table.startDate}`,
+    ),
   ],
 );
 
@@ -2016,17 +3119,29 @@ export const costCenters = pgTable(
     code: text("code").notNull().unique(),
     nameAr: text("name_ar").notNull(),
     centerType: text("center_type").notNull().default("contract"),
-    contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
+    contractId: integer("contract_id").references(() => workforceContracts.id, {
+      onDelete: "restrict",
+    }),
     status: text("status").notNull().default("active"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("cost_centers_type_status_idx").on(table.centerType, table.status),
     uniqueIndex("cost_centers_contract_unique").on(table.contractId),
-    check("cost_centers_type_check", sql`${table.centerType} in ('contract','department','project','administrative')`),
-    check("cost_centers_status_check", sql`${table.status} in ('active','inactive','closed')`),
+    check(
+      "cost_centers_type_check",
+      sql`${table.centerType} in ('contract','department','project','administrative')`,
+    ),
+    check(
+      "cost_centers_status_check",
+      sql`${table.status} in ('active','inactive','closed')`,
+    ),
   ],
 );
 
@@ -2036,7 +3151,9 @@ export const journalEntries = pgTable(
     id: serial("id").primaryKey(),
     entryNumber: text("entry_number").notNull().unique(),
     entryDate: text("entry_date").notNull(),
-    fiscalPeriodId: integer("fiscal_period_id").notNull().references(() => fiscalPeriods.id, { onDelete: "restrict" }),
+    fiscalPeriodId: integer("fiscal_period_id")
+      .notNull()
+      .references(() => fiscalPeriods.id, { onDelete: "restrict" }),
     description: text("description").notNull(),
     sourceType: text("source_type").notNull(),
     sourceId: text("source_id"),
@@ -2048,14 +3165,24 @@ export const journalEntries = pgTable(
     postedBy: text("posted_by"),
     postedAt: text("posted_at"),
     voidReason: text("void_reason"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("journal_entries_period_status_idx").on(table.fiscalPeriodId, table.status),
+    index("journal_entries_period_status_idx").on(
+      table.fiscalPeriodId,
+      table.status,
+    ),
     index("journal_entries_source_idx").on(table.sourceType, table.sourceId),
     index("journal_entries_date_idx").on(table.entryDate),
-    check("journal_entries_status_check", sql`${table.status} in ('draft','approved','posted','reversed','void')`),
+    check(
+      "journal_entries_status_check",
+      sql`${table.status} in ('draft','approved','posted','reversed','void')`,
+    ),
   ],
 );
 
@@ -2063,26 +3190,46 @@ export const journalLines = pgTable(
   "journal_lines",
   {
     id: serial("id").primaryKey(),
-    journalEntryId: integer("journal_entry_id").notNull().references(() => journalEntries.id, { onDelete: "cascade" }),
+    journalEntryId: integer("journal_entry_id")
+      .notNull()
+      .references(() => journalEntries.id, { onDelete: "cascade" }),
     lineNumber: integer("line_number").notNull(),
-    accountId: integer("account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => chartOfAccounts.id, { onDelete: "restrict" }),
     bankAccountId: integer("bank_account_id"),
     description: text("description"),
     debitHalalas: integer("debit_halalas").notNull().default(0),
     creditHalalas: integer("credit_halalas").notNull().default(0),
-    clientId: integer("client_id").references(() => clients.id, { onDelete: "restrict" }),
-    contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
-    workerId: integer("worker_id").references(() => workers.id, { onDelete: "restrict" }),
-    employeeId: integer("employee_id").references(() => employees.id, { onDelete: "restrict" }),
+    clientId: integer("client_id").references(() => clients.id, {
+      onDelete: "restrict",
+    }),
+    contractId: integer("contract_id").references(() => workforceContracts.id, {
+      onDelete: "restrict",
+    }),
+    workerId: integer("worker_id").references(() => workers.id, {
+      onDelete: "restrict",
+    }),
+    employeeId: integer("employee_id").references(() => employees.id, {
+      onDelete: "restrict",
+    }),
     costCenterCode: text("cost_center_code"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("journal_lines_entry_line_unique").on(table.journalEntryId, table.lineNumber),
+    uniqueIndex("journal_lines_entry_line_unique").on(
+      table.journalEntryId,
+      table.lineNumber,
+    ),
     index("journal_lines_account_idx").on(table.accountId),
     index("journal_lines_bank_account_idx").on(table.bankAccountId),
     index("journal_lines_contract_idx").on(table.contractId),
-    check("journal_lines_amount_check", sql`${table.debitHalalas} >= 0 and ${table.creditHalalas} >= 0 and ((${table.debitHalalas} > 0 and ${table.creditHalalas} = 0) or (${table.creditHalalas} > 0 and ${table.debitHalalas} = 0))`),
+    check(
+      "journal_lines_amount_check",
+      sql`${table.debitHalalas} >= 0 and ${table.creditHalalas} >= 0 and ((${table.debitHalalas} > 0 and ${table.creditHalalas} = 0) or (${table.creditHalalas} > 0 and ${table.debitHalalas} = 0))`,
+    ),
   ],
 );
 
@@ -2095,14 +3242,23 @@ export const bankAccounts = pgTable(
     accountName: text("account_name").notNull(),
     iban: text("iban").notNull().unique(),
     currency: text("currency").notNull().default("SAR"),
-    ledgerAccountId: integer("ledger_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    ledgerAccountId: integer("ledger_account_id")
+      .notNull()
+      .references(() => chartOfAccounts.id, { onDelete: "restrict" }),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("bank_accounts_status_idx").on(table.status),
-    check("bank_accounts_status_check", sql`${table.status} in ('active','inactive','closed')`),
+    check(
+      "bank_accounts_status_check",
+      sql`${table.status} in ('active','inactive','closed')`,
+    ),
   ],
 );
 
@@ -2111,26 +3267,48 @@ export const bankReconciliations = pgTable(
   {
     id: serial("id").primaryKey(),
     reconciliationNumber: text("reconciliation_number").notNull().unique(),
-    bankAccountId: integer("bank_account_id").notNull().references(() => bankAccounts.id, { onDelete: "restrict" }),
+    bankAccountId: integer("bank_account_id")
+      .notNull()
+      .references(() => bankAccounts.id, { onDelete: "restrict" }),
     statementDate: text("statement_date").notNull(),
     statementBalanceHalalas: integer("statement_balance_halalas").notNull(),
     ledgerBalanceHalalas: integer("ledger_balance_halalas").notNull(),
-    outstandingDepositsHalalas: integer("outstanding_deposits_halalas").notNull().default(0),
-    outstandingPaymentsHalalas: integer("outstanding_payments_halalas").notNull().default(0),
+    outstandingDepositsHalalas: integer("outstanding_deposits_halalas")
+      .notNull()
+      .default(0),
+    outstandingPaymentsHalalas: integer("outstanding_payments_halalas")
+      .notNull()
+      .default(0),
     differenceHalalas: integer("difference_halalas").notNull(),
     status: text("status").notNull().default("draft"),
     notes: text("notes"),
     createdBy: text("created_by").notNull(),
     reviewedBy: text("reviewed_by"),
     reviewedAt: text("reviewed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("bank_reconciliations_bank_date_unique").on(table.bankAccountId, table.statementDate),
-    index("bank_reconciliations_status_date_idx").on(table.status, table.statementDate),
-    check("bank_reconciliations_status_check", sql`${table.status} in ('draft','reviewed','closed','cancelled')`),
-    check("bank_reconciliations_outstanding_check", sql`${table.outstandingDepositsHalalas} >= 0 and ${table.outstandingPaymentsHalalas} >= 0`),
+    uniqueIndex("bank_reconciliations_bank_date_unique").on(
+      table.bankAccountId,
+      table.statementDate,
+    ),
+    index("bank_reconciliations_status_date_idx").on(
+      table.status,
+      table.statementDate,
+    ),
+    check(
+      "bank_reconciliations_status_check",
+      sql`${table.status} in ('draft','reviewed','closed','cancelled')`,
+    ),
+    check(
+      "bank_reconciliations_outstanding_check",
+      sql`${table.outstandingDepositsHalalas} >= 0 and ${table.outstandingPaymentsHalalas} >= 0`,
+    ),
   ],
 );
 
@@ -2139,12 +3317,21 @@ export const accountingPostingRules = pgTable(
   {
     id: serial("id").primaryKey(),
     eventType: text("event_type").notNull().unique(),
-    debitAccountId: integer("debit_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
-    creditAccountId: integer("credit_account_id").notNull().references(() => chartOfAccounts.id, { onDelete: "restrict" }),
-    taxAccountId: integer("tax_account_id").references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    debitAccountId: integer("debit_account_id")
+      .notNull()
+      .references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    creditAccountId: integer("credit_account_id")
+      .notNull()
+      .references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    taxAccountId: integer("tax_account_id").references(
+      () => chartOfAccounts.id,
+      { onDelete: "restrict" },
+    ),
     active: boolean("active").notNull().default(true),
     updatedBy: text("updated_by").notNull(),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("accounting_posting_rules_active_idx").on(table.active)],
 );
@@ -2163,13 +3350,23 @@ export const businessLines = pgTable(
     complianceApprovedBy: text("compliance_approved_by"),
     complianceApprovedAt: text("compliance_approved_at"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
     index("business_lines_status_idx").on(table.status, table.publicStatus),
-    check("business_lines_status_check", sql`${table.status} in ('active','inactive')`),
-    check("business_lines_public_status_check", sql`${table.publicStatus} in ('draft','review','published','blocked')`),
+    check(
+      "business_lines_status_check",
+      sql`${table.status} in ('active','inactive')`,
+    ),
+    check(
+      "business_lines_public_status_check",
+      sql`${table.publicStatus} in ('draft','review','published','blocked')`,
+    ),
   ],
 );
 
@@ -2183,14 +3380,18 @@ export const serviceRegions = pgTable(
     status: text("status").notNull().default("active"),
     sortOrder: integer("sort_order").notNull().default(0),
   },
-  (table) => [index("service_regions_status_sort_idx").on(table.status, table.sortOrder)],
+  (table) => [
+    index("service_regions_status_sort_idx").on(table.status, table.sortOrder),
+  ],
 );
 
 export const serviceCities = pgTable(
   "service_cities",
   {
     id: serial("id").primaryKey(),
-    regionId: integer("region_id").notNull().references(() => serviceRegions.id, { onDelete: "restrict" }),
+    regionId: integer("region_id")
+      .notNull()
+      .references(() => serviceRegions.id, { onDelete: "restrict" }),
     code: text("code").notNull().unique(),
     nameAr: text("name_ar").notNull(),
     nameEn: text("name_en").notNull(),
@@ -2198,12 +3399,20 @@ export const serviceCities = pgTable(
     longitudeE6: integer("longitude_e6"),
     status: text("status").notNull().default("active"),
     seoStatus: text("seo_status").notNull().default("not_ready"),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("service_cities_region_name_unique").on(table.regionId, table.nameAr),
+    uniqueIndex("service_cities_region_name_unique").on(
+      table.regionId,
+      table.nameAr,
+    ),
     index("service_cities_region_status_idx").on(table.regionId, table.status),
-    check("service_cities_seo_status_check", sql`${table.seoStatus} in ('not_ready','draft','review','publishable')`),
+    check(
+      "service_cities_seo_status_check",
+      sql`${table.seoStatus} in ('not_ready','draft','review','publishable')`,
+    ),
   ],
 );
 
@@ -2211,8 +3420,12 @@ export const serviceCoverage = pgTable(
   "service_coverage",
   {
     id: serial("id").primaryKey(),
-    cityId: integer("city_id").notNull().references(() => serviceCities.id, { onDelete: "restrict" }),
-    businessLineId: integer("business_line_id").notNull().references(() => businessLines.id, { onDelete: "restrict" }),
+    cityId: integer("city_id")
+      .notNull()
+      .references(() => serviceCities.id, { onDelete: "restrict" }),
+    businessLineId: integer("business_line_id")
+      .notNull()
+      .references(() => businessLines.id, { onDelete: "restrict" }),
     availability: text("availability").notNull().default("conditional"),
     mobilizationDays: integer("mobilization_days"),
     capacityLevel: text("capacity_level").notNull().default("review_required"),
@@ -2221,15 +3434,34 @@ export const serviceCoverage = pgTable(
     publicApproved: boolean("public_approved").notNull().default(false),
     reviewedBy: text("reviewed_by"),
     reviewedAt: text("reviewed_at"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("service_coverage_city_line_unique").on(table.cityId, table.businessLineId),
-    index("service_coverage_availability_idx").on(table.availability, table.publicApproved),
-    check("service_coverage_availability_check", sql`${table.availability} in ('available','conditional','unavailable')`),
-    check("service_coverage_capacity_check", sql`${table.capacityLevel} in ('high','medium','limited','review_required')`),
-    check("service_coverage_mobilization_check", sql`${table.mobilizationDays} is null or ${table.mobilizationDays} >= 0`),
+    uniqueIndex("service_coverage_city_line_unique").on(
+      table.cityId,
+      table.businessLineId,
+    ),
+    index("service_coverage_availability_idx").on(
+      table.availability,
+      table.publicApproved,
+    ),
+    check(
+      "service_coverage_availability_check",
+      sql`${table.availability} in ('available','conditional','unavailable')`,
+    ),
+    check(
+      "service_coverage_capacity_check",
+      sql`${table.capacityLevel} in ('high','medium','limited','review_required')`,
+    ),
+    check(
+      "service_coverage_mobilization_check",
+      sql`${table.mobilizationDays} is null or ${table.mobilizationDays} >= 0`,
+    ),
   ],
 );
 
@@ -2238,13 +3470,17 @@ export const constructionOpportunities = pgTable(
   {
     id: serial("id").primaryKey(),
     opportunityCode: text("opportunity_code").notNull().unique(),
-    clientId: integer("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    clientId: integer("client_id").references(() => clients.id, {
+      onDelete: "restrict",
+    }),
     clientName: text("client_name").notNull(),
     contactName: text("contact_name"),
     contactMobile: text("contact_mobile"),
     contactEmail: text("contact_email"),
     title: text("title").notNull(),
-    cityId: integer("city_id").references(() => serviceCities.id, { onDelete: "restrict" }),
+    cityId: integer("city_id").references(() => serviceCities.id, {
+      onDelete: "restrict",
+    }),
     projectType: text("project_type").notNull(),
     scopeSummary: text("scope_summary").notNull(),
     estimatedValueHalalas: integer("estimated_value_halalas"),
@@ -2256,17 +3492,33 @@ export const constructionOpportunities = pgTable(
     source: text("source").notNull().default("portal"),
     lossReason: text("loss_reason"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
-    index("construction_opportunities_stage_due_idx").on(table.stage, table.bidDueDate),
+    index("construction_opportunities_stage_due_idx").on(
+      table.stage,
+      table.bidDueDate,
+    ),
     index("construction_opportunities_city_idx").on(table.cityId),
     index("construction_opportunities_client_idx").on(table.clientId),
-    check("construction_opportunities_stage_check", sql`${table.stage} in ('new','qualified','survey','estimating','review','submitted','negotiation','won','lost','declined')`),
-    check("construction_opportunities_probability_check", sql`${table.probabilityBps} >= 0 and ${table.probabilityBps} <= 10000`),
-    check("construction_opportunities_value_check", sql`${table.estimatedValueHalalas} is null or ${table.estimatedValueHalalas} >= 0`),
+    check(
+      "construction_opportunities_stage_check",
+      sql`${table.stage} in ('new','qualified','survey','estimating','review','submitted','negotiation','won','lost','declined')`,
+    ),
+    check(
+      "construction_opportunities_probability_check",
+      sql`${table.probabilityBps} >= 0 and ${table.probabilityBps} <= 10000`,
+    ),
+    check(
+      "construction_opportunities_value_check",
+      sql`${table.estimatedValueHalalas} is null or ${table.estimatedValueHalalas} >= 0`,
+    ),
   ],
 );
 
@@ -2275,13 +3527,22 @@ export const constructionProjects = pgTable(
   {
     id: serial("id").primaryKey(),
     projectCode: text("project_code").notNull().unique(),
-    opportunityId: integer("opportunity_id").references(() => constructionOpportunities.id, { onDelete: "restrict" }),
-    clientId: integer("client_id").references(() => clients.id, { onDelete: "restrict" }),
+    opportunityId: integer("opportunity_id").references(
+      () => constructionOpportunities.id,
+      { onDelete: "restrict" },
+    ),
+    clientId: integer("client_id").references(() => clients.id, {
+      onDelete: "restrict",
+    }),
     clientName: text("client_name").notNull(),
     title: text("title").notNull(),
-    cityId: integer("city_id").references(() => serviceCities.id, { onDelete: "restrict" }),
+    cityId: integer("city_id").references(() => serviceCities.id, {
+      onDelete: "restrict",
+    }),
     projectType: text("project_type").notNull(),
-    contractValueHalalas: integer("contract_value_halalas").notNull().default(0),
+    contractValueHalalas: integer("contract_value_halalas")
+      .notNull()
+      .default(0),
     budgetHalalas: integer("budget_halalas").notNull().default(0),
     startDate: text("start_date").notNull(),
     plannedEndDate: text("planned_end_date").notNull(),
@@ -2292,20 +3553,42 @@ export const constructionProjects = pgTable(
     managerEmail: text("manager_email").notNull(),
     costCenterCode: text("cost_center_code").notNull().unique(),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
-    index("construction_projects_status_end_idx").on(table.status, table.plannedEndDate),
+    index("construction_projects_status_end_idx").on(
+      table.status,
+      table.plannedEndDate,
+    ),
     index("construction_projects_city_idx").on(table.cityId),
     index("construction_projects_opportunity_idx").on(table.opportunityId),
     index("construction_projects_client_idx").on(table.clientId),
-    check("construction_projects_status_check", sql`${table.status} in ('mobilizing','active','on_hold','substantial_completion','defects_liability','closed','cancelled')`),
-    check("construction_projects_risk_check", sql`${table.riskLevel} in ('low','medium','high','critical')`),
-    check("construction_projects_progress_check", sql`${table.progressBps} >= 0 and ${table.progressBps} <= 10000`),
-    check("construction_projects_value_check", sql`${table.contractValueHalalas} >= 0 and ${table.budgetHalalas} >= 0`),
-    check("construction_projects_dates_check", sql`${table.plannedEndDate} >= ${table.startDate}`),
+    check(
+      "construction_projects_status_check",
+      sql`${table.status} in ('mobilizing','active','on_hold','substantial_completion','defects_liability','closed','cancelled')`,
+    ),
+    check(
+      "construction_projects_risk_check",
+      sql`${table.riskLevel} in ('low','medium','high','critical')`,
+    ),
+    check(
+      "construction_projects_progress_check",
+      sql`${table.progressBps} >= 0 and ${table.progressBps} <= 10000`,
+    ),
+    check(
+      "construction_projects_value_check",
+      sql`${table.contractValueHalalas} >= 0 and ${table.budgetHalalas} >= 0`,
+    ),
+    check(
+      "construction_projects_dates_check",
+      sql`${table.plannedEndDate} >= ${table.startDate}`,
+    ),
   ],
 );
 
@@ -2313,12 +3596,23 @@ export const portalAccessScopes = pgTable(
   "portal_access_scopes",
   {
     id: serial("id").primaryKey(),
-    userEmail: text("user_email").notNull().references(() => portalUsers.email, { onDelete: "cascade" }),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => portalUsers.email, { onDelete: "cascade" }),
     functionalRole: text("functional_role").notNull(),
-    businessLineId: integer("business_line_id").references(() => businessLines.id, { onDelete: "restrict" }),
-    regionId: integer("region_id").references(() => serviceRegions.id, { onDelete: "restrict" }),
-    cityId: integer("city_id").references(() => serviceCities.id, { onDelete: "restrict" }),
-    projectId: integer("project_id").references(() => constructionProjects.id, { onDelete: "cascade" }),
+    businessLineId: integer("business_line_id").references(
+      () => businessLines.id,
+      { onDelete: "restrict" },
+    ),
+    regionId: integer("region_id").references(() => serviceRegions.id, {
+      onDelete: "restrict",
+    }),
+    cityId: integer("city_id").references(() => serviceCities.id, {
+      onDelete: "restrict",
+    }),
+    projectId: integer("project_id").references(() => constructionProjects.id, {
+      onDelete: "cascade",
+    }),
     financialLimitHalalas: integer("financial_limit_halalas"),
     approvalLimitHalalas: integer("approval_limit_halalas"),
     canApproveOwn: boolean("can_approve_own").notNull().default(false),
@@ -2326,17 +3620,40 @@ export const portalAccessScopes = pgTable(
     validUntil: text("valid_until"),
     active: boolean("active").notNull().default(true),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("portal_access_scopes_user_active_idx").on(table.userEmail, table.active),
+    index("portal_access_scopes_user_active_idx").on(
+      table.userEmail,
+      table.active,
+    ),
     index("portal_access_scopes_project_idx").on(table.projectId),
     index("portal_access_scopes_city_idx").on(table.cityId),
-    uniqueIndex("portal_access_scopes_assignment_unique").on(table.userEmail, table.functionalRole, table.businessLineId, table.regionId, table.cityId, table.projectId),
-    check("portal_access_scopes_financial_limit_check", sql`${table.financialLimitHalalas} is null or ${table.financialLimitHalalas} >= 0`),
-    check("portal_access_scopes_approval_limit_check", sql`${table.approvalLimitHalalas} is null or ${table.approvalLimitHalalas} >= 0`),
-    check("portal_access_scopes_dates_check", sql`${table.validUntil} is null or ${table.validFrom} is null or ${table.validUntil} >= ${table.validFrom}`),
+    uniqueIndex("portal_access_scopes_assignment_unique").on(
+      table.userEmail,
+      table.functionalRole,
+      table.businessLineId,
+      table.regionId,
+      table.cityId,
+      table.projectId,
+    ),
+    check(
+      "portal_access_scopes_financial_limit_check",
+      sql`${table.financialLimitHalalas} is null or ${table.financialLimitHalalas} >= 0`,
+    ),
+    check(
+      "portal_access_scopes_approval_limit_check",
+      sql`${table.approvalLimitHalalas} is null or ${table.approvalLimitHalalas} >= 0`,
+    ),
+    check(
+      "portal_access_scopes_dates_check",
+      sql`${table.validUntil} is null or ${table.validFrom} is null or ${table.validUntil} >= ${table.validFrom}`,
+    ),
   ],
 );
 
@@ -2346,8 +3663,13 @@ export const constructionRecords = pgTable(
     id: serial("id").primaryKey(),
     recordCode: text("record_code").notNull().unique(),
     recordType: text("record_type").notNull(),
-    opportunityId: integer("opportunity_id").references(() => constructionOpportunities.id, { onDelete: "restrict" }),
-    projectId: integer("project_id").references(() => constructionProjects.id, { onDelete: "restrict" }),
+    opportunityId: integer("opportunity_id").references(
+      () => constructionOpportunities.id,
+      { onDelete: "restrict" },
+    ),
+    projectId: integer("project_id").references(() => constructionProjects.id, {
+      onDelete: "restrict",
+    }),
     title: text("title").notNull(),
     description: text("description").notNull(),
     status: text("status").notNull().default("draft"),
@@ -2366,21 +3688,49 @@ export const constructionRecords = pgTable(
     revision: integer("revision").notNull().default(1),
     parentRecordId: integer("parent_record_id"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     version: integer("version").notNull().default(1),
   },
   (table) => [
-    index("construction_records_type_status_idx").on(table.recordType, table.status),
-    index("construction_records_project_type_idx").on(table.projectId, table.recordType),
+    index("construction_records_type_status_idx").on(
+      table.recordType,
+      table.status,
+    ),
+    index("construction_records_project_type_idx").on(
+      table.projectId,
+      table.recordType,
+    ),
     index("construction_records_opportunity_idx").on(table.opportunityId),
     index("construction_records_due_idx").on(table.dueDate),
-    check("construction_records_type_check", sql`${table.recordType} in ('survey','estimate','boq','contract','wbs','daily_log','document','rfi','submittal','inspection','ncr','safety','procurement','subcontract','change_order','payment_certificate','handover','risk')`),
-    check("construction_records_priority_check", sql`${table.priority} in ('low','normal','high','critical')`),
-    check("construction_records_amount_check", sql`${table.amountHalalas} is null or ${table.amountHalalas} >= 0`),
-    check("construction_records_percentage_check", sql`${table.retentionBps} between 0 and 10000 and ${table.progressBps} between 0 and 10000`),
-    check("construction_records_location_check", sql`(${table.siteLatitudeE6} is null or ${table.siteLatitudeE6} between -90000000 and 90000000) and (${table.siteLongitudeE6} is null or ${table.siteLongitudeE6} between -180000000 and 180000000)`),
-    check("construction_records_field_values_check", sql`(${table.siteAccuracyMeters} is null or ${table.siteAccuracyMeters} >= 0) and (${table.workforceCount} is null or ${table.workforceCount} >= 0)`),
+    check(
+      "construction_records_type_check",
+      sql`${table.recordType} in ('survey','estimate','boq','contract','wbs','daily_log','document','rfi','submittal','inspection','ncr','safety','procurement','subcontract','change_order','payment_certificate','handover','risk')`,
+    ),
+    check(
+      "construction_records_priority_check",
+      sql`${table.priority} in ('low','normal','high','critical')`,
+    ),
+    check(
+      "construction_records_amount_check",
+      sql`${table.amountHalalas} is null or ${table.amountHalalas} >= 0`,
+    ),
+    check(
+      "construction_records_percentage_check",
+      sql`${table.retentionBps} between 0 and 10000 and ${table.progressBps} between 0 and 10000`,
+    ),
+    check(
+      "construction_records_location_check",
+      sql`(${table.siteLatitudeE6} is null or ${table.siteLatitudeE6} between -90000000 and 90000000) and (${table.siteLongitudeE6} is null or ${table.siteLongitudeE6} between -180000000 and 180000000)`,
+    ),
+    check(
+      "construction_records_field_values_check",
+      sql`(${table.siteAccuracyMeters} is null or ${table.siteAccuracyMeters} >= 0) and (${table.workforceCount} is null or ${table.workforceCount} >= 0)`,
+    ),
   ],
 );
 
@@ -2388,7 +3738,9 @@ export const constructionRecordAttachments = pgTable(
   "construction_record_attachments",
   {
     id: serial("id").primaryKey(),
-    recordId: integer("record_id").notNull().references(() => constructionRecords.id, { onDelete: "cascade" }),
+    recordId: integer("record_id")
+      .notNull()
+      .references(() => constructionRecords.id, { onDelete: "cascade" }),
     revision: integer("revision").notNull().default(1),
     transmittalCode: text("transmittal_code").notNull(),
     title: text("title").notNull(),
@@ -2400,21 +3752,44 @@ export const constructionRecordAttachments = pgTable(
     reviewerEmail: text("reviewer_email"),
     reviewNotes: text("review_notes"),
     rejectionReason: text("rejection_reason"),
-    submittedAt: text("submitted_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    submittedAt: text("submitted_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
     reviewedAt: text("reviewed_at"),
     approvedAt: text("approved_at"),
     isCurrent: boolean("is_current").notNull().default(true),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("construction_record_attachments_record_idx").on(table.recordId, table.revision),
-    uniqueIndex("construction_record_attachments_revision_unique").on(table.recordId, table.revision),
-    index("construction_record_attachments_transmittal_idx").on(table.transmittalCode),
-    check("construction_record_attachments_revision_check", sql`${table.revision} > 0`),
-    check("construction_record_attachments_size_check", sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 20971520`),
-    check("construction_record_attachments_status_check", sql`${table.status} in ('submitted','under_review','approved','approved_as_noted','revise_resubmit','rejected','superseded')`),
+    index("construction_record_attachments_record_idx").on(
+      table.recordId,
+      table.revision,
+    ),
+    uniqueIndex("construction_record_attachments_revision_unique").on(
+      table.recordId,
+      table.revision,
+    ),
+    index("construction_record_attachments_transmittal_idx").on(
+      table.transmittalCode,
+    ),
+    check(
+      "construction_record_attachments_revision_check",
+      sql`${table.revision} > 0`,
+    ),
+    check(
+      "construction_record_attachments_size_check",
+      sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 20971520`,
+    ),
+    check(
+      "construction_record_attachments_status_check",
+      sql`${table.status} in ('submitted','under_review','approved','approved_as_noted','revise_resubmit','rejected','superseded')`,
+    ),
   ],
 );
 
@@ -2422,7 +3797,9 @@ export const constructionRecordLines = pgTable(
   "construction_record_lines",
   {
     id: serial("id").primaryKey(),
-    recordId: integer("record_id").notNull().references(() => constructionRecords.id, { onDelete: "cascade" }),
+    recordId: integer("record_id")
+      .notNull()
+      .references(() => constructionRecords.id, { onDelete: "cascade" }),
     lineNumber: integer("line_number").notNull(),
     itemCode: text("item_code"),
     description: text("description").notNull(),
@@ -2431,12 +3808,20 @@ export const constructionRecordLines = pgTable(
     unitRateHalalas: integer("unit_rate_halalas").notNull().default(0),
     totalHalalas: integer("total_halalas").notNull().default(0),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    uniqueIndex("construction_record_lines_record_number_unique").on(table.recordId, table.lineNumber),
+    uniqueIndex("construction_record_lines_record_number_unique").on(
+      table.recordId,
+      table.lineNumber,
+    ),
     index("construction_record_lines_record_idx").on(table.recordId),
-    check("construction_record_lines_values_check", sql`${table.quantityMilli} >= 0 and ${table.unitRateHalalas} >= 0 and ${table.totalHalalas} >= 0`),
+    check(
+      "construction_record_lines_values_check",
+      sql`${table.quantityMilli} >= 0 and ${table.unitRateHalalas} >= 0 and ${table.totalHalalas} >= 0`,
+    ),
   ],
 );
 
@@ -2444,28 +3829,57 @@ export const constructionCostEntries = pgTable(
   "construction_cost_entries",
   {
     id: serial("id").primaryKey(),
-    projectId: integer("project_id").notNull().references(() => constructionProjects.id, { onDelete: "cascade" }),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => constructionProjects.id, { onDelete: "cascade" }),
     costCode: text("cost_code").notNull(),
     costTitle: text("cost_title").notNull(),
     costCategory: text("cost_category").notNull().default("other"),
     entryType: text("entry_type").notNull(),
     amountHalalas: integer("amount_halalas").notNull().default(0),
     effectiveDate: text("effective_date").notNull(),
-    sourceRecordId: integer("source_record_id").references(() => constructionRecords.id, { onDelete: "restrict" }),
+    sourceRecordId: integer("source_record_id").references(
+      () => constructionRecords.id,
+      { onDelete: "restrict" },
+    ),
     referenceCode: text("reference_code"),
     notes: text("notes"),
     status: text("status").notNull().default("approved"),
     createdBy: text("created_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
-    index("construction_cost_entries_project_code_idx").on(table.projectId, table.costCode),
-    index("construction_cost_entries_project_type_idx").on(table.projectId, table.entryType),
-    index("construction_cost_entries_effective_date_idx").on(table.effectiveDate),
-    check("construction_cost_entries_type_check", sql`${table.entryType} in ('baseline','commitment','actual','forecast_to_complete','approved_change','payment_certificate','retention')`),
-    check("construction_cost_entries_category_check", sql`${table.costCategory} in ('labor','materials','equipment','subcontract','overhead','other')`),
-    check("construction_cost_entries_status_check", sql`${table.status} in ('draft','approved','cancelled')`),
-    check("construction_cost_entries_amount_check", sql`${table.amountHalalas} >= 0`),
+    index("construction_cost_entries_project_code_idx").on(
+      table.projectId,
+      table.costCode,
+    ),
+    index("construction_cost_entries_project_type_idx").on(
+      table.projectId,
+      table.entryType,
+    ),
+    index("construction_cost_entries_effective_date_idx").on(
+      table.effectiveDate,
+    ),
+    check(
+      "construction_cost_entries_type_check",
+      sql`${table.entryType} in ('baseline','commitment','actual','forecast_to_complete','approved_change','payment_certificate','retention')`,
+    ),
+    check(
+      "construction_cost_entries_category_check",
+      sql`${table.costCategory} in ('labor','materials','equipment','subcontract','overhead','other')`,
+    ),
+    check(
+      "construction_cost_entries_status_check",
+      sql`${table.status} in ('draft','approved','cancelled')`,
+    ),
+    check(
+      "construction_cost_entries_amount_check",
+      sql`${table.amountHalalas} >= 0`,
+    ),
   ],
 );
