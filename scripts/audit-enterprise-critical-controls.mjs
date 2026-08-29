@@ -14,7 +14,7 @@ const requiredColumns = {
   employee_leave_requests: ["balance_days_deducted", "paid_percentage_bps", "cancelled_by", "cancelled_at"],
   payroll_runs: ["bank_account_id", "payroll_type", "snapshot_json"],
   payroll_items: ["employee_name_snapshot", "iban_snapshot", "payment_status", "paid_amount_halalas", "pending_payment_amount_halalas", "payment_reference"],
-  legal_records: ["assigned_lawyer_email", "court_case_number", "court_name", "claim_value_halalas", "judgment_value_halalas", "judicial_stage"],
+  legal_records: ["assigned_lawyer_email", "court_case_number", "court_name", "claim_amount_halalas", "judgment_amount_halalas", "litigation_stage"],
   legal_case_attachments: ["sha256", "document_category", "version_number", "approval_status"],
 };
 const requiredTables = [
