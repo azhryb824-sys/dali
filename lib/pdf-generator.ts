@@ -966,8 +966,8 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     const header = () => {
       ensure(34);
       page.drawRectangle({ x: PAGE.margin, y: y - 23, width: PAGE.width - PAGE.margin * 2, height: 28, color: COLORS.navy });
-      drawRight(page, "الخدمة / البند", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.description);
-      drawRight(page, openQuantity ? "العدد" : "الكمية", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.quantity);
+      drawRight(page, workforcePricing ? "المهنة" : "الخدمة / البند", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.description);
+      drawRight(page, workforcePricing ? "العدد" : openQuantity ? "العدد" : "الكمية", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.quantity);
       if (workforcePricing) {
         drawRight(page, "سعر العامل", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.unit);
         drawRight(page, "السكن", y - 13, resources.bold, 8, rgb(1, 1, 1), columns.accommodation);
