@@ -19,10 +19,10 @@ test("purchaser contract payments require an active bank and create a settlement
 
 test("purchaser settlement is exposed through a bank-selection system form", async () => {
   const workspace = await read("app/portal/ContractBillingWorkspace.tsx");
-  assert.match(workspace, /contractDirection:"dali_supplier"\|"dali_purchaser"/);
+  assert.match(workspace, /contractDirection:\s*"dali_supplier"\s*\|\s*"dali_purchaser"/);
   assert.match(workspace, /setSettlingPayment\(payment\)/);
   assert.match(workspace, /name="bankAccountId"/);
-  assert.match(workspace, /data\.banks\.map\(bank=>/);
+  assert.match(workspace, /data\.banks\.map\(\(bank\)\s*=>/);
   assert.match(workspace, /تسجيل السداد وإنشاء القيد/);
   assert.doesNotMatch(workspace, /patch\(payment,"mark-paid"\)/);
 });

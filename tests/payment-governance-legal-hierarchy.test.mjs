@@ -15,9 +15,9 @@ test("legal roles are separated without deleting legacy roles",async()=>{
 test("each legal case shows its assigned lawyer and immutable actor history",async()=>{
   const[schema,route,ui]=await Promise.all([read("db/schema.ts"),read("app/api/portal/legal-cases/route.ts"),read("app/portal/LegalCaseWorkspace.tsx")]);
   for(const field of ["assignedLawyerEmail","assignedBy","assignedAt","legalCaseActionLog"])assert.match(schema,new RegExp(field));
-  assert.match(route,/actionRequest==="assign-case"/);
+  assert.match(route,/actionRequest\s*===\s*"assign-case"/);
   assert.match(route,/إسناد القضية من صلاحيات المحامي المشرف/);
-  assert.match(route,/actorEmail:actor\.user\.email,actorRole:actorRole\(actor\)/);
+  assert.match(route,/actorEmail:\s*actor\.user\.email,\s*actorRole:\s*actorRole\(actor\)/);
   assert.match(route,/المحامي الفرعي يستطيع تحديث الإجراءات المسندة إليه فقط/);
   assert.match(ui,/المحامي المستلم للقضية/);
   assert.match(ui,/سجل منفذي الإجراءات/);
@@ -26,12 +26,13 @@ test("each legal case shows its assigned lawyer and immutable actor history",asy
 
 test("legal judgment payment is owner-confirmed and posts only to legal judgment expense",async()=>{
   const[route,ui,migration]=await Promise.all([read("app/api/portal/legal-cases/route.ts"),read("app/portal/LegalCaseWorkspace.tsx"),read("drizzle-pg/0054_legal_hierarchy_and_action_attribution.sql")]);
-  assert.match(route,/requestAction==="request-judgment-payment"/);
-  assert.match(route,/actionRequest==="pay-judgment"/);
-  assert.match(route,/if\(!isOwner\(actor\)\)/);
-  assert.match(route,/eq\(chartOfAccounts\.code,"5290"\)/);
-  assert.match(route,/category:"legal_judgment"/);
-  assert.match(route,/sourceType:"financial-record"/);
+  assert.match(route,/requestAction\s*===\s*"request-judgment-payment"/);
+  assert.match(route,/actionRequest\s*===\s*"pay-judgment"/);
+  assert.match(route,/if\s*\(!isOwner\(actor\)\)/);
+  assert.match(route,/resolvePostingRule\("legal_judgment_payment"/);
+  assert.match(route,/debitCode:\s*"5290"/);
+  assert.match(route,/category:\s*"legal_judgment"/);
+  assert.match(route,/sourceType:\s*"financial-record"/);
   assert.match(route,/bank\.ledgerAccountId/);
   assert.match(ui,/طلبات سداد المحكوم به/);
   assert.match(ui,/تم السداد وإنشاء القيد/);
@@ -56,5 +57,5 @@ test("supplier, government and legal payments use distinct accounting sources",a
   assert.match(supplier,/sourceType:"contract-payment-settlement"/);
   assert.match(supplier,/accountId:payable\.id/);
   assert.match(government,/eq\(chartOfAccounts\.code,"5280"\)/);
-  assert.match(legal,/eq\(chartOfAccounts\.code,"5290"\)/);
+  assert.match(legal,/resolvePostingRule\("legal_judgment_payment"/);
 });

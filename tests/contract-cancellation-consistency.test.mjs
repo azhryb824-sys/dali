@@ -16,7 +16,7 @@ test("contract cancellation updates both contract lists without reloading the pa
     /setContracts[\s\S]{0,300}router\.refresh\(\)/,
   );
   assert.match(billing, /addEventListener\("dali-contract-updated"/);
-  assert.match(billing, /contracts\.map\(item=>item\.id===contract\.id/);
+  assert.match(billing, /contracts\.map\(\(item\)\s*=>\s*item\.id\s*===\s*contract\.id/);
   assert.match(billing, /setCancellingContract\(contract\)/);
   assert.match(dashboard, /ContractCancellationDialog/);
   assert.match(dialog, /سبب .*إلغاء.* العقد/);

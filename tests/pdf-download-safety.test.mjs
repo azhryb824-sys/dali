@@ -76,11 +76,11 @@ test("quotation approval is a visible owner and system-admin action", async () =
     source("app/api/portal/operations/route.ts"),
   ]);
   assert.match(workspace, /اعتماد عرض السعر/);
-  assert.match(workspace, /\["draft","pending_approval"\]\.includes\(quote\.status\)/);
+  assert.match(workspace, /\["draft",\s*"pending_approval"\]\.includes\(quote\.status\)/);
   assert.match(workspace, /transition\("transition-quote", quote, "approved"\)/);
   assert.match(dashboard, /role === "system_owner" \|\| role === "system_admin"/);
   assert.match(operations, /قرار اعتماد أو رفض أو إلغاء عرض السعر متاح للمالك أو مشرف النظام فقط/);
-  assert.match(operations, /draft: canApprove \? \["pending_approval", "approved", "cancelled"\]/);
+  assert.match(operations, /draft:\s*canApprove\s*\?\s*\["pending_approval",\s*"approved",\s*"cancelled"\]/);
 });
 
 test("legacy generated PDFs are rebuilt with the current template when accessed", async () => {

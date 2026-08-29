@@ -29,8 +29,8 @@ test("employee-specific records stay inside the employee card while general HR l
   assert.match(dashboard, /EmployeeProfileWorkspace employeeId=\{item\.id\}/);
   assert.match(dashboard, /HrWorkspace[^>]+generalOnly/);
   assert.match(profile, /الراتب والرواتب/);
-  assert.match(profile, /\['movements','الحركات'\]/);
-  assert.match(profile, /\['leaves','الإجازات'\]/);
+  assert.match(profile, /["']movements["']\s*,\s*["']الحركات["']/);
+  assert.match(profile, /["']leaves["']\s*,\s*["']الإجازات["']/);
   assert.match(profile, /الرصيد الحالي/);
   assert.match(profile, /إرسال طلب الإجازة للاعتماد/);
   assert.match(profile, /الحضور/);

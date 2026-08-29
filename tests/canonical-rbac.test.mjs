@@ -36,9 +36,9 @@ test("new users require and persist multiple roles", () => {
 
 test("unauthorized pages are hidden and direct APIs enforce dedicated permissions", () => {
   const dashboard = read("app/portal/PortalDashboard.tsx");
-  assert.match(dashboard, /canAccessGovernment && <button/);
-  assert.match(dashboard, /canAccessOperations && <button/);
-  assert.match(dashboard, /canAccessContracts && <button/);
+  assert.match(dashboard, /canAccessGovernment\s*&&\s*\(\s*<button/);
+  assert.match(dashboard, /canAccessOperations\s*&&\s*\(\s*<button/);
+  assert.match(dashboard, /canAccessContracts[\s\S]*?<button/);
   assert.match(dashboard, /if \(!canOpenView\(next\)\)/);
   assert.doesNotMatch(dashboard, /currentUser\.role !== "employee" \|\| currentUser\.department === department/);
   assert.match(read("app/api/portal/government/route.ts"), /hasPortalPermission\(access,"government"/);

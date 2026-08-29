@@ -38,6 +38,7 @@ const prefixes: Record<IssuedDocumentType, string> = {
   payment_voucher: "PAY",
   construction_record: "CST",
   official_letter: "LTR",
+  payslip: "PSL",
 };
 
 type ProfessionInput = { profession: string; requiredCount: number; unitSalaryHalalas: number; actualSalaryHalalas: number; sponsorshipType: "dali" | "other"; sponsorName: string | null; ajirContractStatus: "not_applicable" | "with_ajir" | "without_ajir"; workerIds: number[] };

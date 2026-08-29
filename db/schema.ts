@@ -567,6 +567,11 @@ export const employeeLeaveRequests = pgTable(
     decidedBy: text("decided_by"),
     decisionNote: text("decision_note"),
     decidedAt: text("decided_at"),
+    balanceDaysDeducted: integer("balance_days_deducted").notNull().default(0),
+    paidPercentageBps: integer("paid_percentage_bps").notNull().default(10000),
+    cancelledBy: text("cancelled_by"),
+    cancelledAt: text("cancelled_at"),
+    cancellationReason: text("cancellation_reason"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP::text`),
@@ -583,6 +588,32 @@ export const employeeLeaveRequests = pgTable(
     check("employee_leave_days_check", sql`${table.days} > 0`),
   ],
 );
+
+export const companyHolidays = pgTable("company_holidays", {
+  id: serial("id").primaryKey(),
+  holidayDate: text("holiday_date").notNull().unique(),
+  nameAr: text("name_ar").notNull(),
+  paid: boolean("paid").notNull().default(true),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
+});
+
+export const employeeLeavePolicies = pgTable("employee_leave_policies", {
+  leaveType: text("leave_type").primaryKey(),
+  labelAr: text("label_ar").notNull(),
+  deductsAnnualBalance: boolean("deducts_annual_balance")
+    .notNull()
+    .default(false),
+  paidPercentageBps: integer("paid_percentage_bps").notNull().default(10000),
+  requiresAttachment: boolean("requires_attachment").notNull().default(false),
+  maxDaysPerRequest: integer("max_days_per_request"),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
+});
 
 export const employeeAttendance = pgTable(
   "employee_attendance",
@@ -856,7 +887,7 @@ export const payrollRuns = pgTable(
   {
     id: serial("id").primaryKey(),
     runNumber: text("run_number").notNull().unique(),
-    periodMonth: text("period_month").notNull().unique(),
+    periodMonth: text("period_month").notNull(),
     paymentDate: text("payment_date").notNull(),
     status: text("status").notNull().default("draft"),
     totalGrossHalalas: integer("total_gross_halalas").notNull().default(0),
@@ -866,6 +897,12 @@ export const payrollRuns = pgTable(
     totalNetHalalas: integer("total_net_halalas").notNull().default(0),
     journalEntryId: integer("journal_entry_id"),
     paymentJournalEntryId: integer("payment_journal_entry_id"),
+    bankAccountId: integer("bank_account_id").references(
+      () => bankAccounts.id,
+      { onDelete: "restrict" },
+    ),
+    payrollType: text("payroll_type").notNull().default("monthly"),
+    snapshotJson: text("snapshot_json"),
     createdBy: text("created_by").notNull(),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
@@ -879,6 +916,10 @@ export const payrollRuns = pgTable(
       .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
+    uniqueIndex("payroll_runs_period_type_unique").on(
+      table.periodMonth,
+      table.payrollType,
+    ),
     index("payroll_runs_status_payment_idx").on(
       table.status,
       table.paymentDate,
@@ -910,6 +951,28 @@ export const payrollItems = pgTable(
     deductionsHalalas: integer("deductions_halalas").notNull().default(0),
     netPayHalalas: integer("net_pay_halalas").notNull(),
     notes: text("notes"),
+    employeeNumberSnapshot: text("employee_number_snapshot"),
+    employeeNameSnapshot: text("employee_name_snapshot"),
+    bankNameSnapshot: text("bank_name_snapshot"),
+    ibanSnapshot: text("iban_snapshot"),
+    gosiEmployeeHalalas: integer("gosi_employee_halalas").notNull().default(0),
+    gosiEmployerHalalas: integer("gosi_employer_halalas").notNull().default(0),
+    unpaidLeaveDeductionHalalas: integer("unpaid_leave_deduction_halalas")
+      .notNull()
+      .default(0),
+    proratedDays: integer("prorated_days"),
+    paymentStatus: text("payment_status").notNull().default("pending"),
+    paidAmountHalalas: integer("paid_amount_halalas").notNull().default(0),
+    pendingPaymentAmountHalalas: integer("pending_payment_amount_halalas")
+      .notNull()
+      .default(0),
+    paymentReference: text("payment_reference"),
+    paymentJournalId: integer("payment_journal_id"),
+    paymentFailureReason: text("payment_failure_reason"),
+    paymentAttempts: integer("payment_attempts").notNull().default(0),
+    paidAt: text("paid_at"),
+    excludedAt: text("excluded_at"),
+    excludedBy: text("excluded_by"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP::text`),
@@ -923,6 +986,78 @@ export const payrollItems = pgTable(
     check(
       "payroll_items_amounts_check",
       sql`${table.baseSalaryHalalas} >= 0 and ${table.allowancesHalalas} >= 0 and ${table.bonusHalalas} >= 0 and ${table.deductionsHalalas} >= 0 and ${table.netPayHalalas} >= 0`,
+    ),
+  ],
+);
+
+export const employeeTerminationRequests = pgTable(
+  "employee_termination_requests",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
+    requestedLastDay: text("requested_last_day").notNull(),
+    reason: text("reason").notNull(),
+    status: text("status").notNull().default("draft"),
+    serviceAwardHalalas: integer("service_award_halalas").notNull().default(0),
+    leaveCompensationHalalas: integer("leave_compensation_halalas")
+      .notNull()
+      .default(0),
+    salaryDueHalalas: integer("salary_due_halalas").notNull().default(0),
+    deductionsHalalas: integer("deductions_halalas").notNull().default(0),
+    netSettlementHalalas: integer("net_settlement_halalas")
+      .notNull()
+      .default(0),
+    clearanceJson: text("clearance_json").notNull().default("{}"),
+    journalEntryId: integer("journal_entry_id").references(
+      () => journalEntries.id,
+      { onDelete: "restrict" },
+    ),
+    requestedBy: text("requested_by").notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    completedBy: text("completed_by"),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("employee_termination_employee_status_idx").on(
+      table.employeeId,
+      table.status,
+    ),
+  ],
+);
+
+export const employeeProfileChanges = pgTable(
+  "employee_profile_changes",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "restrict" }),
+    changeType: text("change_type").notNull(),
+    effectiveDate: text("effective_date").notNull(),
+    beforeJson: text("before_json").notNull(),
+    afterJson: text("after_json").notNull(),
+    reason: text("reason").notNull(),
+    status: text("status").notNull().default("pending"),
+    requestedBy: text("requested_by").notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("employee_profile_changes_employee_status_idx").on(
+      table.employeeId,
+      table.status,
     ),
   ],
 );
@@ -1067,6 +1202,22 @@ export const legalRecords = pgTable(
     assignedLawyerEmail: text("assigned_lawyer_email"),
     assignedBy: text("assigned_by"),
     assignedAt: text("assigned_at"),
+    courtCaseNumber: text("court_case_number"),
+    courtName: text("court_name"),
+    circuitName: text("circuit_name"),
+    claimType: text("claim_type"),
+    companyCapacity: text("company_capacity"),
+    currentHearingNumber: text("current_hearing_number"),
+    claimAmountHalalas: integer("claim_amount_halalas"),
+    judgmentAmountHalalas: integer("judgment_amount_halalas"),
+    enforcementInstrumentNumber: text("enforcement_instrument_number"),
+    opposingCounsel: text("opposing_counsel"),
+    litigationStage: text("litigation_stage"),
+    litigationLevel: text("litigation_level"),
+    outcome: text("outcome"),
+    closedBy: text("closed_by"),
+    closedAt: text("closed_at"),
+    closureReason: text("closure_reason"),
     expiryDate: text("expiry_date"),
     status: text("status").notNull().default("active"),
     createdAt: text("created_at")
@@ -1098,6 +1249,12 @@ export const legalCaseAttachments = pgTable(
     sizeBytes: integer("size_bytes").notNull(),
     validationStatus: text("validation_status").notNull().default("validated"),
     validationDetails: text("validation_details"),
+    documentCategory: text("document_category").notNull().default("general"),
+    versionNumber: integer("version_number").notNull().default(1),
+    approvalStatus: text("approval_status").notNull().default("draft"),
+    sha256: text("sha256"),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
     createdBy: text("created_by").notNull(),
     createdAt: text("created_at")
       .notNull()
@@ -1220,6 +1377,7 @@ export const legalJudgmentPaymentRequests = pgTable(
     paidBy: text("paid_by"),
     paidAt: text("paid_at"),
     rejectionReason: text("rejection_reason"),
+    responseReason: text("response_reason"),
     updatedAt: text("updated_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP::text`),
@@ -1238,7 +1396,134 @@ export const legalJudgmentPaymentRequests = pgTable(
     ),
     check(
       "legal_judgment_payments_status_check",
-      sql`${table.status} in ('requested','paid','rejected','cancelled')`,
+      sql`${table.status} in ('requested','changes_requested','paid','rejected','cancelled')`,
+    ),
+  ],
+);
+
+export const legalHearings = pgTable(
+  "legal_hearings",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "cascade" }),
+    hearingNumber: text("hearing_number").notNull(),
+    scheduledAt: text("scheduled_at").notNull(),
+    courtName: text("court_name"),
+    circuitName: text("circuit_name"),
+    attendeesJson: text("attendees_json").notNull().default("[]"),
+    requestsJson: text("requests_json").notNull().default("[]"),
+    decisionText: text("decision_text"),
+    nextHearingAt: text("next_hearing_at"),
+    status: text("status").notNull().default("scheduled"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_hearings_record_schedule_idx").on(
+      table.legalRecordId,
+      table.scheduledAt,
+    ),
+  ],
+);
+
+export const legalEvidenceCustody = pgTable(
+  "legal_evidence_custody",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "cascade" }),
+    attachmentId: integer("attachment_id")
+      .notNull()
+      .references(() => legalCaseAttachments.id, { onDelete: "cascade" }),
+    eventType: text("event_type").notNull(),
+    actorEmail: text("actor_email").notNull(),
+    fileSha256: text("file_sha256"),
+    details: text("details"),
+    occurredAt: text("occurred_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_evidence_custody_attachment_idx").on(
+      table.attachmentId,
+      table.occurredAt,
+    ),
+  ],
+);
+
+export const legalSubmissions = pgTable(
+  "legal_submissions",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "cascade" }),
+    submissionType: text("submission_type").notNull(),
+    title: text("title").notNull(),
+    versionNumber: integer("version_number").notNull().default(1),
+    status: text("status").notNull().default("draft"),
+    content: text("content"),
+    attachmentId: integer("attachment_id").references(
+      () => legalCaseAttachments.id,
+      { onDelete: "set null" },
+    ),
+    parentId: integer("parent_id"),
+    createdBy: text("created_by").notNull(),
+    reviewedBy: text("reviewed_by"),
+    approvedBy: text("approved_by"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_submissions_record_status_idx").on(
+      table.legalRecordId,
+      table.status,
+    ),
+  ],
+);
+
+export const legalSettlements = pgTable(
+  "legal_settlements",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "restrict" }),
+    amountHalalas: integer("amount_halalas").notNull(),
+    concessions: text("concessions"),
+    paymentScheduleJson: text("payment_schedule_json").notNull().default("[]"),
+    status: text("status").notNull().default("draft"),
+    agreementAttachmentId: integer("agreement_attachment_id").references(
+      () => legalCaseAttachments.id,
+      { onDelete: "set null" },
+    ),
+    financialRecordId: integer("financial_record_id"),
+    requestedBy: text("requested_by").notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_settlements_record_status_idx").on(
+      table.legalRecordId,
+      table.status,
     ),
   ],
 );
@@ -3334,6 +3619,129 @@ export const accountingPostingRules = pgTable(
       .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [index("accounting_posting_rules_active_idx").on(table.active)],
+);
+
+export const bankStatementLines = pgTable(
+  "bank_statement_lines",
+  {
+    id: serial("id").primaryKey(),
+    bankAccountId: integer("bank_account_id")
+      .notNull()
+      .references(() => bankAccounts.id, { onDelete: "restrict" }),
+    statementDate: text("statement_date").notNull(),
+    transactionDate: text("transaction_date").notNull(),
+    reference: text("reference"),
+    description: text("description").notNull(),
+    amountHalalas: integer("amount_halalas").notNull(),
+    direction: text("direction").notNull(),
+    fingerprint: text("fingerprint").notNull().unique(),
+    matchStatus: text("match_status").notNull().default("unmatched"),
+    journalEntryId: integer("journal_entry_id").references(
+      () => journalEntries.id,
+      { onDelete: "set null" },
+    ),
+    matchedBy: text("matched_by"),
+    matchedAt: text("matched_at"),
+    importedBy: text("imported_by").notNull(),
+    importedAt: text("imported_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("bank_statement_lines_bank_date_idx").on(
+      table.bankAccountId,
+      table.transactionDate,
+    ),
+  ],
+);
+export const fixedAssets = pgTable("fixed_assets", {
+  id: serial("id").primaryKey(),
+  assetCode: text("asset_code").notNull().unique(),
+  nameAr: text("name_ar").notNull(),
+  acquisitionDate: text("acquisition_date").notNull(),
+  costHalalas: integer("cost_halalas").notNull(),
+  residualValueHalalas: integer("residual_value_halalas").notNull().default(0),
+  usefulLifeMonths: integer("useful_life_months").notNull(),
+  accumulatedDepreciationHalalas: integer("accumulated_depreciation_halalas")
+    .notNull()
+    .default(0),
+  status: text("status").notNull().default("active"),
+  costCenterCode: text("cost_center_code"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
+});
+export const budgetLines = pgTable(
+  "budget_lines",
+  {
+    id: serial("id").primaryKey(),
+    fiscalPeriodId: integer("fiscal_period_id")
+      .notNull()
+      .references(() => fiscalPeriods.id, { onDelete: "restrict" }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => chartOfAccounts.id, { onDelete: "restrict" }),
+    costCenterCode: text("cost_center_code"),
+    amountHalalas: integer("amount_halalas").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("budget_lines_period_account_idx").on(
+      table.fiscalPeriodId,
+      table.accountId,
+    ),
+  ],
+);
+export const taxReturns = pgTable("tax_returns", {
+  id: serial("id").primaryKey(),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  outputVatHalalas: integer("output_vat_halalas").notNull().default(0),
+  inputVatHalalas: integer("input_vat_halalas").notNull().default(0),
+  netVatHalalas: integer("net_vat_halalas").notNull().default(0),
+  status: text("status").notNull().default("draft"),
+  journalEntryId: integer("journal_entry_id").references(
+    () => journalEntries.id,
+    { onDelete: "restrict" },
+  ),
+  createdBy: text("created_by").notNull(),
+  approvedBy: text("approved_by"),
+  filedAt: text("filed_at"),
+  paidAt: text("paid_at"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP::text`),
+});
+export const financialOperationIssues = pgTable(
+  "financial_operation_issues",
+  {
+    id: serial("id").primaryKey(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    issueType: text("issue_type").notNull(),
+    errorMessage: text("error_message").notNull(),
+    status: text("status").notNull().default("open"),
+    retryCount: integer("retry_count").notNull().default(0),
+    assignedTo: text("assigned_to"),
+    resolvedBy: text("resolved_by"),
+    resolvedAt: text("resolved_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("financial_operation_issues_status_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+  ],
 );
 
 // Multi-business and nationwide operating model. These records are operational,

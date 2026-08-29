@@ -10,25 +10,25 @@ test("contractual documents use dedicated tabs and the canonical quotation modal
     read("app/portal/PortalDashboard.tsx"),
     read("app/portal/OperationsWorkspace.tsx"),
   ]);
-  assert.match(workspace, /"contracts"\|"quotes"\|"letters"/);
-  assert.match(workspace, />العقود<\/button>/);
-  assert.match(workspace, />عروض الأسعار<\/button>/);
-  assert.match(workspace, />الخطابات<\/button>/);
+  assert.match(workspace, /"contracts"\s*\|\s*"quotes"\s*\|\s*"letters"/);
+  assert.match(workspace, />\s*العقود\s*<\/button>/);
+  assert.match(workspace, />\s*عروض الأسعار\s*<\/button>/);
+  assert.match(workspace, />\s*الخطابات\s*<\/button>/);
   assert.match(workspace, /onCreateQuotation=\{onCreateQuotation\}/);
-  assert.match(operations, /onClick=\{onCreateQuotation\}>إنشاء عرض سعر/);
+  assert.match(operations, /onClick=\{onCreateQuotation\}[\s\S]*?>\s*إنشاء عرض سعر\s*<\/button>/);
   assert.match(dashboard, /onCreateQuotation=\{\(\)\s*=>\s*openIssueDocument\("quotation"\)\}/);
   assert.match(dashboard, /issueReturnView === "contractual-documents"/);
   assert.match(operations, /quote-approve/);
   assert.match(operations, /اعتماد عرض السعر/);
-  assert.match(operations, /tab === "contracts".*<ContractBillingWorkspace\/>/s);
+  assert.match(operations, /tab === "contracts"[\s\S]*?<ContractBillingWorkspace\s*\/>/);
   const billing = await read("app/portal/ContractBillingWorkspace.tsx");
   assert.match(billing, /contract-card-approve/);
   assert.match(billing, /اعتماد العقد/);
-  assert.match(workspace, /activeTab==="letters"/);
-  assert.match(workspace, /letter\.status==="draft"/);
+  assert.match(workspace, /activeTab\s*===\s*"letters"/);
+  assert.match(workspace, /letter\.status\s*===\s*"draft"/);
   assert.match(workspace, /اعتماد الخطاب/);
   assert.match(workspace, /letter-record-actions/);
-  assert.match(workspace, /contracts\.map\(item=>item\.id\)\.join\(","\)/);
+  assert.match(workspace, /contracts\.map\(\(item\)\s*=>\s*item\.id\)\.join\(","\)/);
 });
 
 test("employee creation filters linked accounts and saves employee documents atomically", async () => {

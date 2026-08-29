@@ -95,6 +95,7 @@ async function ProtectedPortal() {
     getActivePortalScopes(access),
   ]);
   const canAccessConstruction = constructionPermission || canReadConstruction(access, constructionScopes);
+  const canSuperviseLegal = access.role === "admin" || access.functionalRoles.some((role) => ["system_owner", "system_admin", "legal_supervisor"].includes(role));
   const portalDataPromises = [
     canAccessPortalDepartment(access, "workforce")
       ? db.select().from(workforceRequests).orderBy(desc(workforceRequests.createdAt)).limit(250)
@@ -116,7 +117,7 @@ async function ProtectedPortal() {
       ? db.select().from(financialRecords).orderBy(desc(financialRecords.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "legal")
-      ? db.select().from(legalRecords).orderBy(desc(legalRecords.createdAt)).limit(500)
+      ? db.select().from(legalRecords).where(canSuperviseLegal ? undefined : eq(legalRecords.assignedLawyerEmail, access.user.email.toLowerCase())).orderBy(desc(legalRecords.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "workforce")
       ? db.select().from(workers).where(isNull(workers.archivedAt)).orderBy(desc(workers.createdAt)).limit(500)

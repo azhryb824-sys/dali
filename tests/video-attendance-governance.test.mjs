@@ -24,8 +24,8 @@ test("attendance, deduction and performance are server governed and payroll link
     source("app/portal/ExecutivePeopleCommandCenter.tsx"),
   ]);
   for (const table of ["portal_attendance_policies","portal_attendance_sessions","attendance_deduction_proposals","employee_performance_reviews"]) assert.match(migration,new RegExp(table));
-  assert.match(api,/system_admin/);assert.match(api,/تفعيل حساب زمن الحضور متاح لمالك النظام فقط/);assert.match(api,/legalCapPercent:50/);
-  assert.match(api,/writtenConsentConfirmed/);assert.match(api,/reviewedBy===context\.access\.user\.email/);assert.match(api,/movementType:"deduction"/);
+  assert.match(api,/system_admin/);assert.match(api,/تفعيل حساب زمن الحضور متاح لمالك النظام فقط/);assert.match(api,/legalCapPercent:\s*50/);
+  assert.match(api,/writtenConsentConfirmed/);assert.match(api,/reviewedBy\s*===\s*context\.access\.user\.email/);assert.match(api,/movementType:\s*"deduction"/);
   assert.match(api,/roleWeights/);assert.match(api,/تقييم موزون بحسب الدور مع أدلة ومعايرة مستقلة/);
   assert.match(helper,/local\.hour < 20/);assert.match(helper,/10 \* 60_000/);assert.match(helper,/syncEmployeeAttendance/);
   assert.match(sessions,/enforceNightlyAttendanceCutoff/);assert.match(sessions,/startAttendanceSession/);assert.match(sessions,/closeAttendanceSession/);

@@ -32,8 +32,8 @@ test("Saudi IBAN remains formatted, validated with MOD-97 and resolves the bank"
 
 test("employee payroll incorporates all persisted allowances", () => {
   const hr = read("app/api/portal/hr/route.ts");
-  assert.match(hr, /employee\.housingAllowanceHalalas \+ employee\.transportAllowanceHalalas \+ employee\.otherAllowanceHalalas/);
-  assert.match(hr, /baseSalaryHalalas: employee\.baseSalaryHalalas, allowancesHalalas: allowances/);
+  assert.match(hr, /employee\.housingAllowanceHalalas\s*\+\s*employee\.transportAllowanceHalalas\s*\+\s*employee\.otherAllowanceHalalas/);
+  assert.match(hr, /baseSalaryHalalas:\s*employee\.baseSalaryHalalas[\s\S]*?allowancesHalalas:\s*allowances/);
   assert.match(hr, /createDraftJournal/);
 });
 

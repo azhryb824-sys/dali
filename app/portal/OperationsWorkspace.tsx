@@ -789,6 +789,7 @@ export default function OperationsWorkspace({
                   {canWrite && ["draft", "rejected"].includes(quote.status) && (
                     <button
                       className="quote-revision"
+                      aria-label="تعديل عرض السعر"
                       disabled={busy === `edit-quote-${quote.id}`}
                       onClick={() => editQuote(quote)}
                     >

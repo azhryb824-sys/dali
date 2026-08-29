@@ -42,8 +42,8 @@ test("official letters support create save edit delete and PDF preview", () => {
   assert.match(route, /update\(officialLetters\)/);
   assert.match(route, /export async function DELETE/);
   assert.match(route, /delete\(officialLetters\)/);
-  assert.match(ui, />تعديل<\/button>/);
-  assert.match(ui, />حذف<\/button>/);
+  assert.match(ui, />\s*تعديل\s*<\/button>/);
+  assert.match(ui, />\s*حذف\s*<\/button>/);
   assert.match(ui, /\/api\/portal\/letters\/\$\{letter\.id\}\/pdf\?language=ar/);
   assert.match(pdf, /generateIssuedPdf/);
 });

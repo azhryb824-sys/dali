@@ -85,12 +85,12 @@ test("document edit buttons open system forms and draft delete actions remain av
   assert.match(letters,/aria-label="تعديل الخطاب الرسمي"/);
   assert.match(dashboard,/setShowEditForm\(true\)/);
   assert.match(dashboard,/submitContractEdit/);
-  assert.match(billing,/method:"DELETE"/);
+  assert.match(billing,/method:\s*"DELETE"/);
   assert.match(operations,/method: "DELETE"/);
-  assert.match(letters,/method:"DELETE"/);
-  assert.match(billing,/>حذف<\/button>/);
-  assert.match(operations,/>حذف<\/button>/);
-  assert.match(letters,/>حذف<\/button>/);
+  assert.match(letters,/method:\s*"DELETE"/);
+  assert.match(billing,/>\s*حذف\s*<\/button>/);
+  assert.match(operations,/>\s*حذف\s*<\/button>/);
+  assert.match(letters,/>\s*حذف\s*<\/button>/);
 });
 
 

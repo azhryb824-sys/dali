@@ -1,4 +1,4 @@
-import { desc, like, or } from "drizzle-orm";
+import { and, desc, eq, like, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { clients, companyDocuments, constructionOpportunities, constructionProjects, constructionRecords, contractPaymentSchedules, employees, financialRecords, governmentPaymentRequests, governmentSites, legalRecords, officialLetters, portalTasks, quoteVersions, salesOpportunities, timesheets, visitorConversations, videoInterviews, workers, workforceContracts, workforceRequests, workOrders, capacityPlans, dataSubjectRequests, portalUsers } from "@/db/schema";
 import { canAccessPortalDepartment, canAccessPortalDocuments, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   if (query.length < 2) return jsonNoStore({ results: [] });
   const pattern = `%${query}%`;
   const db = getDb();
+  const legalSupervisor = access.role === "admin" || access.functionalRoles.some((role) => ["system_owner", "system_admin", "legal_supervisor"].includes(role));
   try {
     const [requestRows, workerRows, contractRows, paymentRows, conversationRows, interviewRows, employeeRows, financeRows, legalRows, documentRows, clientRows, opportunityRows, quoteRows, orderRows, sheetRows, planRows, privacyRows, userRows, constructionOpportunityRows, constructionProjectRows, constructionRecordRows, governmentSiteRows, governmentPaymentRows, taskRows, letterRows] = await Promise.all([
       canAccessPortalDepartment(access, "workforce") ? db.select().from(workforceRequests).where(or(like(workforceRequests.trackingCode, pattern), like(workforceRequests.fullName, pattern), like(workforceRequests.companyName, pattern), like(workforceRequests.mobile, pattern))).orderBy(desc(workforceRequests.updatedAt)).limit(6) : Promise.resolve([]),
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
       hasPortalPermission(access, "video", "read").then((allowed) => allowed ? db.select().from(videoInterviews).where(or(like(videoInterviews.referenceCode, pattern), like(videoInterviews.assignedTo, pattern), like(videoInterviews.status, pattern))).orderBy(desc(videoInterviews.updatedAt)).limit(6) : []),
       canAccessPortalDepartment(access, "employees") ? db.select().from(employees).where(or(like(employees.fullName, pattern), like(employees.employeeNumber, pattern), like(employees.jobTitle, pattern))).orderBy(desc(employees.updatedAt)).limit(6) : Promise.resolve([]),
       canAccessPortalDepartment(access, "finance") ? db.select().from(financialRecords).where(or(like(financialRecords.referenceCode, pattern), like(financialRecords.description, pattern))).orderBy(desc(financialRecords.updatedAt)).limit(6) : Promise.resolve([]),
-      canAccessPortalDepartment(access, "legal") ? db.select().from(legalRecords).where(or(like(legalRecords.referenceCode, pattern), like(legalRecords.title, pattern), like(legalRecords.counterparty, pattern))).orderBy(desc(legalRecords.updatedAt)).limit(6) : Promise.resolve([]),
+      canAccessPortalDepartment(access, "legal") ? db.select().from(legalRecords).where(and(or(like(legalRecords.referenceCode, pattern), like(legalRecords.title, pattern), like(legalRecords.counterparty, pattern)),legalSupervisor ? undefined : eq(legalRecords.assignedLawyerEmail,access.user.email.toLowerCase()))).orderBy(desc(legalRecords.updatedAt)).limit(6) : Promise.resolve([]),
       canAccessPortalDocuments(access) ? db.select().from(companyDocuments).where(or(like(companyDocuments.referenceCode, pattern), like(companyDocuments.title, pattern), like(companyDocuments.counterparty, pattern))).orderBy(desc(companyDocuments.updatedAt)).limit(6) : Promise.resolve([]),
       canAccessPortalDepartment(access, "workforce") ? db.select().from(clients).where(or(like(clients.clientCode, pattern), like(clients.legalName, pattern), like(clients.commercialRegistration, pattern))).orderBy(desc(clients.updatedAt)).limit(6) : Promise.resolve([]),
       canAccessPortalDepartment(access, "workforce") ? db.select().from(salesOpportunities).where(or(like(salesOpportunities.opportunityCode, pattern), like(salesOpportunities.title, pattern))).orderBy(desc(salesOpportunities.updatedAt)).limit(6) : Promise.resolve([]),
