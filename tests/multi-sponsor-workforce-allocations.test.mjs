@@ -18,11 +18,12 @@ test("contract creation validates allocation identity and worker sponsor", () =>
   assert.match(route, /worker\.sponsorName !== item\.sponsorName/);
 });
 
-test("contract exposes sponsor allocations and quotations retain one sponsor per line", () => {
+test("contract derives sponsor names from workers while quotations retain sponsor details", () => {
   const contracts = read("app/portal/PortalDashboard.tsx");
   const quotes = read("app/portal/OperationsWorkspace.tsx");
   assert.match(contracts, /توزيع كفيل آخر/);
-  assert.match(contracts, /contract-sponsor-options/);
+  assert.doesNotMatch(contracts, /value=\{item\.sponsorName\}/);
+  assert.match(contracts, /تُؤخذ أسماء\s+كفلائهم تلقائياً من ملفاتهم/);
   assert.match(quotes, /sponsorshipType:\"dali\"\|\"other\"/);
   assert.match(quotes, /اسم الكفيل/);
 });

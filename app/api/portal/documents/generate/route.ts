@@ -199,7 +199,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "اختر المهنة أو اكتب اسم المهنة الفعلي يدوياً عند اختيار «أخرى»، وأدخل عدد العمالة وراتب العامل الصحيح لكل مهنة" }, { status: 400 });
       }
       if (professionInputs.some((item) => !["with_ajir", "without_ajir", "not_applicable"].includes(item.ajirContractStatus)
-        || (item.sponsorshipType === "other" && !item.sponsorName))) {
+        )) {
         return Response.json({ error: "أكمل جهة الكفالة وحالة عقد أجير لكل مهنة، ويمكن تحديد أجير أيضًا للعمالة على كفالة دالي" }, { status: 400 });
       }
       const vatRateBpsForSchedule = vatEnabled ? Math.round(vatRate * 100) : 0;
@@ -295,14 +295,14 @@ export async function POST(request: Request) {
       const selectedForProfession = selectedWorkers.filter((worker) => item.workerIds.includes(worker.id));
       if (selectedForProfession.some((worker) => worker.profession !== item.profession || worker.status !== "available"
         || worker.sponsorshipType !== item.sponsorshipType
-        || (item.sponsorshipType === "other" && worker.sponsorName !== item.sponsorName))) {
+        || (item.sponsorshipType === "other" && item.sponsorName && worker.sponsorName !== item.sponsorName))) {
         return Response.json({ error: `يجب أن تكون العمالة المختارة لمهنة ${item.profession} متاحة ومطابقة للمهنة وجهة الكفالة` }, { status: 409 });
       }
     }
 
     const capacity = professionInputs.map((item) => {
       const sponsorshipMatch = (worker: typeof workers.$inferSelect) => worker.sponsorshipType === item.sponsorshipType
-        && (item.sponsorshipType !== "other" || worker.sponsorName === item.sponsorName);
+        && (item.sponsorshipType !== "other" || !item.sponsorName || worker.sponsorName === item.sponsorName);
       const registeredCount = relevantWorkers.filter((worker) => worker.profession === item.profession && sponsorshipMatch(worker)).length;
       const availableCount = relevantWorkers.filter((worker) => worker.profession === item.profession && worker.status === "available" && sponsorshipMatch(worker)).length;
       return {
