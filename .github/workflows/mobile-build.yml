@@ -61,7 +61,6 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci --prefix mobile
-      - run: npm run assets --prefix mobile
       - run: npm run sync --prefix mobile
       - run: ./gradlew assembleDebug
         working-directory: mobile/android
@@ -84,7 +83,6 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci --prefix mobile
-      - run: npm run assets --prefix mobile
       - run: npm run sync --prefix mobile
       - name: Build without signing
         run: xcodebuild -project mobile/ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -derivedDataPath mobile/ios/DerivedData CODE_SIGNING_ALLOWED=NO build
