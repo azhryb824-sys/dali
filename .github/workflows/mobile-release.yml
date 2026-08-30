@@ -2,6 +2,12 @@ name: Signed Android mobile release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "codex/mobile-app"
+    paths:
+      - ".github/workflows/mobile-release.yml"
+      - "mobile/**"
 
 permissions:
   contents: read
