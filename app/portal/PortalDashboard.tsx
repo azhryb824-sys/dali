@@ -2709,7 +2709,18 @@ function CreateUserModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: 
           </label>
           <label>
             كلمة المرور المؤقتة
-            <input name="password" type="password" required minLength={12} maxLength={128} dir="ltr" autoComplete="new-password" />
+            <input
+              name="password"
+              type="password"
+              required
+              minLength={12}
+              maxLength={128}
+              pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,128}"
+              title="12 خانة على الأقل، تشمل حرفًا إنجليزيًا كبيرًا وصغيرًا ورقمًا ورمزًا"
+              dir="ltr"
+              autoComplete="new-password"
+            />
+            <small>12 خانة على الأقل، تشمل حرفًا إنجليزيًا كبيرًا وصغيرًا ورقمًا ورمزًا.</small>
           </label>
           <fieldset className="quick-permission-profile span-two">
             <legend>الأدوار الوظيفية (يمكن اختيار أكثر من دور)</legend>

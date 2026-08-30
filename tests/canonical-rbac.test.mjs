@@ -32,6 +32,18 @@ test("new users require and persist multiple roles", () => {
   assert.match(createUserBlock, /formData\.getAll\("functionalRoles"\)/);
   assert.doesNotMatch(createUserBlock, /const payload = Object\.fromEntries\(new FormData\(form\)\.entries\(\)\)/);
   assert.match(dashboard, /type="checkbox" name="functionalRoles"/);
+  assert.match(dashboard, /pattern="\(\?=\.\*\[a-z\]\)\(\?=\.\*\[A-Z\]\)\(\?=\.\*\[0-9\]\)\(\?=\.\*\[\^A-Za-z0-9\]\)\.\{12,128\}"/);
+});
+
+test("access scope roles follow active role definitions instead of a stale hard-coded check", () => {
+  const migration = read("drizzle-pg/0062_dynamic_access_scope_roles.sql");
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS "portal_access_scopes_role_check"/);
+  assert.match(migration, /FOREIGN KEY \("functional_role"\) REFERENCES public\.portal_roles \("role_key"\)\s+ON DELETE RESTRICT/);
+  assert.match(migration, /VALIDATE CONSTRAINT "portal_access_scopes_functional_role_fk"/);
+
+  const schema = read("db/schema.ts");
+  const accessScopes = schema.slice(schema.indexOf("export const portalAccessScopes"), schema.indexOf("export const constructionRecords"));
+  assert.match(accessScopes, /functionalRole: text\("functional_role"\)[\s\S]*?references\(\(\) => portalRoles\.roleKey, \{ onDelete: "restrict" \}\)/);
 });
 
 test("unauthorized pages are hidden and direct APIs enforce dedicated permissions", () => {

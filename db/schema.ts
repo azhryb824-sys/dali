@@ -4007,7 +4007,9 @@ export const portalAccessScopes = pgTable(
     userEmail: text("user_email")
       .notNull()
       .references(() => portalUsers.email, { onDelete: "cascade" }),
-    functionalRole: text("functional_role").notNull(),
+    functionalRole: text("functional_role")
+      .notNull()
+      .references(() => portalRoles.roleKey, { onDelete: "restrict" }),
     businessLineId: integer("business_line_id").references(
       () => businessLines.id,
       { onDelete: "restrict" },
