@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./portal.css";
 import "./contract-workflow.css";
 import "./approval-actions.css";
@@ -25,5 +26,5 @@ export const metadata: Metadata = {
 };
 
 export default function PortalLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return children;
+  return <>{children}<Script src="/mobile/runtime.js" strategy="afterInteractive" /></>;
 }
