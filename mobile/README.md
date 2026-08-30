@@ -21,3 +21,12 @@ npx cap sync
 ```
 
 يبنى Android من Android Studio أو `npm run build:android`. ويتطلب بناء iOS جهاز macOS مع Xcode 26 أو أحدث، ثم `npm run open:ios`. قبل توقيع الإصدارات يجب إعداد مفاتيح Android وملف Apple Team وبيانات APNs/FCM الخاصة بالشركة؛ لا تحفظ هذه الأسرار في Git.
+
+## إصدار Android الإنتاجي الموقّع
+
+ينشئ مسار GitHub Actions اليدوي `Signed Android mobile release` ملف APK وملف AAB للمتجر من دون حفظ مواد التوقيع داخل المستودع. يجب إعداد أسرار المستودع المشفرة التالية قبل تشغيله:
+
+- `DALI_ANDROID_KEYSTORE_BASE64`
+- `DALI_ANDROID_KEYSTORE_PASSWORD`
+- `DALI_ANDROID_KEY_ALIAS`
+- `DALI_ANDROID_KEY_PASSWORD`
