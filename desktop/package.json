@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "build:windows": "electron-builder --win nsis --x64",
-    "build:mac": "electron-builder --mac dmg zip --x64 --arm64",
+    "build:mac": "electron-builder --mac dmg zip --x64 --arm64 --publish never",
     "build:dir": "electron-builder --dir"
   },
   "devDependencies": {
