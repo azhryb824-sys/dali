@@ -6,7 +6,9 @@ const read=(path)=>readFile(path,"utf8");
 
 test("desktop uses the same production portal with encrypted local persistence",async()=>{
   const[main,pkg]=await Promise.all([read("desktop/main.mjs"),read("desktop/package.json")]);
-  assert.match(main,/https:\/\/www\.dally\.info\/portal/);
+  assert.match(main,/https:\/\/www\.dally\.info/);
+  assert.match(main,/\/api\/portal\/desktop\/entry-link/);
+  assert.match(main,/PORTAL_LOGIN_FALLBACK/);
   assert.match(main,/aes-256-gcm/);
   assert.match(main,/safeStorage/);
   assert.match(main,/contextIsolation: true/);
@@ -22,8 +24,44 @@ test("administrative entry is desktop-only while public pages remain available",
   assert.match(proxy,/DALI_ALLOW_BROWSER_PORTAL/);
   assert.match(main,/webRequest\.onBeforeSendHeaders/);
   assert.match(main,/dali-desktop-v1/);
+  assert.match(main,/x-dali-desktop-device/);
   assert.match(desktopPackage,/dali-icon\.ico/);
   assert.doesNotMatch(proxy,/desktopOnlyPath\s*=.*contracts\/signature/);
+});
+
+test("desktop entry uses a short-lived device-bound link that only opens login",async()=>{
+  const[main,token,issue,redeem,login,proxy]=await Promise.all([
+    read("desktop/main.mjs"),
+    read("lib/desktop-entry.ts"),
+    read("app/api/portal/desktop/entry-link/route.ts"),
+    read("app/desktop-access/[token]/route.ts"),
+    read("app/login/page.tsx"),
+    read("proxy.ts"),
+  ]);
+  assert.match(main,/requestPortalEntryUrl/);
+  assert.match(main,/\/desktop-access\//);
+  assert.match(token,/HMAC/);
+  assert.match(token,/SHA-256/);
+  assert.match(token,/DESKTOP_ENTRY_SECONDS = 5 \* 60/);
+  assert.match(token,/payload\.deviceId !== deviceId/);
+  assert.match(token,/HttpOnly; SameSite=Strict/);
+  assert.match(issue,/enforcePublicRateLimit/);
+  assert.match(redeem,/verifyDesktopEntryToken/);
+  assert.match(redeem,/\/login\?returnTo=%2Fportal/);
+  assert.doesNotMatch(redeem,/createIdentityToken|issuePortalSession/);
+  assert.match(login,/hasVerifiedDesktopEntry/);
+  assert.match(proxy,/desktop-access/);
+});
+
+test("macOS packaging keeps the Arabic bundle name byte-identical to Electron helpers",async()=>{
+  const[signing,workflow]=await Promise.all([
+    read("desktop/scripts/adhoc-sign-mac.cjs"),
+    read(".github/workflows/desktop-macos-no-terminal.yml"),
+  ]);
+  assert.match(signing,/alignBundleNameWithHelpers/);
+  assert.match(signing,/CFBundleName/);
+  assert.match(signing,/primaryHelper\.slice/);
+  assert.match(workflow,/Contents\/Frameworks\/\$bundle_name Helper\.app/);
 });
 
 test("offline queue synchronizes every twenty seconds and server prevents duplicate writes",async()=>{

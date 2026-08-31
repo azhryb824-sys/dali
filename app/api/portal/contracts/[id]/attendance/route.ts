@@ -8,7 +8,7 @@ import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelatio
 
 const positiveId=(value:unknown)=>{const n=Number(value);return Number.isSafeInteger(n)&&n>0?n:0};
 const clean=(value:unknown,max:number)=>typeof value==="string"?value.trim().slice(0,max):"";
-const chargeableDays=(start:string,end:string)=>{let count=0,cursor=new Date(`${start}T12:00:00Z`),last=new Date(`${end}T12:00:00Z`);while(cursor<=last){if(cursor.getUTCDay()!==5)count++;cursor=new Date(cursor.getTime()+86400000)}return count};
+const chargeableDays=(start:string,end:string)=>{let count=0,cursor=new Date(`${start}T12:00:00Z`);const last=new Date(`${end}T12:00:00Z`);while(cursor<=last){if(cursor.getUTCDay()!==5)count++;cursor=new Date(cursor.getTime()+86400000)}return count};
 const owner=(access:NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>)=>access.role==="admin"||access.functionalRoles.some(role=>["system_owner","system_admin","workforce_supervisor","workforce_operations_manager"].includes(role));
 
 export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){

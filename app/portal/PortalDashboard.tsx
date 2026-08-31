@@ -4183,7 +4183,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
   ]);
   const [payments, setPayments] = useState<DraftPayment[]>([{ key: "payment-1", title: "الدفعة الأولى", dueDate: "", percentage: 100 }]);
   // Opening a quote conversion intentionally hydrates the contract wizard state once.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!initialQuoteId || !convertibleQuotes.length) return;
     const quote = convertibleQuotes.find((item) => item.id === initialQuoteId);
@@ -4234,6 +4234,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
       if (field instanceof HTMLInputElement) field.value = quote.clientName;
     }, 0);
   }, [initialQuoteId, convertibleQuotes]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const [selectedWorkers, setSelectedWorkers] = useState<Record<string, number[]>>({});
   const isContract = documentType === "workforce_contract";
   const capacity = professions.map((item) => {

@@ -40,6 +40,8 @@ export default function FinanceEnterpriseWorkspace({
     setData(result);
   }, []);
   useEffect(() => {
+    // The request resolves asynchronously; its completion initializes this external API view.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load().catch((error) =>
       setNotice(error instanceof Error ? error.message : "تعذر التحميل"),
     );

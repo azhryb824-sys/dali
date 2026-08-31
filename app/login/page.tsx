@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
+import { hasVerifiedDesktopEntry } from "@/lib/desktop-entry";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const returnTo = query.returnTo?.startsWith("/portal") && !query.returnTo.startsWith("//") ? query.returnTo : "/portal";
   const currentUser = await getChatGPTUser();
   if (currentUser) redirect(returnTo);
+  const desktopEntry = await hasVerifiedDesktopEntry();
 
   const retrySeconds = Number(query.retryAfter || 0);
   const retryMinutes = Number.isFinite(retrySeconds) && retrySeconds > 0 ? Math.max(1, Math.ceil(retrySeconds / 60)) : null;
@@ -36,6 +38,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <p className="gate-kicker">النظام الإداري الداخلي</p>
         <h1>تسجيل الدخول الآمن</h1>
         <p className="gate-copy">أدخل رقم الهوية الوطنية أو الإقامة وكلمة المرور. تُحد الجلسة تلقائيًا ويُسجل كل دخول في سجل النشاط.</p>
+        {desktopEntry && <p role="status" className="operations-notice">تم التحقق من رابط تطبيق دالي لهذا الجهاز. أدخل بيانات حسابك لإكمال تسجيل الدخول.</p>}
         {errorMessage && (
           <p role="alert" className="gate-status suspended">
             {errorMessage}

@@ -9,10 +9,11 @@
   "scripts": {
     "start": "electron .",
     "build:windows": "electron-builder --win nsis --x64",
+    "build:mac:no-terminal": "electron-builder --mac dmg zip --arm64 --x64 --publish never",
     "build:dir": "electron-builder --dir"
   },
   "devDependencies": {
-    "electron": "^38.0.0",
+    "electron": "44.1.0",
     "electron-builder": "^26.0.12"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "productName": "نظام دالي الإداري",
     "artifactName": "Dali-Desktop-Setup-${version}.${ext}",
     "asar": true,
+    "afterPack": "scripts/adhoc-sign-mac.cjs",
     "publish": {
       "provider": "github",
       "owner": "azhryb824-sys",
@@ -36,6 +38,20 @@
       "assets/**/*",
       "package.json"
     ],
+    "mac": {
+      "icon": "assets/dali-icon.png",
+      "identity": null,
+      "hardenedRuntime": true,
+      "artifactName": "Dali-Mac-No-Terminal-${version}-${arch}.${ext}",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extendInfo": {
+        "NSCameraUsageDescription": "يحتاج نظام دالي إلى الكاميرا للمكالمات المرئية.",
+        "NSMicrophoneUsageDescription": "يحتاج نظام دالي إلى الميكروفون للمكالمات المرئية."
+      }
+    },
     "win": {
       "icon": "assets/dali-icon.ico",
       "target": ["nsis"]

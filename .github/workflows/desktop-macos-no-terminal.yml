@@ -1,0 +1,92 @@
+name: Build Dali macOS No-Terminal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [macos-no-terminal-0.2.5]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-macos-no-terminal.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  mac-installer:
+    name: macOS ${{ matrix.arch }}
+    runs-on: macos-14
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Validate desktop source
+        run: npm run desktop:check
+      - name: Build local macOS package
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never
+      - name: Verify application bundle and packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find desktop/dist -maxdepth 2 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          bundle_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app_path/Contents/Info.plist")"
+          test -d "$app_path/Contents/Frameworks/$bundle_name Helper.app"
+          /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
+          /usr/bin/codesign -dv --verbose=4 "$app_path" 2>&1
+          entitlements_output="$(/usr/bin/codesign -d --entitlements :- "$app_path" 2>&1)"
+          printf '%s\n' "$entitlements_output"
+          grep -q 'com.apple.security.cs.allow-jit' <<<"$entitlements_output"
+          grep -q 'com.apple.security.cs.disable-library-validation' <<<"$entitlements_output"
+          dmg_path="$(find desktop/dist -maxdepth 1 -type f -name 'Dali-Mac-No-Terminal-*-${{ matrix.arch }}.dmg' -print -quit)"
+          zip_path="$(find desktop/dist -maxdepth 1 -type f -name 'Dali-Mac-No-Terminal-*-${{ matrix.arch }}.zip' -print -quit)"
+          test -s "$dmg_path"
+          test -s "$zip_path"
+          hdiutil verify "$dmg_path"
+          shasum -a 256 "$dmg_path" "$zip_path"
+      - name: Smoke-test packaged application launch
+        shell: bash
+        env:
+          ELECTRON_ENABLE_LOGGING: "1"
+        run: |
+          set -euo pipefail
+          app_path="$(find desktop/dist -maxdepth 2 -type d -name '*.app' -print -quit)"
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
+          log_path="$RUNNER_TEMP/dali-macos-${{ matrix.arch }}.log"
+          "$app_path/Contents/MacOS/$executable" >"$log_path" 2>&1 &
+          app_pid=$!
+          sleep 15
+          if ! kill -0 "$app_pid" 2>/dev/null; then
+            set +e
+            cat "$log_path"
+            wait "$app_pid"
+            app_status=$?
+            sleep 5
+            find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -type f -mmin -5 -print -exec cat {} \;
+            exit "$app_status"
+          fi
+          kill "$app_pid"
+          wait "$app_pid" || true
+          cat "$log_path"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Dali-Mac-No-Terminal-${{ matrix.arch }}
+          path: |
+            desktop/dist/Dali-Mac-No-Terminal-*-${{ matrix.arch }}.dmg
+            desktop/dist/Dali-Mac-No-Terminal-*-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          retention-days: 7

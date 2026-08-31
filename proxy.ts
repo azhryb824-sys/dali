@@ -19,8 +19,8 @@ const contentSecurityPolicy = [
   "upgrade-insecure-requests",
 ].join("; ");
 
-const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
-const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
+const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|desktop-access(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
+const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|desktop-access(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
 const desktopMarker = "dali-desktop-v1";
 
 export function proxy(request: NextRequest) {
