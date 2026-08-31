@@ -41,7 +41,7 @@
     "mac": {
       "icon": "assets/dali-icon.png",
       "identity": null,
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
       "artifactName": "Dali-Mac-No-Terminal-${version}-${arch}.${ext}",
       "target": [
         "dmg",

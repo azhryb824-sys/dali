@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { execFileSync } = require("node:child_process");
 const { lstatSync, readdirSync } = require("node:fs");
 const { join } = require("node:path");
@@ -23,6 +24,8 @@ function sign(target, entitlements) {
     "--sign",
     "-",
     "--timestamp=none",
+    "--options",
+    "runtime",
   ];
   if (entitlements) args.push("--entitlements", entitlements);
   args.push(target);
