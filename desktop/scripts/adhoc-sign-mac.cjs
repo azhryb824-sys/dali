@@ -23,8 +23,6 @@ function sign(target, entitlements) {
     "--sign",
     "-",
     "--timestamp=none",
-    "--options",
-    "runtime",
   ];
   if (entitlements) args.push("--entitlements", entitlements);
   args.push(target);
