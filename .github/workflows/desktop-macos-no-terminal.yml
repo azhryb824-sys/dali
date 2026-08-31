@@ -43,12 +43,13 @@ jobs:
           set -euo pipefail
           app_path="$(find desktop/dist -maxdepth 2 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
-          if /usr/bin/codesign -dv "$app_path" >/dev/null 2>&1; then
-            /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
-            /usr/bin/codesign -dv --verbose=4 "$app_path" 2>&1
-          else
-            echo "Application bundle is intentionally unsigned for local installation."
-          fi
+          /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
+          /usr/bin/codesign -dv --verbose=4 "$app_path" 2>&1
+          entitlements_path="$RUNNER_TEMP/dali-entitlements-${{ matrix.arch }}.plist"
+          /usr/bin/codesign -d --entitlements :- "$app_path" >"$entitlements_path" 2>/dev/null
+          /usr/bin/plutil -extract com.apple.security.cs.allow-jit raw "$entitlements_path" | grep -qx true
+          /usr/bin/plutil -extract com.apple.security.cs.disable-library-validation raw "$entitlements_path" | grep -qx true
+          /usr/bin/plutil -p "$entitlements_path"
           dmg_path="$(find desktop/dist -maxdepth 1 -type f -name 'Dali-Mac-No-Terminal-*-${{ matrix.arch }}.dmg' -print -quit)"
           zip_path="$(find desktop/dist -maxdepth 1 -type f -name 'Dali-Mac-No-Terminal-*-${{ matrix.arch }}.zip' -print -quit)"
           test -s "$dmg_path"
