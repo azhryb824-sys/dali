@@ -64,9 +64,13 @@ jobs:
           app_pid=$!
           sleep 15
           if ! kill -0 "$app_pid" 2>/dev/null; then
+            set +e
             cat "$log_path"
             wait "$app_pid"
-            exit 1
+            app_status=$?
+            sleep 5
+            find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -type f -mmin -5 -print -exec cat {} \;
+            exit "$app_status"
           fi
           kill "$app_pid"
           wait "$app_pid" || true

@@ -37,11 +37,12 @@
       "assets/**/*",
       "package.json"
     ],
-    "afterSign": "scripts/after-sign-mac.cjs",
     "mac": {
       "icon": "assets/dali-icon.png",
       "identity": "-",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "artifactName": "Dali-Mac-No-Terminal-${version}-${arch}.${ext}",
       "target": [
         "dmg",
