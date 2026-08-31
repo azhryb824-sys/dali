@@ -1,6 +1,6 @@
 # تطبيق دالي لسطح المكتب
 
-تطبيق Electron لنظام Windows x64 يعرض واجهة النظام نفسها ويضيف تخزينًا محليًا مشفرًا وطابور مزامنة كل 20 ثانية.
+تطبيق Electron لنظامي Windows وmacOS يعرض واجهة النظام نفسها ويضيف تخزينًا محليًا مشفرًا وطابور مزامنة كل 20 ثانية.
 
 ## التحديث البرمجي التلقائي
 
@@ -28,3 +28,13 @@ npm run build:windows
 ```
 
 الملف الناتج داخل `desktop/dist`.
+
+## البناء على macOS
+
+```bash
+cd desktop
+npm ci
+npm run build:mac
+```
+
+ينشئ البناء حزم DMG وZIP مستقلة لمعالجات Intel وApple Silicon. حزم الاختبار غير موقعة؛ التوزيع الخارجي النهائي يتطلب شهادة Developer ID Application وتوثيق Apple Notarization لحساب الشركة.

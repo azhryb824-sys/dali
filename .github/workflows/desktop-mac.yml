@@ -1,0 +1,55 @@
+name: Build Dali Mac Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "codex/mobile-app"
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-mac.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mac-packages:
+    name: macOS Intel and Apple Silicon
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Validate desktop source
+        run: npm run desktop:check
+      - name: Build unsigned Mac test packages
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run build:mac
+      - name: Verify Mac packages
+        run: |
+          test -s desktop/dist/Dali-Mac-0.2.5-x64.dmg
+          test -s desktop/dist/Dali-Mac-0.2.5-arm64.dmg
+          test -s desktop/dist/Dali-Mac-0.2.5-x64.zip
+          test -s desktop/dist/Dali-Mac-0.2.5-arm64.zip
+          shasum -a 256 desktop/dist/Dali-Mac-0.2.5-*.dmg desktop/dist/Dali-Mac-0.2.5-*.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dali-mac-desktop-0.2.5
+          path: |
+            desktop/dist/Dali-Mac-0.2.5-*.dmg
+            desktop/dist/Dali-Mac-0.2.5-*.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "build:windows": "electron-builder --win nsis --x64",
+    "build:mac": "electron-builder --mac dmg zip --x64 --arm64",
     "build:dir": "electron-builder --dir"
   },
   "devDependencies": {
@@ -39,6 +40,24 @@
     "win": {
       "icon": "assets/dali-icon.ico",
       "target": ["nsis"]
+    },
+    "mac": {
+      "icon": "assets/dali-icon.png",
+      "category": "public.app-category.business",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "artifactName": "Dali-Mac-${version}-${arch}.${ext}",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
