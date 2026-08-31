@@ -29,6 +29,18 @@ function sign(target, entitlements) {
   execFileSync("/usr/bin/codesign", args, { stdio: "inherit" });
 }
 
+function alignBundleNameWithHelpers(appPath) {
+  const frameworksPath = join(appPath, "Contents", "Frameworks");
+  const primaryHelper = readdirSync(frameworksPath).find((name) => name.endsWith(" Helper.app"));
+  if (!primaryHelper) throw new Error(`No primary Electron helper found in ${frameworksPath}`);
+
+  const helperBaseName = primaryHelper.slice(0, -" Helper.app".length);
+  const infoPlist = join(appPath, "Contents", "Info.plist");
+  execFileSync("/usr/bin/plutil", ["-replace", "CFBundleName", "-string", helperBaseName, infoPlist], {
+    stdio: "inherit",
+  });
+}
+
 exports.default = async function adhocSignMac(context) {
   if (process.platform !== "darwin") return;
 
@@ -36,6 +48,10 @@ exports.default = async function adhocSignMac(context) {
   if (!appName) throw new Error(`No macOS application bundle found in ${context.appOutDir}`);
 
   const appPath = join(context.appOutDir, appName);
+  // electron-builder v26 normalizes Unicode file names to NFD but leaves
+  // CFBundleName composed. Electron derives helper names from CFBundleName,
+  // so Arabic product names otherwise fail before application JavaScript runs.
+  alignBundleNameWithHelpers(appPath);
   const mainEntitlements = join(__dirname, "..", "build", "entitlements.mac.plist");
   const inheritEntitlements = join(__dirname, "..", "build", "entitlements.mac.inherit.plist");
   const files = [];

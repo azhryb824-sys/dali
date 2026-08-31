@@ -43,6 +43,8 @@ jobs:
           set -euo pipefail
           app_path="$(find desktop/dist -maxdepth 2 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
+          bundle_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app_path/Contents/Info.plist")"
+          test -d "$app_path/Contents/Frameworks/$bundle_name Helper.app"
           /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
           /usr/bin/codesign -dv --verbose=4 "$app_path" 2>&1
           entitlements_output="$(/usr/bin/codesign -d --entitlements :- "$app_path" 2>&1)"

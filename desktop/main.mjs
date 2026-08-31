@@ -5,7 +5,9 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import crypto from "node:crypto";
 
-const PORTAL_URL = process.env.DALI_DESKTOP_URL || "https://www.dally.info/portal";
+const PORTAL_ORIGIN = "https://www.dally.info";
+const PORTAL_URL_OVERRIDE = process.env.DALI_DESKTOP_URL?.trim() || "";
+const PORTAL_LOGIN_FALLBACK = `${PORTAL_ORIGIN}/login?returnTo=%2Fportal`;
 const DESKTOP_MARKER = "dali-desktop-v1";
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const { autoUpdater } = electronUpdater;
@@ -14,6 +16,7 @@ let storePath;
 let keyPath;
 let key;
 let updateCheckTimer;
+let desktopDeviceId;
 
 function configureAutomaticUpdates() {
   if (!app.isPackaged) return;
@@ -114,6 +117,40 @@ function registerIpc() {
     return true;
   }));
 }
+function trustedPortalUrl(value, requiredPathPrefix = "/") {
+  try {
+    const url = new URL(value, PORTAL_ORIGIN);
+    return url.origin === PORTAL_ORIGIN && url.pathname.startsWith(requiredPathPrefix) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+async function requestPortalEntryUrl() {
+  if (PORTAL_URL_OVERRIDE) return trustedPortalUrl(PORTAL_URL_OVERRIDE) || PORTAL_LOGIN_FALLBACK;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(`${PORTAL_ORIGIN}/api/portal/desktop/entry-link`, {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "x-dali-desktop-app": DESKTOP_MARKER,
+        "x-dali-desktop-device": desktopDeviceId,
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`desktop-entry-${response.status}`);
+    const payload = await response.json();
+    const protectedUrl = trustedPortalUrl(String(payload?.url || ""), "/desktop-access/");
+    if (!protectedUrl) throw new Error("desktop-entry-url-invalid");
+    return protectedUrl;
+  } catch (error) {
+    console.error("Dali protected entry link failed:", error?.message || error);
+    return PORTAL_LOGIN_FALLBACK;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 async function openWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -141,7 +178,7 @@ async function openWindow() {
   });
   mainWindow.once("ready-to-show", () => mainWindow.show());
   try {
-    await mainWindow.loadURL(PORTAL_URL);
+    await mainWindow.loadURL(await requestPortalEntryUrl());
     const snapshot = join(app.getPath("userData"), "portal-snapshot.mhtml");
     await mainWindow.webContents.savePage(snapshot, "MHTML").catch(() => undefined);
   } catch {
@@ -154,11 +191,15 @@ app.whenReady().then(async () => {
   storePath = join(app.getPath("userData"), "offline-store.enc");
   await loadKey();
   if (!existsSync(storePath)) await writeStore({ deviceId: crypto.randomUUID(), cache: {}, queue: [], conflicts: [], lastSyncAt: null, serverCursor: 0 });
+  const startupStore = await readStore();
+  desktopDeviceId = startupStore.deviceId;
+  await writeStore(startupStore);
   registerIpc();
   session.defaultSession.webRequest.onBeforeSendHeaders(
     { urls: ["https://www.dally.info/*"] },
     (details, callback) => {
       details.requestHeaders["x-dali-desktop-app"] = DESKTOP_MARKER;
+      details.requestHeaders["x-dali-desktop-device"] = desktopDeviceId;
       callback({ requestHeaders: details.requestHeaders });
     },
   );
