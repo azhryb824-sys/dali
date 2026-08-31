@@ -32,19 +32,23 @@ jobs:
         run: npm ci
       - name: Validate desktop source
         run: npm run desktop:check
-      - name: Build locally signed macOS package
+      - name: Build local macOS package
         working-directory: desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never
-      - name: Verify application signature and packages
+      - name: Verify application bundle and packages
         shell: bash
         run: |
           set -euo pipefail
           app_path="$(find desktop/dist -maxdepth 2 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
-          /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
-          /usr/bin/codesign -dv --verbose=4 "$app_path" 2>&1
+          if /usr/bin/codesign -dv "$app_path" >/dev/null 2>&1; then
+            /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
+            /usr/bin/codesign -dv --verbose=4 "$app_path" 2>&1
+          else
+            echo "Application bundle is intentionally unsigned for local installation."
+          fi
           dmg_path="$(find desktop/dist -maxdepth 1 -type f -name 'Dali-Mac-No-Terminal-*-${{ matrix.arch }}.dmg' -print -quit)"
           zip_path="$(find desktop/dist -maxdepth 1 -type f -name 'Dali-Mac-No-Terminal-*-${{ matrix.arch }}.zip' -print -quit)"
           test -s "$dmg_path"
@@ -76,6 +80,7 @@ jobs:
           wait "$app_pid" || true
           cat "$log_path"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Dali-Mac-No-Terminal-${{ matrix.arch }}
           path: |

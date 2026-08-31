@@ -39,10 +39,8 @@
     ],
     "mac": {
       "icon": "assets/dali-icon.png",
-      "identity": "-",
-      "hardenedRuntime": true,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "identity": null,
+      "hardenedRuntime": false,
       "artifactName": "Dali-Mac-No-Terminal-${version}-${arch}.${ext}",
       "target": [
         "dmg",
