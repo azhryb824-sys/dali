@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     const supervisor =
       actor.role === "admin" ||
       actor.functionalRoles.some((role) =>
-        ["system_owner", "system_admin", "legal_supervisor"].includes(role),
+        ["system_owner", "system_admin", "legal_supervisor", "lawyer"].includes(role),
       );
     if (
       !supervisor &&
@@ -117,8 +117,9 @@ export async function POST(request: Request) {
       });
       const role = actor.functionalRoles.includes("legal_supervisor")
         ? "legal_supervisor"
-        : actor.functionalRoles.includes("legal_lawyer") ||
-            actor.functionalRoles.includes("lawyer")
+        : actor.functionalRoles.includes("lawyer")
+          ? "lawyer"
+          : actor.functionalRoles.includes("legal_lawyer")
           ? "legal_lawyer"
           : actor.role === "admin"
             ? "system_admin"

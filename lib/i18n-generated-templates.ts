@@ -854,5 +854,35 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "يومية موقع {{0}}",
     "en": "Daily site _ {{0}}",
     "bn": "দৈনিক সাইট _ {{0}}"
+  },
+  {
+    "source": "· آخر فتح {{0}}",
+    "en": "· Last opened {{0}}",
+    "bn": "· সর্বশেষ খোলা হয়েছে {{0}}"
+  },
+  {
+    "source": "· أسندها {{0}}",
+    "en": "· Assigned by {{0}}",
+    "bn": "· দায়িত্ব দিয়েছেন {{0}}"
+  },
+  {
+    "source": "تنتهي {{0}}",
+    "en": "Expires {{0}}",
+    "bn": "মেয়াদ শেষ {{0}}"
+  },
+  {
+    "source": "صالح حتى {{0}}",
+    "en": "Valid until {{0}}",
+    "bn": "{{0}} পর্যন্ত বৈধ"
+  },
+  {
+    "source": "محامٍ #{{0}}",
+    "en": "Lawyer #{{0}}",
+    "bn": "আইনজীবী #{{0}}"
+  },
+  {
+    "source": "ملف #{{0}}",
+    "en": "File #{{0}}",
+    "bn": "ফাইল #{{0}}"
   }
 ];

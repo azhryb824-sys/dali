@@ -67,19 +67,20 @@ test("payroll uses an actual bank and confirms individual payment only after jou
   assert.match(route, /"excluded"/);
 });
 
-test("lawyers only retrieve assigned cases and assignees must be active legal users", () => {
+test("lawyer users manage all cases while external counsel is assigned from the lawyer registry", () => {
   const route = read("app/api/portal/legal-cases/route.ts"),
     search = read("app/api/portal/search/route.ts"),
     attachment = read(
       "app/api/portal/legal-cases/attachments\/\[id\]\/route.ts",
     );
-  assert.match(
-    route,
-    /assignedLawyerEmail\s*,\s*actor\.user\.email\.toLowerCase\(\)/,
-  );
-  assert.match(route, /portalUsers\.status\s*,\s*"active"/);
-  assert.match(route, /legal_affairs/);
-  assert.match(search, /assignedLawyerEmail/);
+  assert.match(route, /function isCaseManager/);
+  assert.match(route, /functionalRoles\.includes\("lawyer"\)/);
+  assert.match(route, /assignedLawyerId/);
+  assert.match(route, /legalLawyers\.status, "active"/);
+  assert.doesNotMatch(route, /يجب إسناد القضية إلى حساب نشط/);
+  assert.match(search, /legalCaseManager/);
+  assert.match(search, /"legal_supervisor", "lawyer"/);
+  assert.match(attachment, /"legal_supervisor", "lawyer"/);
   assert.match(attachment, /القضية غير مسندة إليك/);
 });
 

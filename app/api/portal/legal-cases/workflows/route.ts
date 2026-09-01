@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   legalCaseActivities,
@@ -27,6 +27,8 @@ const supervisor = (actor: Actor) =>
   actor.functionalRoles.some((role) =>
     ["system_owner", "system_admin", "legal_supervisor"].includes(role),
   );
+const caseManager = (actor: Actor) =>
+  supervisor(actor) || actor.functionalRoles.includes("lawyer");
 const owner = (actor: Actor) =>
   actor.role === "admin" ||
   actor.functionalRoles.some((role) =>
@@ -44,7 +46,7 @@ async function matterAccess(actor: Actor, legalRecordId: number) {
     where: eq(legalRecords.id, legalRecordId),
   });
   return matter &&
-    (supervisor(actor) ||
+    (caseManager(actor) ||
       matter.assignedLawyerEmail?.toLowerCase() ===
         actor.user.email.toLowerCase())
     ? matter
@@ -55,7 +57,7 @@ export async function GET() {
   const actor = await access();
   if (!actor) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   const db = getDb(),
-    cases = supervisor(actor)
+    cases = caseManager(actor)
       ? await db.select({ id: legalRecords.id }).from(legalRecords)
       : await db
           .select({ id: legalRecords.id })

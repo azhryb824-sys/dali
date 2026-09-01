@@ -12,6 +12,7 @@ type Matter = {
   referralReason: string | null;
   fileSnapshotJson: string | null;
   contractId: number | null;
+  assignedLawyerId: number | null;
   assignedLawyerEmail: string | null;
   assignedBy: string | null;
   assignedAt: string | null;
@@ -27,6 +28,36 @@ type Matter = {
   opposingCounsel: string | null;
   litigationStage: string | null;
   litigationLevel: string | null;
+};
+type Lawyer = {
+  id: number;
+  fullName: string;
+  licenseNumber: string | null;
+  licenseExpiryDate: string | null;
+  mobile: string | null;
+  email: string | null;
+  portalUserEmail: string | null;
+  notes: string | null;
+  status: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+type LawyerUser = { email: string; displayName: string };
+type ExternalShare = {
+  id: string;
+  legalRecordId: number;
+  attachmentId: number;
+  lawyerId: number;
+  channel: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  maxDownloads: number;
+  downloadCount: number;
+  lastAccessedAt: string | null;
+  sharedBy: string;
+  sharedAt: string;
 };
 type Activity = {
   id: number;
@@ -103,11 +134,15 @@ type Data = {
   actionLog: ActionLog[];
   judgmentPayments: JudgmentPayment[];
   banks: Bank[];
+  lawyers: Lawyer[];
+  externalShares: ExternalShare[];
   currentActorEmail: string;
   currentActorRole: string;
   canWrite: boolean;
   canApprove: boolean;
+  canManageCases: boolean;
   canSupervise: boolean;
+  canShareExternally: boolean;
   canPayJudgments: boolean;
 };
 type Hearing = {
@@ -168,6 +203,14 @@ export default function LegalCaseWorkspace() {
     [selected, setSelected] = useState(0),
     [notice, setNotice] = useState(""),
     [uploading, setUploading] = useState(false),
+    [lawyerModal, setLawyerModal] = useState(false),
+    [lawyerBusy, setLawyerBusy] = useState(false),
+    [shareBusy, setShareBusy] = useState(false),
+    [currentTime, setCurrentTime] = useState(0),
+    [lawyerUsers, setLawyerUsers] = useState<LawyerUser[]>([]),
+    [sharingAttachment, setSharingAttachment] = useState<Attachment | null>(
+      null,
+    ),
     [payingJudgment, setPayingJudgment] = useState<JudgmentPayment | null>(
       null,
     );
@@ -179,15 +222,25 @@ export default function LegalCaseWorkspace() {
     canApproveSettlement: false,
   });
   const load = useCallback(async () => {
-    const [response, workflowResponse] = await Promise.all([
+    const [response, workflowResponse, lawyerResponse] = await Promise.all([
       fetch("/api/portal/legal-cases", { cache: "no-store" }),
       fetch("/api/portal/legal-cases/workflows", { cache: "no-store" }),
+      fetch("/api/portal/legal-lawyers", { cache: "no-store" }),
     ]);
     const result = (await readApiJson(response)) as Data & { error?: string };
     if (!response.ok) throw new Error(result.error || "تعذر تحميل القضايا");
-    setData(result);
     if (workflowResponse.ok)
       setWorkflows((await readApiJson(workflowResponse)) as WorkflowData);
+    if (lawyerResponse.ok) {
+      const directory = (await readApiJson(lawyerResponse)) as {
+        lawyers?: Lawyer[];
+        userCandidates?: LawyerUser[];
+      };
+      if (directory.lawyers) result.lawyers = directory.lawyers;
+      setLawyerUsers(directory.userCandidates || []);
+    }
+    setData(result);
+    setCurrentTime(Date.now());
     setSelected((value) => value || result.cases[0]?.id || 0);
   }, []);
   useEffect(() => {
@@ -201,6 +254,26 @@ export default function LegalCaseWorkspace() {
     return () => window.clearTimeout(timer);
   }, [load]);
   const matter = data?.cases.find((item) => item.id === selected);
+  const assignedLawyer = data?.lawyers.find(
+    (lawyer) => lawyer.id === matter?.assignedLawyerId,
+  );
+  const externalLawyers = useMemo(
+    () =>
+      data?.lawyers.filter(
+        (lawyer) =>
+          lawyer.status === "active" &&
+          !lawyer.portalUserEmail &&
+          Boolean(lawyer.mobile),
+      ) || [],
+    [data],
+  );
+  const matterShares = useMemo(
+    () =>
+      data?.externalShares.filter(
+        (share) => share.legalRecordId === selected,
+      ) || [],
+    [data, selected],
+  );
   const activities = useMemo(
     () =>
       data?.activities.filter((item) => item.legalRecordId === selected) || [],
@@ -303,8 +376,8 @@ export default function LegalCaseWorkspace() {
   async function assignCase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget,
-      assignedLawyerEmail = String(
-        new FormData(form).get("assignedLawyerEmail") || "",
+      assignedLawyerId = Number(
+        new FormData(form).get("assignedLawyerId") || 0,
       );
     const response = await fetch("/api/portal/legal-cases", {
       method: "PATCH",
@@ -312,7 +385,7 @@ export default function LegalCaseWorkspace() {
       body: JSON.stringify({
         action: "assign-case",
         legalRecordId: selected,
-        assignedLawyerEmail,
+        assignedLawyerId,
       }),
     });
     const result = (await readApiJson(response)) as { error?: string };
@@ -322,6 +395,106 @@ export default function LegalCaseWorkspace() {
     }
     form.reset();
     setNotice("تم تحديد المحامي المستلم للقضية وتسجيل الإسناد.");
+    await load();
+  }
+  async function addLawyer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setLawyerBusy(true);
+    try {
+      const response = await fetch("/api/portal/legal-lawyers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(new FormData(form).entries())),
+      });
+      const result = (await readApiJson(response)) as { error?: string };
+      if (!response.ok)
+        throw new Error(result.error || "تعذر إضافة المحامي");
+      form.reset();
+      setLawyerModal(false);
+      setNotice("تمت إضافة المحامي إلى السجل القانوني.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر إضافة المحامي");
+    } finally {
+      setLawyerBusy(false);
+    }
+  }
+  async function updateLawyerStatus(lawyer: Lawyer) {
+    setLawyerBusy(true);
+    try {
+      const response = await fetch("/api/portal/legal-lawyers", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          lawyerId: lawyer.id,
+          status: lawyer.status === "active" ? "inactive" : "active",
+        }),
+      });
+      const result = (await readApiJson(response)) as { error?: string };
+      if (!response.ok)
+        throw new Error(result.error || "تعذر تحديث حالة المحامي");
+      setNotice("تم تحديث حالة المحامي وتسجيل العملية.");
+      await load();
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "تعذر تحديث حالة المحامي",
+      );
+    } finally {
+      setLawyerBusy(false);
+    }
+  }
+  async function shareOnWhatsApp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sharingAttachment) return;
+    const popup = window.open("about:blank", "_blank");
+    if (popup) popup.opener = null;
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    setShareBusy(true);
+    try {
+      const response = await fetch("/api/portal/legal-cases/shares", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...values,
+          legalRecordId: selected,
+          attachmentId: sharingAttachment.id,
+        }),
+      });
+      const result = (await readApiJson(response)) as {
+        error?: string;
+        whatsappUrl?: string;
+      };
+      if (!response.ok || !result.whatsappUrl)
+        throw new Error(result.error || "تعذر تجهيز مشاركة واتساب");
+      setSharingAttachment(null);
+      setNotice("تم تسجيل تاريخ وساعة المشاركة وفتح محادثة واتساب.");
+      if (popup) popup.location.href = result.whatsappUrl;
+      else window.location.href = result.whatsappUrl;
+      await load();
+    } catch (error) {
+      popup?.close();
+      setNotice(
+        error instanceof Error ? error.message : "تعذر تجهيز مشاركة واتساب",
+      );
+    } finally {
+      setShareBusy(false);
+    }
+  }
+  async function revokeShare(share: ExternalShare) {
+    const reason = window.prompt("سبب إبطال رابط المشاركة") || "";
+    if (!reason) return;
+    const response = await fetch("/api/portal/legal-cases/shares", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ shareId: share.id, reason }),
+    });
+    const result = (await readApiJson(response)) as { error?: string };
+    if (!response.ok) {
+      setNotice(result.error || "تعذر إبطال رابط المشاركة");
+      return;
+    }
+    setNotice("أُبطل رابط المشاركة مع بقاء سجلها وتاريخها محفوظين.");
     await load();
   }
   async function upload(event: FormEvent<HTMLFormElement>) {
@@ -425,12 +598,88 @@ export default function LegalCaseWorkspace() {
             واحد.
           </p>
         </div>
-        <b>
-          {data.cases.filter((item) => item.status !== "closed").length} ملف
-          مفتوح
-        </b>
+        <div className="heading-actions">
+          {data.canManageCases && (
+            <button
+              type="button"
+              className="admin-primary"
+              onClick={() => setLawyerModal(true)}
+            >
+              + إضافة محامي
+            </button>
+          )}
+          <b>
+            {data.cases.filter((item) => item.status !== "closed").length} ملف
+            مفتوح
+          </b>
+        </div>
       </header>
       {notice && <p className="operations-notice">{notice}</p>}
+      <details className="legal-lawyer-register">
+        <summary>
+          سجل المحامين — {data.lawyers.filter((item) => item.status === "active").length} نشط
+        </summary>
+        <div className="management-table-wrap">
+          <table className="management-table">
+            <thead>
+              <tr>
+                <th>المحامي</th>
+                <th>الرخصة</th>
+                <th>النوع والصلاحية</th>
+                <th>التواصل</th>
+                <th>الحالة</th>
+                {data.canManageCases && <th>إجراء</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {data.lawyers.map((lawyer) => (
+                <tr key={lawyer.id}>
+                  <td>
+                    <strong>{lawyer.fullName}</strong>
+                    <small>{lawyer.notes || "دون ملاحظات"}</small>
+                  </td>
+                  <td>
+                    <strong dir="ltr">{lawyer.licenseNumber || "—"}</strong>
+                    <small>
+                      {lawyer.licenseExpiryDate
+                        ? `تنتهي ${new Date(`${lawyer.licenseExpiryDate}T00:00:00`).toLocaleDateString("ar-SA")}`
+                        : "دون تاريخ انتهاء"}
+                    </small>
+                  </td>
+                  <td>
+                    <strong>
+                      {lawyer.portalUserEmail
+                        ? "محامي لديه مستخدم"
+                        : "محامي خارجي"}
+                    </strong>
+                    <small dir="ltr">{lawyer.portalUserEmail || "دون دخول للنظام"}</small>
+                  </td>
+                  <td>
+                    <strong dir="ltr">{lawyer.mobile || "—"}</strong>
+                    <small dir="ltr">{lawyer.email || "—"}</small>
+                  </td>
+                  <td>{lawyer.status === "active" ? "نشط" : "غير نشط"}</td>
+                  {data.canManageCases && (
+                    <td>
+                      <button
+                        type="button"
+                        className="admin-secondary"
+                        disabled={lawyerBusy}
+                        onClick={() => void updateLawyerStatus(lawyer)}
+                      >
+                        {lawyer.status === "active" ? "تعطيل" : "تفعيل"}
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!data.lawyers.length && (
+            <p className="legal-empty">لم يُضف أي محامٍ بعد.</p>
+          )}
+        </div>
+      </details>
       <div className="legal-matter-layout">
         <aside>
           {data.cases.map((item) => (
@@ -455,26 +704,47 @@ export default function LegalCaseWorkspace() {
                   <p>{matter.referralReason || "ملف قانوني مسجل يدويًا"}</p>
                   <p>
                     <strong>المحامي المستلم للقضية:</strong>{" "}
-                    {matter.assignedLawyerEmail || "لم يُسند بعد"}
-                    {matter.assignedBy && (
-                      <small>
-                        {" "}
-                        · أسندها {matter.assignedBy}
-                        {matter.assignedAt
-                          ? ` في ${new Date(matter.assignedAt).toLocaleString("ar-SA")}`
-                          : ""}
-                      </small>
-                    )}
+                    {assignedLawyer?.fullName ||
+                      matter.assignedLawyerEmail ||
+                      "لم يُسند بعد"}
                   </p>
-                  {data.canSupervise && (
+                  {matter.assignedAt && (
+                    <p>
+                      <strong>تاريخ ووقت الإسناد:</strong>{" "}
+                      {new Date(matter.assignedAt).toLocaleString("ar-SA", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                      {matter.assignedBy ? ` · أسندها ${matter.assignedBy}` : ""}
+                    </p>
+                  )}
+                  {assignedLawyer && (
+                    <p>
+                      <strong>نوع المحامي:</strong>{" "}
+                      {assignedLawyer.portalUserEmail
+                        ? "محامي لديه مستخدم ويدير جميع القضايا"
+                        : "محامي خارجي دون دخول للنظام"}
+                    </p>
+                  )}
+                  {data.canManageCases && (
                     <>
                       <form onSubmit={assignCase}>
-                        <input
-                          name="assignedLawyerEmail"
-                          type="email"
+                        <select
+                          name="assignedLawyerId"
                           required
-                          placeholder="بريد المحامي الفرعي المستلم"
-                        />
+                          defaultValue={matter.assignedLawyerId || ""}
+                        >
+                          <option value="" disabled>
+                            اختر المحامي المستلم
+                          </option>
+                          {data.lawyers
+                            .filter((lawyer) => lawyer.status === "active")
+                            .map((lawyer) => (
+                              <option key={lawyer.id} value={lawyer.id}>
+                                {lawyer.fullName} — {lawyer.portalUserEmail ? "داخلي" : "خارجي"}
+                              </option>
+                            ))}
+                        </select>
                         <button>إسناد القضية</button>
                       </form>
                       <form onSubmit={updateCaseStatus}>
@@ -560,7 +830,7 @@ export default function LegalCaseWorkspace() {
                   ))}
                 </section>
               )}
-              {data.canSupervise && (
+              {data.canManageCases && (
                 <details className="legal-linked-file">
                   <summary>بيانات القضية والمحكمة</summary>
                   <form
@@ -989,18 +1259,28 @@ export default function LegalCaseWorkspace() {
               <section className="legal-case-files">
                 <h3>مرفقات الشؤون القانونية</h3>
                 {attachments.map((item) => (
-                  <a
-                    key={item.id}
-                    href={`/api/portal/legal-cases/attachments/${item.id}?inline=1`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <strong>{item.title}</strong>
-                    <small>
-                      {item.fileName} ·{" "}
-                      {(item.sizeBytes / 1024 / 1024).toFixed(2)} م.ب
-                    </small>
-                  </a>
+                  <article className="legal-case-file-row" key={item.id}>
+                    <a
+                      href={`/api/portal/legal-cases/attachments/${item.id}?inline=1`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <strong>{item.title}</strong>
+                      <small>
+                        {item.fileName} ·{" "}
+                        {(item.sizeBytes / 1024 / 1024).toFixed(2)} م.ب
+                      </small>
+                    </a>
+                    {data.canShareExternally && externalLawyers.length > 0 && (
+                      <button
+                        type="button"
+                        className="whatsapp-share-button"
+                        onClick={() => setSharingAttachment(item)}
+                      >
+                        مشاركة عبر واتساب
+                      </button>
+                    )}
+                  </article>
                 ))}
                 {!attachments.length && (
                   <p className="legal-empty">لا توجد مرفقات قانونية إضافية.</p>
@@ -1030,6 +1310,65 @@ export default function LegalCaseWorkspace() {
                       {uploading ? "جارٍ الرفع..." : "إرفاق ملف قانوني"}
                     </button>
                   </form>
+                )}
+              </section>
+              <section className="legal-share-history">
+                <h3>سجل مشاركة الملفات مع المحامين الخارجيين</h3>
+                {matterShares.map((share) => {
+                  const lawyer = data.lawyers.find(
+                    (item) => item.id === share.lawyerId,
+                  );
+                  const attachment = data.attachments.find(
+                    (item) => item.id === share.attachmentId,
+                  );
+                  const expired = Date.parse(share.expiresAt) <= currentTime;
+                  const active = !share.revokedAt && !expired;
+                  return (
+                    <article key={share.id}>
+                      <div>
+                        <strong>
+                          {attachment?.title || `ملف #${share.attachmentId}`}
+                        </strong>
+                        <span>
+                          إلى {lawyer?.fullName || `محامٍ #${share.lawyerId}`}
+                        </span>
+                        <small>
+                          شاركه {share.sharedBy} في{" "}
+                          {new Date(share.sharedAt).toLocaleString("ar-SA", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </small>
+                        <small>
+                          التنزيلات {share.downloadCount}/{share.maxDownloads}
+                          {share.lastAccessedAt
+                            ? ` · آخر فتح ${new Date(share.lastAccessedAt).toLocaleString("ar-SA")}`
+                            : " · لم يُفتح بعد"}
+                        </small>
+                      </div>
+                      <span className={`workflow-status ${active ? "active" : "cancelled"}`}>
+                        {share.revokedAt
+                          ? "مُبطل"
+                          : expired
+                            ? "منتهي"
+                            : `صالح حتى ${new Date(share.expiresAt).toLocaleString("ar-SA")}`}
+                      </span>
+                      {active && data.canShareExternally && (
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => void revokeShare(share)}
+                        >
+                          إبطال الرابط
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
+                {!matterShares.length && (
+                  <p className="legal-empty">
+                    لم تُسجل مشاركة خارجية لملفات هذه القضية.
+                  </p>
                 )}
               </section>
               {data.canWrite && (
@@ -1126,8 +1465,9 @@ export default function LegalCaseWorkspace() {
                     <span>
                       {log.actorRole === "legal_supervisor"
                         ? "محامي مشرف"
-                        : log.actorRole === "legal_lawyer" ||
-                            log.actorRole === "lawyer"
+                        : log.actorRole === "lawyer"
+                          ? "محامي مسؤول"
+                          : log.actorRole === "legal_lawyer"
                           ? "محامي فرعي"
                           : log.actorRole}
                     </span>
@@ -1147,6 +1487,153 @@ export default function LegalCaseWorkspace() {
           )}
         </main>
       </div>
+      {lawyerModal && (
+        <div className="modal-layer">
+          <button
+            className="drawer-backdrop"
+            aria-label="إغلاق نموذج إضافة محامي"
+            onClick={() => setLawyerModal(false)}
+          />
+          <section
+            className="record-modal legal-lawyer-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-lawyer-title"
+          >
+            <div className="drawer-head">
+              <div>
+                <span>سجل الشؤون القانونية</span>
+                <h2 id="add-lawyer-title">إضافة محامي</h2>
+              </div>
+              <button type="button" onClick={() => setLawyerModal(false)}>
+                ×
+              </button>
+            </div>
+            <form onSubmit={addLawyer}>
+              <label>
+                اسم المحامي
+                <input name="fullName" required minLength={3} maxLength={180} />
+              </label>
+              <label>
+                رقم رخصة المحاماة
+                <input name="licenseNumber" maxLength={80} dir="ltr" />
+              </label>
+              <label>
+                تاريخ انتهاء الرخصة
+                <input name="licenseExpiryDate" type="date" />
+              </label>
+              <label>
+                رقم الجوال وواتساب
+                <input
+                  name="mobile"
+                  type="tel"
+                  required
+                  maxLength={20}
+                  placeholder="9665XXXXXXXX"
+                  dir="ltr"
+                />
+              </label>
+              <label>
+                البريد المهني
+                <input name="email" type="email" maxLength={254} dir="ltr" />
+              </label>
+              <label>
+                ربط بمستخدم — اختياري
+                <select name="portalUserEmail" defaultValue="">
+                  <option value="">محامي خارجي دون حساب</option>
+                  {lawyerUsers.map((user) => (
+                    <option key={user.email} value={user.email}>
+                      {user.displayName} — {user.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="span-two">
+                ملاحظات
+                <textarea name="notes" rows={3} maxLength={2000} />
+              </label>
+              <p className="form-hint span-two">
+                لا يُنشئ هذا النموذج مستخدمًا. عند عدم ربط حساب، يبقى المحامي
+                خارجيًا ويمكن إسناد القضايا إليه ومشاركة ملفاتها عبر واتساب.
+              </p>
+              <div className="modal-actions span-two">
+                <button type="button" onClick={() => setLawyerModal(false)}>
+                  إلغاء
+                </button>
+                <button className="admin-primary" disabled={lawyerBusy}>
+                  {lawyerBusy ? "جارٍ الحفظ..." : "حفظ المحامي"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {sharingAttachment && (
+        <div className="modal-layer">
+          <button
+            className="drawer-backdrop"
+            aria-label="إغلاق نموذج مشاركة واتساب"
+            onClick={() => setSharingAttachment(null)}
+          />
+          <section
+            className="record-modal legal-share-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="legal-share-title"
+          >
+            <div className="drawer-head">
+              <div>
+                <span>{matter?.referenceCode}</span>
+                <h2 id="legal-share-title">مشاركة ملف مع محامٍ خارجي</h2>
+              </div>
+              <button type="button" onClick={() => setSharingAttachment(null)}>
+                ×
+              </button>
+            </div>
+            <form onSubmit={shareOnWhatsApp}>
+              <p className="legal-share-file span-two">
+                <strong>{sharingAttachment.title}</strong>
+                <span>{sharingAttachment.fileName}</span>
+              </p>
+              <label>
+                المحامي الخارجي
+                <select name="lawyerId" required defaultValue="">
+                  <option value="" disabled>
+                    اختر حساب واتساب
+                  </option>
+                  {externalLawyers.map((lawyer) => (
+                    <option key={lawyer.id} value={lawyer.id}>
+                      {lawyer.fullName} — {lawyer.mobile}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                صلاحية الرابط
+                <select name="expiresInDays" defaultValue="7">
+                  <option value="1">يوم واحد</option>
+                  <option value="3">3 أيام</option>
+                  <option value="7">7 أيام</option>
+                  <option value="14">14 يومًا</option>
+                </select>
+              </label>
+              <p className="form-hint span-two">
+                سيُفتح واتساب مباشرة بعد إنشاء رابط مشفر مؤقت. تُسجل ساعة
+                المشاركة واسم المشارك والمحامي وعدد مرات فتح الملف، ويمكن إبطال
+                الرابط من سجل المشاركة.
+              </p>
+              <div className="modal-actions span-two">
+                <button type="button" onClick={() => setSharingAttachment(null)}>
+                  إلغاء
+                </button>
+                <button className="admin-primary" disabled={shareBusy}>
+                  {shareBusy ? "جارٍ تجهيز الرابط..." : "فتح واتساب وتسجيل المشاركة"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
       {payingJudgment && (
         <div className="modal-layer">
           <button

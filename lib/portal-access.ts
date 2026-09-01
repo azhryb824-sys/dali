@@ -76,6 +76,7 @@ function fallbackPermissions(roles: string[]) {
     for (const [resource, approvers] of Object.entries(functionalApprovals)) if (approvers.includes(role)) permissions.add(`${resource}.approve`);
     if (role === "finance_director") permissions.add("finance.post");
     if (role === "government_relations_officer") { permissions.add("government.read"); permissions.add("government.write"); }
+    if (role === "lawyer" || role === "legal_supervisor" || role === "legal_lawyer") { permissions.add("legal.read"); permissions.add("legal.write"); permissions.add("documents.read"); permissions.add("documents.preview"); }
     if (role === "administrative_assistant") { ["operations.read","operations.write","contracts.read","contracts.write","documents.read","documents.write","documents.share"].forEach((permission) => permissions.add(permission)); }
     if (role === "workforce_supervisor") { ["workforce.read","workforce.write","contracts.read","contracts.write"].forEach((permission) => permissions.add(permission)); }
     if (role === "sales_representative" || role === "purchasing_representative") { ["overview.read","representatives.read","representatives.write"].forEach((permission) => permissions.add(permission)); }

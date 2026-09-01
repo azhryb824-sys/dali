@@ -12,6 +12,7 @@ import {
   financialRecords,
   dataSubjectRequests,
   integrationOutbox,
+  legalLawyers,
   legalRecords,
   legalCaseActivities,
   portalNotificationReads,
@@ -155,9 +156,10 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   if (!options.force && marker && now.getTime() - new Date(marker.updatedAt).getTime() < 5 * 60 * 1000) return;
   await db.insert(portalSettings).values({ key: "operational-notifications-last-refresh", valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() }).onConflictDoUpdate({ target: portalSettings.key, set: { valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() } });
 
-  const [documents, legalItems, legalActivities, paymentItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems, employeeItems] = await Promise.all([
+  const [documents, legalItems, lawyerItems, legalActivities, paymentItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems, employeeItems] = await Promise.all([
     db.select().from(companyDocuments).where(eq(companyDocuments.status, "active")).limit(1000),
     db.select().from(legalRecords).where(ne(legalRecords.status, "closed")).limit(1000),
+    db.select().from(legalLawyers).where(eq(legalLawyers.status, "active")).limit(1000),
     db.select().from(legalCaseActivities).where(ne(legalCaseActivities.status, "completed")).limit(5000),
     db.select().from(contractPaymentSchedules).where(ne(contractPaymentSchedules.status, "paid")).limit(5000),
     db.select().from(workers).limit(2000),
@@ -302,6 +304,27 @@ export async function refreshOperationalNotifications(options: { force?: boolean
       entityId: item.id,
       actionView: "legal",
       targetDepartment: "legal",
+    });
+  }
+
+  for (const lawyer of lawyerItems) {
+    const days = daysUntil(lawyer.licenseExpiryDate);
+    if (!Number.isFinite(days) || days > 30) continue;
+    const expired = days < 0;
+    ensure({
+      dedupeKey: `legal-lawyer-license:${lawyer.id}:${lawyer.licenseExpiryDate}`,
+      eventType: expired
+        ? "legal-lawyer-license-expired"
+        : "legal-lawyer-license-expiring",
+      title: expired ? "رخصة محامٍ منتهية" : "رخصة محامٍ تنتهي قريبًا",
+      message: `${lawyer.fullName} — ${formatAlertDate(lawyer.licenseExpiryDate)}.`,
+      severity: expired || days <= 7 ? "critical" : "warning",
+      module: "legal",
+      entityType: "legal-lawyer",
+      entityId: lawyer.id,
+      actionView: "legal",
+      targetDepartment: "legal",
+      source: "system-check",
     });
   }
 

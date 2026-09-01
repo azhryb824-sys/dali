@@ -863,6 +863,7 @@ export default function PortalDashboard({
   const canAccessGovernment = hasPermission("government.read");
   const canAccessOperations = hasPermission("operations.read");
   const canAccessContracts = hasPermission("contracts.read");
+  const canManageLegalCases = currentUser.role === "admin" || currentUser.functionalRoles.some((role) => ["system_owner", "system_admin", "legal_supervisor", "lawyer"].includes(role));
   const activeRoleLabel = currentUser.functionalRoles.map((role) => functionalRoleLabels[role] || role).join("، ") || roleLabels[currentUser.role];
 
   useEffect(() => {
@@ -2343,7 +2344,7 @@ export default function PortalDashboard({
           )}
 
           {view === "legal" && canAccess("legal") && (
-            <ModuleSection eyebrow="العقود والامتثال" title="الشؤون القانونية" description="متابعة العقود والقضايا والتراخيص والتنبيهات النظامية." actionLabel="إضافة ملف قانوني" canWrite={canWrite} onAdd={() => setModal("legal")}>
+            <ModuleSection eyebrow="العقود والامتثال" title="الشؤون القانونية" description="متابعة العقود والقضايا والتراخيص والتنبيهات النظامية." actionLabel="إضافة ملف قانوني" canWrite={canWrite && canManageLegalCases} onAdd={() => setModal("legal")}>
               <section className="metric-grid compact-metrics">
                 <Metric label="إجمالي الملفات" value={legal.length} note="كل السجلات" />
                 <Metric label="عقود سارية" value={legal.filter((item) => item.category === "contract" && item.status === "active").length} note="عقود فعّالة" />
@@ -2351,7 +2352,7 @@ export default function PortalDashboard({
                 <Metric label="تنبيهات التجديد" value={legalAlerts} note="خلال 45 يوماً" />
               </section>
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالعنوان أو الطرف أو المرجع">
-                <LegalTable records={legal} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("legal", id, status)} />
+                <LegalTable records={legal} query={query} canWrite={canWrite && canManageLegalCases} busy={busy} onStatus={(id, status) => updateRecordStatus("legal", id, status)} />
               </ManagementPanel>
               <LegalCaseWorkspace />
               <ComplianceWorkspace canWrite={canWrite} />
@@ -5325,7 +5326,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
   );
 }
 function StatusControl({ entity, id, value, canWrite, busy, onStatus }: { entity: RecordEntity; id: number; value: string; canWrite: boolean; busy: string | null; onStatus: (id: number, status: string) => void }) {
-  if (!canWrite) return <span className={`status-pill ${statusClass(value)}`}>{recordStatus[entity][value] ?? value}</span>;
+  if (!canWrite || entity === "legal") return <span className={`status-pill ${statusClass(value)}`}>{recordStatus[entity][value] ?? value}</span>;
   return (
     <select className="status-select" value={value} disabled={busy === `${entity}-${id}`} onChange={(event) => onStatus(id, event.target.value)}>
       {Object.entries(recordStatus[entity]).map(([status, label]) => (

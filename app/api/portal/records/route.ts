@@ -42,6 +42,10 @@ function code(prefix: string) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 4).toUpperCase()}`;
 }
 
+function canManageLegalCases(access: NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>) {
+  return access.role === "admin" || access.functionalRoles.some((role) => ["system_owner", "system_admin", "legal_supervisor", "lawyer"].includes(role));
+}
+
 async function recordActivity(actorEmail: string, action: string, entity: string, id: number, before?: unknown, after?: unknown) {
   const correlationId = crypto.randomUUID();
   await auditPortalAction({ actorEmail, action, entityType: entity, entityId: id, before, after, correlationId });
@@ -178,6 +182,7 @@ export async function POST(request: Request) {
     }
 
     if (payload.entity === "legal") {
+      if (!canManageLegalCases(access)) return Response.json({ error: "إدارة جميع القضايا وإضافة الملفات من صلاحيات المالك أو المشرف أو مستخدم المحامي" }, { status: 403 });
       const category = cleanText(data.category, 30);
       const title = cleanText(data.title, 180);
       const counterparty = cleanText(data.counterparty, 160);
@@ -233,6 +238,8 @@ export async function PATCH(request: Request) {
           ? await db.query.legalRecords.findFirst({ where: eq(legalRecords.id, id) })
           : await db.query.workers.findFirst({ where: eq(workers.id, id) });
     if (!existing) return Response.json({ error: "السجل غير موجود" }, { status: 404 });
+    if (payload.entity === "legal" && !canManageLegalCases(access)) return Response.json({ error: "تحديث حالة الملف من صلاحيات مدير القضايا" }, { status: 403 });
+    if (payload.entity === "legal" && status === "closed") return Response.json({ error: "أغلق القضية من مساحة إدارة القضايا بعد استكمال الإجراءات وكتابة السبب" }, { status: 409 });
     let updated: unknown;
     if (payload.entity === "employees") {
       [updated] = await db.update(employees).set({ status, updatedAt }).where(eq(employees.id, id)).returning();

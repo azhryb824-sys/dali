@@ -1185,6 +1185,41 @@ export const contractPaymentSchedules = pgTable(
   ],
 );
 
+export const legalLawyers = pgTable(
+  "legal_lawyers",
+  {
+    id: serial("id").primaryKey(),
+    fullName: text("full_name").notNull(),
+    licenseNumber: text("license_number"),
+    licenseExpiryDate: text("license_expiry_date"),
+    mobile: text("mobile"),
+    email: text("email"),
+    portalUserEmail: text("portal_user_email").references(
+      () => portalUsers.email,
+      { onDelete: "set null" },
+    ),
+    notes: text("notes"),
+    status: text("status").notNull().default("active"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    uniqueIndex("legal_lawyers_license_unique").on(table.licenseNumber),
+    uniqueIndex("legal_lawyers_portal_user_unique").on(table.portalUserEmail),
+    index("legal_lawyers_status_name_idx").on(table.status, table.fullName),
+    index("legal_lawyers_license_expiry_idx").on(table.licenseExpiryDate),
+    check(
+      "legal_lawyers_status_check",
+      sql`${table.status} in ('active','inactive')`,
+    ),
+  ],
+);
+
 export const legalRecords = pgTable(
   "legal_records",
   {
@@ -1199,6 +1234,10 @@ export const legalRecords = pgTable(
     referredBy: text("referred_by"),
     referredAt: text("referred_at"),
     fileSnapshotJson: text("file_snapshot_json"),
+    assignedLawyerId: integer("assigned_lawyer_id").references(
+      () => legalLawyers.id,
+      { onDelete: "set null" },
+    ),
     assignedLawyerEmail: text("assigned_lawyer_email"),
     assignedBy: text("assigned_by"),
     assignedAt: text("assigned_at"),
@@ -1232,6 +1271,7 @@ export const legalRecords = pgTable(
     index("legal_records_expiry_date_idx").on(table.expiryDate),
     index("legal_records_client_id_idx").on(table.clientId),
     index("legal_records_contract_id_idx").on(table.contractId),
+    index("legal_records_assigned_lawyer_idx").on(table.assignedLawyerId),
   ],
 );
 
@@ -1268,6 +1308,54 @@ export const legalCaseAttachments = pgTable(
     check(
       "legal_case_attachments_size_check",
       sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 20971520`,
+    ),
+  ],
+);
+
+export const legalExternalShares = pgTable(
+  "legal_external_shares",
+  {
+    id: text("id").primaryKey(),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "restrict" }),
+    attachmentId: integer("attachment_id")
+      .notNull()
+      .references(() => legalCaseAttachments.id, { onDelete: "restrict" }),
+    lawyerId: integer("lawyer_id")
+      .notNull()
+      .references(() => legalLawyers.id, { onDelete: "restrict" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    channel: text("channel").notNull().default("whatsapp"),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    revokedBy: text("revoked_by"),
+    maxDownloads: integer("max_downloads").notNull().default(20),
+    downloadCount: integer("download_count").notNull().default(0),
+    lastAccessedAt: text("last_accessed_at"),
+    sharedBy: text("shared_by").notNull(),
+    sharedAt: text("shared_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_external_shares_record_idx").on(
+      table.legalRecordId,
+      table.sharedAt,
+    ),
+    index("legal_external_shares_attachment_idx").on(table.attachmentId),
+    index("legal_external_shares_lawyer_idx").on(
+      table.lawyerId,
+      table.sharedAt,
+    ),
+    index("legal_external_shares_expiry_idx").on(table.expiresAt),
+    check(
+      "legal_external_shares_channel_check",
+      sql`${table.channel} in ('whatsapp')`,
+    ),
+    check(
+      "legal_external_shares_download_limit_check",
+      sql`${table.maxDownloads} > 0 and ${table.downloadCount} >= 0`,
     ),
   ],
 );

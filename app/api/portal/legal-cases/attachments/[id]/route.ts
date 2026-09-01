@@ -34,7 +34,7 @@ export async function GET(
   const supervisor =
     actor.role === "admin" ||
     actor.functionalRoles.some((role) =>
-      ["system_owner", "system_admin", "legal_supervisor"].includes(role),
+      ["system_owner", "system_admin", "legal_supervisor", "lawyer"].includes(role),
     );
   if (
     !matter ||

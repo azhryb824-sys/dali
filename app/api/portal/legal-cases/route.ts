@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   bankAccounts,
@@ -7,10 +7,10 @@ import {
   legalCaseActionLog,
   legalCaseActivities,
   legalCaseAttachments,
+  legalExternalShares,
   legalJudgmentPaymentRequests,
+  legalLawyers,
   legalRecords,
-  portalAccessScopes,
-  portalUsers,
 } from "@/db/schema";
 import { createDraftJournal, resolvePostingRule } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
@@ -48,6 +48,12 @@ function isSupervisor(actor: LegalActor) {
     )
   );
 }
+function isCaseManager(actor: LegalActor) {
+  return (
+    isSupervisor(actor) ||
+    actor.functionalRoles.includes("lawyer")
+  );
+}
 function actorRole(actor: LegalActor) {
   if (actor.functionalRoles.includes("legal_supervisor"))
     return "legal_supervisor";
@@ -63,7 +69,7 @@ function canAccessMatter(
   matter: { assignedLawyerEmail: string | null },
 ) {
   return (
-    isSupervisor(actor) ||
+    isCaseManager(actor) ||
     matter.assignedLawyerEmail?.toLowerCase() === actor.user.email.toLowerCase()
   );
 }
@@ -72,7 +78,7 @@ export async function GET() {
   const actor = await access();
   if (!actor) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   const db = getDb();
-  const cases = isSupervisor(actor)
+  const cases = isCaseManager(actor)
     ? await db
         .select()
         .from(legalRecords)
@@ -88,7 +94,15 @@ export async function GET() {
   const visibleCase = caseIds.length
     ? inArray(legalCaseActivities.legalRecordId, caseIds)
     : sql`false`;
-  const [activities, attachments, actionLog, judgmentPayments, banks] =
+  const [
+    activities,
+    attachments,
+    actionLog,
+    judgmentPayments,
+    banks,
+    lawyers,
+    externalShares,
+  ] =
     await Promise.all([
       db
         .select()
@@ -130,6 +144,33 @@ export async function GET() {
         .from(bankAccounts)
         .where(eq(bankAccounts.status, "active"))
         .orderBy(asc(bankAccounts.bankName)),
+      db
+        .select()
+        .from(legalLawyers)
+        .orderBy(asc(legalLawyers.status), asc(legalLawyers.fullName)),
+      db
+        .select({
+          id: legalExternalShares.id,
+          legalRecordId: legalExternalShares.legalRecordId,
+          attachmentId: legalExternalShares.attachmentId,
+          lawyerId: legalExternalShares.lawyerId,
+          channel: legalExternalShares.channel,
+          expiresAt: legalExternalShares.expiresAt,
+          revokedAt: legalExternalShares.revokedAt,
+          revokedBy: legalExternalShares.revokedBy,
+          maxDownloads: legalExternalShares.maxDownloads,
+          downloadCount: legalExternalShares.downloadCount,
+          lastAccessedAt: legalExternalShares.lastAccessedAt,
+          sharedBy: legalExternalShares.sharedBy,
+          sharedAt: legalExternalShares.sharedAt,
+        })
+        .from(legalExternalShares)
+        .where(
+          caseIds.length
+            ? inArray(legalExternalShares.legalRecordId, caseIds)
+            : sql`false`,
+        )
+        .orderBy(desc(legalExternalShares.sharedAt)),
     ]);
   return jsonNoStore({
     cases,
@@ -138,11 +179,15 @@ export async function GET() {
     actionLog,
     judgmentPayments,
     banks,
+    lawyers,
+    externalShares,
     currentActorEmail: actor.user.email,
     currentActorRole: actorRole(actor),
     canWrite: await hasPortalPermission(actor, "legal", "write"),
     canApprove: await hasPortalPermission(actor, "legal", "approve"),
+    canManageCases: isCaseManager(actor),
     canSupervise: isSupervisor(actor),
+    canShareExternally: isCaseManager(actor),
     canPayJudgments: isOwner(actor),
   });
 }
@@ -268,7 +313,7 @@ export async function POST(request: Request) {
   const priority = clean(body.priority, 20) || "medium";
   const dueAt = clean(body.dueAt, 30) || null;
   const requestedAssignee = clean(body.assignedTo, 180) || null;
-  const assignedTo = isSupervisor(actor)
+  const assignedTo = isCaseManager(actor)
     ? requestedAssignee
     : actor.user.email || null;
   if (
@@ -367,9 +412,9 @@ export async function PATCH(request: Request) {
   const actionRequest = clean(body.action, 30);
   const db = getDb();
   if (actionRequest === "update-case-details") {
-    if (!isSupervisor(actor))
+    if (!isCaseManager(actor))
       return jsonNoStore(
-        { error: "تحديث بيانات الملف من صلاحيات المشرف القانوني" },
+        { error: "تحديث بيانات الملف من صلاحيات مدير القضايا" },
         { status: 403 },
       );
     const legalRecordId = Number(body.legalRecordId),
@@ -423,9 +468,9 @@ export async function PATCH(request: Request) {
     return jsonNoStore({ case: row });
   }
   if (actionRequest === "update-case-status") {
-    if (!isSupervisor(actor))
+    if (!isCaseManager(actor))
       return jsonNoStore(
-        { error: "تغيير حالة الملف من صلاحيات المشرف القانوني" },
+        { error: "تغيير حالة الملف من صلاحيات مدير القضايا" },
         { status: 403 },
       );
     const legalRecordId = Number(body.legalRecordId),
@@ -717,23 +762,21 @@ export async function PATCH(request: Request) {
     }
   }
   if (actionRequest === "assign-case") {
-    if (!isSupervisor(actor))
+    if (!isCaseManager(actor))
       return jsonNoStore(
-        { error: "إسناد القضية من صلاحيات المحامي المشرف" },
+        { error: "إسناد القضية من صلاحيات المالك أو المشرف أو مستخدم المحامي" },
         { status: 403 },
       );
     const legalRecordId = Number(body.legalRecordId);
-    const assignedLawyerEmail = clean(
-      body.assignedLawyerEmail,
-      180,
-    ).toLowerCase();
+    const assignedLawyerId = Number(body.assignedLawyerId);
     if (
       !Number.isInteger(legalRecordId) ||
       legalRecordId < 1 ||
-      !assignedLawyerEmail.includes("@")
+      !Number.isInteger(assignedLawyerId) ||
+      assignedLawyerId < 1
     )
       return jsonNoStore(
-        { error: "اختر بريد المحامي المستلم للقضية" },
+        { error: "اختر المحامي المستلم للقضية" },
         { status: 400 },
       );
     const beforeCase = await db.query.legalRecords.findFirst({
@@ -744,38 +787,15 @@ export async function PATCH(request: Request) {
         { error: "الملف القانوني غير موجود" },
         { status: 404 },
       );
-    const today = new Date().toISOString().slice(0, 10);
-    const [targetUser, targetScope] = await Promise.all([
-      db.query.portalUsers.findFirst({
-        where: and(
-          eq(portalUsers.email, assignedLawyerEmail),
-          eq(portalUsers.status, "active"),
-        ),
-      }),
-      db.query.portalAccessScopes.findFirst({
-        where: and(
-          eq(portalAccessScopes.userEmail, assignedLawyerEmail),
-          eq(portalAccessScopes.active, true),
-          inArray(portalAccessScopes.functionalRole, [
-            "legal_affairs",
-            "legal_lawyer",
-            "lawyer",
-            "legal_supervisor",
-          ]),
-          or(
-            isNull(portalAccessScopes.validFrom),
-            lte(portalAccessScopes.validFrom, today),
-          ),
-          or(
-            isNull(portalAccessScopes.validUntil),
-            gte(portalAccessScopes.validUntil, today),
-          ),
-        ),
-      }),
-    ]);
-    if (!targetUser || !targetScope)
+    const targetLawyer = await db.query.legalLawyers.findFirst({
+      where: and(
+        eq(legalLawyers.id, assignedLawyerId),
+        eq(legalLawyers.status, "active"),
+      ),
+    });
+    if (!targetLawyer)
       return jsonNoStore(
-        { error: "يجب إسناد القضية إلى حساب نشط يحمل صلاحية قانونية سارية" },
+        { error: "المحامي المحدد غير موجود أو غير نشط" },
         { status: 409 },
       );
     const now = new Date().toISOString();
@@ -783,7 +803,8 @@ export async function PATCH(request: Request) {
       const [row] = await tx
         .update(legalRecords)
         .set({
-          assignedLawyerEmail,
+          assignedLawyerId: targetLawyer.id,
+          assignedLawyerEmail: targetLawyer.portalUserEmail,
           assignedBy: actor.user.email,
           assignedAt: now,
           updatedAt: now,
@@ -796,7 +817,7 @@ export async function PATCH(request: Request) {
         action: "assigned",
         fromStatus: null,
         toStatus: null,
-        details: `إسناد القضية إلى المحامي ${assignedLawyerEmail}`,
+        details: `إسناد القضية إلى المحامي ${targetLawyer.fullName}${targetLawyer.portalUserEmail ? ` — ${targetLawyer.portalUserEmail}` : " — محامٍ خارجي"}`,
         actorEmail: actor.user.email,
         actorRole: actorRole(actor),
       });
@@ -812,16 +833,20 @@ export async function PATCH(request: Request) {
     });
     await emitPortalNotification({
       eventType: "legal-case-assigned",
-      title: "أُسند ملف قانوني إليك",
-      message: `${updatedCase.referenceCode} — ${updatedCase.title}`,
+      title: targetLawyer.portalUserEmail
+        ? "أُسند ملف قانوني إليك"
+        : "أُسند ملف قانوني إلى محامٍ خارجي",
+      message: `${updatedCase.referenceCode} — ${updatedCase.title} — ${targetLawyer.fullName}`,
       severity: "info",
       module: "legal",
       entityType: "legal-record",
       entityId: legalRecordId,
       actionView: "legal",
-      targetEmail: assignedLawyerEmail,
+      ...(targetLawyer.portalUserEmail
+        ? { targetEmail: targetLawyer.portalUserEmail }
+        : { targetDepartment: "legal" as const }),
     }).catch(() => undefined);
-    return jsonNoStore({ case: updatedCase });
+    return jsonNoStore({ case: updatedCase, lawyer: targetLawyer });
   }
   const id = Number(body.id);
   const status = clean(body.status, 20);
@@ -837,17 +862,17 @@ export async function PATCH(request: Request) {
   if (!before)
     return jsonNoStore({ error: "الإجراء غير موجود" }, { status: 404 });
   if (
-    !isSupervisor(actor) &&
+    !isCaseManager(actor) &&
     before.assignedTo?.toLowerCase() !== actor.user.email.toLowerCase() &&
     before.createdBy.toLowerCase() !== actor.user.email.toLowerCase()
   )
     return jsonNoStore(
-      { error: "المحامي الفرعي يستطيع تحديث الإجراءات المسندة إليه فقط" },
+      { error: "لا يمكن تحديث إجراء غير مسند إلى المستخدم" },
       { status: 403 },
     );
-  if (status === "cancelled" && !isSupervisor(actor))
+  if (status === "cancelled" && !isCaseManager(actor))
     return jsonNoStore(
-      { error: "إلغاء الإجراء من صلاحيات المحامي المشرف" },
+      { error: "إلغاء الإجراء من صلاحيات مدير القضايا" },
       { status: 403 },
     );
   const now = new Date().toISOString();
