@@ -8,12 +8,14 @@ import {
   legalCaseActivities,
   legalCaseAttachments,
   legalExternalShares,
+  legalHearings,
   legalJudgmentPaymentRequests,
   legalLawyers,
   legalRecords,
 } from "@/db/schema";
 import { createDraftJournal, resolvePostingRule } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
+import { makeReference } from "@/lib/company-documents";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import {
@@ -24,6 +26,8 @@ import {
 
 const clean = (value: unknown, max = 1000) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
+const validDateTime = (value: string) =>
+  Boolean(value) && !Number.isNaN(Date.parse(value));
 type LegalActor = NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>;
 async function access(write = false) {
   const actor = await requirePortalApiRole(["admin", "manager", "employee"]);
@@ -201,6 +205,225 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.response;
   const body = parsed.value as Record<string, unknown>;
   const requestAction = clean(body.action, 40);
+  if (requestAction === "create-company-defense-case") {
+    if (!isCaseManager(actor))
+      return jsonNoStore(
+        {
+          error:
+            "تسجيل القضايا المرفوعة على الشركة من صلاحيات المالك أو المشرف أو مستخدم المحامي",
+        },
+        { status: 403 },
+      );
+    const title = clean(body.title, 180),
+      claimantName = clean(body.claimantName, 180),
+      courtCaseNumber = clean(body.courtCaseNumber, 120),
+      courtName = clean(body.courtName, 180),
+      circuitName = clean(body.circuitName, 180) || null,
+      claimType = clean(body.claimType, 120),
+      claimSummary = clean(body.claimSummary, 5000),
+      opposingCounsel = clean(body.opposingCounsel, 180) || null,
+      litigationLevel = clean(body.litigationLevel, 100),
+      noticeReceivedAt = clean(body.noticeReceivedAt, 40),
+      responseDeadlineAt = clean(body.responseDeadlineAt, 40),
+      firstHearingAt = clean(body.firstHearingAt, 40),
+      firstHearingNumber = clean(body.firstHearingNumber, 80) || "الأولى",
+      riskLevel = clean(body.riskLevel, 20),
+      assignedLawyerId = Number(body.assignedLawyerId || 0),
+      claimAmountHalalas = Math.round(Number(body.claimAmount || 0) * 100);
+    if (
+      title.length < 3 ||
+      claimantName.length < 2 ||
+      !courtCaseNumber ||
+      !courtName ||
+      !claimType ||
+      claimSummary.length < 10 ||
+      !["first_instance", "appeal", "supreme", "enforcement"].includes(
+        litigationLevel,
+      ) ||
+      !["low", "medium", "high", "critical"].includes(riskLevel) ||
+      !validDateTime(noticeReceivedAt) ||
+      !validDateTime(responseDeadlineAt) ||
+      (firstHearingAt && !validDateTime(firstHearingAt)) ||
+      !Number.isSafeInteger(claimAmountHalalas) ||
+      claimAmountHalalas < 0 ||
+      (assignedLawyerId !== 0 &&
+        (!Number.isInteger(assignedLawyerId) || assignedLawyerId < 1))
+    )
+      return jsonNoStore(
+        { error: "بيانات القضية المرفوعة على الشركة غير مكتملة أو غير صحيحة" },
+        { status: 400 },
+      );
+    if (Date.parse(responseDeadlineAt) <= Date.parse(noticeReceivedAt))
+      return jsonNoStore(
+        { error: "موعد انتهاء مهلة الرد يجب أن يكون بعد تاريخ استلام التبليغ" },
+        { status: 400 },
+      );
+    if (firstHearingAt && Date.parse(firstHearingAt) < Date.parse(noticeReceivedAt))
+      return jsonNoStore(
+        { error: "موعد الجلسة الأولى لا يمكن أن يسبق استلام التبليغ" },
+        { status: 400 },
+      );
+    const db = getDb();
+    const duplicate = await db.query.legalRecords.findFirst({
+      where: and(
+        eq(legalRecords.courtCaseNumber, courtCaseNumber),
+        eq(legalRecords.companyCapacity, "مدعى عليها"),
+      ),
+    });
+    if (duplicate)
+      return jsonNoStore(
+        {
+          error: `القضية القضائية مسجلة مسبقًا في الملف ${duplicate.referenceCode}`,
+        },
+        { status: 409 },
+      );
+    const assignedLawyer = assignedLawyerId
+      ? await db.query.legalLawyers.findFirst({
+          where: and(
+            eq(legalLawyers.id, assignedLawyerId),
+            eq(legalLawyers.status, "active"),
+          ),
+        })
+      : null;
+    if (assignedLawyerId && !assignedLawyer)
+      return jsonNoStore(
+        { error: "المحامي المحدد غير موجود أو غير نشط" },
+        { status: 409 },
+      );
+    const now = new Date().toISOString();
+    const saved = await db.transaction(async (tx) => {
+      const [matter] = await tx
+        .insert(legalRecords)
+        .values({
+          referenceCode: makeReference("LGL-DEF"),
+          category: "case",
+          title,
+          counterparty: claimantName,
+          referralReason: claimSummary,
+          referredBy: actor.user.email,
+          referredAt: noticeReceivedAt,
+          assignedLawyerId: assignedLawyer?.id || null,
+          assignedLawyerEmail: assignedLawyer?.portalUserEmail || null,
+          assignedBy: assignedLawyer ? actor.user.email : null,
+          assignedAt: assignedLawyer ? now : null,
+          courtCaseNumber,
+          courtName,
+          circuitName,
+          claimType,
+          companyCapacity: "مدعى عليها",
+          currentHearingNumber: firstHearingAt ? firstHearingNumber : null,
+          claimAmountHalalas,
+          opposingCounsel,
+          litigationStage: "إعداد الدفاع والرد",
+          litigationLevel,
+          expiryDate: responseDeadlineAt.slice(0, 10),
+          status: "reviewing",
+          updatedAt: now,
+        })
+        .returning();
+      const activitiesToCreate: Array<
+        typeof legalCaseActivities.$inferInsert
+      > = [
+        {
+          legalRecordId: matter.id,
+          activityType: "deadline" as const,
+          title: "انتهاء مهلة الرد على الدعوى",
+          details: `تجهيز ومراجعة الرد قبل انتهاء المهلة في ${responseDeadlineAt}`,
+          priority: riskLevel,
+          status: "open" as const,
+          dueAt: responseDeadlineAt,
+          assignedTo: assignedLawyer?.portalUserEmail || null,
+          createdBy: actor.user.email,
+          updatedAt: now,
+        },
+      ];
+      if (firstHearingAt) {
+        await tx.insert(legalHearings).values({
+          legalRecordId: matter.id,
+          hearingNumber: firstHearingNumber,
+          scheduledAt: firstHearingAt,
+          courtName,
+          circuitName,
+          attendeesJson: "[]",
+          requestsJson: "[]",
+          status: "scheduled",
+          createdBy: actor.user.email,
+          updatedAt: now,
+        });
+        activitiesToCreate.push({
+          legalRecordId: matter.id,
+          activityType: "hearing",
+          title: `الجلسة ${firstHearingNumber}`,
+          details: `الجلسة الأولى في ${courtName}${circuitName ? ` — ${circuitName}` : ""}`,
+          priority: riskLevel === "critical" ? "critical" : "high",
+          status: "open",
+          dueAt: firstHearingAt,
+          assignedTo: assignedLawyer?.portalUserEmail || null,
+          createdBy: actor.user.email,
+          updatedAt: now,
+        });
+      }
+      await tx.insert(legalCaseActivities).values(activitiesToCreate);
+      await tx.insert(legalCaseActionLog).values([
+        {
+          legalRecordId: matter.id,
+          activityId: null,
+          action: "created",
+          fromStatus: null,
+          toStatus: "reviewing",
+          details: `تسجيل قضية مرفوعة على الشركة من ${claimantName} — مستوى المخاطر: ${riskLevel}`,
+          actorEmail: actor.user.email,
+          actorRole: actorRole(actor),
+        },
+        ...(assignedLawyer
+          ? [
+              {
+                legalRecordId: matter.id,
+                activityId: null,
+                action: "assigned",
+                fromStatus: null,
+                toStatus: null,
+                details: `إسناد القضية عند التسجيل إلى المحامي ${assignedLawyer.fullName}`,
+                actorEmail: actor.user.email,
+                actorRole: actorRole(actor),
+              },
+            ]
+          : []),
+      ]);
+      return matter;
+    });
+    await auditPortalAction({
+      actorEmail: actor.user.email,
+      action: "company-defense-case-created",
+      entityType: "legal-record",
+      entityId: saved.id,
+      after: {
+        ...saved,
+        riskLevel,
+        responseDeadlineAt,
+        firstHearingAt: firstHearingAt || null,
+      },
+    });
+    await emitPortalNotification({
+      eventType: "company-defense-case-created",
+      title: "سُجلت قضية مرفوعة على الشركة",
+      message: `${saved.referenceCode} — ${claimantName} — تنتهي مهلة الرد ${responseDeadlineAt}.`,
+      severity:
+        riskLevel === "critical"
+          ? "critical"
+          : riskLevel === "high"
+            ? "warning"
+            : "info",
+      module: "legal",
+      entityType: "legal-record",
+      entityId: saved.id,
+      actionView: "legal",
+      ...(assignedLawyer?.portalUserEmail
+        ? { targetEmail: assignedLawyer.portalUserEmail }
+        : { targetDepartment: "legal" as const }),
+    }).catch(() => undefined);
+    return jsonNoStore({ case: saved }, { status: 201 });
+  }
   if (requestAction === "request-judgment-payment") {
     const legalRecordId = Number(body.legalRecordId),
       amountHalalas = Math.round(Number(body.amount) * 100),
@@ -796,6 +1019,11 @@ export async function PATCH(request: Request) {
     if (!targetLawyer)
       return jsonNoStore(
         { error: "المحامي المحدد غير موجود أو غير نشط" },
+        { status: 409 },
+      );
+    if (beforeCase.assignedLawyerId === targetLawyer.id)
+      return jsonNoStore(
+        { error: "القضية مسندة بالفعل إلى المحامي المحدد" },
         { status: 409 },
       );
     const now = new Date().toISOString();

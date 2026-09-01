@@ -17228,6 +17228,266 @@ export const generatedUiTranslations: Record<string,{en?:string;bn?:string}> = {
     "en": "Lawyer Type:",
     "bn": "আইনজীবীর ধরন:"
   },
+  "اختر المحامي البديل": {
+    "en": "Select the Replacement Lawyer",
+    "bn": "বিকল্প আইনজীবী নির্বাচন করুন"
+  },
+  "اختر المحامي المستلم للقضية.": {
+    "en": "Select the Lawyer Who Will Receive the Case.",
+    "bn": "মামলাটি গ্রহণকারী আইনজীবী নির্বাচন করুন।"
+  },
+  "إعادة إسناد القضية": {
+    "en": "Reassign Case",
+    "bn": "মামলা পুনরায় বরাদ্দ করুন"
+  },
+  "إغلاق نموذج تحويل القضايا": {
+    "en": "Close Case Transfer Form",
+    "bn": "মামলা স্থানান্তর ফর্ম বন্ধ করুন"
+  },
+  "إغلاق نموذج تعديل المحامي": {
+    "en": "Close Lawyer Editing Form",
+    "bn": "আইনজীবী সম্পাদনা ফর্ম বন্ধ করুন"
+  },
+  "اكتب سبب حذف المحامي": {
+    "en": "Enter the Reason for Deleting the Lawyer",
+    "bn": "আইনজীবী মুছে ফেলার কারণ লিখুন"
+  },
+  "القضايا المفتوحة فقط": {
+    "en": "Open Cases Only",
+    "bn": "শুধু খোলা মামলা"
+  },
+  "المحامي البديل": {
+    "en": "Replacement Lawyer",
+    "bn": "বিকল্প আইনজীবী"
+  },
+  "المحامي المستلم": {
+    "en": "Assigned Lawyer",
+    "bn": "দায়িত্বপ্রাপ্ত আইনজীবী"
+  },
+  "المستخدم الحالي —": {
+    "en": "Current User —",
+    "bn": "বর্তমান ব্যবহারকারী —"
+  },
+  "تأكيد تحويل القضايا": {
+    "en": "Confirm Case Transfer",
+    "bn": "মামলা স্থানান্তর নিশ্চিত করুন"
+  },
+  "تحويل القضايا": {
+    "en": "Transfer Cases",
+    "bn": "মামলা স্থানান্তর"
+  },
+  "تحويل القضايا إلى محامٍ آخر": {
+    "en": "Transfer Cases to Another Lawyer",
+    "bn": "মামলাগুলো অন্য আইনজীবীর কাছে স্থানান্তর করুন"
+  },
+  "تعديل بيانات المحامي": {
+    "en": "Edit Lawyer Details",
+    "bn": "আইনজীবীর তথ্য সম্পাদনা করুন"
+  },
+  "تعذر تحويل القضايا": {
+    "en": "Unable to Transfer the Cases",
+    "bn": "মামলাগুলো স্থানান্তর করা যায়নি"
+  },
+  "تعذر تعديل بيانات المحامي": {
+    "en": "Unable to Update the Lawyer Details",
+    "bn": "আইনজীবীর তথ্য হালনাগাদ করা যায়নি"
+  },
+  "تعذر حذف المحامي": {
+    "en": "Unable to Delete the Lawyer",
+    "bn": "আইনজীবীকে মুছে ফেলা যায়নি"
+  },
+  "تعذر حفظ بيانات المحامي": {
+    "en": "Unable to Save the Lawyer Details",
+    "bn": "আইনজীবীর তথ্য সংরক্ষণ করা যায়নি"
+  },
+  "تم تحديد المحامي المستلم للقضية وتسجيل وقت الإسناد.": {
+    "en": "The Assigned Lawyer Was Selected and the Assignment Time Was Recorded.",
+    "bn": "দায়িত্বপ্রাপ্ত আইনজীবী নির্বাচন এবং বরাদ্দের সময় নথিভুক্ত করা হয়েছে।"
+  },
+  "تم تعديل بيانات المحامي وتسجيل العملية.": {
+    "en": "The Lawyer Details Were Updated and the Action Was Recorded.",
+    "bn": "আইনজীবীর তথ্য হালনাগাদ এবং কার্যক্রমটি নথিভুক্ত করা হয়েছে।"
+  },
+  "جارٍ التحويل...": {
+    "en": "Transferring...",
+    "bn": "স্থানান্তর করা হচ্ছে..."
+  },
+  "جميع القضايا بما فيها المغلقة": {
+    "en": "All Cases, Including Closed Cases",
+    "bn": "বন্ধ মামলাসহ সব মামলা"
+  },
+  "حُذف المحامي من السجل مع توثيق سبب الحذف.": {
+    "en": "The Lawyer Was Deleted From the Registry and the Reason Was Recorded.",
+    "bn": "আইনজীবীকে রেজিস্টার থেকে মুছে ফেলা হয়েছে এবং কারণটি নথিভুক্ত করা হয়েছে।"
+  },
+  "سيُسجل النظام المحامي السابق والجديد ومن نفذ التحويل، ويحدّث تاريخ ووقت الإسناد لكل قضية محولة.": {
+    "en": "The System Will Record the Previous and New Lawyers and Who Performed the Transfer, Then Update the Assignment Date and Time for Every Transferred Case.",
+    "bn": "সিস্টেম আগের ও নতুন আইনজীবী এবং স্থানান্তরকারী ব্যক্তিকে নথিভুক্ত করবে, তারপর প্রতিটি স্থানান্তরিত মামলার বরাদ্দের তারিখ ও সময় হালনাগাদ করবে।"
+  },
+  "نطاق التحويل": {
+    "en": "Transfer Scope",
+    "bn": "স্থানান্তরের পরিধি"
+  },
+  "+ تسجيل قضية على الشركة": {
+    "en": "+ Register Case Against Company",
+    "bn": "+ কোম্পানির বিরুদ্ধে মামলা নথিভুক্ত করুন"
+  },
+  "ابتدائي": {
+    "en": "First Instance",
+    "bn": "প্রথম আদালত"
+  },
+  "إدارة القضايا والمطالبات القانونية": {
+    "en": "Legal Cases and Claims Management",
+    "bn": "আইনি মামলা ও দাবি ব্যবস্থাপনা"
+  },
+  "استقبال دعاوى الخصوم": {
+    "en": "Opposing-Party Claim Intake",
+    "bn": "প্রতিপক্ষের মামলা গ্রহণ"
+  },
+  "استلام التبليغ:": {
+    "en": "Notice Received:",
+    "bn": "নোটিশ প্রাপ্তি:"
+  },
+  "اسم المدعي": {
+    "en": "Claimant Name",
+    "bn": "বাদীর নাম"
+  },
+  "إغلاق نموذج تسجيل قضية على الشركة": {
+    "en": "Close Company Case Registration Form",
+    "bn": "কোম্পানির মামলা নিবন্ধন ফর্ম বন্ধ করুন"
+  },
+  "الأولى": {
+    "en": "First",
+    "bn": "প্রথম"
+  },
+  "القضايا المرفوعة من الشركة أو عليها، والمحامين والمواعيد والمذكرات والمرفقات في ملف قانوني واحد.": {
+    "en": "Cases filed by or against the company, lawyers, deadlines, submissions, and attachments in one legal file.",
+    "bn": "কোম্পানির করা বা কোম্পানির বিরুদ্ধে মামলা, আইনজীবী, সময়সীমা, লিখিত বক্তব্য ও সংযুক্তি—সব এক আইনি ফাইলে।"
+  },
+  "المحامي المستلم — اختياري": {
+    "en": "Assigned Lawyer — Optional",
+    "bn": "দায়িত্বপ্রাপ্ত আইনজীবী — ঐচ্ছিক"
+  },
+  "المدعي:": {
+    "en": "Claimant:",
+    "bn": "বাদী:"
+  },
+  "انتهاء مهلة الرد على الدعوى": {
+    "en": "Deadline to Respond to Claim",
+    "bn": "মামলার জবাব দেওয়ার সময়সীমা"
+  },
+  "انتهاء مهلة الرد:": {
+    "en": "Response Deadline:",
+    "bn": "জবাবের সময়সীমা:"
+  },
+  "تاريخ ووقت استلام التبليغ": {
+    "en": "Notice Receipt Date and Time",
+    "bn": "নোটিশ প্রাপ্তির তারিখ ও সময়"
+  },
+  "تُرتب حسب سجل المواعيد القانوني": {
+    "en": "Prioritized Using the Legal Deadline Register",
+    "bn": "আইনি সময়সীমার রেজিস্টার অনুযায়ী অগ্রাধিকার দেওয়া হয়"
+  },
+  "تسجيل القضية وبدء المتابعة": {
+    "en": "Register Case and Start Follow-up",
+    "bn": "মামলা নথিভুক্ত করে অনুসরণ শুরু করুন"
+  },
+  "تسجيل قضية مرفوعة على الشركة": {
+    "en": "Register a Case Against the Company",
+    "bn": "কোম্পানির বিরুদ্ধে মামলা নথিভুক্ত করুন"
+  },
+  "تعذر تسجيل القضية المرفوعة على الشركة": {
+    "en": "Unable to Register the Case Against the Company",
+    "bn": "কোম্পানির বিরুদ্ধে মামলাটি নথিভুক্ত করা যায়নি"
+  },
+  "تنفيذ": {
+    "en": "Enforcement",
+    "bn": "বাস্তবায়ন"
+  },
+  "جارٍ تسجيل القضية...": {
+    "en": "Registering Case...",
+    "bn": "মামলা নথিভুক্ত করা হচ্ছে..."
+  },
+  "رقم الجلسة الأولى": {
+    "en": "First Hearing Number",
+    "bn": "প্রথম শুনানির নম্বর"
+  },
+  "عليا": {
+    "en": "Supreme Court",
+    "bn": "সর্বোচ্চ আদালত"
+  },
+  "عمالية، تجارية، تنفيذية...": {
+    "en": "Labor, Commercial, Enforcement...",
+    "bn": "শ্রম, বাণিজ্যিক, বাস্তবায়ন..."
+  },
+  "غير مسند — يُسند لاحقًا": {
+    "en": "Unassigned — Assign Later",
+    "bn": "অনির্ধারিত — পরে দায়িত্ব দিন"
+  },
+  "قضايا مرفوعة على الشركة": {
+    "en": "Cases Against the Company",
+    "bn": "কোম্পানির বিরুদ্ধে মামলা"
+  },
+  "قضية مرفوعة على الشركة": {
+    "en": "Case Against the Company",
+    "bn": "কোম্পানির বিরুদ্ধে মামলা"
+  },
+  "قيد المتابعة": {
+    "en": "Under Follow-up",
+    "bn": "অনুসরণাধীন"
+  },
+  "مثال: مطالبة مالية عن عقد تشغيل": {
+    "en": "Example: Financial Claim Under an Operating Contract",
+    "bn": "উদাহরণ: পরিচালনা চুক্তির অধীনে আর্থিক দাবি"
+  },
+  "محامي المدعي — اختياري": {
+    "en": "Claimant's Lawyer — Optional",
+    "bn": "বাদীর আইনজীবী — ঐচ্ছিক"
+  },
+  "مخاطر": {
+    "en": "Risk",
+    "bn": "ঝুঁকি"
+  },
+  "مدعى عليها": {
+    "en": "Defendant",
+    "bn": "বিবাদী"
+  },
+  "مستوى المخاطر": {
+    "en": "Risk Level",
+    "bn": "ঝুঁকির স্তর"
+  },
+  "ملخص المطالبة ومتطلبات الدفاع": {
+    "en": "Claim Summary and Defense Requirements",
+    "bn": "দাবির সারসংক্ষেপ ও প্রতিরক্ষার প্রয়োজনীয়তা"
+  },
+  "ملخص الوقائع والطلبات والمستندات المطلوب جمعها وخطة الرد الأولية": {
+    "en": "Summary of facts, remedies sought, documents to collect, and the initial response plan",
+    "bn": "ঘটনা, চাওয়া প্রতিকার, সংগ্রহযোগ্য নথি এবং প্রাথমিক জবাব পরিকল্পনার সারসংক্ষেপ"
+  },
+  "ملف قانوني": {
+    "en": "Legal File",
+    "bn": "আইনি ফাইল"
+  },
+  "مهل رد خلال 7 أيام أو متأخرة": {
+    "en": "Response Deadlines Within 7 Days or Overdue",
+    "bn": "৭ দিনের মধ্যে বা পেরিয়ে যাওয়া জবাবের সময়সীমা"
+  },
+  "موضوع الدعوى": {
+    "en": "Claim Subject",
+    "bn": "মামলার বিষয়"
+  },
+  "موعد الجلسة الأولى — اختياري": {
+    "en": "First Hearing Date — Optional",
+    "bn": "প্রথম শুনানির সময় — ঐচ্ছিক"
+  },
+  "نهاية مهلة الرد": {
+    "en": "Response Deadline",
+    "bn": "জবাবের সময়সীমা"
+  },
+  "ينشئ النظام ملف دفاع مستقلًا، ومهلة رد، وجلسة أولى عند تحديدها، ويسجل الإسناد وتوقيته في السجل القانوني.": {
+    "en": "The system creates a dedicated defense file, a response deadline, and an initial hearing when provided, and logs the assignment and its time in the legal register.",
+    "bn": "সিস্টেম একটি পৃথক প্রতিরক্ষা ফাইল, জবাবের সময়সীমা এবং নির্ধারিত থাকলে প্রথম শুনানি তৈরি করে; আইনি রেজিস্টারে দায়িত্ব ও সময় নথিভুক্ত করে।"
+  },
   "يوم واحد": {
     "en": "One Day",
     "bn": "এক দিন"

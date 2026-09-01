@@ -6,10 +6,13 @@ import { readApiJson } from "@/lib/client-api";
 type Matter = {
   id: number;
   referenceCode: string;
+  category: string;
   title: string;
   counterparty: string;
   status: string;
   referralReason: string | null;
+  referredAt: string | null;
+  expiryDate: string | null;
   fileSnapshotJson: string | null;
   contractId: number | null;
   assignedLawyerId: number | null;
@@ -189,6 +192,18 @@ const types: Record<string, string> = {
   hearing: "جلسة",
   settlement: "تسوية",
 };
+const riskLabels: Record<string, string> = {
+  low: "منخفض",
+  medium: "متوسط",
+  high: "مرتفع",
+  critical: "حرج",
+};
+const riskRank: Record<string, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+  critical: 4,
+};
 const text = (value: unknown) =>
   value === null || value === undefined || value === ""
     ? "غير مسجل"
@@ -203,11 +218,18 @@ export default function LegalCaseWorkspace() {
     [selected, setSelected] = useState(0),
     [notice, setNotice] = useState(""),
     [uploading, setUploading] = useState(false),
+    [companyCaseModal, setCompanyCaseModal] = useState(false),
+    [companyCaseBusy, setCompanyCaseBusy] = useState(false),
     [lawyerModal, setLawyerModal] = useState(false),
+    [editingLawyer, setEditingLawyer] = useState<Lawyer | null>(null),
     [lawyerBusy, setLawyerBusy] = useState(false),
+    [assignmentBusy, setAssignmentBusy] = useState(false),
     [shareBusy, setShareBusy] = useState(false),
     [currentTime, setCurrentTime] = useState(0),
     [lawyerUsers, setLawyerUsers] = useState<LawyerUser[]>([]),
+    [transferringLawyer, setTransferringLawyer] = useState<Lawyer | null>(
+      null,
+    ),
     [sharingAttachment, setSharingAttachment] = useState<Attachment | null>(
       null,
     ),
@@ -279,6 +301,29 @@ export default function LegalCaseWorkspace() {
       data?.activities.filter((item) => item.legalRecordId === selected) || [],
     [data, selected],
   );
+  const selectedRisk = useMemo(
+    () =>
+      activities
+        .filter((item) => !["completed", "cancelled"].includes(item.status))
+        .reduce(
+          (highest, item) =>
+            (riskRank[item.priority] || 0) > (riskRank[highest] || 0)
+              ? item.priority
+              : highest,
+          "low",
+        ),
+    [activities],
+  );
+  const responseDeadline = useMemo(
+    () =>
+      activities.find(
+        (item) =>
+          item.activityType === "deadline" &&
+          item.title === "انتهاء مهلة الرد على الدعوى" &&
+          !["completed", "cancelled"].includes(item.status),
+      ) || null,
+    [activities],
+  );
   const attachments = useMemo(
     () =>
       data?.attachments.filter((item) => item.legalRecordId === selected) || [],
@@ -299,6 +344,26 @@ export default function LegalCaseWorkspace() {
       ) || [],
     [data, selected],
   );
+  const companyDefenseCases = useMemo(
+    () =>
+      data?.cases.filter(
+        (item) => item.companyCapacity === "مدعى عليها",
+      ) || [],
+    [data],
+  );
+  const urgentDefenseDeadlines = useMemo(() => {
+    if (!data || !currentTime) return [];
+    const defenseIds = new Set(companyDefenseCases.map((item) => item.id));
+    const sevenDaysFromNow = currentTime + 7 * 86_400_000;
+    return data.activities.filter(
+      (item) =>
+        defenseIds.has(item.legalRecordId) &&
+        item.activityType === "deadline" &&
+        !["completed", "cancelled"].includes(item.status) &&
+        Boolean(item.dueAt) &&
+        Date.parse(item.dueAt || "") <= sevenDaysFromNow,
+    );
+  }, [companyDefenseCases, currentTime, data]);
   const snapshot = useMemo(() => {
     if (!matter?.fileSnapshotJson) return null;
     try {
@@ -324,6 +389,43 @@ export default function LegalCaseWorkspace() {
     form.reset();
     setNotice("تمت إضافة الإجراء إلى سجل القضية.");
     await load();
+  }
+  async function createCompanyDefenseCase(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setCompanyCaseBusy(true);
+    try {
+      const response = await fetch("/api/portal/legal-cases", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "create-company-defense-case",
+          ...Object.fromEntries(new FormData(form)),
+        }),
+      });
+      const result = (await readApiJson(response)) as {
+        error?: string;
+        case?: Matter;
+      };
+      if (!response.ok || !result.case)
+        throw new Error(result.error || "تعذر تسجيل القضية المرفوعة على الشركة");
+      setSelected(result.case.id);
+      setCompanyCaseModal(false);
+      setNotice(
+        `سُجلت القضية ${result.case.referenceCode} مع مهلة الرد وسجل الإسناد.`,
+      );
+      await load();
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "تعذر تسجيل القضية المرفوعة على الشركة",
+      );
+    } finally {
+      setCompanyCaseBusy(false);
+    }
   }
   async function requestJudgmentPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -379,43 +481,76 @@ export default function LegalCaseWorkspace() {
       assignedLawyerId = Number(
         new FormData(form).get("assignedLawyerId") || 0,
       );
-    const response = await fetch("/api/portal/legal-cases", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "assign-case",
-        legalRecordId: selected,
-        assignedLawyerId,
-      }),
-    });
-    const result = (await readApiJson(response)) as { error?: string };
-    if (!response.ok) {
-      setNotice(result.error || "تعذر إسناد القضية");
+    if (!assignedLawyerId) {
+      setNotice("اختر المحامي المستلم للقضية.");
       return;
     }
-    form.reset();
-    setNotice("تم تحديد المحامي المستلم للقضية وتسجيل الإسناد.");
-    await load();
+    setAssignmentBusy(true);
+    try {
+      const response = await fetch("/api/portal/legal-cases", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "assign-case",
+          legalRecordId: selected,
+          assignedLawyerId,
+        }),
+      });
+      const result = (await readApiJson(response)) as { error?: string };
+      if (!response.ok)
+        throw new Error(result.error || "تعذر إسناد القضية");
+      setNotice("تم تحديد المحامي المستلم للقضية وتسجيل وقت الإسناد.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر إسناد القضية");
+    } finally {
+      setAssignmentBusy(false);
+    }
   }
-  async function addLawyer(event: FormEvent<HTMLFormElement>) {
+  function closeLawyerModal() {
+    setLawyerModal(false);
+    setEditingLawyer(null);
+  }
+  async function saveLawyer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     setLawyerBusy(true);
     try {
+      const values = Object.fromEntries(new FormData(form).entries());
       const response = await fetch("/api/portal/legal-lawyers", {
-        method: "POST",
+        method: editingLawyer ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(new FormData(form).entries())),
+        body: JSON.stringify(
+          editingLawyer
+            ? {
+                ...values,
+                action: "update-details",
+                lawyerId: editingLawyer.id,
+              }
+            : values,
+        ),
       });
       const result = (await readApiJson(response)) as { error?: string };
       if (!response.ok)
-        throw new Error(result.error || "تعذر إضافة المحامي");
+        throw new Error(
+          result.error ||
+            (editingLawyer
+              ? "تعذر تعديل بيانات المحامي"
+              : "تعذر إضافة المحامي"),
+        );
       form.reset();
-      setLawyerModal(false);
-      setNotice("تمت إضافة المحامي إلى السجل القانوني.");
+      const updated = Boolean(editingLawyer);
+      closeLawyerModal();
+      setNotice(
+        updated
+          ? "تم تعديل بيانات المحامي وتسجيل العملية."
+          : "تمت إضافة المحامي إلى السجل القانوني.",
+      );
       await load();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "تعذر إضافة المحامي");
+      setNotice(
+        error instanceof Error ? error.message : "تعذر حفظ بيانات المحامي",
+      );
     } finally {
       setLawyerBusy(false);
     }
@@ -440,6 +575,65 @@ export default function LegalCaseWorkspace() {
       setNotice(
         error instanceof Error ? error.message : "تعذر تحديث حالة المحامي",
       );
+    } finally {
+      setLawyerBusy(false);
+    }
+  }
+  async function deleteLawyer(lawyer: Lawyer) {
+    if (
+      !window.confirm(
+        `هل تريد حذف المحامي «${lawyer.fullName}» نهائيًا من السجل؟`,
+      )
+    )
+      return;
+    const reason = window.prompt("اكتب سبب حذف المحامي")?.trim() || "";
+    if (!reason) return;
+    setLawyerBusy(true);
+    try {
+      const response = await fetch("/api/portal/legal-lawyers", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lawyerId: lawyer.id, reason }),
+      });
+      const result = (await readApiJson(response)) as { error?: string };
+      if (!response.ok)
+        throw new Error(result.error || "تعذر حذف المحامي");
+      setNotice("حُذف المحامي من السجل مع توثيق سبب الحذف.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر حذف المحامي");
+    } finally {
+      setLawyerBusy(false);
+    }
+  }
+  async function transferLawyerCases(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!transferringLawyer) return;
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    setLawyerBusy(true);
+    try {
+      const response = await fetch("/api/portal/legal-lawyers", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...values,
+          action: "transfer-cases",
+          lawyerId: transferringLawyer.id,
+        }),
+      });
+      const result = (await readApiJson(response)) as {
+        error?: string;
+        transferredCount?: number;
+      };
+      if (!response.ok)
+        throw new Error(result.error || "تعذر تحويل القضايا");
+      setTransferringLawyer(null);
+      setNotice(
+        `تم تحويل ${result.transferredCount || 0} قضية وتسجيل وقت الإسناد الجديد.`,
+      );
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر تحويل القضايا");
     } finally {
       setLawyerBusy(false);
     }
@@ -591,22 +785,34 @@ export default function LegalCaseWorkspace() {
     <section className="panel legal-matter-workspace">
       <header>
         <div>
-          <span>إدارة المسائل القانونية</span>
+          <span>إدارة القضايا والمطالبات القانونية</span>
           <h2>ملف قانوني مترابط بالعقد والعميل</h2>
           <p>
-            العقد ومرفقاته ودفعاته وسجله المالي والعمالة والإجراءات في موضع
-            واحد.
+            القضايا المرفوعة من الشركة أو عليها، والمحامين والمواعيد والمذكرات
+            والمرفقات في ملف قانوني واحد.
           </p>
         </div>
         <div className="heading-actions">
           {data.canManageCases && (
-            <button
-              type="button"
-              className="admin-primary"
-              onClick={() => setLawyerModal(true)}
-            >
-              + إضافة محامي
-            </button>
+            <>
+              <button
+                type="button"
+                className="admin-primary legal-defense-create"
+                onClick={() => setCompanyCaseModal(true)}
+              >
+                + تسجيل قضية على الشركة
+              </button>
+              <button
+                type="button"
+                className="admin-secondary"
+                onClick={() => {
+                  setEditingLawyer(null);
+                  setLawyerModal(true);
+                }}
+              >
+                + إضافة محامي
+              </button>
+            </>
           )}
           <b>
             {data.cases.filter((item) => item.status !== "closed").length} ملف
@@ -615,6 +821,25 @@ export default function LegalCaseWorkspace() {
         </div>
       </header>
       {notice && <p className="operations-notice">{notice}</p>}
+      <div className="legal-defense-kpis">
+        <article>
+          <span>قضايا مرفوعة على الشركة</span>
+          <strong>{companyDefenseCases.length}</strong>
+          <small>
+            {
+              companyDefenseCases.filter(
+                (item) => !["closed", "cancelled"].includes(item.status),
+              ).length
+            }{" "}
+            قيد المتابعة
+          </small>
+        </article>
+        <article className={urgentDefenseDeadlines.length ? "urgent" : ""}>
+          <span>مهل رد خلال 7 أيام أو متأخرة</span>
+          <strong>{urgentDefenseDeadlines.length}</strong>
+          <small>تُرتب حسب سجل المواعيد القانوني</small>
+        </article>
+      </div>
       <details className="legal-lawyer-register">
         <summary>
           سجل المحامين — {data.lawyers.filter((item) => item.status === "active").length} نشط
@@ -661,14 +886,50 @@ export default function LegalCaseWorkspace() {
                   <td>{lawyer.status === "active" ? "نشط" : "غير نشط"}</td>
                   {data.canManageCases && (
                     <td>
-                      <button
-                        type="button"
-                        className="admin-secondary"
-                        disabled={lawyerBusy}
-                        onClick={() => void updateLawyerStatus(lawyer)}
-                      >
-                        {lawyer.status === "active" ? "تعطيل" : "تفعيل"}
-                      </button>
+                      <div className="legal-lawyer-actions">
+                        <button
+                          type="button"
+                          className="admin-secondary"
+                          disabled={lawyerBusy}
+                          onClick={() => {
+                            setEditingLawyer(lawyer);
+                            setLawyerModal(true);
+                          }}
+                        >
+                          تعديل
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-secondary"
+                          disabled={
+                            lawyerBusy ||
+                            !data.lawyers.some(
+                              (item) =>
+                                item.id !== lawyer.id &&
+                                item.status === "active",
+                            )
+                          }
+                          onClick={() => setTransferringLawyer(lawyer)}
+                        >
+                          تحويل القضايا
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-secondary"
+                          disabled={lawyerBusy}
+                          onClick={() => void updateLawyerStatus(lawyer)}
+                        >
+                          {lawyer.status === "active" ? "تعطيل" : "تفعيل"}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={lawyerBusy}
+                          onClick={() => void deleteLawyer(lawyer)}
+                        >
+                          حذف
+                        </button>
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -691,7 +952,11 @@ export default function LegalCaseWorkspace() {
             >
               <strong>{item.referenceCode}</strong>
               <span>{item.counterparty}</span>
-              <small>{item.status}</small>
+              <small>
+                {item.companyCapacity === "مدعى عليها"
+                  ? `مرفوعة على الشركة · ${item.status}`
+                  : item.status}
+              </small>
             </button>
           ))}
         </aside>
@@ -700,8 +965,62 @@ export default function LegalCaseWorkspace() {
             <>
               <div className="legal-matter-head">
                 <div>
+                  <div className="legal-case-classification">
+                    <span
+                      className={
+                        matter.companyCapacity === "مدعى عليها"
+                          ? "defense"
+                          : ""
+                      }
+                    >
+                      {matter.companyCapacity === "مدعى عليها"
+                        ? "قضية مرفوعة على الشركة"
+                        : matter.companyCapacity || "ملف قانوني"}
+                    </span>
+                    {matter.companyCapacity === "مدعى عليها" && (
+                      <span className={`risk-${selectedRisk}`}>
+                        مخاطر {riskLabels[selectedRisk] || selectedRisk}
+                      </span>
+                    )}
+                  </div>
                   <h3>{matter.title}</h3>
                   <p>{matter.referralReason || "ملف قانوني مسجل يدويًا"}</p>
+                  {matter.companyCapacity === "مدعى عليها" && (
+                    <div className="legal-defense-dates">
+                      <p>
+                        <strong>المدعي:</strong> {matter.counterparty}
+                      </p>
+                      <p>
+                        <strong>استلام التبليغ:</strong>{" "}
+                        {matter.referredAt
+                          ? new Date(matter.referredAt).toLocaleString("ar-SA", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })
+                          : "غير مسجل"}
+                      </p>
+                      <p
+                        className={
+                          responseDeadline?.dueAt &&
+                          Date.parse(responseDeadline.dueAt) < currentTime
+                            ? "overdue"
+                            : ""
+                        }
+                      >
+                        <strong>انتهاء مهلة الرد:</strong>{" "}
+                        {responseDeadline?.dueAt
+                          ? new Date(responseDeadline.dueAt).toLocaleString(
+                              "ar-SA",
+                              { dateStyle: "medium", timeStyle: "short" },
+                            )
+                          : matter.expiryDate
+                            ? new Date(
+                                `${matter.expiryDate}T00:00:00`,
+                              ).toLocaleDateString("ar-SA")
+                            : "غير مسجل"}
+                      </p>
+                    </div>
+                  )}
                   <p>
                     <strong>المحامي المستلم للقضية:</strong>{" "}
                     {assignedLawyer?.fullName ||
@@ -728,24 +1047,45 @@ export default function LegalCaseWorkspace() {
                   )}
                   {data.canManageCases && (
                     <>
-                      <form onSubmit={assignCase}>
-                        <select
-                          name="assignedLawyerId"
-                          required
-                          defaultValue={matter.assignedLawyerId || ""}
+                      <form
+                        className="legal-assignment-control"
+                        key={`assignment-${matter.id}-${matter.assignedLawyerId || 0}`}
+                        onSubmit={assignCase}
+                      >
+                        <label>
+                          المحامي المستلم
+                          <select
+                            name="assignedLawyerId"
+                            required
+                            defaultValue={matter.assignedLawyerId || ""}
+                          >
+                            <option value="" disabled>
+                              اختر المحامي المستلم
+                            </option>
+                            {data.lawyers
+                              .filter((lawyer) => lawyer.status === "active")
+                              .map((lawyer) => (
+                                <option key={lawyer.id} value={lawyer.id}>
+                                  {lawyer.fullName} — {lawyer.portalUserEmail ? "داخلي" : "خارجي"}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={
+                            assignmentBusy ||
+                            !data.lawyers.some(
+                              (lawyer) => lawyer.status === "active",
+                            )
+                          }
                         >
-                          <option value="" disabled>
-                            اختر المحامي المستلم
-                          </option>
-                          {data.lawyers
-                            .filter((lawyer) => lawyer.status === "active")
-                            .map((lawyer) => (
-                              <option key={lawyer.id} value={lawyer.id}>
-                                {lawyer.fullName} — {lawyer.portalUserEmail ? "داخلي" : "خارجي"}
-                              </option>
-                            ))}
-                        </select>
-                        <button>إسناد القضية</button>
+                          {assignmentBusy
+                            ? "جارٍ الإسناد..."
+                            : matter.assignedLawyerId
+                              ? "إعادة إسناد القضية"
+                              : "إسناد القضية"}
+                        </button>
                       </form>
                       <form onSubmit={updateCaseStatus}>
                         <select name="status" defaultValue={matter.status}>
@@ -1487,12 +1827,184 @@ export default function LegalCaseWorkspace() {
           )}
         </main>
       </div>
-      {lawyerModal && (
-        <div className="modal-layer">
+      {companyCaseModal && (
+        <div className="modal-layer legal-lawyer-modal-layer">
           <button
             className="drawer-backdrop"
-            aria-label="إغلاق نموذج إضافة محامي"
-            onClick={() => setLawyerModal(false)}
+            aria-label="إغلاق نموذج تسجيل قضية على الشركة"
+            onClick={() => setCompanyCaseModal(false)}
+          />
+          <section
+            className="record-modal legal-lawyer-modal legal-company-case-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="company-defense-case-title"
+          >
+            <div className="drawer-head">
+              <div>
+                <span>استقبال دعاوى الخصوم</span>
+                <h2 id="company-defense-case-title">
+                  تسجيل قضية مرفوعة على الشركة
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCompanyCaseModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={createCompanyDefenseCase}>
+              <p className="legal-transfer-summary span-two">
+                ينشئ النظام ملف دفاع مستقلًا، ومهلة رد، وجلسة أولى عند تحديدها،
+                ويسجل الإسناد وتوقيته في السجل القانوني.
+              </p>
+              <label className="span-two">
+                موضوع الدعوى
+                <input
+                  name="title"
+                  required
+                  minLength={3}
+                  maxLength={180}
+                  placeholder="مثال: مطالبة مالية عن عقد تشغيل"
+                />
+              </label>
+              <label>
+                اسم المدعي
+                <input
+                  name="claimantName"
+                  required
+                  minLength={2}
+                  maxLength={180}
+                />
+              </label>
+              <label>
+                رقم القضية لدى المحكمة
+                <input
+                  name="courtCaseNumber"
+                  required
+                  maxLength={120}
+                  dir="ltr"
+                />
+              </label>
+              <label>
+                المحكمة
+                <input name="courtName" required maxLength={180} />
+              </label>
+              <label>
+                الدائرة
+                <input name="circuitName" maxLength={180} />
+              </label>
+              <label>
+                نوع الدعوى
+                <input
+                  name="claimType"
+                  required
+                  maxLength={120}
+                  placeholder="عمالية، تجارية، تنفيذية..."
+                />
+              </label>
+              <label>
+                قيمة المطالبة
+                <input
+                  name="claimAmount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue="0"
+                />
+              </label>
+              <label>
+                درجة التقاضي
+                <select name="litigationLevel" required defaultValue="first_instance">
+                  <option value="first_instance">ابتدائي</option>
+                  <option value="appeal">استئناف</option>
+                  <option value="supreme">عليا</option>
+                  <option value="enforcement">تنفيذ</option>
+                </select>
+              </label>
+              <label>
+                مستوى المخاطر
+                <select name="riskLevel" required defaultValue="high">
+                  <option value="low">منخفض</option>
+                  <option value="medium">متوسط</option>
+                  <option value="high">مرتفع</option>
+                  <option value="critical">حرج</option>
+                </select>
+              </label>
+              <label>
+                تاريخ ووقت استلام التبليغ
+                <input name="noticeReceivedAt" type="datetime-local" required />
+              </label>
+              <label>
+                نهاية مهلة الرد
+                <input name="responseDeadlineAt" type="datetime-local" required />
+              </label>
+              <label>
+                رقم الجلسة الأولى
+                <input
+                  name="firstHearingNumber"
+                  maxLength={80}
+                  placeholder="الأولى"
+                />
+              </label>
+              <label>
+                موعد الجلسة الأولى — اختياري
+                <input name="firstHearingAt" type="datetime-local" />
+              </label>
+              <label>
+                محامي المدعي — اختياري
+                <input name="opposingCounsel" maxLength={180} />
+              </label>
+              <label>
+                المحامي المستلم — اختياري
+                <select name="assignedLawyerId" defaultValue="">
+                  <option value="">غير مسند — يُسند لاحقًا</option>
+                  {data.lawyers
+                    .filter((lawyer) => lawyer.status === "active")
+                    .map((lawyer) => (
+                      <option key={lawyer.id} value={lawyer.id}>
+                        {lawyer.fullName} — {lawyer.portalUserEmail ? "داخلي" : "خارجي"}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="span-two">
+                ملخص المطالبة ومتطلبات الدفاع
+                <textarea
+                  name="claimSummary"
+                  required
+                  minLength={10}
+                  maxLength={5000}
+                  rows={4}
+                  placeholder="ملخص الوقائع والطلبات والمستندات المطلوب جمعها وخطة الرد الأولية"
+                />
+              </label>
+              <div className="modal-actions span-two">
+                <button
+                  type="button"
+                  onClick={() => setCompanyCaseModal(false)}
+                >
+                  إلغاء
+                </button>
+                <button className="admin-primary" disabled={companyCaseBusy}>
+                  {companyCaseBusy ? "جارٍ تسجيل القضية..." : "تسجيل القضية وبدء المتابعة"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {lawyerModal && (
+        <div className="modal-layer legal-lawyer-modal-layer">
+          <button
+            className="drawer-backdrop"
+            aria-label={
+              editingLawyer
+                ? "إغلاق نموذج تعديل المحامي"
+                : "إغلاق نموذج إضافة محامي"
+            }
+            onClick={closeLawyerModal}
           />
           <section
             className="record-modal legal-lawyer-modal"
@@ -1503,24 +2015,44 @@ export default function LegalCaseWorkspace() {
             <div className="drawer-head">
               <div>
                 <span>سجل الشؤون القانونية</span>
-                <h2 id="add-lawyer-title">إضافة محامي</h2>
+                <h2 id="add-lawyer-title">
+                  {editingLawyer ? "تعديل بيانات المحامي" : "إضافة محامي"}
+                </h2>
               </div>
-              <button type="button" onClick={() => setLawyerModal(false)}>
+              <button type="button" onClick={closeLawyerModal}>
                 ×
               </button>
             </div>
-            <form onSubmit={addLawyer}>
+            <form
+              key={editingLawyer?.id || "new-lawyer"}
+              onSubmit={saveLawyer}
+            >
               <label>
                 اسم المحامي
-                <input name="fullName" required minLength={3} maxLength={180} />
+                <input
+                  name="fullName"
+                  required
+                  minLength={3}
+                  maxLength={180}
+                  defaultValue={editingLawyer?.fullName || ""}
+                />
               </label>
               <label>
                 رقم رخصة المحاماة
-                <input name="licenseNumber" maxLength={80} dir="ltr" />
+                <input
+                  name="licenseNumber"
+                  maxLength={80}
+                  dir="ltr"
+                  defaultValue={editingLawyer?.licenseNumber || ""}
+                />
               </label>
               <label>
                 تاريخ انتهاء الرخصة
-                <input name="licenseExpiryDate" type="date" />
+                <input
+                  name="licenseExpiryDate"
+                  type="date"
+                  defaultValue={editingLawyer?.licenseExpiryDate || ""}
+                />
               </label>
               <label>
                 رقم الجوال وواتساب
@@ -1531,16 +2063,34 @@ export default function LegalCaseWorkspace() {
                   maxLength={20}
                   placeholder="9665XXXXXXXX"
                   dir="ltr"
+                  defaultValue={editingLawyer?.mobile || ""}
                 />
               </label>
               <label>
                 البريد المهني
-                <input name="email" type="email" maxLength={254} dir="ltr" />
+                <input
+                  name="email"
+                  type="email"
+                  maxLength={254}
+                  dir="ltr"
+                  defaultValue={editingLawyer?.email || ""}
+                />
               </label>
               <label>
                 ربط بمستخدم — اختياري
-                <select name="portalUserEmail" defaultValue="">
+                <select
+                  name="portalUserEmail"
+                  defaultValue={editingLawyer?.portalUserEmail || ""}
+                >
                   <option value="">محامي خارجي دون حساب</option>
+                  {editingLawyer?.portalUserEmail &&
+                    !lawyerUsers.some(
+                      (user) => user.email === editingLawyer.portalUserEmail,
+                    ) && (
+                      <option value={editingLawyer.portalUserEmail}>
+                        المستخدم الحالي — {editingLawyer.portalUserEmail}
+                      </option>
+                    )}
                   {lawyerUsers.map((user) => (
                     <option key={user.email} value={user.email}>
                       {user.displayName} — {user.email}
@@ -1550,18 +2100,100 @@ export default function LegalCaseWorkspace() {
               </label>
               <label className="span-two">
                 ملاحظات
-                <textarea name="notes" rows={3} maxLength={2000} />
+                <textarea
+                  name="notes"
+                  rows={3}
+                  maxLength={2000}
+                  defaultValue={editingLawyer?.notes || ""}
+                />
               </label>
               <p className="form-hint span-two">
                 لا يُنشئ هذا النموذج مستخدمًا. عند عدم ربط حساب، يبقى المحامي
                 خارجيًا ويمكن إسناد القضايا إليه ومشاركة ملفاتها عبر واتساب.
               </p>
               <div className="modal-actions span-two">
-                <button type="button" onClick={() => setLawyerModal(false)}>
+                <button type="button" onClick={closeLawyerModal}>
                   إلغاء
                 </button>
                 <button className="admin-primary" disabled={lawyerBusy}>
-                  {lawyerBusy ? "جارٍ الحفظ..." : "حفظ المحامي"}
+                  {lawyerBusy
+                    ? "جارٍ الحفظ..."
+                    : editingLawyer
+                      ? "حفظ التعديلات"
+                      : "حفظ المحامي"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {transferringLawyer && (
+        <div className="modal-layer legal-lawyer-modal-layer">
+          <button
+            className="drawer-backdrop"
+            aria-label="إغلاق نموذج تحويل القضايا"
+            onClick={() => setTransferringLawyer(null)}
+          />
+          <section
+            className="record-modal legal-lawyer-modal legal-transfer-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transfer-lawyer-cases-title"
+          >
+            <div className="drawer-head">
+              <div>
+                <span>{transferringLawyer.fullName}</span>
+                <h2 id="transfer-lawyer-cases-title">
+                  تحويل القضايا إلى محامٍ آخر
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTransferringLawyer(null)}
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={transferLawyerCases}>
+              <p className="legal-transfer-summary span-two">
+                سيُسجل النظام المحامي السابق والجديد ومن نفذ التحويل، ويحدّث
+                تاريخ ووقت الإسناد لكل قضية محولة.
+              </p>
+              <label>
+                المحامي البديل
+                <select name="targetLawyerId" required defaultValue="">
+                  <option value="" disabled>
+                    اختر المحامي البديل
+                  </option>
+                  {data.lawyers
+                    .filter(
+                      (lawyer) =>
+                        lawyer.id !== transferringLawyer.id &&
+                        lawyer.status === "active",
+                    )
+                    .map((lawyer) => (
+                      <option key={lawyer.id} value={lawyer.id}>
+                        {lawyer.fullName} — {lawyer.portalUserEmail ? "داخلي" : "خارجي"}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                نطاق التحويل
+                <select name="scope" defaultValue="open">
+                  <option value="open">القضايا المفتوحة فقط</option>
+                  <option value="all">جميع القضايا بما فيها المغلقة</option>
+                </select>
+              </label>
+              <div className="modal-actions span-two">
+                <button
+                  type="button"
+                  onClick={() => setTransferringLawyer(null)}
+                >
+                  إلغاء
+                </button>
+                <button className="admin-primary" disabled={lawyerBusy}>
+                  {lawyerBusy ? "جارٍ التحويل..." : "تأكيد تحويل القضايا"}
                 </button>
               </div>
             </form>

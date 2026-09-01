@@ -884,5 +884,25 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "ملف #{{0}}",
     "en": "File #{{0}}",
     "bn": "ফাইল #{{0}}"
+  },
+  {
+    "source": "تم تحويل {{0}} قضية وتسجيل وقت الإسناد الجديد.",
+    "en": "{{0}} case(s) were transferred and the new assignment time was recorded.",
+    "bn": "{{0}}টি মামলা স্থানান্তর করা হয়েছে এবং নতুন বরাদ্দের সময় নথিভুক্ত করা হয়েছে।"
+  },
+  {
+    "source": "هل تريد حذف المحامي «{{0}}» نهائيًا من السجل؟",
+    "en": "Do you want to permanently delete lawyer «{{0}}» from the registry?",
+    "bn": "আপনি কি আইনজীবী «{{0}}»-কে রেজিস্টার থেকে স্থায়ীভাবে মুছে ফেলতে চান?"
+  },
+  {
+    "source": "سُجلت القضية {{0}} مع مهلة الرد وسجل الإسناد.",
+    "en": "Case {{0}} was registered with its response deadline and assignment record.",
+    "bn": "মামলা {{0}} জবাবের সময়সীমা ও দায়িত্বের রেকর্ডসহ নথিভুক্ত হয়েছে।"
+  },
+  {
+    "source": "مرفوعة على الشركة · {{0}}",
+    "en": "Against the Company · {{0}}",
+    "bn": "কোম্পানির বিরুদ্ধে · {{0}}"
   }
 ];
