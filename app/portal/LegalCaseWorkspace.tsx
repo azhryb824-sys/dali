@@ -1,6 +1,14 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { readApiJson } from "@/lib/client-api";
 
 type Matter = {
@@ -212,6 +220,19 @@ const money = (value: unknown) =>
   new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(
     Number(value || 0) / 100,
   );
+
+function LegalOverlayPortal({ children }: { children: ReactNode }) {
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setPortalRoot(document.querySelector<HTMLElement>(".admin-shell"));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  return portalRoot ? createPortal(children, portalRoot) : null;
+}
 
 export default function LegalCaseWorkspace() {
   const [data, setData] = useState<Data | null>(null),
@@ -1827,6 +1848,7 @@ export default function LegalCaseWorkspace() {
           )}
         </main>
       </div>
+      <LegalOverlayPortal>
       {companyCaseModal && (
         <div className="modal-layer legal-lawyer-modal-layer">
           <button
@@ -2327,6 +2349,7 @@ export default function LegalCaseWorkspace() {
           </section>
         </div>
       )}
+      </LegalOverlayPortal>
     </section>
   );
 }

@@ -116,6 +116,8 @@ test("legal UI exposes named assignment time and WhatsApp share history", async 
   ]);
   assert.match(ui, /\+ إضافة محامي/);
   assert.match(ui, /modal-layer legal-lawyer-modal-layer/);
+  assert.match(ui, /createPortal\(children, portalRoot\)/);
+  assert.match(ui, /querySelector<HTMLElement>\("\.admin-shell"\)/);
   assert.match(ui, />\s*تعديل\s*</);
   assert.match(ui, />\s*حذف\s*</);
   assert.match(ui, />\s*تحويل القضايا\s*</);
@@ -130,14 +132,17 @@ test("legal UI exposes named assignment time and WhatsApp share history", async 
   assert.match(ui, /سجل مشاركة الملفات مع المحامين الخارجيين/);
   assert.match(ui, /share\.sharedAt/);
   assert.match(ui, /إبطال الرابط/);
-  assert.match(css, /\.legal-lawyer-modal-layer\{display:grid;place-items:center/);
   assert.match(
     css,
-    /\.legal-lawyer-modal-layer \.drawer-backdrop\{background:rgba\(0,20,31,\.22\)/,
+    /\.modal-layer\.legal-lawyer-modal-layer\{position:fixed;inset:0;z-index:1800;display:flex;align-items:center;justify-content:center/,
   );
   assert.match(
     css,
-    /\.legal-lawyer-modal-layer \.legal-lawyer-modal\{position:relative;inset:auto;transform:none/,
+    /\.modal-layer\.legal-lawyer-modal-layer>\.drawer-backdrop\{position:fixed;inset:0;z-index:0;background:rgba\(0,20,31,\.24\)/,
+  );
+  assert.match(
+    css,
+    /\.modal-layer\.legal-lawyer-modal-layer>\.legal-lawyer-modal\{position:relative;inset:auto;margin:auto;transform:none/,
   );
   assert.match(css, /\.legal-lawyer-actions\{display:flex/);
   assert.match(css, /\.legal-assignment-control\{display:grid/);
