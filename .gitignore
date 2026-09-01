@@ -41,3 +41,7 @@ next-env.d.ts
 /outputs/
 /work/
 /.data/
+
+# python
+__pycache__/
+*.py[cod]

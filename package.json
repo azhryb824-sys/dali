@@ -9,6 +9,7 @@
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "next dev -H 0.0.0.0",
+    "prebuild": "npm run i18n:audit",
     "build": "next build --webpack",
     "start": "next start -H 0.0.0.0",
     "start:render": "node scripts/render-start.mjs",

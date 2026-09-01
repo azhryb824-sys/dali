@@ -1,4 +1,6 @@
 import { adminUiTranslations } from "@/lib/i18n-admin-catalog";
+import { generatedUiTranslations } from "@/lib/i18n-generated-catalog";
+import { generatedUiTemplates } from "@/lib/i18n-generated-templates";
 import { publicUiTranslations } from "@/lib/i18n-public-catalog";
 
 export const supportedLocales = ["ar", "en", "bn"] as const;
@@ -98,6 +100,9 @@ Object.assign(uiTranslations, {
   "تنزيل PDF": { ...uiTranslations["تنزيل PDF"], bn: "PDF ডাউনলোড" },
   "البنغالية": { en: "Bengali", bn: "বাংলা" },
 });
+for (const [source, generated] of Object.entries(generatedUiTranslations)) {
+  uiTranslations[source] = { ...uiTranslations[source], ...generated } as Translation;
+}
 const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>string;ur:(match:RegExpMatchArray)=>string;bn?:(match:RegExpMatchArray)=>string}>=[
   {pattern:/^مساحة عمل مهيأة لصلاحيات:\s*(.+)\.$/,en:m=>`Workspace configured for role: ${translateUi(m[1],"en")}.`,ur:m=>`کردار کے مطابق ورک اسپیس: ${m[1]}۔`,bn:m=>`ভূমিকা অনুযায়ী কর্মক্ষেত্র: ${m[1]}।`},
   {pattern:/^مساحة عملك في قسم\s+(.+)\.$/,en:m=>`Your workspace in the ${translateUi(m[1],"en")} department.`,ur:m=>`${m[1]} شعبے میں آپ کا ورک اسپیس۔`,bn:m=>`${m[1]} বিভাগে আপনার কর্মক্ষেত্র।`},
@@ -112,5 +117,40 @@ const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>s
   {pattern:/^(\d+)\s+تنبيه$/,en:m=>`${m[1]} alerts`,ur:m=>`${m[1]} انتباہات`},
   {pattern:/^(\d+)\s+طلب$/,en:m=>`${m[1]} requests`,ur:m=>`${m[1]} درخواستیں`}
 ];
+function escapeRegExp(value:string){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
+const compiledGeneratedUiTemplates=generatedUiTemplates.map(item=>{
+  const indexes:number[]=[];
+  let sourceIndex=0;
+  let pattern="^";
+  for(const match of item.source.matchAll(/\{\{(\d+)\}\}/g)){
+    const matchIndex=match.index??0;
+    pattern+=escapeRegExp(item.source.slice(sourceIndex,matchIndex)).replaceAll(" ","\\s+");
+    pattern+="(.*?)";
+    indexes.push(Number(match[1]));
+    sourceIndex=matchIndex+match[0].length;
+  }
+  pattern+=escapeRegExp(item.source.slice(sourceIndex)).replaceAll(" ","\\s+")+"$";
+  return{...item,indexes,pattern:new RegExp(pattern,"s")};
+});
 const calendarWords:Record<AppLocale,Record<string,string>>={ar:{},en:{"الأحد":"Sunday","الاثنين":"Monday","الثلاثاء":"Tuesday","الأربعاء":"Wednesday","الخميس":"Thursday","الجمعة":"Friday","السبت":"Saturday","يناير":"January","فبراير":"February","مارس":"March","أبريل":"April","مايو":"May","يونيو":"June","يوليو":"July","أغسطس":"August","سبتمبر":"September","أكتوبر":"October","نوفمبر":"November","ديسمبر":"December"},bn:{"الأحد":"রবিবার","الاثنين":"সোমবার","الثلاثاء":"মঙ্গলবার","الأربعاء":"বুধবার","الخميس":"বৃহস্পতিবার","الجمعة":"শুক্রবার","السبت":"শনিবার","يناير":"জানুয়ারি","فبراير":"ফেব্রুয়ারি","مارس":"মার্চ","أبريل":"এপ্রিল","مايو":"মে","يونيو":"জুন","يوليو":"জুলাই","أغسطس":"আগস্ট","سبتمبر":"সেপ্টেম্বর","أكتوبر":"অক্টোবর","نوفمبر":"নভেম্বর","ديسمبر":"ডিসেম্বর"}};
-export function translateUi(value:string,locale:AppLocale){if(locale==="ar")return value;const exact=uiTranslations[value]?.[locale];if(exact)return exact;for(const item of dynamicUiTranslations){const match=value.match(item.pattern);const translate=item[locale];if(match&&translate)return translate(match)}let translated=value;for(const[arabic,replacement]of Object.entries(calendarWords[locale]))translated=translated.replace(arabic,replacement);return translated;}
+export function translateUi(value:string,locale:AppLocale){
+  if(locale==="ar")return value;
+  const normalized=value.replace(/\s+/g," ").trim();
+  const exact=uiTranslations[value]?.[locale]??uiTranslations[normalized]?.[locale];
+  if(exact)return exact;
+  for(const item of dynamicUiTranslations){const match=normalized.match(item.pattern);const translate=item[locale];if(match&&translate)return translate(match)}
+  for(const item of compiledGeneratedUiTemplates){
+    const match=normalized.match(item.pattern);
+    if(!match)continue;
+    let translated=item[locale];
+    item.indexes.forEach((placeholderIndex,captureIndex)=>{
+      const captured=match[captureIndex+1];
+      const nested=uiTranslations[captured]?.[locale]??captured;
+      translated=translated.replaceAll(`{{${placeholderIndex}}}`,nested);
+    });
+    return translated;
+  }
+  let translated=value;
+  for(const[arabic,replacement]of Object.entries(calendarWords[locale]))translated=translated.replace(arabic,replacement);
+  return translated;
+}
