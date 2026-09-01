@@ -7097,6 +7097,10 @@ export const generatedUiTranslations: Record<string,{en?:string;bn?:string}> = {
   "تعذّر الحفظ": {
     "bn": "বাঁচাতে পারিনি"
   },
+  "تعذّر حفظ اللغة": {
+    "en": "Unable to save the language preference",
+    "bn": "ভাষার পছন্দ সংরক্ষণ করা যায়নি"
+  },
   "تعذر إلغاء الحركة": {
     "en": "Can't cancel the movement",
     "bn": "আন্দোলন বাতিল করা যাবে না"

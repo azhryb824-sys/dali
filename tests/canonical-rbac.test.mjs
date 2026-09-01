@@ -46,6 +46,29 @@ test("access scope roles follow active role definitions instead of a stale hard-
   assert.match(accessScopes, /functionalRole: text\("functional_role"\)[\s\S]*?references\(\(\) => portalRoles\.roleKey, \{ onDelete: "restrict" \}\)/);
 });
 
+test("sales and purchasing representatives are assignable with isolated request permissions", () => {
+  const migration = read("drizzle-pg/0063_representative_portal_roles.sql");
+  const users = read("app/api/portal/users/route.ts");
+  const permissions = read("lib/portal-permissions.ts");
+  const dashboard = read("app/portal/PortalDashboard.tsx");
+  const representatives = read("app/api/portal/sales-representatives/route.ts");
+  const requests = read("app/api/portal/representative-requests/route.ts");
+  for (const role of ["sales_representative", "purchasing_representative"]) {
+    assert.match(migration, new RegExp(`'${role}'`));
+    assert.match(users, new RegExp(`"${role}"`));
+    assert.match(dashboard, new RegExp(`"${role}"`));
+  }
+  assert.match(migration, /representatives\.read/);
+  assert.match(migration, /representatives\.write/);
+  assert.doesNotMatch(migration, /\.(approve|post|pay|administer)/);
+  assert.match(permissions, /"representatives\.read", "representatives\.write"/);
+  assert.match(dashboard, /canAccessRepresentatives/);
+  assert.match(representatives, /visibleRepresentatives = owner \? representatives : ownRepresentatives/);
+  assert.match(representatives, /!access \|\| !isOwner\(access\)/);
+  assert.match(requests, /rep\.representativeType==="sales"&&!a\.functionalRoles\.includes\("sales_representative"\)/);
+  assert.match(requests, /rep\.representativeType==="purchasing"&&!a\.functionalRoles\.includes\("purchasing_representative"\)/);
+});
+
 test("unauthorized pages are hidden and direct APIs enforce dedicated permissions", () => {
   const dashboard = read("app/portal/PortalDashboard.tsx");
   assert.match(dashboard, /canAccessGovernment\s*&&\s*\(\s*<button/);

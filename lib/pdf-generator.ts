@@ -95,14 +95,17 @@ const englishDocumentLabels: Record<IssuedDocumentType, string> = {
 function englishText(value?: string | null) {
   if (!value) return "Not specified";
   const replacements: Array<[RegExp, string]> = [
+    [/خصم غياب العمالة قبل الضريبة:\s*([0-9.,]+)\s*ر\.س\./g, "Manpower absence deduction before VAT: $1 SAR."],
+    [/فاتورة الدفعة رقم\s+([0-9]+)\s+\(([^)]+)\)\s+من العقد\s+([A-Za-z0-9_-]+)\./g, "Invoice for installment No. $1 ($2) under contract $3."],
+    [/استحقاق المورد للدفعة رقم\s+([0-9]+)\s+\(([^)]+)\)\s+من عقد شراء العمالة\s+([A-Za-z0-9_-]+)\./g, "Supplier payable for installment No. $1 ($2) under manpower purchase contract $3."],
     [/توريد وتشغيل القوى العاملة وفق البنود والكميات والمواقع المعتمدة\./g, "Supply and operation of manpower according to the approved items, quantities and locations."],
     [/تستحق الدفعات وفق الجدول أدناه\./g, "Installments are due according to the payment schedule below."],
     [/تخضع الخدمات للأنظمة المعمول بها في المملكة العربية السعودية\./g, "Services are governed by the applicable laws and regulations of the Kingdom of Saudi Arabia."],
     [/توريد العمالة/g, "Manpower supply"], [/التشغيل والصيانة/g, "Operations and maintenance"], [/المقاولات/g, "Contracting"], [/الخدمات الموسمية/g, "Seasonal services"],
     [/عامل نظافة/g, "Cleaner"], [/عامل/g, "Worker"], [/مشرف/g, "Supervisor"], [/فني/g, "Technician"], [/كهربائي/g, "Electrician"], [/سباك/g, "Plumber"],
-    [/الدفعة الأولى/g, "First installment"], [/الدفعة الثانية/g, "Second installment"], [/الدفعة/g, "Installment"], [/موسم الحج/g, "Hajj season"], [/موسم رمضان/g, "Ramadan season"],
+    [/الدفعة الأولى/g, "First installment"], [/الدفعة الثانية/g, "Second installment"], [/الدفعة/g, "Installment"], [/دفعة/g, "Installment"], [/موسم الحج/g, "Hajj season"], [/موسم رمضان/g, "Ramadan season"],
     [/فاتورة/g, "Invoice"], [/استحقاق مورّد/g, "Supplier payable"], [/العقد/g, "contract"], [/عقد شراء العمالة/g, "manpower purchase contract"],
-    [/خصم غياب العمالة قبل الضريبة/g, "Manpower absence deduction before VAT"], [/من عقد/g, "under contract"], [/رقم/g, "No."],
+    [/خصم غياب العمالة قبل الضريبة/g, "Manpower absence deduction before VAT"], [/من العقد/g, "under contract"], [/من عقد/g, "under contract"], [/رقم/g, "No."], [/ر\.س\./g, "SAR"],
     [/مكة المكرمة/g, "Makkah"], [/المشاعر المقدسة/g, "Holy Sites"], [/الرياض/g, "Riyadh"], [/المملكة العربية السعودية/g, "Kingdom of Saudi Arabia"],
     [/شركة الكفيل/g, "Sponsor Company"], [/شركة العميل التجريبية/g, "Sample Client Company"],
   ];
@@ -112,21 +115,24 @@ function englishText(value?: string | null) {
 async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: CompanyAsset[]) {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${englishDocumentLabels[input.documentType]} - ${input.referenceCode}`);
+  pdf.setAuthor("Dally Corporation for Operations and Maintenance");
+  pdf.setCreator("Dally Corporation Administrative System");
+  pdf.setProducer("Dally Corporation for Operations and Maintenance");
+  pdf.setCreationDate(new Date());
   const resources = await loadResources(pdf, assets);
-  let page = pdf.addPage([PAGE.width, PAGE.height]);
-  let y = PAGE.height - 58;
-  let pageNumber = 1;
-  const addPage = () => { page = pdf.addPage([PAGE.width, PAGE.height]); pageNumber += 1; y = PAGE.height - 58; header(); };
-  const header = () => {
-    page.drawRectangle({ x: 0, y: PAGE.height - 10, width: PAGE.width, height: 10, color: COLORS.navy });
-    drawLeft(page, "DALI OPERATIONS & MAINTENANCE CO.", PAGE.height - 42, resources.latinBold, 12, COLORS.navy);
-    drawRight(page, `Page ${pageNumber}`, PAGE.height - 42, resources.latinRegular, 8, COLORS.muted);
-    page.drawLine({ start: { x: PAGE.margin, y: PAGE.height - 52 }, end: { x: PAGE.width - PAGE.margin, y: PAGE.height - 52 }, thickness: .7, color: COLORS.line });
+  let page!: PDFPage;
+  let y = 0;
+  let pageNumber = 0;
+  const addPage = () => {
+    page = pdf.addPage([PAGE.width, PAGE.height]);
+    pageNumber += 1;
+    drawEnglishHeader(page, resources, input, pageNumber);
+    y = PAGE.height - (resources.letterhead ? 148 : 128);
   };
-  const ensure = (height: number) => { if (y - height < 65) addPage(); };
-  const heading = (value: string) => { ensure(38); drawLeft(page, value, y, resources.latinBold, 16, COLORS.navy); page.drawRectangle({ x: PAGE.margin, y: y - 11, width: 34, height: 3, color: COLORS.red }); y -= 34; };
-  const row = (label: string, value: string) => { const lines = wrapWords(resources.latinRegular, value || "Not specified", 8, PAGE.width - PAGE.margin * 2 - 24); const height = 20 + lines.length * 11; ensure(height + 3); page.drawRectangle({ x: PAGE.margin, y: y - height + 7, width: PAGE.width - PAGE.margin * 2, height, color: COLORS.pale, borderColor: COLORS.line, borderWidth: .5 }); drawLeft(page, label, y - 3, resources.latinBold, 7, COLORS.red, PAGE.margin + 12); lines.forEach((line, index) => drawLeft(page, line, y - 16 - index * 11, resources.latinRegular, 8, COLORS.text, PAGE.margin + 12)); y -= height + 3; };
-  header();
+  const ensure = (height: number) => { if (y - height < 72) addPage(); };
+  const heading = (value: string) => { ensure(34); drawLeft(page, value, y, resources.latinBold, 16, COLORS.navy); page.drawRectangle({ x: PAGE.margin, y: y - 11, width: 34, height: 3, color: COLORS.red }); y -= 30; };
+  const row = (label: string, value: string) => { const lines = wrapWords(resources.latinRegular, value || "Not specified", 8, PAGE.width - PAGE.margin * 2 - 24); const height = 16 + lines.length * 10; ensure(height + 2); page.drawRectangle({ x: PAGE.margin, y: y - height + 5, width: PAGE.width - PAGE.margin * 2, height, color: COLORS.pale, borderColor: COLORS.line, borderWidth: .5 }); drawLeft(page, label, y - 2, resources.latinBold, 7, COLORS.red, PAGE.margin + 12); lines.forEach((line, index) => drawLeft(page, line, y - 14 - index * 10, resources.latinRegular, 8, COLORS.text, PAGE.margin + 12)); y -= height + 2; };
+  addPage();
   heading(englishDocumentLabels[input.documentType]);
   row("Reference", input.referenceCode); row("Issue date", input.issueDate); row("Client / Entity", input.clientName);
   row("Document title", englishText(input.title));
@@ -185,6 +191,9 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
     if (input.paymentTerms) row("Payment terms", englishText(input.paymentTerms));
     if (input.specialTerms) row("Special terms", englishText(input.specialTerms));
   }
+  if (y < PAGE.footerTop + 22) addPage();
+  if (input.approvalState === "draft") drawEnglishDraftEndorsement(page, resources, input.referenceCode);
+  else drawEnglishEndorsement(page, resources, input.referenceCode);
   return pdf.save();
 }
 
@@ -822,6 +831,23 @@ function drawHeader(page: PDFPage, resources: PdfResources, input: IssuedDocumen
   }
 }
 
+function drawEnglishHeader(page: PDFPage, resources: PdfResources, input: IssuedDocumentInput, pageNumber: number) {
+  const top = PAGE.height - PAGE.margin;
+  if (resources.letterhead) page.drawImage(resources.letterhead, { x: 0, y: 0, width: PAGE.width, height: PAGE.height });
+  else {
+    page.drawRectangle({ x: 0, y: PAGE.height - 10, width: PAGE.width, height: 10, color: COLORS.navy });
+    page.drawRectangle({ x: PAGE.width - 10, y: PAGE.height - 10, width: 10, height: 10, color: COLORS.red });
+  }
+  if (!resources.letterhead && resources.logo) {
+    const ratio = resources.logo.width / resources.logo.height;
+    const height = 42;
+    page.drawImage(resources.logo, { x: PAGE.width - PAGE.margin - height * ratio, y: top - height, width: height * ratio, height });
+    drawLeft(page, input.referenceCode, top - 10, resources.latinBold, 9, COLORS.navy);
+    drawLeft(page, `Page ${pageNumber}`, top - 28, resources.latinRegular, 8, COLORS.muted);
+    page.drawLine({ start: { x: PAGE.margin, y: top - 58 }, end: { x: PAGE.width - PAGE.margin, y: top - 58 }, thickness: 1, color: COLORS.line });
+  }
+}
+
 function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: string) {
   const y = 92;
   page.drawLine({ start: { x: PAGE.margin, y: PAGE.footerTop }, end: { x: PAGE.width - PAGE.margin, y: PAGE.footerTop }, thickness: 1, color: COLORS.line });
@@ -837,6 +863,29 @@ function drawEndorsement(page: PDFPage, resources: PdfResources, referenceCode: 
     drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
     drawRight(page, "أُصدر إلكترونياً من نظام شركة دالي للتشغيل والصيانة", 21, resources.regular, 7, COLORS.muted);
   }
+}
+
+function drawEnglishEndorsement(page: PDFPage, resources: PdfResources, referenceCode: string) {
+  const y = 92;
+  page.drawLine({ start: { x: PAGE.margin, y: PAGE.footerTop }, end: { x: PAGE.width - PAGE.margin, y: PAGE.footerTop }, thickness: 1, color: COLORS.line });
+  drawLeft(page, "Authorized Company Stamp and Signature", PAGE.footerTop - 22, resources.latinBold, 10, COLORS.navy);
+
+  const stampScale = Math.min(96 / resources.stamp.width, 76 / resources.stamp.height);
+  const signatureScale = Math.min(138 / resources.signature.width, 68 / resources.signature.height);
+  page.drawImage(resources.stamp, { x: PAGE.width - PAGE.margin - 100, y, width: resources.stamp.width * stampScale, height: resources.stamp.height * stampScale });
+  page.drawImage(resources.signature, { x: PAGE.margin + 40, y: y + 4, width: resources.signature.width * signatureScale, height: resources.signature.height * signatureScale });
+  drawRight(page, "Company Stamp", 78, resources.latinRegular, 8, COLORS.muted, PAGE.width - PAGE.margin - 12);
+  drawLeft(page, "Authorized Signature", 78, resources.latinRegular, 8, COLORS.muted, PAGE.margin + 45);
+  if (!resources.letterhead) {
+    drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
+    drawRight(page, "Electronically issued by Dally Corporation for Operations and Maintenance", 21, resources.latinRegular, 7, COLORS.muted);
+  }
+}
+
+function drawEnglishDraftEndorsement(page: PDFPage, resources: PdfResources, referenceCode: string) {
+  page.drawLine({ start: { x: PAGE.margin, y: PAGE.footerTop }, end: { x: PAGE.width - PAGE.margin, y: PAGE.footerTop }, thickness: 1, color: COLORS.line });
+  drawLeft(page, "Preview Draft — Not Approved and Not Valid for Use", PAGE.footerTop - 28, resources.latinBold, 11, COLORS.red);
+  if (!resources.letterhead) drawLeft(page, referenceCode, 21, resources.latinRegular, 7, COLORS.muted);
 }
 
 function drawContractSignatures(page: PDFPage, resources: PdfResources, referenceCode: string, clientName: string) {

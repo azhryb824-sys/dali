@@ -34,14 +34,19 @@ test("Arabic, English and Bengali share a persistent direction-aware translation
 });
 
 test("non-admin portal users choose a saved language on first login while supervisors bypass onboarding", async () => {
-  const [portal, onboarding, api, access, schema, migration] = await Promise.all([
+  const [portal, onboarding, choice, api, access, schema, migration] = await Promise.all([
     source("app/portal/page.tsx"), source("app/portal/language/page.tsx"),
+    source("app/portal/language/LanguageChoice.tsx"),
     source("app/api/portal/language/route.ts"), source("lib/portal-access.ts"),
     source("db/schema.ts"), source("drizzle-pg/0039_replace_urdu_with_bengali.sql")
   ]);
   assert.match(portal, /access\.role !== "admin" && !cookieLocale && !access\.preferredLanguage/);
   assert.match(portal, /redirect\("\/portal\/language"\)/);
   assert.match(onboarding, /access\.role==="admin"/);
+  assert.match(choice, /credentials: "same-origin"/);
+  assert.match(choice, /cache: "no-store"/);
+  assert.match(choice, /window\.location\.replace\("\/portal"\)/);
+  assert.doesNotMatch(choice, /router\.replace/);
   assert.match(api, /preferredLanguage:locale/);
   assert.match(api, /language_selected_at = \$2/);
   assert.match(api, /code!=="42703"/);

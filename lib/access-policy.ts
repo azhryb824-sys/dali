@@ -24,6 +24,8 @@ export const functionalRoleLabels = {
   hr_officer: "مسؤول الموارد البشرية",
   government_relations_officer: "سكرتير العلاقات الحكومية",
   accountant: "المحاسب",
+  sales_representative: "مندوب مبيعات",
+  purchasing_representative: "مندوب مشتريات",
   administrative_assistant: "المساعد الإداري",
   lawyer: "محامي",
   regional_manager: "مسؤول المنطقة أو المدينة",

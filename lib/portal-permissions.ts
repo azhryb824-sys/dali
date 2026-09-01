@@ -2,7 +2,7 @@ export const availableRolePermissions = [
   "overview.read", "employees.read", "employees.write", "employees.approve",
   "finance.read", "finance.write", "finance.approve", "finance.post", "finance.pay",
   "legal.read", "legal.write", "legal.approve", "government.read", "government.write",
-  "workforce.read", "workforce.write", "workforce.approve", "operations.read", "operations.write", "contracts.read", "contracts.write", "contracts.approve",
+  "workforce.read", "workforce.write", "workforce.approve", "operations.read", "operations.write", "representatives.read", "representatives.write", "contracts.read", "contracts.write", "contracts.approve",
   "construction.read", "construction.write", "construction.approve", "documents.read", "documents.preview", "documents.write", "documents.share",
   "conversations.read", "conversations.write", "website.read", "website.write", "reports.read", "reports.export",
   "video.read", "video.manage", "video.transfer",

@@ -856,7 +856,9 @@ export default function PortalDashboard({
     workforce: "workforce",
     conversations: "workforce",
   };
-  const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!) : view === "operations" || view === "representatives" ? hasPermission("operations.write") : view === "contractual-documents" ? hasPermission("contracts.write") : currentUser.role === "admin" || functionalAdmin;
+  const canAccessRepresentatives = hasPermission("representatives.read") || hasPermission("operations.read");
+  const canWriteRepresentatives = hasPermission("representatives.write") || hasPermission("operations.write");
+  const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!) : view === "representatives" ? canWriteRepresentatives : view === "operations" ? hasPermission("operations.write") : view === "contractual-documents" ? hasPermission("contracts.write") : currentUser.role === "admin" || functionalAdmin;
   const canAccessDocuments = currentUser.role === "admin" || hasPermission("documents.read") || hasPermission("assets.administer");
   const canAccessGovernment = hasPermission("government.read");
   const canAccessOperations = hasPermission("operations.read");
@@ -997,7 +999,8 @@ export default function PortalDashboard({
     if (["overview", "notifications", "tasks"].includes(next)) return true;
     if (next === "employees" || next === "finance" || next === "legal" || next === "workforce") return canAccess(next);
     if (next === "government") return canAccessGovernment;
-    if (next === "operations" || next === "representatives") return canAccessOperations;
+    if (next === "operations") return canAccessOperations;
+    if (next === "representatives") return canAccessRepresentatives;
     if (next === "workforce-supervision") return canAccessContracts && canAccess("workforce");
     if (next === "contractual-documents") return canAccessContracts;
     if (next === "documents" || next === "brand") return canAccessDocuments;
@@ -1236,7 +1239,7 @@ export default function PortalDashboard({
     setNotificationsOpen(false);
     setOperationsQuery("");
     const actionView = item.actionView as View | null;
-    if (actionView && ["overview", "notifications", "tasks", "employees", "finance", "legal", "government", "workforce", "operations", "construction", "conversations", "contractual-documents", "documents", "website", "users"].includes(actionView)) changeView(actionView);
+    if (actionView && ["overview", "notifications", "tasks", "employees", "finance", "legal", "government", "workforce", "operations", "representatives", "construction", "conversations", "contractual-documents", "documents", "website", "users"].includes(actionView)) changeView(actionView);
     if (item.entityType === "workforce-request" && item.entityId) setSelectedId(Number(item.entityId));
     if (item.entityType === "worker" && item.entityId) setSelectedWorkerId(Number(item.entityId));
     if (item.entityType === "workforce-contract" && item.entityId) setSelectedContractId(Number(item.entityId));
@@ -1978,7 +1981,7 @@ export default function PortalDashboard({
               <span>المبيعات والتشغيل</span>
             </button>
           )}
-          {canAccessOperations && (
+          {canAccessRepresentatives && (
             <button className={view === "representatives" ? "active" : ""} onClick={() => changeView("representatives")}>
               <Icon name="users" />
               <span>إدارة المناديب</span>
@@ -2395,7 +2398,7 @@ export default function PortalDashboard({
           )}
 
           {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} allowedTabs={["crm", "orders", "timesheets", "capacity", "privacy", ...(currentUser.role === "admin" || functionalAdmin ? (["clients", "integrations"] as OperationsTab[]) : [])]} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} />}
-          {view === "representatives" && canAccess("workforce") && <SalesRepresentativesWorkspace canWrite={canWrite} />}
+          {view === "representatives" && canAccessRepresentatives && <SalesRepresentativesWorkspace canWrite={canWriteRepresentatives} />}
           {view === "construction" && canAccessConstruction && <ConstructionWorkspace />}
 
           {view === "workforce-supervision" && canAccessContracts && canAccess("workforce") && <WorkforceSupervisionWorkspace contracts={contracts} professions={contractProfessions} assignments={contractAssignments} workers={workers} onOpenContract={setSelectedContractId} />}
@@ -2657,7 +2660,7 @@ function CreateUserModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: 
         };
         if (!response.ok) throw new Error(data.error || "تعذر تحميل الأدوار");
         if (active) {
-          const assignable = new Set(["system_owner", "system_admin", "hr_officer", "accountant", "government_relations_officer", "administrative_assistant", "lawyer", "workforce_supervisor"]);
+          const assignable = new Set(["system_owner", "system_admin", "hr_officer", "accountant", "government_relations_officer", "administrative_assistant", "lawyer", "workforce_supervisor", "sales_representative", "purchasing_representative"]);
           const available = (data.roles || []).filter((role) => role.active && assignable.has(role.roleKey));
           setRoles(available);
           setSelectedRoles((current) => current.filter((key) => available.some((role) => role.roleKey === key)));

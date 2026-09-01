@@ -596,6 +596,11 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "bn": "ট্যাক্সের আগে কর্মসংস্থান অনুপস্থিতি জন্য ডিসকাউন্ট: {{0}} R.S."
   },
   {
+    "source": "خصم غياب العمالة قبل الضريبة: {{0}} ر.س. {{1}}",
+    "en": "Manpower absence deduction before VAT: {{0}} SAR. {{1}}",
+    "bn": "ভ্যাটের আগে জনবল অনুপস্থিতির কর্তন: {{0}} সৌদি রিয়াল। {{1}}"
+  },
+  {
     "source": "خطوة: {{0}}",
     "en": "Step: {{0}}",
     "bn": "ধাপ: {{0}}"

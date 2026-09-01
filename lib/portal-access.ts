@@ -47,8 +47,8 @@ const functionalDepartmentAccess: Record<string, { read: Exclude<PortalDepartmen
   subcontractor: { read: ["construction"], write: [] },
   accountant: { read: ["finance"], write: ["finance"] },
   legal_affairs: { read: ["legal"], write: ["legal"] },
-  sales_representative: { read: ["workforce"], write: ["workforce"] },
-  purchasing_representative: { read: ["finance", "construction"], write: ["finance"] },
+  sales_representative: { read: [], write: [] },
+  purchasing_representative: { read: [], write: [] },
   administrative_assistant: { read: [], write: [] },
   workforce_supervisor: { read: ["workforce"], write: ["workforce"] },
 };
@@ -78,6 +78,7 @@ function fallbackPermissions(roles: string[]) {
     if (role === "government_relations_officer") { permissions.add("government.read"); permissions.add("government.write"); }
     if (role === "administrative_assistant") { ["operations.read","operations.write","contracts.read","contracts.write","documents.read","documents.write","documents.share"].forEach((permission) => permissions.add(permission)); }
     if (role === "workforce_supervisor") { ["workforce.read","workforce.write","contracts.read","contracts.write"].forEach((permission) => permissions.add(permission)); }
+    if (role === "sales_representative" || role === "purchasing_representative") { ["overview.read","representatives.read","representatives.write"].forEach((permission) => permissions.add(permission)); }
   }
   return [...permissions];
 }
