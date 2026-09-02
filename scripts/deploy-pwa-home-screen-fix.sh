@@ -135,8 +135,9 @@ smoke_pid=$!
 unset database_url
 
 smoke_ready=0
+local_setup_html=""
 for attempt in $(seq 1 60); do
-  if curl -fsS http://127.0.0.1:3101/api/health/ready >/dev/null 2>&1; then
+  if local_setup_html="$(curl -fsSL http://127.0.0.1:3101/pwa/setup 2>/dev/null)"; then
     smoke_ready=1
     break
   fi
@@ -148,7 +149,6 @@ if [[ "$smoke_ready" -ne 1 ]]; then
   exit 1
 fi
 
-local_setup_html="$(curl -fsSL http://127.0.0.1:3101/pwa/setup)"
 local_metadata_links="$(grep -oE '<link[^>]+(manifest|canonical)[^>]*>' <<<"$local_setup_html" || true)"
 printf 'PRE_SWAP_METADATA=%s\n' "$local_metadata_links"
 
