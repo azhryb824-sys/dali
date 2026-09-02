@@ -41,7 +41,7 @@ test("administrative install metadata is isolated from the public-site manifest"
   const runtime = await read("app/components/PwaRuntime.tsx");
   const [rootLayout, publicManifest, pwaLayout, proxySource, setupClient] = await Promise.all([
     read("app/layout.tsx"),
-    read("app/manifest.ts"),
+    read("app/manifest.webmanifest/route.ts"),
     read("app/pwa/layout.tsx"),
     read("proxy.ts"),
     read("app/components/PwaSetupClient.tsx"),
@@ -60,8 +60,10 @@ test("administrative install metadata is isolated from the public-site manifest"
   assert.match(proxySource, /NextResponse\.next\(\{ request: \{ headers: requestHeaders \} \}\)/);
   assert.match(setupClient, /isStandalonePwa\(\)/);
   assert.match(setupClient, /window\.location\.replace\("\/pwa\/launch"\)/);
+  assert.match(publicManifest, /export async function GET/);
   assert.match(publicManifest, /start_url:\s*"\/"/);
-  assert.doesNotMatch(publicManifest, /pwa\/launch|dali-portal-pwa/);
+  assert.doesNotMatch(publicManifest, /export default async function manifest|pwa\/launch|dali-portal-pwa/);
+  await assert.rejects(read("app/manifest.ts"), (error) => error?.code === "ENOENT");
 });
 
 test("iPhone activation keeps a non-extractable P-256 private key on the device", async () => {

@@ -3,9 +3,9 @@ import { getWebsiteContent } from "@/lib/website-content";
 
 export const dynamic = "force-dynamic";
 
-export default async function manifest(): Promise<MetadataRoute.Manifest> {
+export async function GET() {
   const content = await getWebsiteContent();
-  return {
+  const manifest: MetadataRoute.Manifest = {
     name: content.site.companyName,
     short_name: content.site.shortName,
     description: content.site.description,
@@ -17,4 +17,11 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     dir: "rtl",
     icons: [{ src: "/dally-logo.jpg", sizes: "any", type: "image/jpeg", purpose: "any" }],
   };
+
+  return Response.json(manifest, {
+    headers: {
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-type": "application/manifest+json; charset=utf-8",
+    },
+  });
 }
