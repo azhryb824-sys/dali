@@ -7,7 +7,12 @@
   --login-muted: #687981;
   --login-line: #dce5e9;
   min-height: 100vh;
-  padding: 28px;
+  min-height: 100dvh;
+  padding:
+    max(28px, env(safe-area-inset-top))
+    max(28px, env(safe-area-inset-right))
+    max(28px, env(safe-area-inset-bottom))
+    max(28px, env(safe-area-inset-left));
   display: grid;
   place-items: center;
   overflow-x: hidden;

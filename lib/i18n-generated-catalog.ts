@@ -17491,5 +17491,269 @@ export const generatedUiTranslations: Record<string,{en?:string;bn?:string}> = {
   "يوم واحد": {
     "en": "One Day",
     "bn": "এক দিন"
+  },
+  "اختر «إضافة إلى الشاشة الرئيسية» ثم اضغط «إضافة».": {
+    "en": "Choose ‘Add to Home Screen’, then tap ‘Add’.",
+    "bn": "‘হোম স্ক্রিনে যোগ করুন’ নির্বাচন করে ‘যোগ করুন’ চাপুন।"
+  },
+  "أدخل الرمز المؤقت الصادر من المالك أو مشرف النظام. لن تُفتح صفحة تسجيل الدخول قبل التحقق من مفتاح هذا الجهاز.": {
+    "en": "Enter the temporary code issued by the owner or system administrator. The login page will not open until this device key is verified.",
+    "bn": "মালিক বা সিস্টেম অ্যাডমিনের দেওয়া অস্থায়ী কোড লিখুন। এই ডিভাইসের কী যাচাই না হওয়া পর্যন্ত লগইন পৃষ্ঠা খুলবে না।"
+  },
+  "اسم الجهاز": {
+    "en": "Device name",
+    "bn": "ডিভাইসের নাম"
+  },
+  "إضافة نظام دالي إلى iPhone": {
+    "en": "Add Dally System to iPhone",
+    "bn": "iPhone-এ ডালি সিস্টেম যোগ করুন"
+  },
+  "اعتماد الجهاز والدخول": {
+    "en": "Approve device and continue",
+    "bn": "ডিভাইস অনুমোদন করে প্রবেশ করুন"
+  },
+  "اعتماد جهاز جديد": {
+    "en": "Approve a new device",
+    "bn": "নতুন ডিভাইস অনুমোদন"
+  },
+  "افتح التطبيق من الشاشة الرئيسية": {
+    "en": "Open the app from the Home Screen",
+    "bn": "হোম স্ক্রিন থেকে অ্যাপ খুলুন"
+  },
+  "افتح أيقونة نظام دالي الجديدة وأدخل رمز التفعيل عند طلبه.": {
+    "en": "Open the new Dally System icon and enter the activation code when prompted.",
+    "bn": "ডালি সিস্টেমের নতুন আইকন খুলুন এবং চাওয়া হলে সক্রিয়করণ কোড লিখুন।"
+  },
+  "افتح رابط التثبيت الذي أصدره المالك أو مشرف النظام.": {
+    "en": "Open the installation link issued by the owner or system administrator.",
+    "bn": "মালিক বা সিস্টেম অ্যাডমিনের দেওয়া ইনস্টলেশন লিংক খুলুন।"
+  },
+  "افتح هذه الصفحة في Safari واضغط زر المشاركة.": {
+    "en": "Open this page in Safari and tap the Share button.",
+    "bn": "Safari-তে এই পৃষ্ঠা খুলে শেয়ার বোতাম চাপুন।"
+  },
+  "أُلغي اعتماد هذا الجهاز. اطلب رمز تفعيل جديداً من المالك أو مشرف النظام.": {
+    "en": "This device approval was revoked. Request a new activation code from the owner or system administrator.",
+    "bn": "এই ডিভাইসের অনুমোদন বাতিল করা হয়েছে। মালিক বা সিস্টেম অ্যাডমিনের কাছে নতুন সক্রিয়করণ কোড চান।"
+  },
+  "أيقونة نظام دالي": {
+    "en": "Dally System icon",
+    "bn": "ডালি সিস্টেম আইকন"
+  },
+  "تثبيت خاص بجهاز معتمد": {
+    "en": "Installation for an approved device",
+    "bn": "অনুমোদিত ডিভাইসের জন্য ইনস্টলেশন"
+  },
+  "تثبيت واعتماد نسخة iPhone الخاصة من نظام دالي الإداري.": {
+    "en": "Install and approve the private iPhone version of the Dally administrative system.",
+    "bn": "ডালি প্রশাসনিক সিস্টেমের ব্যক্তিগত iPhone সংস্করণ ইনস্টল ও অনুমোদন করুন।"
+  },
+  "تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.": {
+    "en": "Could not connect to the server. Check your internet connection and try again.",
+    "bn": "সার্ভারের সঙ্গে সংযোগ করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"
+  },
+  "تعذّر إنشاء جلسة الجهاز": {
+    "en": "Could not create the device session",
+    "bn": "ডিভাইস সেশন তৈরি করা যায়নি"
+  },
+  "تعذّر تفعيل الجهاز": {
+    "en": "Could not activate the device",
+    "bn": "ডিভাইস সক্রিয় করা যায়নি"
+  },
+  "تفعيل نظام دالي": {
+    "en": "Activate Dally System",
+    "bn": "ডালি সিস্টেম সক্রিয় করুন"
+  },
+  "تم التحقق من اعتماد جهاز iPhone. أدخل بيانات حسابك لإكمال تسجيل الدخول.": {
+    "en": "iPhone device approval verified. Enter your account details to complete login.",
+    "bn": "iPhone ডিভাইসের অনুমোদন যাচাই হয়েছে। লগইন সম্পন্ন করতে আপনার অ্যাকাউন্টের তথ্য লিখুন।"
+  },
+  "تم النسخ": {
+    "en": "Copied",
+    "bn": "কপি হয়েছে"
+  },
+  "تنتهي صلاحية الرمز بعد المدة المحددة في تطبيق الإدارة.": {
+    "en": "The code expires after the period shown in the administration app.",
+    "bn": "প্রশাসনিক অ্যাপে দেখানো সময়ের পর কোডটির মেয়াদ শেষ হবে।"
+  },
+  "جارٍ اعتماد الجهاز...": {
+    "en": "Approving device...",
+    "bn": "ডিভাইস অনুমোদন করা হচ্ছে..."
+  },
+  "جارٍ التحقق من اعتماد الجهاز...": {
+    "en": "Verifying device approval...",
+    "bn": "ডিভাইসের অনুমোদন যাচাই করা হচ্ছে..."
+  },
+  "رمز التفعيل": {
+    "en": "Activation code",
+    "bn": "সক্রিয়করণ কোড"
+  },
+  "رمز تفعيل لمرة واحدة": {
+    "en": "One-time activation code",
+    "bn": "একবার ব্যবহারযোগ্য সক্রিয়করণ কোড"
+  },
+  "عرض تعليمات التثبيت": {
+    "en": "View installation instructions",
+    "bn": "ইনস্টলেশনের নির্দেশনা দেখুন"
+  },
+  "كل مستخدم سيظل مطالباً برقم هويته وكلمة مروره وصلاحيات حسابه المعتادة.": {
+    "en": "Every user must still provide their ID number and password and will retain their normal account permissions.",
+    "bn": "প্রত্যেক ব্যবহারকারীকে এখনও পরিচয় নম্বর ও পাসওয়ার্ড দিতে হবে এবং তার স্বাভাবিক অ্যাকাউন্ট অনুমতিই কার্যকর থাকবে।"
+  },
+  "لا تعرض هذه الصفحة تسجيل الدخول ولا تمنح أي صلاحية قبل اعتماد مفتاح الجهاز.": {
+    "en": "This page does not show login or grant any access before the device key is approved.",
+    "bn": "ডিভাইসের কী অনুমোদনের আগে এই পৃষ্ঠা লগইন দেখায় না বা কোনো প্রবেশাধিকার দেয় না।"
+  },
+  "نسخ الرمز": {
+    "en": "Copy code",
+    "bn": "কোড কপি করুন"
+  },
+  "نظام دالي | تثبيت iPhone": {
+    "en": "Dally System | iPhone Installation",
+    "bn": "ডালি সিস্টেম | iPhone ইনস্টলেশন"
+  },
+  "هذه الصفحة لا تفتح النظام داخل Safari. أضف نظام دالي إلى الشاشة الرئيسية أولاً ثم افتح الأيقونة الجديدة.": {
+    "en": "This page does not open the system inside Safari. First add Dally System to the Home Screen, then open the new icon.",
+    "bn": "এই পৃষ্ঠা Safari-র ভেতরে সিস্টেম খোলে না। প্রথমে ডালি সিস্টেম হোম স্ক্রিনে যোগ করুন, তারপর নতুন আইকন খুলুন।"
+  },
+  "iPad دالي": {
+    "en": "Dally iPad",
+    "bn": "ডালি iPad"
+  },
+  "iPhone دالي": {
+    "en": "Dally iPhone",
+    "bn": "ডালি iPhone"
+  },
+  "· أضيف": {
+    "en": "· Added",
+    "bn": "· যোগ করা হয়েছে"
+  },
+  "آخر تحقق:": {
+    "en": "Last verification:",
+    "bn": "সর্বশেষ যাচাই:"
+  },
+  "إرسال عبر واتساب": {
+    "en": "Send via WhatsApp",
+    "bn": "WhatsApp-এ পাঠান"
+  },
+  "إصدار رمز تثبيت مؤقت": {
+    "en": "Issue temporary installation code",
+    "bn": "অস্থায়ী ইনস্টলেশন কোড দিন"
+  },
+  "اكتب سبب الإلغاء بوضوح": {
+    "en": "Clearly state the revocation reason",
+    "bn": "বাতিলের কারণ স্পষ্টভাবে লিখুন"
+  },
+  "الأجهزة المعتمدة لنسخة PWA": {
+    "en": "Devices approved for the PWA",
+    "bn": "PWA-র জন্য অনুমোদিত ডিভাইস"
+  },
+  "إلغاء اعتماد الجهاز": {
+    "en": "Revoke device approval",
+    "bn": "ডিভাইসের অনুমোদন বাতিল করুন"
+  },
+  "إلغاء الجهاز": {
+    "en": "Revoke device",
+    "bn": "ডিভাইস বাতিল করুন"
+  },
+  "إلغاء الرمز": {
+    "en": "Cancel code",
+    "bn": "কোড বাতিল করুন"
+  },
+  "إلغاء رمز التفعيل قبل استخدامه": {
+    "en": "Cancel the activation code before it is used",
+    "bn": "ব্যবহারের আগে সক্রিয়করণ কোড বাতিল করুন"
+  },
+  "أُلغي اعتماد الجهاز، ولن يستطيع تجديد تصريح الدخول.": {
+    "en": "Device approval was revoked and it can no longer renew its access permit.",
+    "bn": "ডিভাইসের অনুমোদন বাতিল হয়েছে এবং এটি আর প্রবেশের অনুমতি নবায়ন করতে পারবে না।"
+  },
+  "أُلغي رمز التفعيل غير المستخدم.": {
+    "en": "The unused activation code was cancelled.",
+    "bn": "অব্যবহৃত সক্রিয়করণ কোড বাতিল করা হয়েছে।"
+  },
+  "المتصفح العام يبقى محظوراً. كل جهاز يحتاج رمزاً مؤقتاً ومفتاح تشفير مستقلًا يمكن إلغاؤه من هنا.": {
+    "en": "Public browser access remains blocked. Every device needs a temporary code and an independent cryptographic key that can be revoked here.",
+    "bn": "সাধারণ ব্রাউজার থেকে প্রবেশ বন্ধ থাকবে। প্রতিটি ডিভাইসের জন্য একটি অস্থায়ী কোড ও স্বতন্ত্র ক্রিপ্টোগ্রাফিক কী প্রয়োজন, যা এখান থেকে বাতিল করা যায়।"
+  },
+  "تأكيد الإلغاء": {
+    "en": "Confirm revocation",
+    "bn": "বাতিল নিশ্চিত করুন"
+  },
+  "تراجع": {
+    "en": "Go back",
+    "bn": "ফিরে যান"
+  },
+  "تعذّر إصدار رمز التفعيل": {
+    "en": "Could not issue the activation code",
+    "bn": "সক্রিয়করণ কোড দেওয়া যায়নি"
+  },
+  "تعذّر إلغاء الجهاز": {
+    "en": "Could not revoke the device",
+    "bn": "ডিভাইস বাতিল করা যায়নি"
+  },
+  "تعذّر إلغاء الرمز": {
+    "en": "Could not cancel the code",
+    "bn": "কোড বাতিল করা যায়নি"
+  },
+  "تعذّر تحميل الأجهزة": {
+    "en": "Could not load devices",
+    "bn": "ডিভাইসগুলো লোড করা যায়নি"
+  },
+  "تم إصدار رمز تفعيل لمرة واحدة. أرسله إلى iPhone خلال عشرين دقيقة.": {
+    "en": "A one-time activation code was issued. Send it to the iPhone within twenty minutes.",
+    "bn": "একবার ব্যবহারযোগ্য সক্রিয়করণ কোড দেওয়া হয়েছে। বিশ মিনিটের মধ্যে এটি iPhone-এ পাঠান।"
+  },
+  "تم نسخ رابط تثبيت iPhone.": {
+    "en": "iPhone installation link copied.",
+    "bn": "iPhone ইনস্টলেশন লিংক কপি হয়েছে।"
+  },
+  "تم نسخ رمز التفعيل.": {
+    "en": "Activation code copied.",
+    "bn": "সক্রিয়করণ কোড কপি হয়েছে।"
+  },
+  "جارٍ إصدار الرمز...": {
+    "en": "Issuing code...",
+    "bn": "কোড দেওয়া হচ্ছে..."
+  },
+  "جهاز نشط": {
+    "en": "Active device",
+    "bn": "সক্রিয় ডিভাইস"
+  },
+  "دخول iPhone وiPad": {
+    "en": "iPhone and iPad access",
+    "bn": "iPhone ও iPad প্রবেশাধিকার"
+  },
+  "رموز لم تُستخدم بعد": {
+    "en": "Unused codes",
+    "bn": "এখনও ব্যবহার না করা কোড"
+  },
+  "سيتوقف الجهاز عن تجديد تصريح الدخول خلال خمس دقائق كحد أقصى.": {
+    "en": "The device will stop renewing its access permit within five minutes at most.",
+    "bn": "সর্বোচ্চ পাঁচ মিনিটের মধ্যে ডিভাইসটি প্রবেশের অনুমতি নবায়ন করা বন্ধ করবে।"
+  },
+  "لم يُعتمد أي جهاز iPhone أو iPad بعد.": {
+    "en": "No iPhone or iPad has been approved yet.",
+    "bn": "এখনও কোনো iPhone বা iPad অনুমোদিত হয়নি।"
+  },
+  "مثال: iPhone المدير": {
+    "en": "Example: Manager's iPhone",
+    "bn": "উদাহরণ: ব্যবস্থাপকের iPhone"
+  },
+  "نسخ رابط التثبيت": {
+    "en": "Copy installation link",
+    "bn": "ইনস্টলেশন লিংক কপি করুন"
+  },
+  "ينتهي": {
+    "en": "Expires",
+    "bn": "মেয়াদ শেষ হবে"
+  },
+  "ينتهي:": {
+    "en": "Expires:",
+    "bn": "মেয়াদ শেষ:"
+  },
+  "iPhone الإدارة": {
+    "en": "Administration iPhone",
+    "bn": "প্রশাসনের iPhone"
   }
 };

@@ -49,12 +49,23 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       { source: "/portal/:path*", headers: protectedNoStoreHeaders },
       { source: "/api/portal/:path*", headers: protectedNoStoreHeaders },
+      { source: "/pwa/:path*", headers: protectedNoStoreHeaders },
+      { source: "/api/pwa/:path*", headers: protectedNoStoreHeaders },
       { source: "/login", headers: protectedNoStoreHeaders },
       { source: "/api/auth/:path*", headers: protectedNoStoreHeaders },
       { source: "/client/:path*", headers: protectedNoStoreHeaders },
       { source: "/api/client/:path*", headers: protectedNoStoreHeaders },
       { source: "/worker/:path*", headers: protectedNoStoreHeaders },
       { source: "/api/worker/:path*", headers: protectedNoStoreHeaders },
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      { source: "/manifest.webmanifest", headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }] },
+      { source: "/offline.html", headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }] },
     ];
   },
 };

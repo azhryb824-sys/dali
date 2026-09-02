@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -19,14 +20,22 @@ const contentSecurityPolicy = [
   "upgrade-insecure-requests",
 ].join("; ");
 
-const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|desktop-access(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
+const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|pwa(?:\/|$)|desktop-access(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
 const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|desktop-access(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
 const desktopMarker = "dali-desktop-v1";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const emergencyBrowserAccess = process.env.DALI_ALLOW_BROWSER_PORTAL === "true";
   const desktopRequest = request.headers.get("x-dali-desktop-app") === desktopMarker;
-  if (desktopOnlyPath.test(request.nextUrl.pathname) && !desktopRequest && !emergencyBrowserAccess) {
+  let trustedPwaRequest = false;
+  if (desktopOnlyPath.test(request.nextUrl.pathname) && !desktopRequest) {
+    try {
+      trustedPwaRequest = Boolean(await pwaAccessFromCookieHeader(request.headers.get("cookie")));
+    } catch {
+      trustedPwaRequest = false;
+    }
+  }
+  if (desktopOnlyPath.test(request.nextUrl.pathname) && !desktopRequest && !trustedPwaRequest && !emergencyBrowserAccess) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "النظام الإداري متاح عبر تطبيق دالي المعتمد فقط" }, { status: 403 });
     }

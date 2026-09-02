@@ -1,4 +1,5 @@
 export const publicUiTranslations = {
+  "نظام دالي": { en: "Dally System", bn: "ডালি সিস্টেম" },
   "عن الشركة": { en: "About the company", ur: "کمپنی کے بارے میں" },
   "طلب عرض سعر": { en: "Request a quotation", ur: "قیمت کی پیشکش طلب کریں" },
   "طلب توظيف": { en: "Job application", ur: "ملازمت کی درخواست" },

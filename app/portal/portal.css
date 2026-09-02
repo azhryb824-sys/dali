@@ -243,3 +243,55 @@ body:has(.modal-layer) .video-desk{visibility:hidden;pointer-events:none}
 .hr-general-only .hr-forms details:not(:nth-child(3)),.hr-general-only .hr-people-grid>article:first-child,.hr-general-only .employee-document-library,.hr-general-only .hr-grid>section:nth-child(2){display:none}.hr-general-only .hr-people-grid{grid-template-columns:1fr}.hr-general-only .hr-grid{grid-template-columns:1fr}.employee-profile-workspace{display:grid;gap:13px;padding-top:15px;border-top:1px solid #dce5e8}.employee-profile-workspace>nav{display:flex;gap:7px;flex-wrap:wrap;padding:4px;border-radius:11px;background:#edf3f5}.employee-profile-workspace>nav button{flex:1;min-width:120px;border:0;border-radius:8px;background:transparent;color:#60747d;padding:9px;font:inherit;font-weight:800;cursor:pointer}.employee-profile-workspace>nav button.active{background:#fff;color:var(--admin-navy);box-shadow:0 3px 10px rgba(0,29,45,.08)}.employee-related-summary{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}.employee-related-summary article{display:grid;gap:5px;padding:13px;border:1px solid #dde7ea;border-radius:11px;background:#fff;text-align:center}.employee-related-summary span{color:#70828a;font-size:11px}.employee-related-summary b{color:var(--admin-navy);font-size:19px}.employee-profile-section{display:grid;gap:12px}.employee-inline-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;padding:13px;border:1px solid #dbe5e8;border-radius:12px;background:#f5f9fa}.employee-inline-form input,.employee-inline-form select{min-height:41px;border:1px solid #cfdbdf;border-radius:8px;background:#fff;padding:8px 10px;font:inherit}.employee-inline-form button{min-height:41px;border:0;border-radius:8px;background:var(--admin-navy);color:#fff;font:inherit;font-weight:800;cursor:pointer}.employee-related-list{display:grid;gap:8px}.employee-related-list>article{display:grid;grid-template-columns:minmax(150px,1fr) 2fr auto;align-items:center;gap:12px;padding:12px 13px;border:1px solid #dfe7ea;border-radius:10px;background:#fff}.employee-related-list>article>div{display:grid;gap:3px}.employee-related-list small{color:#7a8a91}.employee-related-list span{color:#526973}.employee-related-list b{color:var(--admin-navy)}.employee-related-list a{color:var(--admin-navy);font-weight:800}.employee-related-list>p{margin:0;padding:22px;text-align:center;color:#76878e;background:#fff;border:1px dashed #cfdbdf;border-radius:10px}
 @media(max-width:900px){.employee-related-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.employee-inline-form{grid-template-columns:1fr 1fr}}@media(max-width:620px){.employee-related-summary,.employee-inline-form{grid-template-columns:1fr 1fr}.employee-related-list>article{grid-template-columns:1fr}.employee-profile-workspace>nav button{min-width:calc(50% - 7px)}}@media(max-width:430px){.employee-related-summary,.employee-inline-form{grid-template-columns:1fr}}
 .employee-leave-head{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.employee-leave-head>div{display:grid;gap:5px;padding:14px;border:1px solid #dce6e9;border-radius:11px;background:linear-gradient(145deg,#fff,#f3f8f9)}.employee-leave-head span{color:#70828a;font-size:11px}.employee-leave-head strong{color:var(--admin-navy);font-size:20px}.employee-leave-head small{color:#788991;line-height:1.6}.employee-leave-form{grid-template-columns:1fr 1fr 1fr 2fr auto}.employee-leave-history article.leave-approved{border-right:4px solid #3b9b69}.employee-leave-history article.leave-pending{border-right:4px solid #d39a36}.employee-leave-history article.leave-rejected{border-right:4px solid #be4b51}@media(max-width:780px){.employee-leave-head{grid-template-columns:1fr}.employee-leave-form{grid-template-columns:1fr 1fr}}@media(max-width:480px){.employee-leave-form{grid-template-columns:1fr}}
+
+/* مساحات iPhone الآمنة عند تشغيل البوابة كتطبيق PWA مستقل. */
+@media (display-mode: standalone) {
+  .admin-shell,
+  .admin-workspace,
+  .portal-gate {
+    min-height: 100dvh;
+  }
+
+  .admin-sidebar {
+    padding-top: max(28px, env(safe-area-inset-top));
+    padding-bottom: max(22px, env(safe-area-inset-bottom));
+  }
+
+  .admin-topbar {
+    height: calc(84px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .portal-gate {
+    padding:
+      max(24px, env(safe-area-inset-top))
+      max(24px, env(safe-area-inset-right))
+      max(24px, env(safe-area-inset-bottom))
+      max(24px, env(safe-area-inset-left));
+  }
+
+  .admin-shell > .portal-language-switcher,
+  .video-desk {
+    bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (display-mode: standalone) and (max-width: 760px) {
+  .admin-topbar {
+    height: auto;
+    min-height: calc(68px + env(safe-area-inset-top));
+    padding-top: calc(10px + env(safe-area-inset-top));
+  }
+}
+
+@media (display-mode: standalone) and (max-width: 650px) {
+  .admin-shell > .portal-language-switcher {
+    bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .video-desk {
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}
+
+.pwa-device-manager{overflow:hidden}.pwa-device-manager>header{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:22px 24px;border-bottom:1px solid var(--admin-border)}.pwa-device-manager>header span{color:var(--admin-gold);font-size:11px;font-weight:700}.pwa-device-manager>header h2{margin:4px 0;color:var(--admin-navy);font-size:18px}.pwa-device-manager>header p{margin:0;color:#718089;font-size:12px;line-height:1.7}.pwa-device-manager>header>strong{display:grid;place-items:center;min-width:78px;color:var(--admin-navy);font-size:27px}.pwa-device-manager>header>strong small{font-size:9px;color:#788891}.pwa-enrollment-form{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:12px;align-items:end;padding:20px 24px;background:#f8fafb;border-bottom:1px solid var(--admin-border)}.pwa-enrollment-form label{display:grid;gap:6px;color:#657780;font-size:10px}.pwa-enrollment-form input{height:42px;border:1px solid var(--admin-border);border-radius:8px;padding:0 12px;background:#fff;color:var(--admin-navy);font:500 12px Tajawal,sans-serif}.pwa-enrollment-form button,.pwa-issued-enrollment button,.pwa-issued-enrollment a,.pwa-pending-list button{min-height:40px;border:0;border-radius:7px;padding:0 15px;background:var(--admin-navy);color:#fff;font:700 10px Tajawal,sans-serif;display:grid;place-items:center;text-decoration:none;cursor:pointer}.pwa-issued-enrollment{display:grid;grid-template-columns:minmax(220px,1fr) repeat(3,auto);gap:10px;align-items:center;padding:17px 24px;background:#eef7f8;border-bottom:1px solid #cee5e8}.pwa-issued-enrollment>div{display:grid;gap:2px}.pwa-issued-enrollment span,.pwa-issued-enrollment small{color:#647881;font-size:9px}.pwa-issued-enrollment strong{color:var(--admin-navy);font:700 17px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:1px}.pwa-issued-enrollment a{background:#167c58}.pwa-pending-list{padding:18px 24px;border-bottom:1px solid var(--admin-border)}.pwa-pending-list h3{margin:0 0 10px;color:var(--admin-navy);font-size:13px}.pwa-pending-list article{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #edf1f2}.pwa-pending-list article>div{display:grid}.pwa-pending-list strong{font-size:11px;color:#314752}.pwa-pending-list small{font-size:9px;color:#7f8e95}.pwa-pending-list button{min-height:32px;background:#8d6320}.pwa-device-list{display:grid}.pwa-device-list>article{display:grid;grid-template-columns:42px minmax(180px,1fr) auto auto;gap:14px;align-items:center;padding:16px 24px;border-bottom:1px solid var(--admin-border)}.pwa-device-list>article.revoked{opacity:.62;background:#faf8f7}.pwa-device-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:10px;background:#e9f3f5;color:#006f83;font-size:26px}.pwa-device-list article>div:nth-child(2){display:grid;gap:2px}.pwa-device-list strong{color:#263d49;font-size:12px}.pwa-device-list small{color:#7b8b93;font-size:9px}.pwa-device-list em{color:#974939;font-size:9px;font-style:normal}.pwa-device-list button{min-height:34px;border:1px solid #e3b9b1;border-radius:7px;background:#fff;color:#9a3d2c;padding:0 12px;font:700 9px Tajawal,sans-serif;cursor:pointer}.pwa-revoke-form{margin:18px 24px;padding:18px;border:1px solid #e3b9b1;border-radius:10px;background:#fff8f6;display:grid;gap:12px}.pwa-revoke-form>div:first-child{display:grid}.pwa-revoke-form strong{color:#7e3024;font-size:13px}.pwa-revoke-form small{color:#926a63;font-size:10px}.pwa-revoke-form textarea{min-height:78px;border:1px solid #d8b5ae;border-radius:8px;padding:10px;font:500 11px Tajawal,sans-serif;resize:vertical}.pwa-revoke-form>div:last-child{display:flex;justify-content:flex-end;gap:9px}.pwa-revoke-form button{min-height:36px;border:1px solid var(--admin-border);border-radius:7px;background:#fff;padding:0 14px;font:700 10px Tajawal,sans-serif}.pwa-revoke-form button.danger-action{background:#8e3528;color:#fff;border-color:#8e3528}@media(max-width:780px){.pwa-issued-enrollment{grid-template-columns:1fr 1fr}.pwa-issued-enrollment>div{grid-column:1/-1}.pwa-device-list>article{grid-template-columns:42px 1fr}.pwa-device-list>article>span,.pwa-device-list>article>button{justify-self:start}.pwa-enrollment-form{grid-template-columns:1fr}.pwa-device-manager>header{padding:18px}.pwa-enrollment-form,.pwa-issued-enrollment,.pwa-pending-list,.pwa-device-list>article{padding-left:18px;padding-right:18px}}

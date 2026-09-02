@@ -1686,6 +1686,92 @@ export const desktopSyncOperations = pgTable(
   ],
 );
 
+export const pwaDevices = pgTable(
+  "pwa_devices",
+  {
+    id: text("id").primaryKey(),
+    deviceName: text("device_name").notNull(),
+    platform: text("platform").notNull().default("ios-pwa"),
+    publicKeyJwk: text("public_key_jwk").notNull(),
+    status: text("status").notNull().default("active"),
+    enrolledBy: text("enrolled_by")
+      .notNull()
+      .references(() => portalUsers.email, { onDelete: "restrict" }),
+    enrolledAt: text("enrolled_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    lastSeenAt: text("last_seen_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    lastSourceHash: text("last_source_hash"),
+    revokedAt: text("revoked_at"),
+    revokedBy: text("revoked_by").references(() => portalUsers.email, {
+      onDelete: "set null",
+    }),
+    revocationReason: text("revocation_reason"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("pwa_devices_status_last_seen_idx").on(table.status, table.lastSeenAt),
+    index("pwa_devices_enrolled_by_idx").on(table.enrolledBy, table.status),
+    check(
+      "pwa_devices_status_check",
+      sql`${table.status} in ('active','revoked')`,
+    ),
+    check(
+      "pwa_devices_platform_check",
+      sql`${table.platform} in ('ios-pwa','ipad-pwa')`,
+    ),
+  ],
+);
+
+export const pwaEnrollmentTokens = pgTable(
+  "pwa_enrollment_tokens",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    deviceName: text("device_name").notNull(),
+    issuedBy: text("issued_by")
+      .notNull()
+      .references(() => portalUsers.email, { onDelete: "restrict" }),
+    expiresAt: text("expires_at").notNull(),
+    consumedAt: text("consumed_at"),
+    consumedDeviceId: text("consumed_device_id"),
+    revokedAt: text("revoked_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("pwa_enrollment_tokens_expiry_idx").on(table.expiresAt),
+    index("pwa_enrollment_tokens_issuer_idx").on(table.issuedBy, table.createdAt),
+  ],
+);
+
+export const pwaDeviceChallenges = pgTable(
+  "pwa_device_challenges",
+  {
+    id: text("id").primaryKey(),
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => pwaDevices.id, { onDelete: "cascade" }),
+    nonce: text("nonce").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("pwa_device_challenges_device_expiry_idx").on(table.deviceId, table.expiresAt),
+  ],
+);
+
 export const complianceObligations = pgTable(
   "compliance_obligations",
   {

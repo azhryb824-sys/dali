@@ -904,5 +904,10 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "مرفوعة على الشركة · {{0}}",
     "en": "Against the Company · {{0}}",
     "bn": "কোম্পানির বিরুদ্ধে · {{0}}"
+  },
+  {
+    "source": "تثبيت نظام دالي الخاص: {{0}} رمز التفعيل: {{1}}",
+    "en": "Private Dally System installation: {{0}} Activation code: {{1}}",
+    "bn": "ব্যক্তিগত ডালি সিস্টেম ইনস্টলেশন: {{0}} সক্রিয়করণ কোড: {{1}}"
   }
 ];

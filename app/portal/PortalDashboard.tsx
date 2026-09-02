@@ -23,6 +23,7 @@ import BankReconciliationWorkspace from "./BankReconciliationWorkspace";
 import ConstructionWorkspace from "./ConstructionWorkspace";
 import AccessScopeManager from "./AccessScopeManager";
 import RoleDefinitionManager from "./RoleDefinitionManager";
+import PwaDeviceManager from "./PwaDeviceManager";
 import SalesRepresentativesWorkspace from "./SalesRepresentativesWorkspace";
 import ContractCancellationDialog from "./ContractCancellationDialog";
 import LegalCaseWorkspace from "./LegalCaseWorkspace";
@@ -2455,6 +2456,7 @@ export default function PortalDashboard({
                   ))}
                 </div>
               </section>
+              <PwaDeviceManager />
               <RoleDefinitionManager />
               <AccessScopeManager currentEmail={currentUser.email} />
             </ModuleSection>

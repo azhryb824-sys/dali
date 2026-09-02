@@ -1,9 +1,11 @@
 import { eq } from "drizzle-orm";
 import { getDb, getSqlClient } from "@/db";
-import { passwordResetTokens, portalAuthCredentials } from "@/db/schema";
+import { passwordResetTokens, portalAuthCredentials, pwaDevices } from "@/db/schema";
 import { createIdentityToken, identityCookie, sha256, verifyPasswordHash } from "@/lib/credential-auth";
+import { DESKTOP_APP_HEADER, DESKTOP_APP_MARKER } from "@/lib/desktop-entry";
 import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-error";
 import { getPortalAdminConfig, normalizePortalEmail, normalizePortalIdentifier } from "@/lib/portal-auth-config";
+import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
 import { externalRequestUrl } from "@/lib/request-origin";
 import { enforcePublicRateLimit, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
 
@@ -12,6 +14,16 @@ function safePortalReturnPath(value: string) {
 }
 
 type LoginCredential = { identifier: string; email: string; displayName: string; passwordHash: string; mustChangePassword: boolean };
+
+async function hasAuthorizedApplicationEntry(request: Request) {
+  if (request.headers.get(DESKTOP_APP_HEADER) === DESKTOP_APP_MARKER) return true;
+  if (process.env.DALI_ALLOW_BROWSER_PORTAL === "true") return true;
+  const access = await pwaAccessFromCookieHeader(request.headers.get("cookie"));
+  if (!access) return false;
+  const [device] = await getDb().select({ status: pwaDevices.status }).from(pwaDevices).where(eq(pwaDevices.id, access.deviceId)).limit(1);
+  return device?.status === "active";
+}
+
 async function readLoginCredential(identifier: string): Promise<LoginCredential | null> {
   try {
     const [stored] = await getDb().select({ identifier: portalAuthCredentials.identifier, email: portalAuthCredentials.email, displayName: portalAuthCredentials.displayName, passwordHash: portalAuthCredentials.passwordHash, mustChangePassword: portalAuthCredentials.mustChangePassword }).from(portalAuthCredentials).where(eq(portalAuthCredentials.identifier, identifier)).limit(1);
@@ -49,6 +61,12 @@ export async function POST(request: Request) {
   try {
     if (rejectCrossSiteRequest(request)) {
       return new Response(null, { status: 403, headers: { "cache-control": "no-store", "x-request-id": correlationId } });
+    }
+    if (!await hasAuthorizedApplicationEntry(request)) {
+      return new Response("النظام الإداري متاح عبر تطبيق دالي المعتمد فقط", {
+        status: 403,
+        headers: { "cache-control": "no-store", "content-type": "text/plain; charset=utf-8", "x-request-id": correlationId },
+      });
     }
 
     const form = await request.formData();

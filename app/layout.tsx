@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@fontsource/tajawal/400.css";
 import "@fontsource/tajawal/500.css";
 import "@fontsource/tajawal/700.css";
@@ -14,6 +14,13 @@ import { localeCookieName, localeDirection, normalizeAppLocale } from "@/lib/i18
 
 export const dynamic = "force-dynamic";
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#001d2d",
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   const content = await getWebsiteContent();
   const keywords = content.seo.focusKeywords.split(/[،,]/).map((item) => item.trim()).filter(Boolean).slice(0, 24);
@@ -25,6 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
     alternates: { canonical: "/", languages: { "ar-SA": "/" } },
     applicationName: content.site.companyName,
     category: "business",
+    formatDetection: { telephone: false },
     icons: {
       icon: [{ url: "/dally-logo.jpg", type: "image/jpeg" }],
       shortcut: "/dally-logo.jpg",

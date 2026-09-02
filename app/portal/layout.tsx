@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PwaAccessRuntime } from "@/app/components/PwaAccessRuntime";
 import "./portal.css";
 import "./contract-workflow.css";
 import "./approval-actions.css";
@@ -20,10 +21,14 @@ export const metadata: Metadata = {
   title: { absolute: "النظام الإداري | شركة دالي للتشغيل والصيانة" },
   description: "النظام الإداري الداخلي لشركة دالي للتشغيل والصيانة.",
   applicationName: "نظام دالي الإداري",
-  icons: { icon: [{ url: "/dally-logo.jpg", type: "image/jpeg" }], shortcut: "/dally-logo.jpg", apple: "/dally-logo.jpg" },
+  icons: {
+    icon: [{ url: "/dally-logo.jpg", type: "image/jpeg" }],
+    shortcut: "/dally-logo.jpg",
+    apple: [{ url: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   robots: { index: false, follow: false, nocache: true },
 };
 
 export default function PortalLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return children;
+  return <><PwaAccessRuntime />{children}</>;
 }
