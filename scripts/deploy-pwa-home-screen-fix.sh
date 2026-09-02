@@ -46,11 +46,22 @@ failed="$repo/.next.failed-pwa-home-fix-$stamp"
 swapped=0
 deployed=0
 health=""
+stage="initializing"
+smoke_pid=""
 
 finish() {
   exit_code=$?
   trap - EXIT
   set +e
+
+  if [[ -n "$smoke_pid" ]]; then
+    kill "$smoke_pid" >/dev/null 2>&1 || true
+    wait "$smoke_pid" >/dev/null 2>&1 || true
+  fi
+
+  if [[ "$exit_code" -ne 0 ]]; then
+    echo "FAILED_STAGE=$stage" >&2
+  fi
 
   if [[ "$exit_code" -ne 0 && "$swapped" -eq 1 && "$deployed" -eq 0 ]]; then
     echo "Deployment failed; restoring the previous build..." >&2
@@ -75,6 +86,7 @@ finish() {
 
 trap finish EXIT
 
+stage="isolated-build"
 git worktree add --detach "$worktree" "$source_head"
 ln -s "$repo/node_modules" "$worktree/node_modules"
 
@@ -93,12 +105,50 @@ test -f "$worktree/.next/BUILD_ID"
 new_build="$(cat "$worktree/.next/BUILD_ID")"
 [[ "$new_build" != "$old_build" ]]
 
+stage="pre-swap-local-metadata"
+smoke_log="$release_root/smoke.log"
+(
+  cd "$worktree"
+  exec env NEXT_TELEMETRY_DISABLED=1 "$worktree/node_modules/.bin/next" start -H 127.0.0.1 -p 3101
+) >"$smoke_log" 2>&1 &
+smoke_pid=$!
+
+smoke_ready=0
+for attempt in $(seq 1 60); do
+  if curl -fsS http://127.0.0.1:3101/api/health/ready >/dev/null 2>&1; then
+    smoke_ready=1
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$smoke_ready" -ne 1 ]]; then
+  sed -n '1,120p' "$smoke_log" >&2
+  exit 1
+fi
+
+local_setup_html="$(curl -fsSL http://127.0.0.1:3101/pwa/setup)"
+local_metadata_links="$(grep -oE '<link[^>]+(manifest|canonical)[^>]*>' <<<"$local_setup_html" || true)"
+printf 'PRE_SWAP_METADATA=%s\n' "$local_metadata_links"
+
+grep -Fq 'href="/pwa/manifest.webmanifest"' <<<"$local_setup_html"
+if grep -Fq 'href="/manifest.webmanifest"' <<<"$local_setup_html"; then
+  echo "ABORT: local setup page exposes the public manifest" >&2
+  exit 1
+fi
+
+kill "$smoke_pid" >/dev/null 2>&1 || true
+wait "$smoke_pid" >/dev/null 2>&1 || true
+smoke_pid=""
+
+stage="swapping-build"
 sudo systemctl stop dali.service
 mv "$repo/.next" "$backup"
 mv "$worktree/.next" "$repo/.next"
 swapped=1
 sudo systemctl start dali.service
 
+stage="local-health"
 ready=0
 for attempt in $(seq 1 60); do
   if health="$(curl -fsS http://127.0.0.1:3000/api/health/ready 2>/dev/null)"; then
@@ -109,6 +159,7 @@ for attempt in $(seq 1 60); do
 done
 [[ "$ready" -eq 1 ]]
 
+stage="public-http"
 manifest_http="$(curl -fsS --retry 5 --retry-delay 1 -o /dev/null -w '%{http_code}' https://www.dally.info/pwa/manifest.webmanifest)"
 worker_http="$(curl -fsS --retry 5 --retry-delay 1 -o /dev/null -w '%{http_code}' https://www.dally.info/sw.js)"
 launch_http="$(curl -fsS --retry 5 --retry-delay 1 -o /dev/null -w '%{http_code}' https://www.dally.info/pwa/launch)"
@@ -117,13 +168,22 @@ launch_http="$(curl -fsS --retry 5 --retry-delay 1 -o /dev/null -w '%{http_code}
 [[ "$worker_http" == "200" ]]
 [[ "$launch_http" == "200" ]]
 
-setup_html="$(curl -fsSL --retry 5 --retry-delay 1 https://www.dally.info/pwa/setup)"
-grep -Fq 'href="/pwa/manifest.webmanifest"' <<<"$setup_html"
-if grep -Fq 'href="/manifest.webmanifest"' <<<"$setup_html"; then
-  echo "ABORT: setup page still exposes the public manifest" >&2
-  exit 1
-fi
-grep -Eq 'https://(www\.)?dally\.info/pwa/setup' <<<"$setup_html"
+stage="public-metadata"
+public_metadata_ready=0
+setup_html=""
+for attempt in $(seq 1 60); do
+  setup_html="$(curl -fsSL https://www.dally.info/pwa/setup 2>/dev/null || true)"
+  if grep -Fq 'href="/pwa/manifest.webmanifest"' <<<"$setup_html" &&
+     ! grep -Fq 'href="/manifest.webmanifest"' <<<"$setup_html"; then
+    public_metadata_ready=1
+    break
+  fi
+  sleep 1
+done
+
+live_metadata_links="$(grep -oE '<link[^>]+(manifest|canonical)[^>]*>' <<<"$setup_html" || true)"
+printf 'LIVE_METADATA=%s\n' "$live_metadata_links"
+[[ "$public_metadata_ready" -eq 1 ]]
 
 deployed=1
 
