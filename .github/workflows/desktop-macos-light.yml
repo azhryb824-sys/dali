@@ -1,0 +1,78 @@
+name: Build Dali Lightweight macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - godaddy-preview
+      - macos-lightweight-0.3.0
+    paths:
+      - "native-macos/**"
+      - "desktop/assets/dali-icon.png"
+      - "tests/native-macos-light.test.mjs"
+      - ".github/workflows/desktop-macos-light.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dali-macos-light-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-arm64:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate source contract
+        run: |
+          bash -n native-macos/scripts/build.sh
+          node --test tests/native-macos-light.test.mjs
+
+      - name: Build lightweight Apple Silicon application
+        run: bash native-macos/scripts/build.sh arm64
+
+      - name: Verify isolation, signature, size, and launch
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find native-macos/build/arm64 -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          executable="$app_path/Contents/MacOS/DaliAdminLight"
+          bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")"
+          test "$bundle_id" = "sa.dally.desktop.light"
+          file "$executable" | grep -q 'arm64'
+          /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
+          app_size_kb="$(du -sk "$app_path" | awk '{print $1}')"
+          test "$app_size_kb" -lt 20480
+          "$executable" --self-test | tee "$RUNNER_TEMP/dali-native-self-test.log"
+          grep -q 'DALI_SELF_TEST_OK' "$RUNNER_TEMP/dali-native-self-test.log"
+
+          "$executable" --smoke-test >"$RUNNER_TEMP/dali-native-smoke.log" 2>&1 &
+          app_pid=$!
+          sleep 6
+          kill -0 "$app_pid"
+          rss_kb="$(ps -o rss= -p "$app_pid" | tr -d ' ')"
+          test -n "$rss_kb"
+          test "$rss_kb" -lt 180000
+          wait "$app_pid"
+          grep -q 'DALI_SMOKE_OK' "$RUNNER_TEMP/dali-native-smoke.log"
+
+          dmg_path="$(find native-macos/dist -maxdepth 1 -type f -name 'Dali-Mac-Light-*-arm64.dmg' -print -quit)"
+          zip_path="$(find native-macos/dist -maxdepth 1 -type f -name 'Dali-Mac-Light-*-arm64.zip' -print -quit)"
+          test -s "$dmg_path"
+          test -s "$zip_path"
+          hdiutil verify "$dmg_path"
+          cat native-macos/dist/*-SHA256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Dali-Mac-Light-0.3.0-arm64
+          path: |
+            native-macos/dist/Dali-Mac-Light-0.3.0-arm64.dmg
+            native-macos/dist/Dali-Mac-Light-0.3.0-arm64.zip
+            native-macos/dist/Dali-Mac-Light-0.3.0-arm64-SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
