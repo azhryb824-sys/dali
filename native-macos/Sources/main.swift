@@ -80,7 +80,8 @@ private final class DaliApplicationDelegate: NSObject, NSApplicationDelegate, NS
 
         if CommandLine.arguments.contains("--smoke-test") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
-                print("DALI_SMOKE_OK")
+                FileHandle.standardOutput.write(Data("DALI_SMOKE_OK\n".utf8))
+                try? FileHandle.standardOutput.synchronize()
                 NSApp.terminate(nil)
             }
         }
