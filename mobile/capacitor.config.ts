@@ -18,6 +18,8 @@ const config: CapacitorConfig = {
     backgroundColor: "#071a2b",
     allowMixedContent: false,
     captureInput: true,
+    minWebViewVersion: 111,
+    resolveServiceWorkerRequests: false,
     webContentsDebuggingEnabled: false,
   },
   ios: {

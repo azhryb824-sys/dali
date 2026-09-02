@@ -4,4 +4,8 @@
     <string name="title_activity_main">نظام دالي الإداري</string>
     <string name="package_name">sa.dally.mobile</string>
     <string name="custom_url_scheme">sa.dally.mobile</string>
+    <string name="webview_failure_title">تعذر عرض نظام دالي</string>
+    <string name="webview_failure_message">توقف مكوّن العرض في أندرويد. حدّث Android System WebView وGoogle Chrome من المتجر، ثم أعد المحاولة. لم تُفقد أي بيانات.</string>
+    <string name="webview_retry">إعادة المحاولة</string>
+    <string name="webview_close">إغلاق</string>
 </resources>
