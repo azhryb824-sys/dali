@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { isDaliMobileUserAgent } from "../lib/mobile-entry.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -33,8 +34,8 @@ test("mobile container targets Android and iOS through the trusted production po
 });
 
 test("server admits the Dali mobile marker without weakening desktop or PWA access", async () => {
-  const [proxy, layout, compatibility] = await Promise.all([read("proxy.ts"), read("app/portal/layout.tsx"), read("public/mobile/compatibility.html")]);
-  assert.match(proxy, /mobileMarker\.test\(userAgent\)/);
+  const [proxy, login, layout, compatibility] = await Promise.all([read("proxy.ts"), read("app/api/auth/login/route.ts"), read("app/portal/layout.tsx"), read("public/mobile/compatibility.html")]);
+  assert.match(proxy, /isDaliMobileUserAgent\(userAgent\)/);
   assert.match(proxy, /trustedNativeRequest = desktopRequest \|\| mobileRequest/);
   assert.match(proxy, /!trustedNativeRequest && !trustedPwaRequest && !emergencyBrowserAccess/);
   assert.match(proxy, /pwaAccessFromCookieHeader/);
@@ -42,6 +43,11 @@ test("server admits the Dali mobile marker without weakening desktop or PWA acce
   assert.match(proxy, /camera=\(self\), microphone=\(self\)/);
   assert.match(proxy, /minimumAndroidWebView = 111/);
   assert.match(proxy, /webViewMajor < minimumAndroidWebView/);
+  assert.match(login, /isDaliMobileUserAgent\(request\.headers\.get\("user-agent"\)\)/);
+  assert.match(login, /request\.headers\.get\(DESKTOP_APP_HEADER\) === DESKTOP_APP_MARKER/);
+  assert.equal(isDaliMobileUserAgent("Mozilla/5.0 Android DaliMobile/1 Android DaliInfinix/1"), true);
+  assert.equal(isDaliMobileUserAgent("Mozilla/5.0 Android DaliMobile/10"), false);
+  assert.equal(isDaliMobileUserAgent("Mozilla/5.0 Android"), false);
   assert.match(compatibility, /Android System WebView/);
   assert.match(layout, /<PwaAccessRuntime \/>/);
   assert.match(layout, /src="\/mobile\/runtime\.js"/);

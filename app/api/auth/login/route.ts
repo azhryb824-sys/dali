@@ -3,6 +3,7 @@ import { getDb, getSqlClient } from "@/db";
 import { passwordResetTokens, portalAuthCredentials, pwaDevices } from "@/db/schema";
 import { createIdentityToken, identityCookie, sha256, verifyPasswordHash } from "@/lib/credential-auth";
 import { DESKTOP_APP_HEADER, DESKTOP_APP_MARKER } from "@/lib/desktop-entry";
+import { isDaliMobileUserAgent } from "@/lib/mobile-entry";
 import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-error";
 import { getPortalAdminConfig, normalizePortalEmail, normalizePortalIdentifier } from "@/lib/portal-auth-config";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
@@ -17,6 +18,7 @@ type LoginCredential = { identifier: string; email: string; displayName: string;
 
 async function hasAuthorizedApplicationEntry(request: Request) {
   if (request.headers.get(DESKTOP_APP_HEADER) === DESKTOP_APP_MARKER) return true;
+  if (isDaliMobileUserAgent(request.headers.get("user-agent"))) return true;
   if (process.env.DALI_ALLOW_BROWSER_PORTAL === "true") return true;
   const access = await pwaAccessFromCookieHeader(request.headers.get("cookie"));
   if (!access) return false;
