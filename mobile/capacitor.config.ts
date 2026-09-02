@@ -38,13 +38,9 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     StatusBar: {
-      style: "DARK",
+      style: "LIGHT",
       backgroundColor: "#071a2b",
       overlaysWebView: false,
-    },
-    PrivacyScreen: {
-      enable: true,
-      imageName: "Splash",
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],

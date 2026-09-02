@@ -13,7 +13,8 @@ test("mobile container targets Android and iOS through the trusted production po
   ]);
   assert.match(pkg, /@capacitor\/android/);
   assert.match(pkg, /@capacitor\/ios/);
-  assert.match(pkg, /"version": "1\.0\.2"/);
+  assert.match(pkg, /"version": "1\.0\.3"/);
+  assert.doesNotMatch(pkg, /@capacitor\/privacy-screen/);
   assert.match(config, /https:\/\/www\.dally\.info\/portal/);
   assert.match(config, /errorPath: "offline\.html"/);
   assert.match(config, /appId: "sa\.dally\.mobile"/);
@@ -23,10 +24,11 @@ test("mobile container targets Android and iOS through the trusted production po
   assert.match(config, /minWebViewVersion: 111/);
   assert.match(config, /resolveServiceWorkerRequests: false/);
   assert.match(config, /webContentsDebuggingEnabled: false/);
+  assert.doesNotMatch(config, /PrivacyScreen/);
   assert.match(config, /limitsNavigationsToAppBoundDomains: true/);
   assert.match(gradle, /applicationId "sa\.dally\.mobile"/);
-  assert.match(gradle, /versionCode 3/);
-  assert.match(gradle, /versionName "1\.0\.2"/);
+  assert.match(gradle, /versionCode 4/);
+  assert.match(gradle, /versionName "1\.0\.3"/);
   assert.match(strings, /<string name="app_name">نظام دالي الإداري<\/string>/);
 });
 
@@ -81,6 +83,15 @@ test("native projects disable cleartext and declare privacy-scoped device permis
   assert.doesNotMatch(manifest, /READ_MEDIA_IMAGES/);
   assert.match(activity, /onRenderProcessGone/);
   assert.match(activity, /recoverFromRendererFailure/);
+  assert.match(activity, /isInfinixDevice/);
+  assert.match(activity, /View\.LAYER_TYPE_SOFTWARE/);
+  assert.match(activity, /setAlgorithmicDarkeningAllowed\(false\)/);
+  assert.match(activity, /inspectPortalRender/);
+  assert.match(activity, /hasVisiblePortalContent/);
+  assert.match(activity, /renderRecovery=1/);
+  const styles = await read("mobile/android/app/src/main/res/values/styles.xml");
+  assert.match(styles, /Theme\.AppCompat\.Light\.NoActionBar/);
+  assert.match(styles, /android:forceDarkAllowed">false/);
   assert.match(network, /cleartextTrafficPermitted="false"/);
   assert.match(plist, /WKAppBoundDomains/);
   assert.match(plist, /NSCameraUsageDescription/);

@@ -11,5 +11,5 @@ if (!index.includes('lang="ar"') || !index.includes('dir="rtl"')) throw new Erro
 const manifest = await readFile(new URL("../android/app/src/main/AndroidManifest.xml", import.meta.url), "utf8");
 if (!manifest.includes("android.permission.RECORD_AUDIO") || manifest.includes("READ_MEDIA_IMAGES")) throw new Error("Android permissions are not privacy-scoped");
 const gradle = await readFile(new URL("../android/app/build.gradle", import.meta.url), "utf8");
-if (!gradle.includes('applicationId "sa.dally.mobile"') || !gradle.includes("versionCode 3") || !gradle.includes('versionName "1.0.2"')) throw new Error("Android identity or version is incorrect");
-console.log(JSON.stringify({ status: "ok", root, appId: "sa.dally.mobile", appName: "نظام دالي الإداري", version: "1.0.2", platforms: ["android", "ios"], remotePortal: true, minimumAndroidWebView: 111 }));
+if (!gradle.includes('applicationId "sa.dally.mobile"') || !gradle.includes("versionCode 4") || !gradle.includes('versionName "1.0.3"')) throw new Error("Android identity or version is incorrect");
+console.log(JSON.stringify({ status: "ok", root, appId: "sa.dally.mobile", appName: "نظام دالي الإداري", version: "1.0.3", platforms: ["android", "ios"], remotePortal: true, minimumAndroidWebView: 111, infinixCompatibility: true }));
