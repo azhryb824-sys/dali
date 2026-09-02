@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { rememberEnrollmentCode } from "@/app/components/pwa-device-client";
+import { isStandalonePwa, rememberEnrollmentCode } from "@/app/components/pwa-device-client";
 
 export function PwaSetupClient({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -11,6 +11,7 @@ export function PwaSetupClient({ code }: { code: string }) {
 
   useEffect(() => {
     if (normalized) rememberEnrollmentCode(normalized);
+    if (isStandalonePwa()) window.location.replace("/pwa/launch");
   }, [normalized]);
 
   async function copyCode() {

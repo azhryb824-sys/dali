@@ -39,7 +39,13 @@ test("service worker never caches authenticated, API, or enrollment pages", asyn
 
 test("administrative install metadata is isolated from the public-site manifest", async () => {
   const runtime = await read("app/components/PwaRuntime.tsx");
-  const [rootLayout, publicManifest, pwaLayout] = await Promise.all([read("app/layout.tsx"), read("app/manifest.ts"), read("app/pwa/layout.tsx")]);
+  const [rootLayout, publicManifest, pwaLayout, proxySource, setupClient] = await Promise.all([
+    read("app/layout.tsx"),
+    read("app/manifest.ts"),
+    read("app/pwa/layout.tsx"),
+    read("proxy.ts"),
+    read("app/components/PwaSetupClient.tsx"),
+  ]);
   assert.match(runtime, /process\.env\.NODE_ENV !== "production"/);
   assert.match(runtime, /navigator\.serviceWorker\.register\("\/sw\.js"/);
   assert.match(runtime, /updateViaCache:\s*"none"/);
@@ -47,7 +53,13 @@ test("administrative install metadata is isolated from the public-site manifest"
   assert.match(pwaLayout, /manifest:\s*"\/pwa\/manifest\.webmanifest"/);
   assert.match(pwaLayout, /appleWebApp/);
   assert.doesNotMatch(rootLayout, /PwaRuntime|appleWebApp/);
-  assert.match(rootLayout, /manifest:\s*"\/manifest\.webmanifest"/);
+  assert.match(rootLayout, /x-dali-pathname/);
+  assert.match(rootLayout, /manifest:\s*isPwaRequest\s*\?\s*"\/pwa\/manifest\.webmanifest"\s*:\s*"\/manifest\.webmanifest"/);
+  assert.match(rootLayout, /canonicalPath/);
+  assert.match(proxySource, /requestHeaders\.set\("x-dali-pathname", request\.nextUrl\.pathname\)/);
+  assert.match(proxySource, /NextResponse\.next\(\{ request: \{ headers: requestHeaders \} \}\)/);
+  assert.match(setupClient, /isStandalonePwa\(\)/);
+  assert.match(setupClient, /window\.location\.replace\("\/pwa\/launch"\)/);
   assert.match(publicManifest, /start_url:\s*"\/"/);
   assert.doesNotMatch(publicManifest, /pwa\/launch|dali-portal-pwa/);
 });

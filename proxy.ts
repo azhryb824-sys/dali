@@ -44,7 +44,9 @@ export async function proxy(request: NextRequest) {
       headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
     });
   }
-  const response = NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-dali-pathname", request.nextUrl.pathname);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("content-security-policy", contentSecurityPolicy);
   response.headers.set("referrer-policy", "strict-origin-when-cross-origin");
   response.headers.set("x-content-type-options", "nosniff");
