@@ -46,7 +46,7 @@ case "$database_url" in
     ;;
 esac
 
-node --test tests/pwa-runtime.test.mjs
+node --test tests/pwa-runtime.test.mjs tests/multilingual-system.test.mjs tests/video-attendance-governance.test.mjs
 npm run typecheck
 git restore --staged --worktree -- tsconfig.tsbuildinfo 2>/dev/null || true
 

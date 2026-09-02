@@ -536,3 +536,52 @@ footer { padding: 85px max(6vw, 24px) 26px; background: #00131e; color: #fff; }
 .public-video-card{margin:10px 12px 0;padding:12px;border:1px solid #d8e4e7;border-radius:12px;background:linear-gradient(135deg,#f8fbfc,#eef5f7);display:grid;gap:9px}.public-video-card>div{display:flex;align-items:center;gap:9px}.public-video-card>div>span{width:34px;height:34px;border-radius:9px;background:#062b3a;color:#fff;display:grid;place-items:center;font-size:18px}.public-video-card p{margin:0;display:grid;gap:2px}.public-video-card strong{color:#082c3b;font-size:13px}.public-video-card small{color:#6d7d84;font-size:10px}.public-video-card button,.public-video-card>a{min-height:38px;border:0;border-radius:8px;background:#e21c25;color:#fff;font:inherit;font-size:12px;font-weight:800;display:grid;place-items:center;text-decoration:none;cursor:pointer}.public-video-card button:disabled{background:#9aa8ae;cursor:not-allowed}.public-video-card.active{border-color:#9ad2b4;background:#eefaf4}.public-video-card .video-consent{display:block;color:#78878d;font-size:9px;line-height:1.6}
 .contract-full-editor{width:min(1120px,96vw);max-height:94vh;overflow:auto}.contract-edit-professions{padding:18px;border:1px solid var(--line,#dfe5e8);border-radius:16px;background:#f8fafb}.contract-edit-professions>header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.contract-edit-professions h3,.contract-edit-professions p{margin:0}.profession-edit-row{display:grid;grid-template-columns:minmax(150px,1.3fr) 75px 105px 105px 115px minmax(120px,1fr) 115px auto;gap:8px;align-items:center;padding:10px 0;border-top:1px solid #e4e9ec}.profession-edit-row input,.profession-edit-row select{min-width:0;width:100%}@media(max-width:900px){.profession-edit-row{grid-template-columns:1fr 1fr}.contract-edit-professions>header{align-items:flex-start;flex-direction:column}}
 .contract-sponsorship-policy{padding:18px;border:1px solid #d7e1e6;border-radius:16px;background:#f4f8fa}.contract-sponsorship-policy h3,.contract-sponsorship-policy p{margin:0 0 8px}.policy-list{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.policy-list span{padding:7px 11px;border-radius:999px;background:#fff;border:1px solid #d6e0e5}.policy-add{display:flex;flex-wrap:wrap;gap:8px}.policy-add input,.policy-add select{min-width:160px;flex:1}
+
+/* Mobile-safe public chat: persistent close control and visible video invitation. */
+.chat-header,
+.chat-hours,
+.chat-conversation-meta,
+.public-video-card,
+.chat-composer,
+.chat-end-button,
+.service-rating,
+.chat-rating-thanks,
+.chat-error,
+.chat-window > footer {
+  flex: 0 0 auto;
+}
+.chat-window {
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+.chat-loading,
+.chat-start,
+.chat-messages {
+  min-height: 0;
+}
+@media (max-width: 560px) {
+  .live-chat.open .chat-launcher {
+    display: none;
+  }
+  .chat-window {
+    inset: auto;
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    height: auto;
+    max-height: none;
+  }
+  .chat-header {
+    position: relative;
+    z-index: 4;
+  }
+  .chat-header > button {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    touch-action: manipulation;
+  }
+}
+

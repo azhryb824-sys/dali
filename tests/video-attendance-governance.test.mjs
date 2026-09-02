@@ -4,10 +4,11 @@ import test from "node:test";
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("video interviews enforce hours, availability, transfer permission, audit and notifications", async () => {
-  const [migration, publicApi, portalApi, helper, publicUi, portalUi] = await Promise.all([
+  const [migration, publicApi, portalApi, helper, publicUi, portalUi, publicCss] = await Promise.all([
     source("drizzle-pg/0030_video_interviews_and_operational_roles.sql"), source("app/api/video-interviews/route.ts"),
     source("app/api/portal/video-interviews/route.ts"), source("lib/video-interviews.ts"),
     source("app/LiveChatWidget.tsx"), source("app/portal/VideoInterviewDesk.tsx"),
+    source("app/globals.css"),
   ]);
   for (const role of ["accountant","legal_affairs","sales_representative","purchasing_representative","administrative_assistant"]) assert.match(migration, new RegExp(role));
   for (const table of ["video_interviews","video_interview_transfers","portal_user_presence"]) assert.match(migration, new RegExp(table));
@@ -15,6 +16,13 @@ test("video interviews enforce hours, availability, transfer permission, audit a
   assert.match(portalApi,/hasPortalPermission\(access, "video", requiredAction\)/);assert.match(portalApi,/listAvailableInterviewStaff/);assert.match(portalApi,/system_owner/);
   assert.match(portalApi,/video-interview-transferred/);assert.match(portalApi,/auditPortalAction/);assert.match(portalApi,/emitPortalNotification/);
   assert.match(helper,/video\.manage/);assert.match(publicUi,/طلب مقابلة مرئية/);assert.match(portalUi,/تحويل إلى موظف متاح أو المالك/);
+  assert.match(publicUi,/window\.addEventListener\("focus", refresh\)/);
+  assert.match(publicUi,/document\.addEventListener\("visibilitychange", refresh\)/);
+  assert.match(publicUi,/public-video-card[^>]+aria-live="polite"/);
+  assert.match(publicCss,/\.chat-header,[\s\S]*\.public-video-card,[\s\S]*flex: 0 0 auto/);
+  assert.match(publicCss,/\.chat-loading,[\s\S]*\.chat-messages \{[\s\S]*min-height: 0/);
+  assert.match(publicCss,/safe-area-inset-top/);
+  assert.match(publicCss,/\.live-chat\.open \.chat-launcher \{\s*display: none/);
 });
 
 test("attendance, deduction and performance are server governed and payroll linked", async () => {

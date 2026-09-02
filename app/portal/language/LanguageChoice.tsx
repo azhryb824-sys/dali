@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { readApiJson } from "@/lib/client-api";
-import { AppLocale, localeNames } from "@/lib/i18n";
+import { AppLocale, localeCookieName, localeNames } from "@/lib/i18n";
 
 export default function LanguageChoice() {
   const [locale, setLocale] = useState<AppLocale>("ar");
@@ -23,8 +23,16 @@ export default function LanguageChoice() {
       const result = (await readApiJson(response)) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذّر حفظ اللغة");
 
-      // A full navigation guarantees that the server receives the new locale
-      // cookie and freshly saved preference before rendering the portal gate.
+      // Browsers can start the navigation before a response Set-Cookie is visible
+      // to the next request. Mirror the non-sensitive locale cookie synchronously
+      // so the first portal render cannot loop back to this onboarding page.
+      document.cookie = [
+        `${localeCookieName}=${encodeURIComponent(locale)}`,
+        "Path=/",
+        "Max-Age=31536000",
+        "SameSite=Lax",
+        ...(window.location.protocol === "https:" ? ["Secure"] : []),
+      ].join("; ");
       window.location.replace("/portal");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "تعذّر حفظ اللغة");

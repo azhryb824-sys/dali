@@ -45,7 +45,10 @@ test("non-admin portal users choose a saved language on first login while superv
   assert.match(onboarding, /access\.role==="admin"/);
   assert.match(choice, /credentials: "same-origin"/);
   assert.match(choice, /cache: "no-store"/);
+  assert.match(choice, /document\.cookie/);
+  assert.match(choice, /localeCookieName/);
   assert.match(choice, /window\.location\.replace\("\/portal"\)/);
+  assert.ok(choice.indexOf("document.cookie") < choice.indexOf('window.location.replace("/portal")'));
   assert.doesNotMatch(choice, /router\.replace/);
   assert.match(api, /preferredLanguage:locale/);
   assert.match(api, /language_selected_at = \$2/);

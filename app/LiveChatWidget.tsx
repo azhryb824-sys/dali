@@ -87,12 +87,22 @@ export default function LiveChatWidget() {
   }, [loadConversation]);
   useEffect(() => {
     if (!conversation || !open) return;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") { void loadConversation(true); void loadVideoInterview(); }
-    }, 5000);
-    return () => window.clearInterval(timer);
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadConversation(true);
+      void loadVideoInterview();
+    };
+    const first = window.setTimeout(refresh, 0);
+    const timer = window.setInterval(refresh, 3000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [conversation, open, loadConversation, loadVideoInterview]);
-  useEffect(()=>{if(!conversation)return;const timer=window.setTimeout(()=>void loadVideoInterview(),0);return()=>window.clearTimeout(timer)},[conversation,loadVideoInterview]);
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, open]);
@@ -166,12 +176,12 @@ export default function LiveChatWidget() {
     {open && <section ref={dialogRef} className="chat-window" role="dialog" aria-modal="false" aria-label="محادثة مباشرة مع شركة دالي">
       <header className="chat-header">
         <div className="chat-brand"><Image src="/dally-logo.jpg" alt="" width={545} height={280} sizes="48px"/><p><strong>فريق دالي</strong><span><i className={businessHours?.isOpen ? "online" : "offline"}/>{businessHours?.isOpen ? "متاحون الآن" : "خارج ساعات الدوام"}</span></p></div>
-        <button ref={closeRef} onClick={() => { setOpen(false); window.setTimeout(() => launcherRef.current?.focus(), 0); }} aria-label="إغلاق المحادثة">×</button>
+        <button type="button" ref={closeRef} onClick={() => { setOpen(false); window.setTimeout(() => launcherRef.current?.focus(), 0); }} aria-label="إغلاق المحادثة">×</button>
       </header>
       {businessHours && <div className={`chat-hours ${businessHours.isOpen ? "open" : "closed"}`}><span>{businessHours.isOpen ? "فريقنا جاهز لخدمتك الآن" : `موعد العودة: ${businessHours.nextOpenLabel || "خلال ساعات العمل القادمة"}`}</span><b>{businessHours.opensAt} — {businessHours.closesAt} · بتوقيت مكة</b></div>}
       {loading ? <div className="chat-loading"><span/><p>جارٍ تحميل المحادثة...</p></div> : conversation ? <>
         <div className="chat-conversation-meta"><span>{conversation.trackingCode}</span><strong>{conversation.subject}</strong></div>
-        <section className={`public-video-card ${videoInterview?.status||"idle"}`}><div><span>▣</span><p><strong>{videoInterview?videoInterview.status==="active"?"الموظف جاهز للمكالمة":videoInterview.status==="completed"?"انتهت المكالمة المرئية":"طلب المكالمة قيد المتابعة":"مكالمة مرئية مع فريق دالي"}</strong><small>{videoInterview?`${videoInterview.referenceCode}${videoInterview.assignedName?` · ${videoInterview.assignedName}`:" · جارٍ البحث عن موظف متاح"}`:businessHours?.isOpen?"متاحة الآن خلال ساعات العمل":"تتاح فقط خلال ساعات العمل"}</small></p></div>{videoInterview?.joinUrl?<button onClick={()=>setCallOpen(true)}>دخول المكالمة المرئية</button>:videoInterview?.status==="completed"?null:videoInterview?<button disabled>بانتظار قبول الموظف</button>:<button disabled={!businessHours?.isOpen||videoBusy} onClick={()=>void requestVideoInterview()}>{videoBusy?"جارٍ الطلب...":"طلب مكالمة مرئية"}</button>}<p className="video-consent">يمكنك إيقاف الكاميرا أو الميكروفون وإعادتهما في أي وقت من شريط المكالمة. النظام لا يسجل الصوت أو الصورة.</p></section>
+        <section className={`public-video-card ${videoInterview?.status||"idle"}`} aria-live="polite"><div><span>▣</span><p><strong>{videoInterview?videoInterview.status==="active"?"الموظف جاهز للمكالمة":videoInterview.status==="completed"?"انتهت المكالمة المرئية":"طلب المكالمة قيد المتابعة":"مكالمة مرئية مع فريق دالي"}</strong><small>{videoInterview?`${videoInterview.referenceCode}${videoInterview.assignedName?` · ${videoInterview.assignedName}`:" · جارٍ البحث عن موظف متاح"}`:businessHours?.isOpen?"متاحة الآن خلال ساعات العمل":"تتاح فقط خلال ساعات العمل"}</small></p></div>{videoInterview?.joinUrl?<button onClick={()=>setCallOpen(true)}>دخول المكالمة المرئية</button>:videoInterview?.status==="completed"?null:videoInterview?<button disabled>بانتظار قبول الموظف</button>:<button disabled={!businessHours?.isOpen||videoBusy} onClick={()=>void requestVideoInterview()}>{videoBusy?"جارٍ الطلب...":"طلب مكالمة مرئية"}</button>}<p className="video-consent">يمكنك إيقاف الكاميرا أو الميكروفون وإعادتهما في أي وقت من شريط المكالمة. النظام لا يسجل الصوت أو الصورة.</p></section>
         {videoInterview?.status==="completed"&&!videoInterview.ratingSubmitted&&<ServiceRating title="كيف كانت المكالمة المرئية؟" busy={ratingBusy} onSubmit={event=>void submitRating(event,"video")}/>} 
         <div className="chat-messages" ref={messagesRef} aria-live="polite">
           <div className="chat-welcome"><strong>أهلاً {conversation.visitorName}</strong><span>شاركنا تفاصيل احتياجك، وسيصل حديثك إلى المختص الأنسب في فريق دالي.</span></div>
@@ -181,7 +191,7 @@ export default function LiveChatWidget() {
             {message.senderType === "visitor" && <small>{message.readByStaffAt ? "تمت القراءة" : "تم الإرسال"}</small>}
           </article>)}
         </div>
-        {conversation.status==="closed"?(conversation.ratingSubmitted?<div className="chat-rating-thanks"><strong>شكرًا لتقييمك</strong><span>تم حفظ تقييمك وسيساعدنا على تحسين الخدمة.</span></div>:<ServiceRating title="كيف كانت المحادثة النصية؟" busy={ratingBusy} onSubmit={event=>void submitRating(event,"chat")}/>):<><form className="chat-composer" onSubmit={sendMessage}><label><span className="sr-only">اكتب رسالتك</span><textarea name="message" required minLength={2} maxLength={2000} rows={2} placeholder="اكتب رسالتك هنا..."/></label><button type="submit" disabled={sending}>{sending ? "..." : "إرسال"}</button></form><button className="chat-end-button" disabled={sending} onClick={()=>void endConversation()}>إنهاء المحادثة</button></>}
+        {conversation.status==="closed"?(conversation.ratingSubmitted?<div className="chat-rating-thanks"><strong>شكرًا لتقييمك</strong><span>تم حفظ تقييمك وسيساعدنا على تحسين الخدمة.</span></div>:<ServiceRating title="كيف كانت المحادثة النصية؟" busy={ratingBusy} onSubmit={event=>void submitRating(event,"chat")}/>):<><form className="chat-composer" onSubmit={sendMessage}><label><span className="sr-only">اكتب رسالتك</span><textarea name="message" required minLength={2} maxLength={2000} rows={2} placeholder="اكتب رسالتك هنا..."/></label><button type="submit" disabled={sending}>{sending ? "..." : "إرسال"}</button></form><button type="button" className="chat-end-button" disabled={sending} onClick={()=>void endConversation()}>إنهاء المحادثة</button></>}
       </> : <form className="chat-start" onSubmit={startConversation}>
         <div><strong>كيف يمكننا مساعدتك؟</strong><p>ابدأ المحادثة، وسيستقبل مساعد دالي رسالتك فوراً ويوجّهها إلى الفريق المختص.</p></div>
         <label>الاسم الكامل<input name="visitorName" required minLength={2} maxLength={100} autoComplete="name" placeholder="اكتب اسمك"/></label>
@@ -196,8 +206,8 @@ export default function LiveChatWidget() {
       {error && <p className="chat-error" role="alert">{error}</p>}
       <footer>محادثة محفوظة وآمنة · لا تشارك بيانات بنكية أو كلمات مرور</footer>
     </section>}
-    {callOpen&&videoInterview?.joinUrl&&<div className="video-call-modal"><button className="video-call-backdrop" onClick={()=>setCallOpen(false)} aria-label="إغلاق المكالمة"/><section role="dialog" aria-modal="true" aria-label="المكالمة المرئية"><header><div><strong>مكالمة دالي المرئية</strong><span>{videoInterview.referenceCode}</span></div><button onClick={()=>setCallOpen(false)}>إنهاء وإغلاق</button></header><iframe src={videoInterview.joinUrl} title="مكالمة مرئية مع فريق دالي" allow="camera; microphone; fullscreen; display-capture; autoplay"/></section></div>}
-    <button ref={launcherRef} className="chat-launcher" onClick={() => setOpen((value) => !value)} aria-label={open ? "إغلاق المحادثة" : "فتح المحادثة المباشرة"} aria-expanded={open}>
+    {callOpen&&videoInterview?.joinUrl&&<div className="video-call-modal"><button type="button" className="video-call-backdrop" onClick={()=>setCallOpen(false)} aria-label="إغلاق المكالمة"/><section role="dialog" aria-modal="true" aria-label="المكالمة المرئية"><header><div><strong>مكالمة دالي المرئية</strong><span>{videoInterview.referenceCode}</span></div><button type="button" onClick={()=>setCallOpen(false)}>إنهاء وإغلاق</button></header><iframe src={videoInterview.joinUrl} title="مكالمة مرئية مع فريق دالي" allow="camera; microphone; fullscreen; display-capture; autoplay"/></section></div>}
+    <button type="button" ref={launcherRef} className="chat-launcher" onClick={() => setOpen((value) => !value)} aria-label={open ? "إغلاق المحادثة" : "فتح المحادثة المباشرة"} aria-expanded={open}>
       <span className="chat-launcher-icon">{open ? "×" : "◌"}</span>
       <span><strong>محادثة مباشرة</strong><small>{businessHours?.isOpen ? "الفريق متاح الآن" : "اترك رسالتك وسنرد في الدوام"}</small></span>
       {!open && (
