@@ -741,7 +741,7 @@ if CommandLine.arguments.contains("--self-test") {
 }
 
 let application = NSApplication.shared
-let delegate = DaliApplicationDelegate()
+private let delegate = DaliApplicationDelegate()
 application.delegate = delegate
 application.setActivationPolicy(.regular)
 application.run()
