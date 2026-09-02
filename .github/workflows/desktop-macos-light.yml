@@ -58,6 +58,7 @@ jobs:
           test -n "$rss_kb"
           test "$rss_kb" -lt 180000
           wait "$app_pid"
+          cat "$RUNNER_TEMP/dali-native-smoke.log"
           grep -q 'DALI_SMOKE_OK' "$RUNNER_TEMP/dali-native-smoke.log"
 
           dmg_path="$(find native-macos/dist -maxdepth 1 -type f -name 'Dali-Mac-Light-*-arm64.dmg' -print -quit)"
