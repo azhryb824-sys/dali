@@ -1,0 +1,90 @@
+name: Build Dali Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "android-dali-1.0.1"
+      - "godaddy-preview"
+    paths:
+      - "mobile/**"
+      - "public/mobile/**"
+      - "app/portal/layout.tsx"
+      - "app/api/portal/desktop/sync/route.ts"
+      - "proxy.ts"
+      - "next.config.ts"
+      - "tests/mobile-app.test.mjs"
+      - ".github/workflows/mobile-build.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - "public/mobile/**"
+      - "app/portal/layout.tsx"
+      - "app/api/portal/desktop/sync/route.ts"
+      - "proxy.ts"
+      - "next.config.ts"
+      - "tests/mobile-app.test.mjs"
+      - ".github/workflows/mobile-build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Mobile policy tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --prefix mobile
+      - run: npm run mobile:check
+
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    needs: policy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci --prefix mobile
+      - run: npm run sync --prefix mobile
+      - run: ./gradlew assembleDebug
+        working-directory: mobile/android
+      - name: Verify Dali APK identity and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="mobile/android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          aapt2_path="$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -1)"
+          apksigner_path="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          test -x "$aapt2_path"
+          test -x "$apksigner_path"
+          "$aapt2_path" dump badging "$apk" | tee /tmp/dali-android-badging.txt
+          grep -Fq "package: name='sa.dally.mobile' versionCode='2' versionName='1.0.1'" /tmp/dali-android-badging.txt
+          grep -Fq "application-label:'نظام دالي الإداري'" /tmp/dali-android-badging.txt
+          "$apksigner_path" verify --verbose --print-certs "$apk"
+          sha256sum "$apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dali-android-1.0.1-debug
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

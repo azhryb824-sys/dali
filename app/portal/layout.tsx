@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { PwaAccessRuntime } from "@/app/components/PwaAccessRuntime";
 import "./portal.css";
 import "./contract-workflow.css";
@@ -30,5 +31,5 @@ export const metadata: Metadata = {
 };
 
 export default function PortalLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <><PwaAccessRuntime />{children}</>;
+  return <><PwaAccessRuntime />{children}<Script src="/mobile/runtime.js" strategy="afterInteractive" /></>;
 }

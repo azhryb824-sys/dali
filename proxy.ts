@@ -23,19 +23,22 @@ const contentSecurityPolicy = [
 const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|pwa(?:\/|$)|desktop-access(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
 const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|desktop-access(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
 const desktopMarker = "dali-desktop-v1";
+const mobileMarker = /(?:^|\s)DaliMobile\/1(?:\s|$)/;
 
 export async function proxy(request: NextRequest) {
   const emergencyBrowserAccess = process.env.DALI_ALLOW_BROWSER_PORTAL === "true";
   const desktopRequest = request.headers.get("x-dali-desktop-app") === desktopMarker;
+  const mobileRequest = mobileMarker.test(request.headers.get("user-agent") ?? "");
+  const trustedNativeRequest = desktopRequest || mobileRequest;
   let trustedPwaRequest = false;
-  if (desktopOnlyPath.test(request.nextUrl.pathname) && !desktopRequest) {
+  if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest) {
     try {
       trustedPwaRequest = Boolean(await pwaAccessFromCookieHeader(request.headers.get("cookie")));
     } catch {
       trustedPwaRequest = false;
     }
   }
-  if (desktopOnlyPath.test(request.nextUrl.pathname) && !desktopRequest && !trustedPwaRequest && !emergencyBrowserAccess) {
+  if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest && !trustedPwaRequest && !emergencyBrowserAccess) {
     if (request.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "النظام الإداري متاح عبر تطبيق دالي المعتمد فقط" }, { status: 403 });
     }
@@ -55,7 +58,11 @@ export async function proxy(request: NextRequest) {
   response.headers.set("cross-origin-resource-policy", "same-origin");
   response.headers.set("origin-agent-cluster", "?1");
   response.headers.set("x-permitted-cross-domain-policies", "none");
-  response.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  response.headers.set("permissions-policy", mobileRequest ? "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()" : "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  if (mobileRequest) {
+    response.headers.set("x-dali-client", "mobile");
+    response.headers.append("vary", "user-agent");
+  }
   response.headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
   if (nonIndexablePath.test(request.nextUrl.pathname)) response.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
   response.headers.delete("x-powered-by");

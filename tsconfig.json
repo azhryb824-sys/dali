@@ -36,6 +36,7 @@
     "examples",
     "build",
     "worker",
+    "mobile",
     "vite.config.ts",
     "drizzle.config.ts"
   ]

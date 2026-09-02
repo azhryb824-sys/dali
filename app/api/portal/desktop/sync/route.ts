@@ -12,6 +12,7 @@ const ONLINE_ONLY_ACTIONS=new Set(["approve","post","mark-paid","pay-judgment","
 const ONLINE_ONLY_PATHS=[/^\/api\/portal\/users/,/^\/api\/portal\/role-definitions/,/^\/api\/portal\/access-scopes/,/^\/api\/portal\/accounting/,/^\/api\/portal\/finance\/posting/,/\/contracts\/\d+\/status/,/\/signed-document/];
 
 function clean(value:unknown,max:number){return typeof value==="string"?value.trim().slice(0,max):""}
+function devicePlatform(request:Request){const value=clean(request.headers.get("x-dali-device-platform"),20).toLowerCase();return value==="android"||value==="ios"?value:"windows"}
 function bodyAction(body:{type?:string;value?:unknown}|null){
   if(body?.type!=="text"||typeof body.value!=="string")return"";
   try{return clean((JSON.parse(body.value)as{action?:unknown}).action,40)}catch{return""}
@@ -48,7 +49,8 @@ export async function GET(request:Request){
   const now=new Date().toISOString();
   const changes=await db.select({id:portalActivity.id,action:portalActivity.action,entityType:portalActivity.entityType,entityId:portalActivity.entityId,createdAt:portalActivity.createdAt}).from(portalActivity).where(gt(portalActivity.id,cursor)).orderBy(asc(portalActivity.id)).limit(500);
   const nextCursor=changes.length?changes[changes.length-1].id:cursor;
-  await db.insert(desktopDevices).values({id:deviceId,userEmail:access.user.email,deviceName:clean(request.headers.get("x-dali-device-name"),160)||null,lastSeenAt:now,lastSyncAt:now,lastActivityId:nextCursor,updatedAt:now}).onConflictDoUpdate({target:desktopDevices.id,set:{userEmail:access.user.email,lastSeenAt:now,lastSyncAt:now,lastActivityId:nextCursor,updatedAt:now}});
+  const platform=devicePlatform(request);
+  await db.insert(desktopDevices).values({id:deviceId,userEmail:access.user.email,deviceName:clean(request.headers.get("x-dali-device-name"),160)||null,platform,lastSeenAt:now,lastSyncAt:now,lastActivityId:nextCursor,updatedAt:now}).onConflictDoUpdate({target:desktopDevices.id,set:{userEmail:access.user.email,platform,lastSeenAt:now,lastSyncAt:now,lastActivityId:nextCursor,updatedAt:now}});
   return jsonNoStore({status:"ok",serverTime:now,deviceId,cursor:nextCursor,changes,hasMore:changes.length===500,intervalSeconds:20,privilegedOperationsRequireOnline:true});
 }
 
@@ -70,7 +72,8 @@ export async function POST(request:Request){
   }
   const device=await db.query.desktopDevices.findFirst({where:eq(desktopDevices.id,deviceId)});
   if(device?.status==="revoked")return jsonNoStore({error:"تم إلغاء اعتماد هذا الجهاز"},{status:403});
-  await db.insert(desktopDevices).values({id:deviceId,userEmail:access.user.email,deviceName:clean(payload.deviceName,160)||null,lastSeenAt:now,lastSyncAt:now,updatedAt:now}).onConflictDoUpdate({target:desktopDevices.id,set:{userEmail:access.user.email,lastSeenAt:now,lastSyncAt:now,updatedAt:now}});
+  const platform=devicePlatform(request);
+  await db.insert(desktopDevices).values({id:deviceId,userEmail:access.user.email,deviceName:clean(payload.deviceName,160)||null,platform,lastSeenAt:now,lastSyncAt:now,updatedAt:now}).onConflictDoUpdate({target:desktopDevices.id,set:{userEmail:access.user.email,platform,lastSeenAt:now,lastSyncAt:now,updatedAt:now}});
   const[operation]=await db.insert(desktopSyncOperations).values({idempotencyKey,deviceId,userEmail:access.user.email,method,requestPath,status:"processing"}).returning();
   try{
     const incomingHeaders=Array.isArray(payload.headers)?payload.headers:[];
