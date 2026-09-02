@@ -26,6 +26,26 @@ grep -Fq 'window.location.replace("/pwa/launch")' app/components/PwaSetupClient.
 systemctl is-active --quiet dali.service
 curl -fsS http://127.0.0.1:3000/api/health/ready >/dev/null
 
+service_pid="$(systemctl show dali.service --property=MainPID --value)"
+if [[ ! "$service_pid" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ABORT: invalid dali.service MainPID" >&2
+  exit 1
+fi
+
+database_url="$(
+  sudo cat "/proc/$service_pid/environ" |
+    tr '\0' '\n' |
+    sed -n 's/^DATABASE_URL=//p'
+)"
+
+case "$database_url" in
+  postgres://*|postgresql://*) ;;
+  *)
+    echo "ABORT: DATABASE_URL is unavailable from dali.service" >&2
+    exit 1
+    ;;
+esac
+
 node --test tests/pwa-runtime.test.mjs
 npm run typecheck
 git restore --staged --worktree -- tsconfig.tsbuildinfo 2>/dev/null || true
@@ -109,9 +129,10 @@ stage="pre-swap-local-metadata"
 smoke_log="$release_root/smoke.log"
 (
   cd "$worktree"
-  exec env NEXT_TELEMETRY_DISABLED=1 "$worktree/node_modules/.bin/next" start -H 127.0.0.1 -p 3101
+  exec env NEXT_TELEMETRY_DISABLED=1 DATABASE_URL="$database_url" "$worktree/node_modules/.bin/next" start -H 127.0.0.1 -p 3101
 ) >"$smoke_log" 2>&1 &
 smoke_pid=$!
+unset database_url
 
 smoke_ready=0
 for attempt in $(seq 1 60); do
