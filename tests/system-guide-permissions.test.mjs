@@ -4,32 +4,53 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("the system guide is trilingual, permission-aware, and reachable", () => {
+test("the system guide mirrors each user's visible pages, roles, and actions", () => {
   const guide = read("app/portal/SystemGuide.tsx");
   const guideCss = read("app/portal/system-guide.css");
   const dashboard = read("app/portal/PortalDashboard.tsx");
   const layout = read("app/portal/layout.tsx");
 
   assert.match(guide, /type Locale = "ar" \| "en" \| "bn"/);
-  assert.match(guide, /const modules: ModuleGuide\[\]/);
-  assert.match(guide, /module\.anyOf\.some|module\.anyOf\?\.some/);
-  assert.match(guide, /module\.allOf\.every|module\.allOf\?\.every/);
+  assert.match(guide, /export type SystemGuideView/);
+  assert.match(guide, /const pages: PageGuide\[\]/);
+  assert.match(guide, /viewSet\.has\(page\.view\)/);
+  assert.match(guide, /requirement\.anyOf\.some|requirement\.anyOf\?\.some/);
+  assert.match(guide, /requirement\.allOf\.every|requirement\.allOf\?\.every/);
   assert.match(guide, /data-no-translate/);
   assert.match(guide, /العربية · English · বাংলা/);
   assert.match(guide, /الملاحظة ليست اعتمادًا/);
   assert.match(guide, /A note is not an approval/);
   assert.match(guide, /নোট কোনো অনুমোদন নয়/);
-  assert.match(guide, /لا تعتبر الحفظ اعتمادًا أو ترحيلًا أو دفعًا/);
-  assert.match(guide, /saving is not the same as approval, posting, or payment/);
-  assert.match(guide, /সংরক্ষণ অনুমোদন, পোস্টিং বা পরিশোধ নয়/);
-  assert.match(guide, /instructionsTitle/);
-  assert.match(guide, /guide-module-body/);
+  assert.match(guide, /الحفظ ينشئ سجلًا أو مسودة فقط/);
+  assert.match(guide, /Saving only creates a record or draft/);
+  assert.match(guide, /সংরক্ষণ শুধু রেকর্ড বা খসড়া তৈরি করে/);
+  assert.match(guide, /guide-page-sections/);
+  assert.match(guide, /guide-page-actions/);
+  assert.match(guide, /guide-page-steps/);
+  assert.match(guide, /availableActions/);
+  assert.match(guide, /unavailableActions/);
   assert.match(guide, /anyOf: \["representatives\.read", "operations\.read"\]/);
+  assert.match(guide, /rolesAny: \["system_owner", "system_admin", "legal_supervisor", "lawyer"\]/);
+  assert.match(guide, /government_relations_officer: t\("مسؤول العلاقات الحكومية والامتثال"/);
+  assert.match(guide, /sales_representative: t\("مندوب مبيعات"/);
+  assert.match(guide, /purchasing_representative: t\("مندوب مشتريات"/);
+  assert.match(guide, /view: "government"[\s\S]{0,100}title: t\("العلاقات الحكومية"/);
+  assert.match(guide, /view: "documents"[\s\S]{0,100}title: t\("مستندات الشركة"/);
+  assert.match(guide, /view: "website"[\s\S]{0,100}title: t\("إدارة الموقع"/);
+  assert.doesNotMatch(guide, /view: "search"/);
+  assert.doesNotMatch(guide, /view: "video"/);
+  assert.doesNotMatch(guide, /view: "integrations"/);
+  assert.match(guide, /Shared tools, not separate pages/);
   assert.match(guideCss, /\.system-guide \.guide-hero h1\{[^}]*color:#f8fdff!important/);
-  assert.match(guideCss, /\.guide-module-body li\{[^}]*font-size:14px/);
+  assert.match(guideCss, /\.guide-page-steps li\{[^}]*font-size:14px/);
   assert.match(dashboard, /type View = [^;]*"guide"/);
   assert.match(dashboard, /changeView\("guide"\)/);
-  assert.match(dashboard, /view === "guide" && <SystemGuide/);
+  assert.match(dashboard, /view === "guide" && \(/);
+  assert.match(dashboard, /const guideViews: SystemGuideView\[\]/);
+  assert.match(dashboard, /visibleViews=\{guideViews\}/);
+  assert.match(dashboard, /operationsTabs=\{allowedOperationsTabs\}/);
+  assert.match(dashboard, /videoEnabled=\{canAccessVideo\}/);
+  assert.match(dashboard, /onOpenView=\{changeView\}/);
   assert.match(layout, /system-guide\.css/);
 });
 

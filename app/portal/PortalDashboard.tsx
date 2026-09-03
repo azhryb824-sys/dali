@@ -37,7 +37,7 @@ import TaskCenter, { GlobalTaskReminder } from "./TaskCenter";
 import ContractualDocumentsWorkspace from "./ContractualDocumentsWorkspace";
 import WorkforceSupervisionWorkspace from "./WorkforceSupervisionWorkspace";
 import LetterPdfLibrary from "./LetterPdfLibrary";
-import SystemGuide from "./SystemGuide";
+import SystemGuide, { type SystemGuideView } from "./SystemGuide";
 import { defaultWorkforceContractClauses, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 import { ANNUAL_CONTRACT_MONTHS, annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
 import { readApiJson } from "@/lib/client-api";
@@ -903,6 +903,26 @@ export default function PortalDashboard({
     ...(canAccessPrivacy ? ["privacy" as const] : []),
     ...(isRoot ? ["clients" as const] : []),
     ...(canAccessIntegrations ? ["integrations" as const] : []),
+  ];
+  const guideViews: SystemGuideView[] = [
+    "overview",
+    "notifications",
+    "tasks",
+    ...(canAccessConversations ? ["conversations" as const] : []),
+    ...(canAccess("employees") ? ["employees" as const] : []),
+    ...(canAccess("finance") ? ["finance" as const] : []),
+    ...(canAccess("legal") ? ["legal" as const] : []),
+    ...(canAccessGovernment ? ["government" as const] : []),
+    ...(canAccess("workforce") ? ["workforce" as const] : []),
+    ...(canAccessOperations ? ["operations" as const] : []),
+    ...(canAccessRepresentatives ? ["representatives" as const] : []),
+    ...(canAccessConstruction ? ["construction" as const] : []),
+    ...(canAccessContracts && canAccess("workforce") ? ["workforce-supervision" as const] : []),
+    ...(canAccessContracts ? ["contractual-documents" as const] : []),
+    ...(canAccessDocuments ? ["documents" as const] : []),
+    ...(canAccessBrand ? ["brand" as const] : []),
+    ...(canAccessWebsite ? ["website" as const] : []),
+    ...(isRoot ? ["users" as const] : []),
   ];
   const activeRoleLabel = currentUser.functionalRoles.map((role) => functionalRoleLabels[role] || role).join("، ") || roleLabels[currentUser.role];
 
@@ -2348,7 +2368,20 @@ export default function PortalDashboard({
           {view === "notifications" && <NotificationCenterView notifications={notifications} onOpen={openNotification} onRead={(id) => void updateNotificationState("read", [id])} onDismiss={(id) => void updateNotificationState("dismiss", [id])} onReadAll={() => void updateNotificationState("read-all")} onRefresh={() => void refreshNotifications()} />}
 
           {view === "tasks" && <TaskCenter />}
-          {view === "guide" && <SystemGuide locale={currentUser.preferredLanguage} userName={currentUser.displayName} role={currentUser.role} department={currentUser.department} functionalRoles={currentUser.functionalRoles} grantedPermissions={currentUser.functionalPermissions} />}
+          {view === "guide" && (
+            <SystemGuide
+              locale={currentUser.preferredLanguage}
+              userName={currentUser.displayName}
+              role={currentUser.role}
+              department={currentUser.department}
+              functionalRoles={currentUser.functionalRoles}
+              grantedPermissions={currentUser.functionalPermissions}
+              visibleViews={guideViews}
+              operationsTabs={allowedOperationsTabs}
+              videoEnabled={canAccessVideo}
+              onOpenView={changeView}
+            />
+          )}
           {view === "government" && canAccessGovernment && <GovernmentAffairsWorkspace />}
 
           {view === "conversations" && canAccessConversations && <ConversationCenter conversations={conversations} messages={conversationMessages} businessHours={businessHours} automation={chatAutomation} query={query} setQuery={setQuery} canManageSettings={canManageChatSettings} onSelect={(id) => void openConversation(id)} onRefresh={() => void refreshConversations()} onOpenSettings={() => setChatSettingsOpen(true)} />}
