@@ -6,6 +6,7 @@ const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "
 
 test("the system guide is trilingual, permission-aware, and reachable", () => {
   const guide = read("app/portal/SystemGuide.tsx");
+  const guideCss = read("app/portal/system-guide.css");
   const dashboard = read("app/portal/PortalDashboard.tsx");
   const layout = read("app/portal/layout.tsx");
 
@@ -18,6 +19,14 @@ test("the system guide is trilingual, permission-aware, and reachable", () => {
   assert.match(guide, /الملاحظة ليست اعتمادًا/);
   assert.match(guide, /A note is not an approval/);
   assert.match(guide, /নোট কোনো অনুমোদন নয়/);
+  assert.match(guide, /لا تعتبر الحفظ اعتمادًا أو ترحيلًا أو دفعًا/);
+  assert.match(guide, /saving is not the same as approval, posting, or payment/);
+  assert.match(guide, /সংরক্ষণ অনুমোদন, পোস্টিং বা পরিশোধ নয়/);
+  assert.match(guide, /instructionsTitle/);
+  assert.match(guide, /guide-module-body/);
+  assert.match(guide, /anyOf: \["representatives\.read", "operations\.read"\]/);
+  assert.match(guideCss, /\.system-guide \.guide-hero h1\{[^}]*color:#f8fdff!important/);
+  assert.match(guideCss, /\.guide-module-body li\{[^}]*font-size:14px/);
   assert.match(dashboard, /type View = [^;]*"guide"/);
   assert.match(dashboard, /changeView\("guide"\)/);
   assert.match(dashboard, /view === "guide" && <SystemGuide/);
