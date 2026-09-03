@@ -4,4 +4,12 @@
     <string name="title_activity_main">نظام دالي الإداري</string>
     <string name="package_name">sa.dally.mobile</string>
     <string name="custom_url_scheme">sa.dally.mobile</string>
+    <string name="webview_failure_title">تعذر عرض نظام دالي</string>
+    <string name="webview_failure_message">توقف مكوّن العرض في أندرويد. حدّث Android System WebView وGoogle Chrome من المتجر، ثم أعد المحاولة. لم تُفقد أي بيانات.</string>
+    <string name="webview_retry">إعادة المحاولة</string>
+    <string name="webview_close">إغلاق</string>
+    <string name="infinix_compatibility_active">تم تشغيل وضع العرض المتوافق مع أجهزة Infinix</string>
+    <string name="webview_blank_retrying">لم تكتمل واجهة دالي؛ تُعاد تهيئة العرض الآن</string>
+    <string name="webview_blank_title">لم تظهر واجهة نظام دالي</string>
+    <string name="webview_blank_message">اكتمل الاتصال لكن لم يظهر محتوى البوابة. أعد المحاولة، ثم أرسل رمز التشخيص التالي إذا استمرت المشكلة: %1$s</string>
 </resources>

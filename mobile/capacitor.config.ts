@@ -18,6 +18,8 @@ const config: CapacitorConfig = {
     backgroundColor: "#071a2b",
     allowMixedContent: false,
     captureInput: true,
+    minWebViewVersion: 111,
+    resolveServiceWorkerRequests: false,
     webContentsDebuggingEnabled: false,
   },
   ios: {
@@ -36,13 +38,9 @@ const config: CapacitorConfig = {
       showSpinner: false,
     },
     StatusBar: {
-      style: "DARK",
+      style: "LIGHT",
       backgroundColor: "#071a2b",
       overlaysWebView: false,
-    },
-    PrivacyScreen: {
-      enable: true,
-      imageName: "Splash",
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],

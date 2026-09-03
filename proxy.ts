@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDaliMobileUserAgent } from "@/lib/mobile-entry";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
 
 const contentSecurityPolicy = [
@@ -23,13 +24,24 @@ const contentSecurityPolicy = [
 const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|pwa(?:\/|$)|desktop-access(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
 const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|desktop-access(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
 const desktopMarker = "dali-desktop-v1";
-const mobileMarker = /(?:^|\s)DaliMobile\/1(?:\s|$)/;
+const minimumAndroidWebView = 111;
+
+function androidWebViewMajor(userAgent: string) {
+  if (!isDaliMobileUserAgent(userAgent) || !/Android/i.test(userAgent)) return null;
+  const match = userAgent.match(/(?:Chrome|Chromium)\/(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
 
 export async function proxy(request: NextRequest) {
   const emergencyBrowserAccess = process.env.DALI_ALLOW_BROWSER_PORTAL === "true";
   const desktopRequest = request.headers.get("x-dali-desktop-app") === desktopMarker;
-  const mobileRequest = mobileMarker.test(request.headers.get("user-agent") ?? "");
+  const userAgent = request.headers.get("user-agent") ?? "";
+  const mobileRequest = isDaliMobileUserAgent(userAgent);
   const trustedNativeRequest = desktopRequest || mobileRequest;
+  const webViewMajor = androidWebViewMajor(userAgent);
+  if ((request.nextUrl.pathname === "/portal" || request.nextUrl.pathname === "/login") && webViewMajor !== null && webViewMajor < minimumAndroidWebView) {
+    return NextResponse.redirect(new URL("/mobile/compatibility.html", request.url), 307);
+  }
   let trustedPwaRequest = false;
   if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest) {
     try {
