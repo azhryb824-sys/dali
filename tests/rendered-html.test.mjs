@@ -54,7 +54,9 @@ test("owner and system administrator can create users without exposing credentia
   assert.match(route, /functionalRoles\.some\(\(roleKey\) => roleKey === "system_owner" \|\| roleKey === "system_admin"\)/);
   assert.match(route, /portalAccessScopes/);
   assert.match(route, /after: \{ \.\.\.user, identifier: "\*\*\*\*\*\*\*\*\*\*", functionalRoles \}/);
-  assert.match(access, /users\.administer/);
+  assert.match(access, /export function canAdministerPortalUsers/);
+  assert.match(access, /access\.role === "admin" \|\| access\.functionalRoles\.includes\("system_owner"\) \|\| access\.functionalRoles\.includes\("system_admin"\)/);
+  assert.doesNotMatch(access, /canAdministerPortalUsers[\s\S]{0,400}functionalPermissions\.includes\("users\.administer"\)/);
 });
 
 test("two-step verification is disabled across active login and authorization paths", async () => {

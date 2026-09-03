@@ -4,7 +4,7 @@ import { portalActivity, portalSettings, visitorConversations, visitorMessages }
 import { getBusinessHoursState, normalizeBusinessHoursConfig } from "@/lib/business-hours";
 import { getChatAutomationConfig, normalizeChatAutomationConfig } from "@/lib/chat-automation";
 import { auditPortalAction } from "@/lib/audit";
-import { canManagePortalConversations, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessPortalConversations, canAdministerPortalUsers, canManagePortalConversations, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { readLimitedJson, rejectCrossSiteRequest, requestCorrelationId, requestSourceHash } from "@/lib/security";
 
@@ -12,7 +12,12 @@ function cleanText(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
-async function requireConversationAccess() {
+async function requireConversationReadAccess() {
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  return access && canAccessPortalConversations(access) ? access : null;
+}
+
+async function requireConversationWriteAccess() {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   return access && canManagePortalConversations(access) ? access : null;
 }
@@ -78,7 +83,7 @@ async function listConversationData(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const access = await requireConversationAccess();
+  const access = await requireConversationReadAccess();
   if (!access) return Response.json({ error: "غير مصرح بالوصول إلى المحادثات" }, { status: 403 });
   try {
     return Response.json(await listConversationData(request), { headers: { "cache-control": "no-store" } });
@@ -89,7 +94,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requireConversationAccess();
+  const access = await requireConversationWriteAccess();
   if (!access) return Response.json({ error: "غير مصرح بالرد على المحادثات" }, { status: 403 });
   try {
     const parsed = await readLimitedJson(request, 12_000);
@@ -147,7 +152,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requireConversationAccess();
+  const access = await requireConversationWriteAccess();
   if (!access) return Response.json({ error: "غير مصرح بإدارة المحادثات" }, { status: 403 });
   try {
     const parsed = await readLimitedJson(request, 40_000);
@@ -158,7 +163,7 @@ export async function PATCH(request: Request) {
     const now = new Date().toISOString();
 
     if (action === "settings") {
-      if (access.role !== "admin") return Response.json({ error: "إعدادات الدوام متاحة لمدير النظام فقط" }, { status: 403 });
+      if (!canAdministerPortalUsers(access)) return Response.json({ error: "إعدادات الدوام متاحة لمالك النظام أو مشرفه فقط" }, { status: 403 });
       const config = normalizeBusinessHoursConfig(payload.config);
       const automation = normalizeChatAutomationConfig(payload.automation);
       const [beforeHours, beforeAutomation] = await Promise.all([getBusinessHoursState(), getChatAutomationConfig()]);

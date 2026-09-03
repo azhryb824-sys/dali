@@ -1,12 +1,12 @@
 import { desc, isNotNull } from "drizzle-orm";
 import { getDb } from "@/db";
 import { videoInterviews, visitorConversations } from "@/db/schema";
-import { canManagePortalConversations, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessPortalConversations, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore } from "@/lib/security";
 
 export async function GET(){
   const access=await requirePortalApiRole(["admin","manager","employee"]);
-  if(!access||!canManagePortalConversations(access))return jsonNoStore({error:"غير مصرح بعرض تقييمات الخدمة"},{status:403});
+  if(!access||!canAccessPortalConversations(access))return jsonNoStore({error:"غير مصرح بعرض تقييمات الخدمة"},{status:403});
   const db=getDb();
   const chat=await db.select({referenceCode:visitorConversations.trackingCode,employeeEmail:visitorConversations.assignedTo,employeeRating:visitorConversations.employeeRating,companyRating:visitorConversations.companyRating,comment:visitorConversations.ratingComment,ratedAt:visitorConversations.ratedAt}).from(visitorConversations).where(isNotNull(visitorConversations.ratedAt)).orderBy(desc(visitorConversations.ratedAt)).limit(100);
   const video=await db.select({referenceCode:videoInterviews.referenceCode,employeeEmail:videoInterviews.assignedTo,employeeRating:videoInterviews.employeeRating,companyRating:videoInterviews.companyRating,comment:videoInterviews.ratingComment,ratedAt:videoInterviews.ratedAt}).from(videoInterviews).where(isNotNull(videoInterviews.ratedAt)).orderBy(desc(videoInterviews.ratedAt)).limit(100);

@@ -11,7 +11,7 @@ const clean = (value: unknown, max: number) => typeof value === "string" ? value
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "operations", "write"))) return jsonNoStore({ error: "غير مصرح بتعديل عرض السعر" }, { status: 403 });
+  if (!access || !(await hasPortalPermission(access, "contracts", "write"))) return jsonNoStore({ error: "غير مصرح بتعديل عرض السعر" }, { status: 403 });
   const id = Number((await context.params).id);
   const db = getDb();
   const quote = await db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, id) });
@@ -38,7 +38,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "operations", "write"))) return jsonNoStore({ error: "غير مصرح بحذف عرض السعر" }, { status: 403 });
+  if (!access || !(await hasPortalPermission(access, "contracts", "write"))) return jsonNoStore({ error: "غير مصرح بحذف عرض السعر" }, { status: 403 });
   const id = Number((await context.params).id);
   const db = getDb();
   const quote = await db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, id) });

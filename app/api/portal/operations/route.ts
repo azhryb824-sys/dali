@@ -29,7 +29,7 @@ import {
   completeOperation,
   failOperation,
 } from "@/lib/idempotency";
-import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
+import { canAdministerPortalUsers, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import {
   parsePaymentSchedule,
@@ -62,11 +62,15 @@ const code = (prefix: string) =>
 
 async function requireOperationsAccess(write = false) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (
-    !access ||
-    !(await hasPortalPermission(access, "operations", write ? "write" : "read"))
-  )
-    return null;
+  if (!access) return null;
+  const action = write ? "write" : "read";
+  const allowed = await Promise.all([
+    hasPortalPermission(access, "operations", action),
+    hasPortalPermission(access, "contracts", action),
+    hasPortalPermission(access, "legal", action),
+    ...(!write ? [hasPortalPermission(access, "integrations", "administer")] : []),
+  ]);
+  if (!allowed.some(Boolean)) return null;
   return access;
 }
 
@@ -85,8 +89,12 @@ export async function GET(request: Request) {
       Math.max(10, Number(params.get("limit")) || 50),
     );
     const offset = Math.max(0, Number(params.get("offset")) || 0);
-    const canSeePrivacy =
-      access.role !== "employee" || access.department === "legal";
+    const [canSeeOperations, canSeeContracts, canSeePrivacy] = await Promise.all([
+      hasPortalPermission(access, "operations", "read"),
+      hasPortalPermission(access, "contracts", "read"),
+      hasPortalPermission(access, "legal", "read"),
+    ]);
+    const canAdministerUsers = canAdministerPortalUsers(access);
     const [
       clientRows,
       contactRows,
@@ -105,64 +113,64 @@ export async function GET(request: Request) {
       clientUserRows,
       workerUserRows,
     ] = await Promise.all([
-      getDb()
+      canSeeOperations ? getDb()
         .select()
         .from(clients)
         .orderBy(desc(clients.updatedAt))
         .limit(limit)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select()
         .from(clientContacts)
         .orderBy(desc(clientContacts.updatedAt))
         .limit(limit * 3)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select()
         .from(salesOpportunities)
         .orderBy(desc(salesOpportunities.updatedAt))
         .limit(limit)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select()
         .from(salesRepresentatives)
-        .orderBy(salesRepresentatives.fullName),
-      getDb()
+        .orderBy(salesRepresentatives.fullName) : Promise.resolve([]),
+      canSeeContracts ? getDb()
         .select()
         .from(quoteVersions)
         .orderBy(desc(quoteVersions.updatedAt))
         .limit(limit)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeContracts ? getDb()
         .select()
         .from(quoteItems)
         .orderBy(quoteItems.sortOrder)
         .limit(limit * 10)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select()
         .from(workOrders)
         .orderBy(desc(workOrders.updatedAt))
         .limit(limit)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select()
         .from(workOrderRequirements)
         .limit(limit * 10)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select()
         .from(timesheets)
         .orderBy(desc(timesheets.updatedAt))
         .limit(limit)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select()
         .from(timeEntries)
         .orderBy(desc(timeEntries.workDate))
         .limit(limit * 20)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select({
           id: workers.id,
           fullName: workers.fullName,
@@ -175,19 +183,19 @@ export async function GET(request: Request) {
         .from(workers)
         .orderBy(desc(workers.updatedAt))
         .limit(limit * 10)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeOperations ? getDb()
         .select()
         .from(capacityPlans)
         .orderBy(desc(capacityPlans.updatedAt))
         .limit(limit)
-        .offset(offset),
-      getDb()
+        .offset(offset) : Promise.resolve([]),
+      canSeeContracts ? getDb()
         .select()
         .from(workflowApprovals)
         .orderBy(desc(workflowApprovals.createdAt))
         .limit(limit * 3)
-        .offset(offset),
+        .offset(offset) : Promise.resolve([]),
       canSeePrivacy
         ? getDb()
             .select()
@@ -196,7 +204,7 @@ export async function GET(request: Request) {
             .limit(limit)
             .offset(offset)
         : Promise.resolve([]),
-      access.role === "admin"
+      canAdministerUsers
         ? getDb()
             .select()
             .from(clientPortalUsers)
@@ -204,7 +212,7 @@ export async function GET(request: Request) {
             .limit(limit)
             .offset(offset)
         : Promise.resolve([]),
-      access.role === "admin"
+      canAdministerUsers
         ? getDb()
             .select()
             .from(workerPortalUsers)
@@ -264,6 +272,19 @@ export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as Record<string, unknown>;
     const action = text(payload.action, 50);
+    const quoteActions = new Set(["create-quote", "create-quote-revision", "transition-quote"]);
+    const portalUserActions = new Set(["invite-client-user", "invite-worker-user", "update-client-portal-user", "update-worker-portal-user"]);
+    if (portalUserActions.has(action) && !canAdministerPortalUsers(access)) {
+      return jsonNoStore({ error: "إدارة حسابات بوابة العملاء والعمال متاحة لمالك النظام أو المشرف فقط" }, { status: 403 });
+    }
+    const permission = quoteActions.has(action)
+      ? ["contracts", "write"] as const
+      : action === "transition-privacy-request"
+        ? ["legal", "write"] as const
+        : ["operations", "write"] as const;
+    if (!(await hasPortalPermission(access, permission[0], permission[1]))) {
+      return jsonNoStore({ error: "غير مصرح بتنفيذ هذا الإجراء" }, { status: 403 });
+    }
     const operation = await beginOperation(
       payload.idempotencyKey,
       access.user.email,
@@ -1626,11 +1647,7 @@ async function transitionRecord(
       where: eq(quoteVersions.id, id),
     });
     if (!item) throw new Error("عرض السعر غير موجود");
-    const canApprove =
-      access.role === "admin" ||
-      access.functionalRoles.some(
-        (role) => role === "system_owner" || role === "system_admin",
-      );
+    const canApprove = await hasPortalPermission(access, "contracts", "approve");
     const allowed: Record<string, string[]> = {
       draft: canApprove
         ? ["pending_approval", "approved", "cancelled"]
@@ -2033,7 +2050,7 @@ async function transitionRecord(
   }
 
   if (action === "transition-privacy-request") {
-    if (access.role === "employee" && access.department !== "legal")
+    if (!(await hasPortalPermission(access, "legal", "write")))
       throw new Error("غير مصرح بإدارة طلبات الخصوصية");
     const item = await db.query.dataSubjectRequests.findFirst({
       where: eq(dataSubjectRequests.id, id),

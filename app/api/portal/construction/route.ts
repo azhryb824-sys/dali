@@ -64,7 +64,11 @@ export async function GET() {
     const visibleRecords = records.filter((record) => (!record.projectId || projectIds.has(record.projectId)) && (!record.opportunityId || opportunityIds.has(record.opportunityId)));
     const recordIds = new Set(visibleRecords.map((record) => record.id));
     const visibleCoverage = coverage.filter((item) => visibleCities.some((city) => city.id === item.cityId));
-    return jsonNoStore({ lines, regions, cities: visibleCities, coverage: visibleCoverage, opportunities: visibleOpportunities, projects: visibleProjects, records: visibleRecords, recordLines: recordLines.filter((line) => recordIds.has(line.recordId)), attachments: attachments.filter((item) => recordIds.has(item.recordId)), canWrite: await hasPortalPermission(access, "construction", "write") || scopes.length > 0, scopedAccess: scopes.length > 0 });
+    const [canWrite, canApprove] = await Promise.all([
+      hasPortalPermission(access, "construction", "write"),
+      hasPortalPermission(access, "construction", "approve"),
+    ]);
+    return jsonNoStore({ lines, regions, cities: visibleCities, coverage: visibleCoverage, opportunities: visibleOpportunities, projects: visibleProjects, records: visibleRecords, recordLines: recordLines.filter((line) => recordIds.has(line.recordId)), attachments: attachments.filter((item) => recordIds.has(item.recordId)), canWrite: canWrite || scopes.length > 0, canApprove, scopedAccess: scopes.length > 0 });
   } catch (error) {
     console.error("construction-workspace-load-failed", error);
     return jsonNoStore({ error: "تعذر تحميل مساحة المقاولات" }, { status: 500 });
@@ -85,6 +89,7 @@ export async function POST(request: Request) {
   const payload = body?.payload && typeof body.payload === "object" ? body.payload as Record<string, unknown> : {};
   const actor = access.user.email;
   const db = getDb();
+  const canApprove = await hasPortalPermission(access, "construction", "approve");
   try {
     if (action === "create-opportunity") {
       const title = clean(payload.title, 180);
@@ -118,6 +123,7 @@ export async function POST(request: Request) {
       const stage = clean(payload.stage, 30);
       const allowed = ["new","qualified","survey","estimating","review","submitted","negotiation","won","lost","declined"];
       if (!id || !allowed.includes(stage)) throw new Error("حالة الفرصة غير صحيحة");
+      if (["won", "lost", "declined"].includes(stage) && !canApprove) throw new Error("اعتماد نتيجة الفرصة يتطلب صلاحية اعتماد المقاولات");
       const current = await db.query.constructionOpportunities.findFirst({ where: eq(constructionOpportunities.id, id) });
       if (!current) throw new Error("الفرصة غير موجودة");
       const [opportunity] = await db.update(constructionOpportunities).set({ stage, lossReason: ["lost","declined"].includes(stage) ? clean(payload.reason, 1000) || null : null, updatedAt: new Date().toISOString(), version: current.version + 1 }).where(and(eq(constructionOpportunities.id, id), eq(constructionOpportunities.version, current.version))).returning();
@@ -172,7 +178,7 @@ export async function POST(request: Request) {
       const mobilizationDays = payload.mobilizationDays === "" || payload.mobilizationDays == null ? null : positiveInteger(payload.mobilizationDays, true);
       if (!cityId || !businessLineId || !["available","conditional","unavailable"].includes(availability) || !["high","medium","limited","review_required"].includes(capacityLevel) || (payload.mobilizationDays !== "" && payload.mobilizationDays != null && mobilizationDays == null)) throw new Error("بيانات التغطية غير صحيحة");
       if (!(await scopeAllowsCity(access, scopes, cityId))) throw new Error("المدينة خارج نطاق صلاحية المستخدم");
-      const publicApproved = payload.publicApproved === true && access.role === "admin";
+      const publicApproved = payload.publicApproved === true && canApprove;
       const now = new Date().toISOString();
       const [coverage] = await db.insert(serviceCoverage).values({ cityId, businessLineId, availability, capacityLevel, mobilizationDays, ownerEmail: clean(payload.ownerEmail, 160).toLowerCase() || actor, operatingNotes: clean(payload.operatingNotes, 2000) || null, publicApproved, reviewedBy: publicApproved ? actor : null, reviewedAt: publicApproved ? now : null }).onConflictDoUpdate({ target: [serviceCoverage.cityId, serviceCoverage.businessLineId], set: { availability, capacityLevel, mobilizationDays, ownerEmail: clean(payload.ownerEmail, 160).toLowerCase() || actor, operatingNotes: clean(payload.operatingNotes, 2000) || null, publicApproved, reviewedBy: publicApproved ? actor : null, reviewedAt: publicApproved ? now : null, updatedAt: now } }).returning();
       await auditPortalAction({ actorEmail: actor, action, entityType: "service-coverage", entityId: coverage.id, after: coverage, correlationId });
@@ -214,13 +220,15 @@ export async function POST(request: Request) {
       const id = positiveInteger(payload.id);
       const status = clean(payload.status, 40);
       const allowedStatuses = ["draft","open","in_review","submitted","approved","approved_as_noted","revise_resubmit","rejected","answered","closed","void","contained","corrective_action","verified","requested","sourcing","ordered","partially_received","received","pricing","negotiated","certified","invoiced","partially_paid","paid","active","complete","cancelled"];
+      const decisionStatuses = ["approved", "approved_as_noted", "revise_resubmit", "rejected", "closed", "void", "verified", "certified", "paid", "complete", "cancelled"];
       if (!id || !allowedStatuses.includes(status)) throw new Error("حالة السجل غير صحيحة");
+      if (decisionStatuses.includes(status) && !canApprove) throw new Error("هذا القرار يتطلب صلاحية اعتماد المقاولات");
       const current = await db.query.constructionRecords.findFirst({ where: eq(constructionRecords.id, id) });
       if (!current) throw new Error("السجل غير موجود");
       if (!canCreateConstructionRecord(access, scopes, current.recordType)) throw new Error("الدور الوظيفي لا يسمح بتغيير حالة هذا السجل");
       const currentProject = current.projectId ? await db.query.constructionProjects.findFirst({ where: eq(constructionProjects.id, current.projectId) }) : null;
       if (current.projectId && (!currentProject || !scopeAllowsProject(access, scopes, currentProject.id, currentProject.cityId))) throw new Error("المشروع خارج نطاق صلاحية المستخدم");
-      if (["approved","certified","closed"].includes(status)) {
+      if (decisionStatuses.includes(status)) {
         if (current.createdBy === actor && access.role !== "admin" && !canApproveOwn(scopes)) throw new Error("فصل الواجبات يمنع اعتماد السجل بواسطة منشئه");
         assertFinancialLimit(access, scopes, current.amountHalalas, true);
       }

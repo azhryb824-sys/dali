@@ -85,6 +85,7 @@ export async function PATCH(request: Request) {
   if (!current) return jsonNoStore({ error: "الإصدار غير موجود" }, { status: 404 });
   const auth = await authorization(current.recordId, true);
   if (!auth) return jsonNoStore({ error: "غير مصرح بمراجعة هذا الإصدار" }, { status: 403 });
+  if (!(await hasPortalPermission(auth.access, "construction", "approve"))) return jsonNoStore({ error: "قرار مراجعة الإصدار يتطلب صلاحية اعتماد المقاولات" }, { status: 403 });
   if (current.createdBy === auth.access.user.email && !canApproveOwn(auth.scopes)) return jsonNoStore({ error: "فصل الواجبات يمنع منشئ الإصدار من اعتماده" }, { status: 409 });
   const rejectionReason = text(body.rejectionReason, 1000);
   if (["rejected", "revise_resubmit"].includes(status) && rejectionReason.length < 5) return jsonNoStore({ error: "سبب الرفض أو طلب التعديل إلزامي" }, { status: 400 });

@@ -163,5 +163,13 @@ export const publicUiTranslations = {
   "جارٍ البحث عن موظف متاح": { en: "Finding an available employee", ur: "دستیاب ملازم تلاش کیا جا رہا ہے" },
   "بانتظار قبول الموظف": { en: "Waiting for an employee to accept", ur: "ملازم کی قبولیت کا انتظار ہے" },
   "دخول المقابلة المرئية": { en: "Join video interview", ur: "ویڈیو انٹرویو میں شامل ہوں" },
-  "باستخدام المقابلة توافق على تشغيل الكاميرا والميكروفون. النظام لا يسجل الصوت أو الصورة.": { en: "By joining, you consent to camera and microphone access. The system does not record audio or video.", ur: "شامل ہو کر آپ کیمرہ اور مائیکروفون کی اجازت دیتے ہیں۔ نظام آڈیو یا ویڈیو ریکارڈ نہیں کرتا۔" }
+  "باستخدام المقابلة توافق على تشغيل الكاميرا والميكروفون. النظام لا يسجل الصوت أو الصورة.": { en: "By joining, you consent to camera and microphone access. The system does not record audio or video.", ur: "شامل ہو کر آپ کیمرہ اور مائیکروفون کی اجازت دیتے ہیں۔ نظام آڈیو یا ویڈیو ریکارڈ نہیں کرتا۔" },
+  "اذكر موضوع الملاحظة، وما حدث أو ما تقترحه، وطريقة التواصل المناسبة.": { en: "State the subject of your feedback, what happened or what you suggest, and your preferred contact method.", bn: "আপনার মতামতের বিষয়, কী ঘটেছে বা আপনি কী প্রস্তাব করছেন এবং যোগাযোগের পছন্দের মাধ্যম লিখুন।" },
+  "إرسال الملاحظة": { en: "Submit feedback", bn: "মতামত পাঠান" },
+  "تُحدد نقاط الجودة والسلامة مع خطة العمل، ويظل لكل ملاحظة مالك وموعد ودليل إغلاق.": { en: "Quality and safety checkpoints are defined with an action plan, and every observation has an owner, deadline, and closure evidence.", bn: "কর্মপরিকল্পনাসহ গুণমান ও নিরাপত্তার যাচাইবিন্দু নির্ধারিত হয়; প্রতিটি পর্যবেক্ষণের দায়িত্বশীল ব্যক্তি, সময়সীমা ও সমাপ্তির প্রমাণ থাকে।" },
+  "تقدم وتغييرات وملاحظات ووثائق إقفال.": { en: "Progress, changes, observations, and closeout documents.", bn: "অগ্রগতি, পরিবর্তন, পর্যবেক্ষণ ও সমাপ্তির নথি।" },
+  "شاركنا ملاحظتك": { en: "Share your feedback", bn: "আপনার মতামত জানান" },
+  "ملاحظات البند": { en: "Line-item notes", bn: "আইটেমের নোট" },
+  "ملاحظتك (اختيارية)": { en: "Your feedback (optional)", bn: "আপনার মতামত (ঐচ্ছিক)" },
+  "نستمع إلى ملاحظتك باهتمام، ونوجّهها بسرية إلى الفريق المختص، لأن جودة تجربتك جزء أساسي من نجاحنا.": { en: "We value your feedback and route it confidentially to the relevant team, because the quality of your experience is central to our success.", bn: "আমরা আপনার মতামত গুরুত্বসহকারে শুনি এবং গোপনীয়ভাবে সংশ্লিষ্ট দলের কাছে পাঠাই, কারণ আপনার অভিজ্ঞতার মান আমাদের সাফল্যের গুরুত্বপূর্ণ অংশ।" }
 } as const;

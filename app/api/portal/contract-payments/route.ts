@@ -23,7 +23,7 @@ export async function GET(){
   for(const payment of due)await issueDueContractInvoice(payment.id,"system@dally-corporation.com").catch(async error=>{await emitPortalNotification({eventType:"contract-payment-auto-invoice-failed",title:"تعذر إنشاء فاتورة دفعة مستحقة",message:`الدفعة ${payment.id} — ${error instanceof Error?error.message:"خطأ غير معروف"}`,severity:"critical",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance",dedupeKey:`auto-invoice-failed:${payment.id}:${payment.dueDate}`}).catch(()=>undefined)});
   const [contracts,payments,professions,contacts,banks,paymentAccounts]=await Promise.all([db.select().from(workforceContracts).orderBy(asc(workforceContracts.startDate)),db.select().from(contractPaymentSchedules).orderBy(asc(contractPaymentSchedules.dueDate),asc(contractPaymentSchedules.installmentNumber)),db.select().from(contractProfessions),db.select().from(clientContacts),db.select().from(bankAccounts).where(eq(bankAccounts.status,"active")).orderBy(asc(bankAccounts.bankName)),db.select().from(chartOfAccounts).where(and(eq(chartOfAccounts.status,"active"),eq(chartOfAccounts.accountType,"asset"),eq(chartOfAccounts.isPosting,true))).orderBy(asc(chartOfAccounts.code))]);
   const clientMobiles=Object.fromEntries(contacts.filter(item=>item.mobile).sort((a,b)=>Number(b.isPrimary)-Number(a.isPrimary)).map(item=>[item.clientId,item.mobile]));
-  return jsonNoStore({contracts,payments,professions,clientMobiles,banks,paymentAccounts,canManageContracts:owner(access)||await hasPortalPermission(access,"contracts","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","approve")||await hasPortalPermission(access,"finance","write"),canReferLegal:owner(access)});
+  return jsonNoStore({contracts,payments,professions,clientMobiles,banks,paymentAccounts,canManageContracts:owner(access)||await hasPortalPermission(access,"contracts","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","pay"),canReferLegal:owner(access)});
 }
 
 export async function POST(request:Request){
@@ -71,7 +71,7 @@ export async function PATCH(request:Request){
     return jsonNoStore({payment:updated});
   }
   if(action==="mark-paid"){
-    if(!(await hasPortalPermission(access,"finance","approve"))&&!(await hasPortalPermission(access,"finance","write")))return jsonNoStore({error:"غير مصرح بتسجيل السداد"},{status:403});
+    if(!(await hasPortalPermission(access,"finance","pay")))return jsonNoStore({error:"تسجيل السداد يتطلب صلاحية الدفع المالي"},{status:403});
     if(payment.status!=="invoiced"||!payment.financialRecordId||payment.paymentJournalEntryId)return jsonNoStore({error:"لا يمكن تسجيل السداد قبل إصدار الاستحقاق أو سبق تسجيله"},{status:409});
     const financial=await db.query.financialRecords.findFirst({where:eq(financialRecords.id,payment.financialRecordId)});
     if(!financial)return jsonNoStore({error:"السجل المالي المرتبط غير موجود"},{status:404});

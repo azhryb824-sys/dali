@@ -3,15 +3,15 @@ import { getDb } from "@/db";
 import { workforceRequests } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
-import { requirePortalApiRole } from "@/lib/portal-access";
+import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { rejectCrossSiteRequest } from "@/lib/security";
 
 const allowedStatuses = new Set(["new", "reviewing", "contacted", "closed"]);
 
 export async function PATCH(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin", "manager"]);
-  if (!access) return Response.json({ error: "غير مصرح" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !(await hasPortalPermission(access, "workforce", "write"))) return Response.json({ error: "غير مصرح" }, { status: 403 });
 
   try {
     const payload = (await request.json()) as { id?: unknown; status?: unknown; version?: unknown };

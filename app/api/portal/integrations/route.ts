@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, lt, lte } from "drizzle-orm";
 import { getDb } from "@/db";
 import { integrationOutbox, operationRequests, portalSessions, publicRateLimits } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
-import { requirePortalApiRole } from "@/lib/portal-access";
+import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
@@ -22,8 +22,14 @@ function integrationConfig() {
   return { url, secret, valid };
 }
 
+async function requireIntegrationAccess() {
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !(await hasPortalPermission(access, "integrations", "administer"))) return null;
+  return access;
+}
+
 export async function GET() {
-  const access = await requirePortalApiRole(["admin"]);
+  const access = await requireIntegrationAccess();
   if (!access) return jsonNoStore({ error: "غير مصرح بإدارة التكاملات" }, { status: 403 });
   try {
     const rows = await getDb().select({ id: integrationOutbox.id, eventType: integrationOutbox.eventType, aggregateType: integrationOutbox.aggregateType, aggregateId: integrationOutbox.aggregateId, status: integrationOutbox.status, attempts: integrationOutbox.attempts, availableAt: integrationOutbox.availableAt, processedAt: integrationOutbox.processedAt, lastError: integrationOutbox.lastError, createdAt: integrationOutbox.createdAt }).from(integrationOutbox).orderBy(desc(integrationOutbox.createdAt)).limit(150);
@@ -35,7 +41,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin"]);
+  const access = await requireIntegrationAccess();
   if (!access) return jsonNoStore({ error: "غير مصرح بإدارة التكاملات" }, { status: 403 });
   try {
     const parsed = await readLimitedJson(request, 4_000);

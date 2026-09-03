@@ -22,7 +22,7 @@ import {
 } from "@/db/schema";
 import { cleanDate, cleanText, makeReference, objectKey, safeFileName } from "@/lib/company-documents";
 import { generateIssuedPdf, issuedDocumentLabels, type IssuedDocumentType } from "@/lib/pdf-generator";
-import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
+import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, requestCorrelationId, validateUploadedFile } from "@/lib/security";
@@ -107,7 +107,7 @@ function parsePayments(value: unknown, contractSubtotalHalalas: number, vatRateB
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !canManagePortalDocuments(access)) return Response.json({ error: "غير مصرح بإصدار المستندات" }, { status: 403 });
+  if (!access) return Response.json({ error: "غير مصرح بإصدار المستندات" }, { status: 403 });
   const correlationId = requestCorrelationId(request);
 
   let form: FormData;
@@ -128,6 +128,19 @@ export async function POST(request: Request) {
     const vatCertificateFile = form.get("vatCertificateFile");
     const nationalAddressFile = form.get("nationalAddressFile");
     const documentType = cleanText(payload.documentType, 40);
+    if (!isDocumentType(documentType)) return Response.json({ error: "نوع المستند غير صحيح" }, { status: 400 });
+    const permissionResource = ["workforce_contract", "quotation", "official_letter"].includes(documentType)
+      ? "contracts"
+      : ["invoice", "receipt", "payment_voucher", "progress_claim"].includes(documentType)
+        ? "finance"
+        : documentType === "payslip"
+          ? "employees"
+          : documentType === "construction_record"
+            ? "construction"
+            : "documents";
+    if (!(await hasPortalPermission(access, permissionResource, "write"))) {
+      return Response.json({ error: "غير مصرح بإصدار هذا النوع من المستندات" }, { status: 403 });
+    }
     const clientName = cleanText(payload.clientName, 160);
     const clientCr = cleanText(payload.clientCr, 30);
     const clientVat = cleanText(payload.clientVat, 30);
@@ -170,7 +183,7 @@ export async function POST(request: Request) {
     let paymentSchedule: PaymentInput[] = [];
     const validatedClientFiles: Array<{ file: File; kind: string; label: string; bytes: Uint8Array; validationDetails: string }> = [];
 
-    if (!isDocumentType(documentType) || documentType === "construction_record" || clientName.length < 2 || !issueDate || expiryDate === "" || details.length < 5) {
+    if (documentType === "construction_record" || clientName.length < 2 || !issueDate || expiryDate === "" || details.length < 5) {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
     }
     const title = `${issuedDocumentLabels[documentType]} — ${clientName}`;

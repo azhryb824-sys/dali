@@ -294,7 +294,11 @@ export function canAccessCompanyFiles(access: Pick<PortalAccess, "role" | "depar
 }
 
 export function canManagePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.write") || access.functionalPermissions.includes("finance.write");
+  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.write");
+}
+
+export function canSharePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
+  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.share");
 }
 
 export function canManageCompanyAssets(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
@@ -302,11 +306,15 @@ export function canManageCompanyAssets(access: Pick<PortalAccess, "role" | "func
 }
 
 export function canAdministerPortalUsers(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin") || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("users.administer");
+  return access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin");
+}
+
+export function canAccessPortalConversations(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
+  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("conversations.read") || access.functionalPermissions.includes("conversations.write");
 }
 
 export function canManagePortalConversations(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.department === "workforce" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("workforce.write") || access.functionalPermissions.includes("conversations.write");
+  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("conversations.write");
 }
 
 export async function hasPortalPermission(

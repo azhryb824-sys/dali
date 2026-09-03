@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import { portalActivity, workforceRequestReplies, workforceRequests } from "@/db/schema";
 import { sendVisitorReplyEmail } from "@/lib/email-delivery";
 import { emitPortalNotification } from "@/lib/portal-notifications";
-import { requirePortalApiRole } from "@/lib/portal-access";
+import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { rejectCrossSiteRequest } from "@/lib/security";
 
 function cleanText(value: unknown, maxLength: number) {
@@ -12,8 +12,8 @@ function cleanText(value: unknown, maxLength: number) {
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin", "manager"]);
-  if (!access) return Response.json({ error: "غير مصرح بالرد على طلبات الزوار" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !(await hasPortalPermission(access, "workforce", "write"))) return Response.json({ error: "غير مصرح بالرد على طلبات الزوار" }, { status: 403 });
 
   const id = Number((await context.params).id);
   if (!Number.isInteger(id) || id < 1) return Response.json({ error: "رقم الطلب غير صحيح" }, { status: 400 });

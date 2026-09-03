@@ -1,12 +1,12 @@
 import { auditPortalAction } from "@/lib/audit";
 import { brandIdentityAssets, isBrandIdentityAssetId } from "@/lib/brand-identity";
 import { generateBrandIdentityPdf } from "@/lib/brand-identity-pdf";
-import { requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessCompanyFiles, requirePortalApiRole } from "@/lib/portal-access";
 import { attachmentHeaders } from "@/lib/company-documents";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access) return Response.json({ error: "غير مصرح بتنزيل ملفات الهوية" }, { status: 403 });
+  if (!access || !canAccessCompanyFiles(access)) return Response.json({ error: "غير مصرح بتنزيل ملفات الهوية" }, { status: 403 });
   const { id } = await context.params;
   if (!isBrandIdentityAssetId(id)) return Response.json({ error: "ملف الهوية غير موجود" }, { status: 404 });
   const item = brandIdentityAssets.find((asset) => asset.id === id)!;

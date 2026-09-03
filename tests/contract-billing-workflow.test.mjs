@@ -159,9 +159,9 @@ test("sales and purchasing representatives follow owner-controlled request workf
   assert.match(share,/documentShareLinks/);assert.match(share,/shareUrl/);assert.match(contractRoute,/\["approved", "sent", "accepted"\]/);
 });
 
-test("quotation approval works for owner and system admin accounts",async()=>{
+test("quotation approval requires the dedicated contract approval permission",async()=>{
   const[api,workspace]=await Promise.all([source("app/api/portal/operations/route.ts"),source("app/portal/OperationsWorkspace.tsx")]);
-  assert.match(api,/access\.role === "admin"\s*\|\|\s*access\.functionalRoles\.some/);
+  assert.match(api,/hasPortalPermission\(access, "contracts", "approve"\)/);
   assert.match(workspace,/const canApproveQuotes = isOwner \|\| isAdmin/);
   assert.match(workspace,/canApproveQuotes\s*&&\s*\["draft",\s*"pending_approval"\]/);
 });

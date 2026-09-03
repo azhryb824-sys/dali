@@ -69,6 +69,7 @@ export async function POST(request: Request) {
   const costCode = clean(body?.costCode, 40).toUpperCase(); const costTitle = clean(body?.costTitle, 180);
   const effectiveDate = clean(body?.effectiveDate, 10); const sourceRecordId = integer(body?.sourceRecordId);
   if (!projectId || amountHalalas === null || !types.has(entryType) || !categories.has(costCategory) || !costCode || costTitle.length < 3 || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) return jsonNoStore({ error: "بيانات حركة التكلفة غير مكتملة" }, { status: 400 });
+  if (["approved_change", "payment_certificate"].includes(entryType) && !(await hasPortalPermission(authorization.access, "construction", "approve"))) return jsonNoStore({ error: "تسجيل أمر تغيير أو مستخلص معتمد يتطلب صلاحية اعتماد المقاولات" }, { status: 403 });
   const db = getDb();
   const project = await db.query.constructionProjects.findFirst({ where: eq(constructionProjects.id, projectId) });
   if (!project || !scopeAllowsProject(authorization.access, authorization.scopes, project.id, project.cityId)) return jsonNoStore({ error: "المشروع خارج نطاق الصلاحية" }, { status: 404 });
@@ -86,6 +87,7 @@ export async function PATCH(request: Request) {
   const crossSite = rejectCrossSiteRequest(request); if (crossSite) return jsonNoStore({ error: "طلب صادر من موقع غير مسموح" }, { status: 403 });
   const authorization = await authorize("write");
   if (!authorization) return jsonNoStore({ error: "غير مصرح بتعديل رقابة التكاليف" }, { status: 403 });
+  if (!(await hasPortalPermission(authorization.access, "construction", "approve"))) return jsonNoStore({ error: "إلغاء حركة تكلفة يتطلب صلاحية اعتماد المقاولات" }, { status: 403 });
   const parsed = await readLimitedJson(request, 4000); if (!parsed.ok) return parsed.response;
   const body = parsed.value as Record<string, unknown> | null; const id = integer(body?.id);
   if (!id) return jsonNoStore({ error: "الحركة غير صحيحة" }, { status: 400 });

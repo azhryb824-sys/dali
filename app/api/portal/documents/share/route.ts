@@ -2,14 +2,14 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyDocuments, documentShareLinks } from "@/db/schema";
 import { hashShareToken } from "@/lib/company-documents";
-import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessPortalDocuments, canSharePortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { auditPortalAction } from "@/lib/audit";
 import { rejectCrossSiteRequest } from "@/lib/security";
 
 export async function GET() {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !canManagePortalDocuments(access)) return Response.json({ error: "غير مصرح بعرض روابط المشاركة" }, { status: 403 });
+  if (!access || !canAccessPortalDocuments(access) || !canSharePortalDocuments(access)) return Response.json({ error: "غير مصرح بعرض روابط المشاركة" }, { status: 403 });
   try {
     const db = getDb();
     const rows = await db.select({ id: documentShareLinks.id, documentId: documentShareLinks.documentId, expiresAt: documentShareLinks.expiresAt, revokedAt: documentShareLinks.revokedAt, maxDownloads: documentShareLinks.maxDownloads, downloadCount: documentShareLinks.downloadCount, lastAccessedAt: documentShareLinks.lastAccessedAt, createdBy: documentShareLinks.createdBy, createdAt: documentShareLinks.createdAt }).from(documentShareLinks).orderBy(desc(documentShareLinks.createdAt)).limit(200);
@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !canManagePortalDocuments(access)) return Response.json({ error: "غير مصرح بمشاركة المستندات" }, { status: 403 });
+  if (!access || !canAccessPortalDocuments(access) || !canSharePortalDocuments(access)) return Response.json({ error: "غير مصرح بمشاركة المستندات" }, { status: 403 });
 
   try {
     const payload = await request.json() as { documentId?: unknown; expiresInDays?: unknown; maxDownloads?: unknown };
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !canManagePortalDocuments(access)) return Response.json({ error: "غير مصرح بإبطال روابط المشاركة" }, { status: 403 });
+  if (!access || !canAccessPortalDocuments(access) || !canSharePortalDocuments(access)) return Response.json({ error: "غير مصرح بإبطال روابط المشاركة" }, { status: 403 });
   try {
     const payload = await request.json() as { shareId?: unknown; reason?: unknown };
     const shareId = typeof payload.shareId === "string" ? payload.shareId.trim().slice(0, 80) : "";

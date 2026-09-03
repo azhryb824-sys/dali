@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import { employeeDocuments, employees, portalUsers } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { objectKey, safeFileName } from "@/lib/company-documents";
-import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessPortalDepartment, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { bankNameFromSaudiIban, isValidSaudiIban, normalizeSaudiIban } from "@/lib/saudi-banks";
@@ -108,8 +108,8 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await requirePortalApiRole(["admin", "manager"]);
-  if (!access || !canAccessPortalDepartment(access, "employees", true)) return Response.json({ error: "غير مصرح بحذف الموظفين" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !(await hasPortalPermission(access, "employees", "approve"))) return Response.json({ error: "أرشفة الموظف تتطلب صلاحية اعتماد شؤون الموظفين" }, { status: 403 });
   try {
     const id = Number(new URL(request.url).searchParams.get("id"));
     if (!Number.isInteger(id) || id < 1) return Response.json({ error: "رقم الموظف غير صحيح" }, { status: 400 });

@@ -19,7 +19,7 @@ function metadata(value: string | null) {
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "operations", "read"))) return Response.json({ error: "غير مصرح بتنزيل عرض السعر" }, { status: 403 });
+  if (!access || !(await hasPortalPermission(access, "contracts", "read"))) return Response.json({ error: "غير مصرح بتنزيل عرض السعر" }, { status: 403 });
   const id = Number((await context.params).id);
   if (!Number.isInteger(id) || id < 1) return Response.json({ error: "عرض السعر غير صحيح" }, { status: 400 });
 

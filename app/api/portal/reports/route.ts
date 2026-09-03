@@ -9,7 +9,7 @@ function validDate(value:string|null,fallback:string){return value&&/^\d{4}-\d{2
 function clean(value:unknown,length:number){return typeof value==="string"?value.trim().slice(0,length):"";}
 
 export async function GET(request:Request){
-  const access=await requirePortalApiRole(["admin","manager","employee"]);if(!access||!(await hasPortalPermission(access,"finance","read")))return jsonNoStore({error:"غير مصرح"},{status:403});
+  const access=await requirePortalApiRole(["admin","manager","employee"]);if(!access||!(await hasPortalPermission(access,"finance","read"))&&!(await hasPortalPermission(access,"reports","read")))return jsonNoStore({error:"غير مصرح"},{status:403});
   const url=new URL(request.url);const year=new Date().getUTCFullYear();const from=validDate(url.searchParams.get("from"),`${year}-01-01`);const to=validDate(url.searchParams.get("to"),`${year}-12-31`);if(to<from)return jsonNoStore({error:"تاريخ النهاية يسبق البداية"},{status:400});
   const db=getDb();const [accounts,entries,entriesToDate,contracts,centers,postedRecords]=await Promise.all([
     db.select().from(chartOfAccounts).where(eq(chartOfAccounts.status,"active")).orderBy(asc(chartOfAccounts.code)),

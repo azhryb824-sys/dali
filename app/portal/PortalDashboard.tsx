@@ -37,6 +37,7 @@ import TaskCenter, { GlobalTaskReminder } from "./TaskCenter";
 import ContractualDocumentsWorkspace from "./ContractualDocumentsWorkspace";
 import WorkforceSupervisionWorkspace from "./WorkforceSupervisionWorkspace";
 import LetterPdfLibrary from "./LetterPdfLibrary";
+import SystemGuide from "./SystemGuide";
 import { defaultWorkforceContractClauses, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 import { ANNUAL_CONTRACT_MONTHS, annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
 import { readApiJson } from "@/lib/client-api";
@@ -44,7 +45,7 @@ import { readApiJson } from "@/lib/client-api";
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
 type RequestStatus = "new" | "reviewing" | "contacted" | "closed";
-type View = "overview" | "notifications" | "tasks" | "employees" | "finance" | "legal" | "government" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "workforce-supervision" | "contractual-documents" | "documents" | "brand" | "website" | "users";
+type View = "overview" | "notifications" | "tasks" | "guide" | "employees" | "finance" | "legal" | "government" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "workforce-supervision" | "contractual-documents" | "documents" | "brand" | "website" | "users";
 type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 type WorkforceRequest = {
@@ -587,13 +588,19 @@ function sponsorshipLabel(value: Pick<WorkerRecord, "sponsorshipType" | "sponsor
   return `على كفالة ${value.sponsorName || "جهة أخرى"}`;
 }
 
-type IconName = "home" | "employees" | "finance" | "legal" | "workforce" | "conversations" | "documents" | "brand" | "website" | "users" | "search" | "bell" | "menu" | "close" | "plus" | "download" | "share" | "upload" | "stamp" | "mail" | "check";
+type IconName = "home" | "guide" | "employees" | "finance" | "legal" | "workforce" | "conversations" | "documents" | "brand" | "website" | "users" | "search" | "bell" | "menu" | "close" | "plus" | "download" | "share" | "upload" | "stamp" | "mail" | "check";
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
     home: (
       <>
         <path d="M3 10.8 12 3l9 7.8" />
         <path d="M5.5 9.5V21h13V9.5M9 21v-6h6v6" />
+      </>
+    ),
+    guide: (
+      <>
+        <path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H12v18H7.5A3.5 3.5 0 0 0 4 23V5.5Z" />
+        <path d="M20 5.5A3.5 3.5 0 0 0 16.5 2H12v18h4.5A3.5 3.5 0 0 1 20 23V5.5Z" />
       </>
     ),
     employees: (
@@ -745,6 +752,7 @@ export default function PortalDashboard({
   canAccessConstruction,
   canManageChatSettings,
   canManageDocuments,
+  canShareDocuments,
   canManageAssets,
   emailConfigured,
   signOutPath,
@@ -771,6 +779,7 @@ export default function PortalDashboard({
   initialDocuments: CompanyDocument[];
   initialAssets: CompanyAsset[];
   canManageDocuments: boolean;
+  canShareDocuments: boolean;
   canManageAssets: boolean;
   initialContracts: WorkforceContract[];
   initialContractProfessions: ContractProfession[];
@@ -848,6 +857,7 @@ export default function PortalDashboard({
   const isSystemOwner = currentUser.functionalRoles.includes("system_owner");
   const isSystemAdmin = currentUser.functionalRoles.includes("system_admin");
   const hasPermission = (permission: string) => currentUser.role === "admin" || currentUser.functionalPermissions.includes("*") || currentUser.functionalPermissions.includes(permission);
+  const isRoot = currentUser.role === "admin" || functionalAdmin;
   const canAccess = (department: RecordEntity) => hasPermission(`${department}.read`);
   const canWriteDepartment = (department: RecordEntity) => hasPermission(`${department}.write`);
   const viewDepartment: Partial<Record<View, RecordEntity>> = {
@@ -855,16 +865,45 @@ export default function PortalDashboard({
     finance: "finance",
     legal: "legal",
     workforce: "workforce",
-    conversations: "workforce",
   };
   const canAccessRepresentatives = hasPermission("representatives.read") || hasPermission("operations.read");
   const canWriteRepresentatives = hasPermission("representatives.write") || hasPermission("operations.write");
-  const canWrite = viewDepartment[view] ? canWriteDepartment(viewDepartment[view]!) : view === "representatives" ? canWriteRepresentatives : view === "operations" ? hasPermission("operations.write") : view === "contractual-documents" ? hasPermission("contracts.write") : currentUser.role === "admin" || functionalAdmin;
-  const canAccessDocuments = currentUser.role === "admin" || hasPermission("documents.read") || hasPermission("assets.administer");
+  const canAccessConversations = hasPermission("conversations.read") || hasPermission("conversations.write");
+  const canWriteConversations = hasPermission("conversations.write");
+  const canAccessDocuments = hasPermission("documents.read");
+  const canAccessBrand = canAccessDocuments || hasPermission("assets.administer");
   const canAccessGovernment = hasPermission("government.read");
-  const canAccessOperations = hasPermission("operations.read");
+  const canAccessOperationsCore = hasPermission("operations.read");
+  const canAccessPrivacy = hasPermission("legal.read");
+  const canAccessIntegrations = hasPermission("integrations.administer");
+  const canAccessOperations = canAccessOperationsCore || canAccessPrivacy || canAccessIntegrations;
   const canAccessContracts = hasPermission("contracts.read");
   const canManageLegalCases = currentUser.role === "admin" || currentUser.functionalRoles.some((role) => ["system_owner", "system_admin", "legal_supervisor", "lawyer"].includes(role));
+  const canIssueContracts = hasPermission("contracts.write");
+  const canIssueFinanceDocuments = hasPermission("finance.write");
+  const canAccessVideo = hasPermission("video.read");
+  const canExportReports = hasPermission("reports.export");
+  const canApproveFinance = hasPermission("finance.approve");
+  const canPayFinance = hasPermission("finance.pay");
+  const canArchiveEmployees = hasPermission("employees.approve");
+  const canArchiveWorkers = isRoot;
+  const canWrite = viewDepartment[view]
+    ? canWriteDepartment(viewDepartment[view]!)
+    : view === "operations"
+      ? hasPermission("operations.write") || hasPermission("legal.write")
+      : view === "representatives"
+        ? canWriteRepresentatives
+      : view === "conversations"
+        ? canWriteConversations
+        : view === "contractual-documents"
+          ? hasPermission("contracts.write")
+          : isRoot;
+  const allowedOperationsTabs: OperationsTab[] = [
+    ...(canAccessOperationsCore ? ["crm", "orders", "timesheets", "capacity"] as const : []),
+    ...(canAccessPrivacy ? ["privacy" as const] : []),
+    ...(isRoot ? ["clients" as const] : []),
+    ...(canAccessIntegrations ? ["integrations" as const] : []),
+  ];
   const activeRoleLabel = currentUser.functionalRoles.map((role) => functionalRoleLabels[role] || role).join("، ") || roleLabels[currentUser.role];
 
   useEffect(() => {
@@ -998,18 +1037,19 @@ export default function PortalDashboard({
   const waitingConversations = conversations.filter((item) => item.status === "waiting").length;
 
   function canOpenView(next: View) {
-    if (["overview", "notifications", "tasks"].includes(next)) return true;
+    if (["overview", "notifications", "tasks", "guide"].includes(next)) return true;
     if (next === "employees" || next === "finance" || next === "legal" || next === "workforce") return canAccess(next);
     if (next === "government") return canAccessGovernment;
     if (next === "operations") return canAccessOperations;
     if (next === "representatives") return canAccessRepresentatives;
     if (next === "workforce-supervision") return canAccessContracts && canAccess("workforce");
     if (next === "contractual-documents") return canAccessContracts;
-    if (next === "documents" || next === "brand") return canAccessDocuments;
+    if (next === "documents") return canAccessDocuments;
+    if (next === "brand") return canAccessBrand;
     if (next === "construction") return canAccessConstruction;
-    if (next === "conversations") return hasPermission("conversations.read") || hasPermission("conversations.write");
+    if (next === "conversations") return canAccessConversations;
     if (next === "website") return canAccessWebsite;
-    if (next === "users") return functionalAdmin || currentUser.role === "admin";
+    if (next === "users") return isRoot;
     return false;
   }
   function changeView(next: View) {
@@ -1080,12 +1120,12 @@ export default function PortalDashboard({
   }, []);
 
   useEffect(() => {
-    if (currentUser.role === "employee" && currentUser.department !== "workforce") return;
+    if (!canAccessConversations) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refreshConversations(true);
     }, 12000);
     return () => window.clearInterval(timer);
-  }, [refreshConversations, currentUser.role, currentUser.department]);
+  }, [refreshConversations, canAccessConversations]);
 
   async function openConversation(id: string) {
     setSelectedConversationId(id);
@@ -1101,16 +1141,18 @@ export default function PortalDashboard({
     } catch {
       /* يحتفظ النظام بالبيانات المحملة مسبقاً عند تعذر الجلب التفصيلي */
     }
-    const now = new Date().toISOString();
-    setConversationMessages((items) => items.map((item) => (item.conversationId === id && item.senderType === "visitor" ? { ...item, readByStaffAt: item.readByStaffAt || now } : item)));
-    try {
-      await fetch("/api/portal/conversations", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "mark-read", conversationId: id }),
-      });
-    } catch {
-      /* polling will reconcile read state */
+    if (canWriteConversations) {
+      const now = new Date().toISOString();
+      setConversationMessages((items) => items.map((item) => (item.conversationId === id && item.senderType === "visitor" ? { ...item, readByStaffAt: item.readByStaffAt || now } : item)));
+      try {
+        await fetch("/api/portal/conversations", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "mark-read", conversationId: id }),
+        });
+      } catch {
+        /* polling will reconcile read state */
+      }
     }
   }
 
@@ -1241,7 +1283,7 @@ export default function PortalDashboard({
     setNotificationsOpen(false);
     setOperationsQuery("");
     const actionView = item.actionView as View | null;
-    if (actionView && ["overview", "notifications", "tasks", "employees", "finance", "legal", "government", "workforce", "operations", "representatives", "construction", "conversations", "contractual-documents", "documents", "website", "users"].includes(actionView)) changeView(actionView);
+    if (actionView && canOpenView(actionView)) changeView(actionView);
     if (item.entityType === "workforce-request" && item.entityId) setSelectedId(Number(item.entityId));
     if (item.entityType === "worker" && item.entityId) setSelectedWorkerId(Number(item.entityId));
     if (item.entityType === "workforce-contract" && item.entityId) setSelectedContractId(Number(item.entityId));
@@ -1893,6 +1935,7 @@ export default function PortalDashboard({
     overview: "لوحة المتابعة",
     notifications: "مركز الإشعارات",
     tasks: "المهام والتذكيرات",
+    guide: "دليل استخدام النظام",
     employees: "إدارة الموظفين",
     finance: "الإدارة المالية",
     legal: "الشؤون القانونية",
@@ -1937,7 +1980,11 @@ export default function PortalDashboard({
             <Icon name="check" />
             <span>المهام والتذكيرات</span>
           </button>
-          {canAccess("workforce") && (
+          <button className={view === "guide" ? "active" : ""} onClick={() => changeView("guide")}>
+            <Icon name="guide" />
+            <span>دليل استخدام النظام</span>
+          </button>
+          {canAccessConversations && (
             <button className={view === "conversations" ? "active" : ""} onClick={() => changeView("conversations")}>
               <Icon name="conversations" />
               <span>المحادثات المباشرة</span>
@@ -2014,7 +2061,7 @@ export default function PortalDashboard({
               {documentAlerts > 0 && <b>{documentAlerts}</b>}
             </button>
           )}
-          {canAccessDocuments && (
+          {canAccessBrand && (
             <button className={view === "brand" ? "active" : ""} onClick={() => changeView("brand")}>
               <Icon name="brand" />
               <span>الهوية البصرية</span>
@@ -2026,7 +2073,7 @@ export default function PortalDashboard({
               <span>إدارة الموقع</span>
             </button>
           )}
-          {(currentUser.role === "admin" || functionalAdmin) && (
+          {isRoot && (
             <button className={view === "users" ? "active" : ""} onClick={() => changeView("users")}>
               <Icon name="users" />
               <span>المستخدمون والصلاحيات</span>
@@ -2184,7 +2231,7 @@ export default function PortalDashboard({
                     </small>
                   </button>
                 )}
-                {canAccess("workforce") && (
+                {canAccessConversations && (
                   <button onClick={() => changeView("conversations")}>
                     <span className="metric-icon red">
                       <Icon name="conversations" />
@@ -2217,7 +2264,7 @@ export default function PortalDashboard({
                   </p>
                   <small>مهامك وتذكيراتك في مكان واحد</small>
                 </button>
-                {canAccess("legal") && (
+                {canAccessGovernment && (
                   <button className={employeeComplianceAlerts ? "metric-attention" : ""} onClick={() => changeView("government")}>
                     <span className="metric-icon sand">
                       <Icon name="website" />
@@ -2230,7 +2277,7 @@ export default function PortalDashboard({
                   </button>
                 )}
               </section>
-              {(currentUser.role === "admin" || functionalAdmin) && <ExecutivePeopleCommandCenter isOwner={isSystemOwner || (currentUser.role === "admin" && !isSystemAdmin)} isSystemAdmin={isSystemAdmin} />}
+              {isRoot && <ExecutivePeopleCommandCenter isOwner={isSystemOwner || (currentUser.role === "admin" && !isSystemAdmin)} isSystemAdmin={isSystemAdmin} />}
               {currentUser.role === "employee" && currentUser.department === "general" && currentUser.functionalRoles.length === 0 ? (
                 <section className="employee-home">
                   <p className="admin-eyebrow">الحساب مفعّل</p>
@@ -2257,12 +2304,13 @@ export default function PortalDashboard({
                       {canAccess("finance") && <DepartmentCard icon="finance" title="الإدارة المالية" text="الفواتير والمصروفات والرواتب والعُهد المالية." count={`${finance.length} سجل`} onClick={() => changeView("finance")} />}
                       {canAccess("legal") && <DepartmentCard icon="legal" title="الشؤون القانونية" text="العقود والقضايا والتراخيص ومواعيد التجديد." count={`${legalAlerts} تنبيه`} onClick={() => changeView("legal")} />}
                       {canAccess("workforce") && <DepartmentCard icon="workforce" title="شؤون العمالة" text="بيانات العمال والتوزيع على المواقع وطلبات العملاء." count={`${requestCounts.total} طلب`} onClick={() => changeView("workforce")} />}
-                      {canAccess("workforce") && <DepartmentCard icon="finance" title="المبيعات والتشغيل" text="العملاء والفرص والعروض وأوامر التشغيل والدوام والسعة." count="دورة مترابطة" onClick={() => changeView("operations")} />}
+                      {canAccessOperations && <DepartmentCard icon="finance" title="المبيعات والتشغيل" text="العملاء والفرص والعروض وأوامر التشغيل والدوام والسعة." count="دورة مترابطة" onClick={() => changeView("operations")} />}
                       {canAccessConstruction && <DepartmentCard icon="legal" title="المقاولات والمشروعات" text="الفرص والمناقصات والمشروعات ومراكز التكلفة والتغطية التشغيلية." count="قطاع أعمال مستقل" onClick={() => changeView("construction")} />}
-                      {canAccess("workforce") && <DepartmentCard icon="conversations" title="المحادثات المباشرة" text="الرد الفوري على زوار الموقع ومتابعة الرسائل غير المقروءة." count={`${waitingConversations} تنتظر الرد`} onClick={() => changeView("conversations")} />}
+                      {canAccessConversations && <DepartmentCard icon="conversations" title="المحادثات المباشرة" text="الرد الفوري على زوار الموقع ومتابعة الرسائل غير المقروءة." count={`${waitingConversations} تنتظر الرد`} onClick={() => changeView("conversations")} />}
                       {canAccessDocuments && <DepartmentCard icon="documents" title="مركز المستندات" text="المرفقات والعقود والإصدارات الرسمية والتنبيهات." count={`${documents.length} مستند`} onClick={() => changeView("documents")} />}
-                      {canAccessDocuments && <DepartmentCard icon="documents" title="العقود والعروض والخطابات" text="دورات التحرير والاعتماد والإلغاء للمحررات الرسمية." count="مركز مستقل" onClick={() => changeView("contractual-documents")} />}
-                      {canAccess("legal") && <DepartmentCard icon="website" title="العلاقات الحكومية والامتثال" text="الإقامات والتراخيص والمنصات الحكومية وطلبات سدادها." count="خزنة مشفّرة" onClick={() => changeView("government")} />}
+                      {canAccessContracts && <DepartmentCard icon="documents" title="العقود والعروض والخطابات" text="دورات التحرير والاعتماد والإلغاء للمحررات الرسمية." count="مركز مستقل" onClick={() => changeView("contractual-documents")} />}
+                      {canAccessGovernment && <DepartmentCard icon="website" title="العلاقات الحكومية والامتثال" text="الإقامات والتراخيص والمنصات الحكومية وطلبات سدادها." count="خزنة مشفّرة" onClick={() => changeView("government")} />}
+                      <DepartmentCard icon="guide" title="دليل استخدام النظام" text="شرح عملي للصفحات وسير العمل والصلاحيات باللغات الثلاث." count="مخصّص لحسابك" onClick={() => changeView("guide")} />
                       {canAccessWebsite && <DepartmentCard icon="website" title="إدارة الموقع الإلكتروني" text="الأقسام والمحتوى والنشر وإعدادات الظهور في محركات البحث." count={`الإصدار ${initialWebsiteContent.version}`} onClick={() => changeView("website")} />}
                     </div>
                   </article>
@@ -2300,10 +2348,11 @@ export default function PortalDashboard({
           {view === "notifications" && <NotificationCenterView notifications={notifications} onOpen={openNotification} onRead={(id) => void updateNotificationState("read", [id])} onDismiss={(id) => void updateNotificationState("dismiss", [id])} onReadAll={() => void updateNotificationState("read-all")} onRefresh={() => void refreshNotifications()} />}
 
           {view === "tasks" && <TaskCenter />}
-          {view === "government" && canAccess("legal") && <GovernmentAffairsWorkspace />}
+          {view === "guide" && <SystemGuide locale={currentUser.preferredLanguage} userName={currentUser.displayName} role={currentUser.role} department={currentUser.department} functionalRoles={currentUser.functionalRoles} grantedPermissions={currentUser.functionalPermissions} />}
+          {view === "government" && canAccessGovernment && <GovernmentAffairsWorkspace />}
 
-          {view === "conversations" && canAccess("workforce") && <ConversationCenter conversations={conversations} messages={conversationMessages} businessHours={businessHours} automation={chatAutomation} query={query} setQuery={setQuery} canManageSettings={canManageChatSettings} onSelect={(id) => void openConversation(id)} onRefresh={() => void refreshConversations()} onOpenSettings={() => setChatSettingsOpen(true)} />}
-          {view === "conversations" && canAccess("workforce") && <ServiceRatingsPanel />}
+          {view === "conversations" && canAccessConversations && <ConversationCenter conversations={conversations} messages={conversationMessages} businessHours={businessHours} automation={chatAutomation} query={query} setQuery={setQuery} canManageSettings={canManageChatSettings} onSelect={(id) => void openConversation(id)} onRefresh={() => void refreshConversations()} onOpenSettings={() => setChatSettingsOpen(true)} />}
+          {view === "conversations" && canAccessConversations && <ServiceRatingsPanel />}
 
           {view === "employees" && canAccess("employees") && (
             <ModuleSection eyebrow="الموارد البشرية" title="إدارة الموظفين" description="ملفات الموظفين وحالتهم الوظيفية وبيانات الالتحاق." actionLabel="إضافة موظف" canWrite={canWrite} onAdd={() => setModal("employees")}>
@@ -2314,7 +2363,7 @@ export default function PortalDashboard({
                 <Metric label="ملفات موقوفة" value={employees.filter((item) => ["suspended", "ended"].includes(item.status.trim().toLowerCase())).length} note="تحتاج إلى متابعة" />
               </section>
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث باسم الموظف أو الرقم أو المسمى">
-                <EmployeeTable records={employees} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} onUpdate={updateEmployeeCompliance} onDelete={deleteEmployee} />
+                <EmployeeTable records={employees} query={query} canWrite={canWrite} canArchive={canArchiveEmployees} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} onUpdate={updateEmployeeCompliance} onDelete={deleteEmployee} />
               </ManagementPanel>
               <HrWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} generalOnly />
             </ModuleSection>
@@ -2337,9 +2386,9 @@ export default function PortalDashboard({
               </ManagementPanel>
               <AccountingWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} />
               <FinancialPostingWorkspace canWrite={canWrite} />
-              <PurchasingWorkspace canWrite={canWrite} />
+              <PurchasingWorkspace canWrite={canWrite} canApprove={canApproveFinance} canPay={canPayFinance} />
               <ReportsWorkspace canWrite={canWrite} contracts={contracts} />
-              <ReportPdfDownload />
+              {canExportReports && <ReportPdfDownload />}
               <BankReconciliationWorkspace canWrite={canWrite} />
             </ModuleSection>
           )}
@@ -2399,7 +2448,7 @@ export default function PortalDashboard({
             </ModuleSection>
           )}
 
-          {view === "operations" && canAccess("workforce") && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} allowedTabs={["crm", "orders", "timesheets", "capacity", "privacy", ...(currentUser.role === "admin" || functionalAdmin ? (["clients", "integrations"] as OperationsTab[]) : [])]} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} />}
+          {view === "operations" && canAccessOperations && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} allowedTabs={allowedOperationsTabs} canWrite={canWrite} isAdmin={isRoot} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} />}
           {view === "representatives" && canAccessRepresentatives && <SalesRepresentativesWorkspace canWrite={canWriteRepresentatives} />}
           {view === "construction" && canAccessConstruction && <ConstructionWorkspace />}
 
@@ -2407,7 +2456,7 @@ export default function PortalDashboard({
 
           {view === "contractual-documents" && canAccessContracts && (
             <>
-              <ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={canManageDocuments} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} onCreateQuotation={() => openIssueDocument("quotation")} />
+              <ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={hasPermission("contracts.write")} canWrite={canWrite} canApprove={hasPermission("contracts.approve")} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} onCreateQuotation={() => openIssueDocument("quotation")} />
               <LetterPdfLibrary />
             </>
           )}
@@ -2420,6 +2469,8 @@ export default function PortalDashboard({
               query={query}
               setQuery={setQuery}
               canManageDocuments={canManageDocuments}
+              canShareDocuments={canShareDocuments}
+              canIssueContracts={canIssueContracts}
               canManageAssets={canManageAssets}
               busy={busy}
               expiringDocuments={expiringDocuments}
@@ -2431,17 +2482,17 @@ export default function PortalDashboard({
                 setOperationsTab("quotes");
                 changeView("operations");
               }}
-              canApprove={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")}
+              canApprove={hasPermission("contracts.approve")}
               onApproveContract={(contractId) => updateContractStatus(contractId, "approved", "اعتماد مباشر من مركز المستندات")}
               onShare={shareDocument}
               onUploadAsset={uploadAsset}
             />
           )}
 
-          {view === "brand" && canAccessDocuments && <BrandIdentityManager />}
+          {view === "brand" && canAccessBrand && <BrandIdentityManager />}
           {view === "website" && canAccessWebsite && <WebsiteManager initialContent={initialWebsiteContent} canManage={canManageWebsite} />}
 
-          {view === "users" && (currentUser.role === "admin" || functionalAdmin) && (
+          {view === "users" && isRoot && (
             <ModuleSection eyebrow="التحكم في الوصول" title="المستخدمون والصلاحيات" description="اعتماد مسبب، وأقل صلاحية لازمة، وإبطال تلقائي للجلسات عند كل تغيير أمني." actionLabel="إضافة مستخدم" canWrite onAdd={() => setUserModal(true)}>
               <section className="panel users-panel">
                 <div className="panel-head">
@@ -2482,14 +2533,14 @@ export default function PortalDashboard({
           }}
         />
       )}
-      {documentModal === "issue" && issuePreset !== "quotation" && <IssueDocumentModal initialType={issuePreset} initialQuoteId={issueQuoteId} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} requests={requests} onClose={() => setDocumentModal(null)} onSubmit={issueDocument} />}
+      {documentModal === "issue" && issuePreset !== "quotation" && <IssueDocumentModal initialType={issuePreset} initialQuoteId={issueQuoteId} canIssueContracts={canIssueContracts} canIssueFinance={canIssueFinanceDocuments} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} requests={requests} onClose={() => setDocumentModal(null)} onSubmit={issueDocument} />}
       {userModal && <CreateUserModal busy={busy === "create-user"} onClose={() => setUserModal(false)} onSubmit={createUser} />}
       {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours} />}
-      {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus} />}
+      {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} canWrite={canWriteConversations} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus} />}
       {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply} />}
-      {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment} />}
+      {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} canArchive={canArchiveWorkers} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment} />}
       {selectedContract && <ContractDrawer contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus} onEdit={editContract} onDelete={deleteContract} onRecordAbsence={recordContractAbsence} />}
-      <VideoInterviewDesk />
+      {canAccessVideo && <VideoInterviewDesk />}
     </main>
   );
 }
@@ -2939,7 +2990,7 @@ function GlobalPortalSearch({ value, setValue, onSelect }: { value: string; setV
                 }}
               >
                 <span>
-                  <Icon name={result.view === "conversations" ? "conversations" : result.view === "workforce" || result.view === "operations" ? "workforce" : result.view === "employees" ? "employees" : result.view === "finance" ? "finance" : result.view === "legal" ? "legal" : result.view === "documents" ? "documents" : result.view === "website" ? "website" : "users"} />
+                  <Icon name={result.view === "guide" ? "guide" : result.view === "conversations" ? "conversations" : result.view === "workforce" || result.view === "operations" || result.view === "construction" ? "workforce" : result.view === "employees" ? "employees" : result.view === "finance" ? "finance" : result.view === "legal" || result.view === "government" ? "legal" : result.view === "documents" || result.view === "contractual-documents" ? "documents" : result.view === "brand" ? "brand" : result.view === "website" ? "website" : "users"} />
                 </span>
                 <p>
                   <strong>{result.title}</strong>
@@ -3209,7 +3260,7 @@ function ConversationCenter({ conversations, messages, businessHours, automation
   );
 }
 
-function ConversationDrawer({ conversation, messages, businessHours, busy, onClose, onReply, onStatus }: { conversation: VisitorConversation; messages: VisitorMessage[]; businessHours: BusinessHours; busy: string | null; onClose: () => void; onReply: (conversationId: string, form: HTMLFormElement) => Promise<void>; onStatus: (conversationId: string, status: "waiting" | "open" | "closed") => Promise<void> }) {
+function ConversationDrawer({ conversation, messages, businessHours, canWrite, busy, onClose, onReply, onStatus }: { conversation: VisitorConversation; messages: VisitorMessage[]; businessHours: BusinessHours; canWrite: boolean; busy: string | null; onClose: () => void; onReply: (conversationId: string, form: HTMLFormElement) => Promise<void>; onStatus: (conversationId: string, status: "waiting" | "open" | "closed") => Promise<void> }) {
   const messageBox = useRef<HTMLDivElement>(null);
   useEffect(() => {
     messageBox.current?.scrollTo({ top: messageBox.current.scrollHeight });
@@ -3241,7 +3292,7 @@ function ConversationDrawer({ conversation, messages, businessHours, busy, onClo
               </small>
             </p>
           </div>
-          <select value={conversation.status} disabled={busy === `chat-status-${conversation.id}`} onChange={(event) => void onStatus(conversation.id, event.target.value as "waiting" | "open" | "closed")}>
+          <select value={conversation.status} disabled={!canWrite || busy === `chat-status-${conversation.id}`} onChange={(event) => void onStatus(conversation.id, event.target.value as "waiting" | "open" | "closed")}>
             <option value="waiting">تنتظر الرد</option>
             <option value="open">جارية</option>
             <option value="closed">مغلقة</option>
@@ -3267,7 +3318,7 @@ function ConversationDrawer({ conversation, messages, businessHours, busy, onClo
             <div className="empty-operational">لا توجد رسائل في هذه المحادثة.</div>
           )}
         </div>
-        <form className="portal-chat-composer" onSubmit={submit}>
+        {canWrite ? <form className="portal-chat-composer" onSubmit={submit}>
           <label>
             <span>الرد المباشر</span>
             <textarea name="body" required minLength={2} maxLength={4000} rows={4} placeholder="اكتب الرد الذي سيظهر للزائر فوراً..." />
@@ -3278,7 +3329,7 @@ function ConversationDrawer({ conversation, messages, businessHours, busy, onClo
               {busy === `chat-reply-${conversation.id}` ? "جارٍ الإرسال..." : conversation.status === "closed" ? "إعادة الفتح والرد" : "إرسال الرد"}
             </button>
           </div>
-        </form>
+        </form> : <p className="portal-chat-readonly">صلاحية حسابك تتيح قراءة المحادثة فقط. الرد وتغيير الحالة يحتاجان صلاحية الكتابة.</p>}
       </aside>
     </div>
   );
@@ -3433,7 +3484,7 @@ function FinanceDocumentActions({ onIssue }: { onIssue: (type: string) => void }
   );
 }
 
-function DocumentCenter({ documents, contracts, assets, query, setQuery, canManageDocuments, canManageAssets, canApprove, busy, expiringDocuments, expiredDocuments, onUpload, onIssue, onIssueQuotation, onOpenQuoteApprovals, onApproveContract, onShare, onUploadAsset }: { documents: CompanyDocument[]; contracts: WorkforceContract[]; assets: CompanyAsset[]; query: string; setQuery: (value: string) => void; canManageDocuments: boolean; canManageAssets: boolean; busy: string | null; canApprove: boolean; onOpenQuoteApprovals: () => void; onApproveContract: (contractId: number) => Promise<void>; expiringDocuments: CompanyDocument[]; expiredDocuments: CompanyDocument[]; onUpload: () => void; onIssue: () => void; onIssueQuotation: () => void; onShare: (id: number) => Promise<void>; onUploadAsset: (slot: "stamp" | "signature", form: HTMLFormElement) => Promise<void> }) {
+function DocumentCenter({ documents, contracts, assets, query, setQuery, canManageDocuments, canShareDocuments, canIssueContracts, canManageAssets, canApprove, busy, expiringDocuments, expiredDocuments, onUpload, onIssue, onIssueQuotation, onOpenQuoteApprovals, onApproveContract, onShare, onUploadAsset }: { documents: CompanyDocument[]; contracts: WorkforceContract[]; assets: CompanyAsset[]; query: string; setQuery: (value: string) => void; canManageDocuments: boolean; canShareDocuments: boolean; canIssueContracts: boolean; canManageAssets: boolean; busy: string | null; canApprove: boolean; onOpenQuoteApprovals: () => void; onApproveContract: (contractId: number) => Promise<void>; expiringDocuments: CompanyDocument[]; expiredDocuments: CompanyDocument[]; onUpload: () => void; onIssue: () => void; onIssueQuotation: () => void; onShare: (id: number) => Promise<void>; onUploadAsset: (slot: "stamp" | "signature", form: HTMLFormElement) => Promise<void> }) {
   const rows = filterRecords(documents, query);
   const generatedCount = documents.filter((item) => item.source === "generated").length;
   return (
@@ -3442,9 +3493,9 @@ function DocumentCenter({ documents, contracts, assets, query, setQuery, canMana
         <div>
           <p className="admin-eyebrow">الحفظ والإصدار الرسمي</p>
           <h1>مركز المستندات</h1>
-          <span>إدارة ملفات الشركة، ومشاركة النسخ، وإصدار العقود والمستندات الرسمية.</span>
+          <span>إدارة ملفات الشركة، ومشاركة النسخ، ومتابعة الإصدارات الرسمية.</span>
         </div>
-        {canManageDocuments && (
+        {(canManageDocuments || canIssueContracts) && (
           <div className="heading-actions">
             {canApprove && (
               <button className="admin-primary document-approval-entry" onClick={onOpenQuoteApprovals}>
@@ -3452,18 +3503,18 @@ function DocumentCenter({ documents, contracts, assets, query, setQuery, canMana
                 اعتماد عروض الأسعار
               </button>
             )}
-            <button className="admin-secondary" onClick={onUpload}>
+            {canManageDocuments && <button className="admin-secondary" onClick={onUpload}>
               <Icon name="upload" />
               رفع مستند
-            </button>
-            <button className="admin-secondary" onClick={onIssueQuotation}>
+            </button>}
+            {canIssueContracts && <button className="admin-secondary" onClick={onIssueQuotation}>
               <Icon name="documents" />
               إنشاء عرض سعر
-            </button>
-            <button className="admin-primary" onClick={onIssue}>
+            </button>}
+            {canIssueContracts && <button className="admin-primary" onClick={onIssue}>
               <Icon name="plus" />
-              إنشاء مستند آخر
-            </button>
+              إنشاء عقد
+            </button>}
           </div>
         )}
       </div>
@@ -3512,11 +3563,11 @@ function DocumentCenter({ documents, contracts, assets, query, setQuery, canMana
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بالعنوان أو المرجع أو الجهة" />
             </label>
           </div>
-          <DocumentTable documents={rows} contracts={contracts} canApprove={canApprove} canShare={canManageDocuments} busy={busy} onApproveContract={onApproveContract} onOpenQuoteApprovals={onOpenQuoteApprovals} onShare={onShare} />
+          <DocumentTable documents={rows} contracts={contracts} canApprove={canApprove} canShare={canShareDocuments} busy={busy} onApproveContract={onApproveContract} onOpenQuoteApprovals={onOpenQuoteApprovals} onShare={onShare} />
         </article>
         <CompanyAssetsPanel assets={assets} canManage={canManageAssets} busy={busy} onUpload={onUploadAsset} />
       </section>
-      {canManageDocuments && (
+      {canShareDocuments && (
         <DocumentShareManager
           documents={documents.map(({ id, referenceCode, title }) => ({
             id,
@@ -3973,7 +4024,7 @@ function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { b
   );
 }
 
-function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { initialType: string; initialQuoteId: number | null; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, canIssueFinance, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { initialType: string; initialQuoteId: number | null; canIssueContracts: boolean; canIssueFinance: boolean; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [representatives, setRepresentatives] = useState<
     Array<{
       id: number;
@@ -4630,11 +4681,11 @@ function IssueDocumentModal({ initialType, initialQuoteId, busy, assetsReady, wo
                   setStep(1);
                 }}
               >
-                <option value="workforce_contract">عقد مقاولات لتوفير العمالة</option>
-                <option value="progress_claim">مستخلص أعمال</option>
-                <option value="invoice">فاتورة</option>
-                <option value="receipt">سند قبض</option>
-                <option value="payment_voucher">سند صرف</option>
+                {canIssueContracts && <option value="workforce_contract">عقد مقاولات لتوفير العمالة</option>}
+                {canIssueFinance && <option value="progress_claim">مستخلص أعمال</option>}
+                {canIssueFinance && <option value="invoice">فاتورة</option>}
+                {canIssueFinance && <option value="receipt">سند قبض</option>}
+                {canIssueFinance && <option value="payment_voucher">سند صرف</option>}
               </select>
             </label>
             <small>اختر نوع المستند أولًا، ثم أكمل البيانات والخطوات الخاصة به.</small>
@@ -5353,7 +5404,7 @@ function filterRecords<T>(records: T[], query: string) {
   return needle ? records.filter((item) => JSON.stringify(item).toLowerCase().includes(needle)) : records;
 }
 
-function EmployeeTable({ records, query, canWrite, busy, onStatus, onUpdate, onDelete }: { records: EmployeeRecord[]; query: string; canWrite: boolean; busy: string | null; onStatus: (id: number, status: string) => void; onUpdate: (id: number, data: Record<string, string>) => Promise<void>; onDelete: (id: number) => Promise<void> }) {
+function EmployeeTable({ records, query, canWrite, canArchive, busy, onStatus, onUpdate, onDelete }: { records: EmployeeRecord[]; query: string; canWrite: boolean; canArchive: boolean; busy: string | null; onStatus: (id: number, status: string) => void; onUpdate: (id: number, data: Record<string, string>) => Promise<void>; onDelete: (id: number) => Promise<void> }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
   const rows = filterRecords(records, query);
@@ -5421,9 +5472,9 @@ function EmployeeTable({ records, query, canWrite, busy, onStatus, onUpdate, onD
                 {canWrite && (
                   <div className="employee-row-actions">
                     <button onClick={() => setEditingId(editingId === item.id ? null : item.id)}>{editingId === item.id ? "إغلاق الإدارة" : "إدارة وتحديث"}</button>
-                    <button className="danger-action" disabled={busy === `employee-delete-${item.id}`} onClick={() => void onDelete(item.id)}>
+                    {canArchive && <button className="danger-action" disabled={busy === `employee-delete-${item.id}`} onClick={() => void onDelete(item.id)}>
                       {busy === `employee-delete-${item.id}` ? "جارٍ الحذف" : "حذف الموظف"}
-                    </button>
+                    </button>}
                   </div>
                 )}
                 {editingId === item.id && (
@@ -6725,7 +6776,7 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
   );
 }
 
-function WorkerDrawer({ worker, attachments, contracts, contractAssignments, canWrite, busy, onClose, onUploadAttachment }: { worker: WorkerRecord; attachments: WorkerAttachment[]; contracts: WorkforceContract[]; contractAssignments: ContractAssignment[]; canWrite: boolean; busy: string | null; onClose: () => void; onUploadAttachment: (workerId: number, form: HTMLFormElement) => Promise<void> }) {
+function WorkerDrawer({ worker, attachments, contracts, contractAssignments, canWrite, canArchive, busy, onClose, onUploadAttachment }: { worker: WorkerRecord; attachments: WorkerAttachment[]; contracts: WorkforceContract[]; contractAssignments: ContractAssignment[]; canWrite: boolean; canArchive: boolean; busy: string | null; onClose: () => void; onUploadAttachment: (workerId: number, form: HTMLFormElement) => Promise<void> }) {
   const profile = workerRequirementStatus(worker, attachments);
   const photo = attachments.find((item) => item.documentType === "photo");
   const activeAssignment = contractAssignments.find((item) => item.workerId === worker.id && item.status === "active");
@@ -6886,7 +6937,7 @@ function WorkerDrawer({ worker, attachments, contracts, contractAssignments, can
               <span>{activeContract ? `تُحدّث الجهة والموقع من العقد ${activeContract.referenceCode}. لإلغاء الإسناد أو تغييره افتح إدارة العقد.` : "تظهر العمالة في خطوة الاختيار عند إنشاء عقد يتضمن مهنتها، ويمكن إضافتها لاحقاً من إدارة العقد."}</span>
             </p>
           </div>
-          {canWrite && (
+          {canArchive && (
             <button className="danger-action" type="button" onClick={() => void archiveWorker()}>
               حذف العامل من النظام
             </button>

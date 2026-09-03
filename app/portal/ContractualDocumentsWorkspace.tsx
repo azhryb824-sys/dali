@@ -43,6 +43,7 @@ export default function ContractualDocumentsWorkspace({
   contracts,
   canManage,
   canWrite,
+  canApprove,
   isAdmin,
   isOwner,
   onCreateContract,
@@ -52,6 +53,7 @@ export default function ContractualDocumentsWorkspace({
   contracts: Contract[];
   canManage: boolean;
   canWrite: boolean;
+  canApprove: boolean;
   isAdmin: boolean;
   isOwner: boolean;
   onCreateContract: (quoteId?: number) => void;
@@ -318,7 +320,7 @@ export default function ContractualDocumentsWorkspace({
                         حذف
                       </button>
                     )}
-                    {canManage && (
+                    {canApprove && (
                       <button
                         className="admin-primary"
                         disabled={

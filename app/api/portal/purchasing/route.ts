@@ -15,7 +15,7 @@ const positiveId = (value: unknown) => { const id = Number(value); return Number
 const money = (value: unknown) => { const n = Number(value); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : -1; };
 
 async function authorize(write = false) {
-  const access = await requirePortalApiRole(write ? ["admin", "manager"] : ["admin", "manager", "employee"]);
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access || !(await hasPortalPermission(access, "finance", write ? "write" : "read"))) return null;
   return access;
 }
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
-  const access = await authorize(true);
+  const access = await authorize(false);
   if (!access) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   try {
     const body = await request.json() as Record<string, unknown>;
@@ -104,6 +104,7 @@ export async function PATCH(request: Request) {
     if (!invoice) return jsonNoStore({ error: "الفاتورة غير موجودة" }, { status: 404 });
     const now = new Date().toISOString();
     if (action === "approve") {
+      if (!(await hasPortalPermission(access, "finance", "approve"))) return jsonNoStore({ error: "اعتماد فاتورة المشتريات يتطلب صلاحية الاعتماد المالي" }, { status: 403 });
       if (invoice.status !== "draft" || invoice.createdBy.toLowerCase() === access.user.email.toLowerCase()) return jsonNoStore({ error: "يلزم اعتماد الفاتورة من مستخدم آخر" }, { status: 409 });
       const accounts = await db.select().from(chartOfAccounts).where(and(eq(chartOfAccounts.isPosting, true), eq(chartOfAccounts.status, "active")));
       const account = (code: string) => accounts.find((row) => row.code === code);
@@ -117,6 +118,7 @@ export async function PATCH(request: Request) {
       return jsonNoStore({ invoice: updated, journal: journal.entry });
     }
     if (action === "sync") {
+      if (!(await hasPortalPermission(access, "finance", "write"))) return jsonNoStore({ error: "مزامنة الفاتورة تتطلب صلاحية الكتابة المالية" }, { status: 403 });
       if (!invoice.journalEntryId) return jsonNoStore({ error: "لا يوجد قيد مرتبط" }, { status: 409 });
       const journal = await db.query.journalEntries.findFirst({ where: eq(journalEntries.id, invoice.journalEntryId) });
       const postingStatus = journal?.status === "posted" ? "posted" : journal?.status === "reversed" ? "reversed" : "draft";
@@ -127,6 +129,7 @@ export async function PATCH(request: Request) {
       return jsonNoStore({ invoice: updated });
     }
     if (action === "pay") {
+      if (!(await hasPortalPermission(access, "finance", "pay"))) return jsonNoStore({ error: "إنشاء سداد المورد يتطلب صلاحية الدفع المالي" }, { status: 403 });
       if (invoice.status !== "posted" || invoice.postingStatus !== "posted" || invoice.paymentJournalEntryId) return jsonNoStore({ error: "يجب ترحيل قيد الفاتورة أولاً وألا يكون لها قيد سداد سابق" }, { status: 409 });
       const accounts = await db.select().from(chartOfAccounts).where(and(eq(chartOfAccounts.isPosting, true), eq(chartOfAccounts.status, "active")));
       const payable = accounts.find((row) => row.code === "2100"); const bank = accounts.find((row) => row.code === "1200");

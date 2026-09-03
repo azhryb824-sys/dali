@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("company file visibility and download authorization use the same policy", () => {
+test("documents and brand assets use their dedicated visibility policies", () => {
   const access = read("lib/portal-access.ts");
   const page = read("app/portal/page.tsx");
   const dashboard = read("app/portal/PortalDashboard.tsx");
@@ -13,9 +13,12 @@ test("company file visibility and download authorization use the same policy", (
 
   assert.match(access, /export function canAccessCompanyFiles/);
   assert.match(access, /canAccessPortalDocuments\(access\) \|\| canManageCompanyAssets\(access\)/);
-  assert.match(page, /const canSeeDocuments = canAccessCompanyFiles\(access\)/);
-  assert.match(dashboard, /hasPermission\("documents\.read"\) \|\| hasPermission\("assets\.administer"\)/);
-  assert.match(documents, /canAccessCompanyFiles\(access\)/);
+  assert.match(page, /const canSeeDocuments = canAccessPortalDocuments\(access\)/);
+  assert.match(page, /const canAccessAssets = canAccessCompanyFiles\(access\)/);
+  assert.match(page, /const canLoadIssueAssets = canAccessAssets \|\| canWriteContracts \|\| canWriteFinance/);
+  assert.match(dashboard, /const canAccessDocuments = hasPermission\("documents\.read"\)/);
+  assert.match(dashboard, /const canAccessBrand = canAccessDocuments \|\| hasPermission\("assets\.administer"\)/);
+  assert.match(documents, /canAccessPortalDocuments\(access\)/);
   assert.match(assets, /canAccessCompanyFiles\(access\)/);
 });
 
@@ -38,7 +41,7 @@ test("official letters support create save edit delete and PDF preview", () => {
 
   assert.match(route, /export async function POST/);
   assert.match(route, /insert\(officialLetters\)/);
-  assert.match(route, /action==="edit"/);
+  assert.match(route, /action\s*===\s*"edit"/);
   assert.match(route, /update\(officialLetters\)/);
   assert.match(route, /export async function DELETE/);
   assert.match(route, /delete\(officialLetters\)/);

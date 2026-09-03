@@ -1,14 +1,22 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { companyDocuments, portalActivity } from "@/db/schema";
+import { companyDocuments, contractPaymentSchedules, portalActivity } from "@/db/schema";
 import { attachmentHeaders } from "@/lib/company-documents";
-import { canAccessCompanyFiles, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessPortalDocuments, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { regenerateIssuedDocumentPdf } from "@/lib/issued-document-regeneration";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !canAccessCompanyFiles(access)) return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });
+  if (!access) return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });
+  const canReadDocuments = canAccessPortalDocuments(access);
+  const [canReadContracts, canReadFinance] = await Promise.all([
+    hasPortalPermission(access, "contracts", "read"),
+    hasPortalPermission(access, "finance", "read"),
+  ]);
+  if (!canReadDocuments && !canReadContracts && !canReadFinance) {
+    return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });
+  }
 
   const { id: value } = await context.params;
   const id = Number(value);
@@ -17,6 +25,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const db = getDb();
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, id) });
   if (!document || document.status !== "active") return Response.json({ error: "المستند غير موجود" }, { status: 404 });
+  const contractualTypes = new Set(["workforce_contract", "quotation", "official_letter", "contract", "letter"]);
+  const financialTypes = new Set(["invoice", "receipt", "payment_voucher", "progress_claim"]);
+  const linkedContractPayment = canReadContracts && financialTypes.has(document.documentType || "")
+    ? await db.query.contractPaymentSchedules.findFirst({ where: eq(contractPaymentSchedules.invoiceDocumentId, id) })
+    : null;
+  const allowed = canReadDocuments
+    || (canReadContracts && (contractualTypes.has(document.documentType || "") || Boolean(linkedContractPayment)))
+    || (canReadFinance && (document.category === "finance" || financialTypes.has(document.documentType || "")));
+  if (!allowed) return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });
   const inline = new URL(request.url).searchParams.get("inline") === "1";
   const requestedLanguage = new URL(request.url).searchParams.get("language");
   const pdfLanguage = requestedLanguage === "en" ? "en" : requestedLanguage === "bilingual" ? "bilingual" : "ar";

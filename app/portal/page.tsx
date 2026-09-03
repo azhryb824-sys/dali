@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, eq, inArray, isNull } from "drizzle-orm";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -10,7 +10,7 @@ import { getBusinessHoursState } from "@/lib/business-hours";
 import { getChatAutomationConfig } from "@/lib/chat-automation";
 import { emailDeliveryConfigured } from "@/lib/email-delivery";
 import { listPortalNotifications } from "@/lib/portal-notifications";
-import { canAccessCompanyFiles, canAccessPortalDepartment, canManageCompanyAssets, canManagePortalConversations, canManagePortalDocuments, hasPortalPermission, resolvePortalAccess } from "@/lib/portal-access";
+import { canAccessCompanyFiles, canAccessPortalConversations, canAccessPortalDepartment, canAccessPortalDocuments, canAdministerPortalUsers, canManageCompanyAssets, canManagePortalDocuments, canSharePortalDocuments, hasPortalPermission, resolvePortalAccess } from "@/lib/portal-access";
 import { getWebsiteContent } from "@/lib/website-content";
 import { portalSessionEndPath, portalSessionStartPath, verifyPortalSession } from "@/lib/portal-session";
 import PortalDashboard from "./PortalDashboard";
@@ -83,11 +83,17 @@ async function ProtectedPortal() {
   if (access.role !== "admin" && !cookieLocale && !access.preferredLanguage) redirect("/portal/language");
 
   const db = getDb();
-  const canManageRequests = access.role === "admin" || access.role === "manager" || canAccessPortalDepartment(access, "workforce", true);
-  const canAdministerUsers = access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
-  const canSeeDocuments = canAccessCompanyFiles(access);
-  const canSeeContracts = await hasPortalPermission(access, "contracts", "read");
-  const canSeeConversations = canManagePortalConversations(access);
+  const canManageRequests = await hasPortalPermission(access, "workforce", "write");
+  const canAdministerUsers = canAdministerPortalUsers(access);
+  const canSeeDocuments = canAccessPortalDocuments(access);
+  const canAccessAssets = canAccessCompanyFiles(access);
+  const [canSeeContracts, canWriteContracts, canWriteFinance] = await Promise.all([
+    hasPortalPermission(access, "contracts", "read"),
+    hasPortalPermission(access, "contracts", "write"),
+    hasPortalPermission(access, "finance", "write"),
+  ]);
+  const canLoadIssueAssets = canAccessAssets || canWriteContracts || canWriteFinance;
+  const canSeeConversations = canAccessPortalConversations(access);
   const [canReadWebsite, canManageWebsite, constructionPermission, constructionScopes] = await Promise.all([
     hasPortalPermission(access, "website", "read"),
     hasPortalPermission(access, "website", "write"),
@@ -137,7 +143,7 @@ async function ProtectedPortal() {
           createdAt: workerAttachments.createdAt,
         }).from(workerAttachments).orderBy(desc(workerAttachments.createdAt)).limit(1000)
       : Promise.resolve([]),
-    canSeeDocuments
+    canSeeDocuments || canSeeContracts
       ? db.select({
           id: companyDocuments.id,
           referenceCode: companyDocuments.referenceCode,
@@ -156,9 +162,11 @@ async function ProtectedPortal() {
           createdBy: companyDocuments.createdBy,
           createdAt: companyDocuments.createdAt,
           updatedAt: companyDocuments.updatedAt,
-        }).from(companyDocuments).orderBy(desc(companyDocuments.createdAt)).limit(750)
+        }).from(companyDocuments)
+          .where(canSeeDocuments ? undefined : inArray(companyDocuments.documentType, ["workforce_contract", "quotation", "official_letter", "contract", "letter"]))
+          .orderBy(desc(companyDocuments.createdAt)).limit(750)
       : Promise.resolve([]),
-    canSeeDocuments
+    canLoadIssueAssets
       ? db.select({
           slot: companyAssets.slot,
           fileName: companyAssets.fileName,
@@ -253,6 +261,7 @@ async function ProtectedPortal() {
       initialChatAutomation={chatAutomation}
       canManageChatSettings={canAdministerUsers}
       canManageDocuments={canManagePortalDocuments(access)}
+      canShareDocuments={canSharePortalDocuments(access)}
       canManageAssets={canManageCompanyAssets(access)}
       emailConfigured={emailDeliveryConfigured()}
       initialWebsiteContent={websiteContent}

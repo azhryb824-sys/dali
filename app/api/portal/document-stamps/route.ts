@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { documentStamps, portalActivity } from "@/db/schema";
 import { attachmentHeaders, cleanText, objectKey, safeFileName } from "@/lib/company-documents";
-import { canManageCompanyAssets, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessCompanyFiles, canManageCompanyAssets, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
 
@@ -10,7 +10,9 @@ const imageTypes = new Set(["image/png", "image/jpeg"]);
 
 export async function GET(request: Request) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access) return Response.json({ error: "غير مصرح" }, { status: 403 });
+  if (!access || !(canAccessCompanyFiles(access) || await hasPortalPermission(access, "contracts", "read"))) {
+    return Response.json({ error: "غير مصرح" }, { status: 403 });
+  }
   const id = Number(new URL(request.url).searchParams.get("id") || 0);
   if (id) {
     const stamp = await getDb().query.documentStamps.findFirst({ where: eq(documentStamps.id, id) });

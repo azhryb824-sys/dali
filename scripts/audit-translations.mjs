@@ -3,6 +3,9 @@ import path from "node:path";
 import ts from "typescript";
 
 const appFiles = [];
+const selfTranslatedAppFiles = new Set([
+  "app/portal/SystemGuide.tsx",
+]);
 const excludedLibraryFiles = new Set([
   "lib/arabic-money.ts",
   "lib/brand-identity-pdf.ts",
@@ -14,7 +17,7 @@ function walk(directory, extension) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const target = path.join(directory, entry.name);
     if (entry.isDirectory()) walk(target, extension);
-    else if (entry.name.endsWith(extension) && !excludedLibraryFiles.has(target) && !entry.name.startsWith("i18n")) appFiles.push(target);
+    else if (entry.name.endsWith(extension) && !selfTranslatedAppFiles.has(target) && !excludedLibraryFiles.has(target) && !entry.name.startsWith("i18n")) appFiles.push(target);
   }
 }
 walk("app", ".tsx");
@@ -181,6 +184,18 @@ for (const area of ["public", "portal"]) {
       for (const [value, files] of missingTemplates[target].sort(([a], [b]) => a.localeCompare(b, "ar"))) console.log(`${area}\t${target}\ttemplate\t${value}\t${[...files].join(",")}`);
     }
   }
+}
+
+const noteRows=[...visibleStrings].filter(([value])=>/ملاحظ|ملاحظة/.test(value));
+const missingNoteTranslations=noteRows.filter(([value])=>{
+  const entry=catalogTranslations.get(value)||{};
+  const fields=new Set(["en","bn"].filter((target)=>validTranslation(entry[target],target)&&validTerminology(value,entry[target],target)));
+  return !fields?.has("en")||!fields?.has("bn");
+});
+console.log(JSON.stringify({review:"notes",visibleStrings:noteRows.length,completeEnglishAndBengali:noteRows.length-missingNoteTranslations.length,missing:missingNoteTranslations.length}));
+if(missingNoteTranslations.length){
+  for(const[value,files]of missingNoteTranslations)console.error(`Missing EN/BN note translation\t${value}\t${[...files].join(",")}`);
+  process.exitCode=1;
 }
 
 if (missingCount) {
