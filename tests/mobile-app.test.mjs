@@ -60,9 +60,10 @@ test("mobile and desktop share server-side idempotent synchronization with platf
 });
 
 test("native projects disable cleartext and declare privacy-scoped device permissions", async () => {
-  const [manifest, network, plist, runtime, nextConfig] = await Promise.all([
+  const [manifest, network, dataRules, plist, runtime, nextConfig] = await Promise.all([
     read("mobile/android/app/src/main/AndroidManifest.xml"),
     read("mobile/android/app/src/main/res/xml/network_security_config.xml"),
+    read("mobile/android/app/src/main/res/xml/data_extraction_rules.xml"),
     read("mobile/ios/App/App/Info.plist"),
     read("public/mobile/runtime.js"),
     read("next.config.ts"),
@@ -71,7 +72,14 @@ test("native projects disable cleartext and declare privacy-scoped device permis
   assert.match(manifest, /android:usesCleartextTraffic="false"/);
   assert.match(manifest, /android\.permission\.CAMERA/);
   assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
+  assert.match(manifest, /android\.hardware\.camera" android:required="false"/);
+  assert.match(manifest, /android\.hardware\.microphone" android:required="false"/);
+  assert.match(manifest, /android:dataExtractionRules="@xml\/data_extraction_rules"/);
+  assert.ok(manifest.indexOf("<uses-permission") < manifest.indexOf("<application"));
   assert.doesNotMatch(manifest, /READ_MEDIA_IMAGES/);
+  assert.match(dataRules, /<cloud-backup>/);
+  assert.match(dataRules, /<device-transfer>/);
+  assert.match(dataRules, /<exclude domain="database" path="\." \/>/);
   assert.match(network, /cleartextTrafficPermitted="false"/);
   assert.match(plist, /WKAppBoundDomains/);
   assert.match(plist, /NSCameraUsageDescription/);
