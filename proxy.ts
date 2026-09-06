@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDaliMobileRequest } from "@/lib/mobile-entry";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
 
 const contentSecurityPolicy = [
@@ -23,12 +24,11 @@ const contentSecurityPolicy = [
 const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|pwa(?:\/|$)|desktop-access(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
 const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|desktop-access(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
 const desktopMarker = "dali-desktop-v1";
-const mobileMarker = /(?:^|\s)DaliMobile\/1(?:\s|$)/;
 
 export async function proxy(request: NextRequest) {
   const emergencyBrowserAccess = process.env.DALI_ALLOW_BROWSER_PORTAL === "true";
   const desktopRequest = request.headers.get("x-dali-desktop-app") === desktopMarker;
-  const mobileRequest = mobileMarker.test(request.headers.get("user-agent") ?? "");
+  const mobileRequest = isDaliMobileRequest(request.headers);
   const trustedNativeRequest = desktopRequest || mobileRequest;
   let trustedPwaRequest = false;
   if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest) {

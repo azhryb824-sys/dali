@@ -29,8 +29,15 @@ test("mobile container targets Android and iOS through the trusted production po
 });
 
 test("server admits the Dali mobile marker without weakening desktop or PWA access", async () => {
-  const [proxy, layout] = await Promise.all([read("proxy.ts"), read("app/portal/layout.tsx")]);
-  assert.match(proxy, /mobileMarker\.test\(request\.headers\.get\("user-agent"\)/);
+  const [proxy, login, mobileEntry, layout] = await Promise.all([
+    read("proxy.ts"),
+    read("app/api/auth/login/route.ts"),
+    read("lib/mobile-entry.ts"),
+    read("app/portal/layout.tsx"),
+  ]);
+  assert.match(mobileEntry, /\(\?:\^\|\\s\)DaliMobile\\\/1\(\?:\\s\|\$\)/);
+  assert.match(proxy, /isDaliMobileRequest\(request\.headers\)/);
+  assert.match(login, /isDaliMobileRequest\(request\.headers\)/);
   assert.match(proxy, /trustedNativeRequest = desktopRequest \|\| mobileRequest/);
   assert.match(proxy, /!trustedNativeRequest && !trustedPwaRequest && !emergencyBrowserAccess/);
   assert.match(proxy, /pwaAccessFromCookieHeader/);
@@ -38,6 +45,15 @@ test("server admits the Dali mobile marker without weakening desktop or PWA acce
   assert.match(proxy, /camera=\(self\), microphone=\(self\)/);
   assert.match(layout, /<PwaAccessRuntime \/>/);
   assert.match(layout, /src="\/mobile\/runtime\.js"/);
+});
+
+test("mobile entry detection accepts only the explicit Dali marker", async () => {
+  const { isDaliMobileRequest } = await import("../lib/mobile-entry.ts");
+  const headers = (userAgent) => new Headers({ "user-agent": userAgent });
+  assert.equal(isDaliMobileRequest(headers("Mozilla/5.0 DaliMobile/1 Android")), true);
+  assert.equal(isDaliMobileRequest(headers("DaliMobile/1")), true);
+  assert.equal(isDaliMobileRequest(headers("Mozilla/5.0 DaliMobile/10 Android")), false);
+  assert.equal(isDaliMobileRequest(headers("Mozilla/5.0 Android")), false);
 });
 
 test("mobile offline records are encrypted and sensitive operations stay online", async () => {
