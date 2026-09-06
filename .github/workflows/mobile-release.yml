@@ -2,11 +2,6 @@ name: Signed Android mobile release
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "godaddy-preview"
-    paths:
-      - ".github/workflows/mobile-release.yml"
 
 permissions:
   contents: read
