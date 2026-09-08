@@ -28,17 +28,29 @@ test("mobile container targets Android and iOS through the trusted production po
   assert.match(strings, /<string name="app_name">نظام دالي الإداري<\/string>/);
 });
 
-test("server admits the Dali mobile marker without weakening desktop or PWA access", async () => {
-  const [proxy, login, mobileEntry, layout] = await Promise.all([
+test("server admits signed mobile sessions without weakening desktop or PWA access", async () => {
+  const [proxy, login, logout, mobileEntry, mobileAccess, portalSession, layout] = await Promise.all([
     read("proxy.ts"),
     read("app/api/auth/login/route.ts"),
+    read("app/api/auth/logout/route.ts"),
     read("lib/mobile-entry.ts"),
+    read("lib/mobile-access.ts"),
+    read("lib/portal-session.ts"),
     read("app/portal/layout.tsx"),
   ]);
   assert.match(mobileEntry, /\(\?:\^\|\\s\)DaliMobile\\\/1\(\?:\\s\|\$\)/);
   assert.match(proxy, /isDaliMobileRequest\(request\.headers\)/);
+  assert.match(proxy, /mobileAccessFromCookieHeader\(request\.headers\.get\("cookie"\)\)/);
   assert.match(login, /isDaliMobileRequest\(request\.headers\)/);
-  assert.match(proxy, /trustedNativeRequest = desktopRequest \|\| mobileRequest/);
+  assert.match(login, /issueMobileAccessToken/);
+  assert.match(login, /mobileAccessCookie/);
+  assert.match(logout, /clearMobileAccessCookies/);
+  assert.match(mobileAccess, /HMAC/);
+  assert.match(mobileAccess, /__Host-dali_mobile_access/);
+  assert.match(mobileAccess, /HttpOnly; SameSite=Strict/);
+  assert.match(portalSession, /dali-mobile-v1:\$\{mobileAccess\.platform\}:\$\{mobileAccess\.nonce\}/);
+  assert.match(portalSession, /requestUserAgentHash\(requestHeaders\)/);
+  assert.match(proxy, /trustedNativeRequest = desktopRequest \|\| verifiedMobileRequest/);
   assert.match(proxy, /!trustedNativeRequest && !trustedPwaRequest && !emergencyBrowserAccess/);
   assert.match(proxy, /pwaAccessFromCookieHeader/);
   assert.match(proxy, /requestHeaders\.set\("x-dali-pathname"/);
@@ -64,6 +76,8 @@ test("mobile offline records are encrypted and sensitive operations stay online"
   assert.match(worker, /method === "DELETE"/);
   assert.match(worker, /SHA-256/);
   assert.match(worker, /idempotencyKey/);
+  assert.match(worker, /request\.mode === "navigate"[\s\S]{0,260}return;/);
+  assert.doesNotMatch(worker, /request\.mode === "navigate"[\s\S]{0,260}respondWith/);
   assert.doesNotMatch(worker, /caches\.put\([^\n]*api\/portal/);
 });
 

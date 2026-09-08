@@ -240,6 +240,13 @@ async function ProtectedPortal() {
         functionalPermissions: access.functionalPermissions,
         preferredLanguage: cookieLocale || access.preferredLanguage || "ar",
       }}
+      currentDateLabel={new Intl.DateTimeFormat("ar-SA", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "Asia/Riyadh",
+      }).format(new Date())}
       initialRequests={requests}
       initialRequestReplies={replies}
       initialNotifications={notifications}

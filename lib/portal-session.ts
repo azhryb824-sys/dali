@@ -6,6 +6,7 @@ import { portalSessions } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { closeAttendanceSession, enforceNightlyAttendanceCutoff, startAttendanceSession, touchAttendanceSession } from "@/lib/attendance-governance";
 import { emitPortalNotification } from "@/lib/portal-notifications";
+import { mobileAccessFromCookieHeader } from "@/lib/mobile-access";
 import { isSecureExternalRequest } from "@/lib/request-origin";
 import { requestSourceHash, sha256 } from "@/lib/security";
 
@@ -69,8 +70,14 @@ function randomToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function requestUserAgentHash(request: Request) {
-  return sha256(request.headers.get("user-agent") || "unknown");
+async function requestUserAgentHash(source: Pick<Headers, "get">) {
+  try {
+    const mobileAccess = await mobileAccessFromCookieHeader(source.get("cookie"));
+    if (mobileAccess) return sha256(`dali-mobile-v1:${mobileAccess.platform}:${mobileAccess.nonce}`);
+  } catch {
+    // Preserve the existing browser binding if mobile token verification fails.
+  }
+  return sha256(source.get("user-agent") || "unknown");
 }
 
 export async function issuePortalSession(user: ChatGPTUser, request: Request) {
@@ -104,7 +111,7 @@ export async function issuePortalSession(user: ChatGPTUser, request: Request) {
     tokenHash,
     userEmail: email,
     status: "active",
-    userAgentHash: await requestUserAgentHash(request),
+    userAgentHash: await requestUserAgentHash(request.headers),
     sourceHash: await requestSourceHash(request),
     createdAt: nowIso,
     lastActivityAt: nowIso,
@@ -166,7 +173,7 @@ export async function verifyPortalSession(userEmail: string, options: { touch?: 
     return { status: "expired" };
   }
 
-  const currentAgentHash = await sha256(requestHeaders.get("user-agent") || "unknown");
+  const currentAgentHash = await requestUserAgentHash(requestHeaders);
   if (currentAgentHash !== session.userAgentHash) {
     await db.update(portalSessions).set({
       status: "revoked",

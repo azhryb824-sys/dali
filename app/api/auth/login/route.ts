@@ -3,7 +3,8 @@ import { getDb, getSqlClient } from "@/db";
 import { passwordResetTokens, portalAuthCredentials, pwaDevices } from "@/db/schema";
 import { createIdentityToken, identityCookie, sha256, verifyPasswordHash } from "@/lib/credential-auth";
 import { DESKTOP_APP_HEADER, DESKTOP_APP_MARKER } from "@/lib/desktop-entry";
-import { isDaliMobileRequest } from "@/lib/mobile-entry";
+import { issueMobileAccessToken, mobileAccessCookie, mobileAccessFromCookieHeader } from "@/lib/mobile-access";
+import { isDaliMobileRequest, mobileAppPlatform } from "@/lib/mobile-entry";
 import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-error";
 import { getPortalAdminConfig, normalizePortalEmail, normalizePortalIdentifier } from "@/lib/portal-auth-config";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
@@ -19,6 +20,7 @@ type LoginCredential = { identifier: string; email: string; displayName: string;
 async function hasAuthorizedApplicationEntry(request: Request) {
   if (request.headers.get(DESKTOP_APP_HEADER) === DESKTOP_APP_MARKER) return true;
   if (isDaliMobileRequest(request.headers)) return true;
+  if (await mobileAccessFromCookieHeader(request.headers.get("cookie"))) return true;
   if (process.env.DALI_ALLOW_BROWSER_PORTAL === "true") return true;
   const access = await pwaAccessFromCookieHeader(request.headers.get("cookie"));
   if (!access) return false;
@@ -132,14 +134,18 @@ export async function POST(request: Request) {
 
     stage = "identity-token";
     const token = await createIdentityToken(email, displayName);
+    const existingMobileAccess = await mobileAccessFromCookieHeader(request.headers.get("cookie"));
+    const mobilePlatform = mobileAppPlatform(request.headers) || existingMobileAccess?.platform || null;
+    const headers = new Headers({
+      location: externalRequestUrl(request, returnTo).toString(),
+      "cache-control": "no-store",
+      "x-request-id": correlationId,
+    });
+    headers.append("set-cookie", identityCookie(request, token));
+    if (mobilePlatform) headers.append("set-cookie", mobileAccessCookie(request, await issueMobileAccessToken(mobilePlatform)));
     return new Response(null, {
       status: 303,
-      headers: {
-        location: externalRequestUrl(request, returnTo).toString(),
-        "set-cookie": identityCookie(request, token),
-        "cache-control": "no-store",
-        "x-request-id": correlationId,
-      },
+      headers,
     });
   } catch (error) {
     const errorCode = safeOperationalErrorCode(error, "PORTAL_LOGIN_FAILED");

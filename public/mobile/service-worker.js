@@ -2,7 +2,7 @@
 
 const DB_NAME = "dali-mobile-secure-v1";
 const DB_VERSION = 1;
-const SHELL_CACHE = "dali-mobile-shell-v2";
+const SHELL_CACHE = "dali-mobile-shell-v3";
 const SYNC_PATH = "/api/portal/desktop/sync";
 const MAX_CACHE_BYTES = 2_000_000;
 const privilegedActions = new Set(["approve", "post", "mark-paid", "pay-judgment", "assign-case", "initialize", "add-bank", "reset-password", "activate"]);
@@ -191,7 +191,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/mobile/offline.html")));
+    // Keep navigations browser-driven so Android WebView preserves the app's
+    // custom user-agent. Capacitor's bundled errorPath handles failed loads.
     return;
   }
   if (url.pathname.startsWith("/_next/static/") || url.pathname === "/dally-logo.jpg") {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { mobileAccessFromCookieHeader } from "@/lib/mobile-access";
 import { isDaliMobileRequest } from "@/lib/mobile-entry";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
 
@@ -29,7 +30,15 @@ export async function proxy(request: NextRequest) {
   const emergencyBrowserAccess = process.env.DALI_ALLOW_BROWSER_PORTAL === "true";
   const desktopRequest = request.headers.get("x-dali-desktop-app") === desktopMarker;
   const mobileRequest = isDaliMobileRequest(request.headers);
-  const trustedNativeRequest = desktopRequest || mobileRequest;
+  let verifiedMobileRequest = mobileRequest;
+  if (desktopOnlyPath.test(request.nextUrl.pathname) && !verifiedMobileRequest) {
+    try {
+      verifiedMobileRequest = Boolean(await mobileAccessFromCookieHeader(request.headers.get("cookie")));
+    } catch {
+      verifiedMobileRequest = false;
+    }
+  }
+  const trustedNativeRequest = desktopRequest || verifiedMobileRequest;
   let trustedPwaRequest = false;
   if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest) {
     try {
@@ -58,8 +67,8 @@ export async function proxy(request: NextRequest) {
   response.headers.set("cross-origin-resource-policy", "same-origin");
   response.headers.set("origin-agent-cluster", "?1");
   response.headers.set("x-permitted-cross-domain-policies", "none");
-  response.headers.set("permissions-policy", mobileRequest ? "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()" : "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
-  if (mobileRequest) {
+  response.headers.set("permissions-policy", verifiedMobileRequest ? "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()" : "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  if (verifiedMobileRequest) {
     response.headers.set("x-dali-client", "mobile");
     response.headers.append("vary", "user-agent");
   }

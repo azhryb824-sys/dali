@@ -727,6 +727,7 @@ function Icon({ name }: { name: IconName }) {
 
 export default function PortalDashboard({
   currentUser,
+  currentDateLabel,
   initialRequests,
   initialRequestReplies,
   initialNotifications,
@@ -766,6 +767,7 @@ export default function PortalDashboard({
     functionalPermissions: string[];
     preferredLanguage: "ar" | "en" | "bn";
   };
+  currentDateLabel: string;
   initialRequests: WorkforceRequest[];
   initialRequestReplies: WorkforceRequestReply[];
   initialNotifications: PortalNotification[];
@@ -2195,14 +2197,7 @@ export default function PortalDashboard({
                   <h1>مرحباً، {currentUser.displayName.split(" ")[0]}</h1>
                   <span>{currentUser.functionalRoles.length ? `مساحة عمل مهيأة لصلاحيات: ${activeRoleLabel}.` : currentUser.role === "employee" ? `مساحة عملك في قسم ${departmentLabels[currentUser.department]}.` : "متابعة موحّدة لأعمال الشركة من لوحة واحدة."}</span>
                 </div>
-                <time>
-                  {new Intl.DateTimeFormat("ar-SA", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  }).format(new Date())}
-                </time>
+                <time>{currentDateLabel}</time>
               </div>
               <section className="metric-grid module-metrics">
                 {canAccess("employees") && (
