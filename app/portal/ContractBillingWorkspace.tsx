@@ -5,6 +5,9 @@ import { readApiJson } from "@/lib/client-api";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createWhatsAppUrl } from "@/lib/whatsapp";
 import ContractCancellationDialog from "./ContractCancellationDialog";
+import ContractApprovalStampDialog, {
+  type ContractApprovalStamp,
+} from "./ContractApprovalStampDialog";
 import LegalPaymentReferralDialog from "./LegalPaymentReferralDialog";
 import ContractFullEditDialog from "./ContractFullEditDialog";
 type Contract = {
@@ -127,6 +130,10 @@ export default function ContractBillingWorkspace() {
     null,
   );
   const [settlingPayment, setSettlingPayment] = useState<Payment | null>(null);
+  const [pendingContractApproval, setPendingContractApproval] = useState<{
+    contract: Contract;
+    stamps: ContractApprovalStamp[];
+  } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const load = useCallback(async () => {
     const response = await fetch("/api/portal/contract-payments", {
@@ -320,7 +327,7 @@ export default function ContractBillingWorkspace() {
       setBusy(0);
     }
   }
-  async function approveContract(contract: Contract) {
+  async function openContractApproval(contract: Contract) {
     setBusy(-contract.id);
     setNotice("");
     try {
@@ -333,17 +340,17 @@ export default function ContractBillingWorkspace() {
         };
       if (!stampResponse.ok || !stampData.stamps?.length)
         throw new Error(stampData.error || "أضف ختمًا نشطًا قبل اعتماد العقد");
-      const options = stampData.stamps
-          .map((item) => `${item.id} — ${item.name}`)
-          .join("\n"),
-        stampId = Number(
-          window.prompt(
-            `اختر رقم ختم الاعتماد:\n${options}`,
-            String(stampData.stamps[0].id),
-          ),
-        );
-      if (!stampData.stamps.some((item) => item.id === stampId))
-        throw new Error("لم يتم اختيار ختم صحيح");
+      setPendingContractApproval({ contract, stamps: stampData.stamps });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر تحميل أختام الاعتماد");
+    } finally {
+      setBusy(0);
+    }
+  }
+  async function approveContract(contract: Contract, stampId: number) {
+    setBusy(-contract.id);
+    setNotice("");
+    try {
       const response = await fetch(
         `/api/portal/contracts/${contract.id}/status`,
         {
@@ -363,10 +370,19 @@ export default function ContractBillingWorkspace() {
       if (!response.ok) throw new Error(result.error || "تعذر اعتماد العقد");
       if (!result.signatureUploadUrl)
         throw new Error("تم الاعتماد لكن لم يُنشأ رابط رفع النسخة الموقعة");
-      await navigator.clipboard.writeText(result.signatureUploadUrl);
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(result.signatureUploadUrl);
+        copied = true;
+      } catch {
+        // Some embedded browsers block clipboard access after an async request.
+      }
       await load();
+      setPendingContractApproval(null);
       setNotice(
-        `تم اعتماد العقد ${contract.referenceCode} ونسخ رابط رفع النسخة الموقعة إلى الحافظة: ${result.signatureUploadUrl}`,
+        copied
+          ? `تم اعتماد العقد ${contract.referenceCode} ونسخ رابط رفع النسخة الموقعة إلى الحافظة: ${result.signatureUploadUrl}`
+          : `تم اعتماد العقد ${contract.referenceCode}. رابط رفع النسخة الموقعة: ${result.signatureUploadUrl}`,
       );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "تعذر اعتماد العقد");
@@ -688,7 +704,7 @@ export default function ContractBillingWorkspace() {
                       <button
                         className="contract-card-approve"
                         disabled={busy === -contract.id}
-                        onClick={() => void approveContract(contract)}
+                        onClick={() => void openContractApproval(contract)}
                       >
                         {busy === -contract.id
                           ? "جارٍ الاعتماد..."
@@ -909,6 +925,16 @@ export default function ContractBillingWorkspace() {
               `تم تعديل العقد ${editingContract.referenceCode} بالكامل وإعادته للمسودة للاعتماد مجددًا.`,
             );
           }}
+        />
+      )}
+      {pendingContractApproval && (
+        <ContractApprovalStampDialog
+          stamps={pendingContractApproval.stamps}
+          busy={busy === -pendingContractApproval.contract.id}
+          onClose={() => setPendingContractApproval(null)}
+          onSelect={(stampId) =>
+            void approveContract(pendingContractApproval.contract, stampId)
+          }
         />
       )}
       {editingPayment && (

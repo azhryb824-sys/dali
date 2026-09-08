@@ -487,13 +487,23 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
   },
   {
     "source": "تم اعتماد العقد {{0}} ونسخ رابط رفع النسخة الموقعة إلى الحافظة: {{1}}",
-    "en": "The contract is approved {{0}} and copy the link to the subscribed version: {{1}}",
-    "bn": "চুক্তি অনুমোদিত হয় {{0}} এবং সাবস্ক্রিপ্ট সংস্করণের লিঙ্ক কপি করা হয়: {{1}}"
+    "en": "Contract {{0}} was approved, and the signed-copy upload link was copied to the clipboard: {{1}}",
+    "bn": "চুক্তি {{0}} অনুমোদিত হয়েছে এবং স্বাক্ষরিত কপি আপলোডের লিংক ক্লিপবোর্ডে কপি করা হয়েছে: {{1}}"
   },
   {
     "source": "تم اعتماد العقد ونسخ رابط رفع النسخة الموقعة إلى الحافظة: {{0}}",
-    "en": "The contract is approved and copy of the link to the subscribed version to the conservation: {{0}}",
-    "bn": "চুক্তি অনুমোদিত হয় এবং সংরক্ষণের জন্য সাবস্ক্রাইব সংস্করণের লিঙ্ক কপি করা হয়: {{0}}"
+    "en": "The contract was approved, and the signed-copy upload link was copied to the clipboard: {{0}}",
+    "bn": "চুক্তি অনুমোদিত হয়েছে এবং স্বাক্ষরিত কপি আপলোডের লিংক ক্লিপবোর্ডে কপি করা হয়েছে: {{0}}"
+  },
+  {
+    "source": "تم اعتماد العقد {{0}}. رابط رفع النسخة الموقعة: {{1}}",
+    "en": "Contract {{0}} was approved. Signed-copy upload link: {{1}}",
+    "bn": "চুক্তি {{0}} অনুমোদিত হয়েছে। স্বাক্ষরিত কপি আপলোডের লিংক: {{1}}"
+  },
+  {
+    "source": "تم اعتماد العقد. رابط رفع النسخة الموقعة: {{0}}",
+    "en": "The contract was approved. Signed-copy upload link: {{0}}",
+    "bn": "চুক্তি অনুমোদিত হয়েছে। স্বাক্ষরিত কপি আপলোডের লিংক: {{0}}"
   },
   {
     "source": "تم إنشاء {{0}} ملف عامل وإرفاق صور الإقامة والمتطلبات.",

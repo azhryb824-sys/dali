@@ -26,6 +26,9 @@ import RoleDefinitionManager from "./RoleDefinitionManager";
 import PwaDeviceManager from "./PwaDeviceManager";
 import SalesRepresentativesWorkspace from "./SalesRepresentativesWorkspace";
 import ContractCancellationDialog from "./ContractCancellationDialog";
+import ContractApprovalStampDialog, {
+  type ContractApprovalStamp,
+} from "./ContractApprovalStampDialog";
 import LegalCaseWorkspace from "./LegalCaseWorkspace";
 import PaymentManagementDashboard from "./PaymentManagementDashboard";
 import VideoInterviewDesk from "./VideoInterviewDesk";
@@ -839,6 +842,12 @@ export default function PortalDashboard({
   const [issuePreset, setIssuePreset] = useState("workforce_contract");
   const [issueReturnView, setIssueReturnView] = useState<View | null>(null);
   const [issueQuoteId, setIssueQuoteId] = useState<number | null>(null);
+  const [pendingContractApproval, setPendingContractApproval] = useState<{
+    contractId: number;
+    reason: string;
+    reasonCode?: "late_payment" | "other";
+    stamps: ContractApprovalStamp[];
+  } | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -1754,11 +1763,17 @@ export default function PortalDashboard({
     }
   }
 
-  async function updateContractStatus(contractId: number, status: string, reason: string, reasonCode?: "late_payment" | "other") {
+  async function updateContractStatus(
+    contractId: number,
+    status: string,
+    reason: string,
+    reasonCode?: "late_payment" | "other",
+    selectedStampId?: number,
+  ) {
     setBusy(`contract-status-${contractId}`);
     try {
-      let stampId: number | undefined;
-      if (status === "approved") {
+      const stampId = selectedStampId;
+      if (status === "approved" && !stampId) {
         const stampResponse = await fetch("/api/portal/document-stamps", {
           cache: "no-store",
         });
@@ -1769,13 +1784,8 @@ export default function PortalDashboard({
         if (!stampResponse.ok) throw new Error(stampData.error || "تعذر تحميل أختام الاعتماد");
         const stamps = stampData.stamps || [];
         if (!stamps.length) throw new Error("لا يوجد ختم اعتماد نشط. أضف ختمًا من إدارة الهوية والمستندات أولًا.");
-        if (stamps.length === 1) stampId = stamps[0].id;
-        else {
-          const selected = window.prompt(`اختر رقم ختم الاعتماد:\n${stamps.map((stamp) => `${stamp.id} — ${stamp.name}`).join("\n")}`, String(stamps[0].id));
-          if (selected === null) return;
-          stampId = Number(selected);
-          if (!stamps.some((stamp) => stamp.id === stampId)) throw new Error("رقم الختم المختار غير صحيح");
-        }
+        setPendingContractApproval({ contractId, reason, reasonCode, stamps });
+        return;
       }
       const response = await fetch(`/api/portal/contracts/${contractId}/status`, {
         method: "PATCH",
@@ -1796,8 +1806,19 @@ export default function PortalDashboard({
       );
       if (status === "approved") {
         if (!result.signatureUploadUrl) throw new Error("تم الاعتماد لكن لم يُنشأ رابط رفع النسخة الموقعة");
-        await navigator.clipboard.writeText(result.signatureUploadUrl);
-        notify(`تم اعتماد العقد ونسخ رابط رفع النسخة الموقعة إلى الحافظة: ${result.signatureUploadUrl}`);
+        let copied = false;
+        try {
+          await navigator.clipboard.writeText(result.signatureUploadUrl);
+          copied = true;
+        } catch {
+          // Approval succeeded; clipboard support must not turn it into a false failure.
+        }
+        setPendingContractApproval(null);
+        notify(
+          copied
+            ? `تم اعتماد العقد ونسخ رابط رفع النسخة الموقعة إلى الحافظة: ${result.signatureUploadUrl}`
+            : `تم اعتماد العقد. رابط رفع النسخة الموقعة: ${result.signatureUploadUrl}`,
+        );
       } else notify("تم تحديث حالة العقد وتسجيل القرار في سجل التدقيق.");
     } catch (error) {
       notify(error instanceof Error ? error.message : "تعذّر تحديث حالة العقد.");
@@ -2510,7 +2531,7 @@ export default function PortalDashboard({
                 setOperationsTab("quotes");
                 changeView("operations");
               }}
-              canApprove={hasPermission("contracts.approve")}
+              canApprove={isRoot}
               onApproveContract={(contractId) => updateContractStatus(contractId, "approved", "اعتماد مباشر من مركز المستندات")}
               onShare={shareDocument}
               onUploadAsset={uploadAsset}
@@ -2568,6 +2589,22 @@ export default function PortalDashboard({
       {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply} />}
       {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} canArchive={canArchiveWorkers} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment} />}
       {selectedContract && <ContractDrawer contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus} onEdit={editContract} onDelete={deleteContract} onRecordAbsence={recordContractAbsence} />}
+      {pendingContractApproval && (
+        <ContractApprovalStampDialog
+          stamps={pendingContractApproval.stamps}
+          busy={busy === `contract-status-${pendingContractApproval.contractId}`}
+          onClose={() => setPendingContractApproval(null)}
+          onSelect={(stampId) =>
+            void updateContractStatus(
+              pendingContractApproval.contractId,
+              "approved",
+              pendingContractApproval.reason,
+              pendingContractApproval.reasonCode,
+              stampId,
+            )
+          }
+        />
+      )}
       {canAccessVideo && <VideoInterviewDesk />}
     </main>
   );
