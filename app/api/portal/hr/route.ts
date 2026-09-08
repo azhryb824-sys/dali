@@ -179,23 +179,24 @@ export async function POST(request: Request) {
         const user = await db.query.portalUsers.findFirst({
           where: eq(portalUsers.email, portalUserEmail),
         });
-        if (!user)
+        if (!user || user.status !== "active")
           return jsonNoStore(
-            { error: "حساب المستخدم غير موجود" },
+            { error: "اختر حساب مستخدم نشطًا" },
             { status: 404 },
           );
+        const linkedEmployee = await db.query.employees.findFirst({
+          where: eq(employees.portalUserEmail, portalUserEmail),
+        });
+        if (linkedEmployee && linkedEmployee.id !== employeeId)
+          return jsonNoStore(
+            { error: "هذا المستخدم مرتبط بموظف آخر" },
+            { status: 409 },
+          );
       }
-      const managerId = positiveId(payload.managerId) || null;
-      if (managerId === employeeId)
-        return jsonNoStore(
-          { error: "لا يمكن أن يكون الموظف مديراً لنفسه" },
-          { status: 400 },
-        );
       const [saved] = await db
         .update(employees)
         .set({
           portalUserEmail,
-          managerId,
           workLocation: clean(payload.workLocation, 120) || null,
           employmentType: clean(payload.employmentType, 30) || "full_time",
           contractType: clean(payload.contractType, 30) || "fixed_term",

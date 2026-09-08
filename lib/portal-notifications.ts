@@ -190,10 +190,12 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   for (const employee of employeeItems) {
     if (employee.archivedAt) continue;
     const expiries = [
-      { kind: "iqama", label: "الإقامة", date: employee.iqamaExpiry },
-      ...(employee.sponsorshipType === "dali" ? [
-        { kind: "employment-contract", label: "عقد العمل", date: employee.contractEndDate },
+      ...(employee.residencyType === "resident" ? [
+        { kind: "iqama", label: "الإقامة", date: employee.iqamaExpiry },
         { kind: "work-permit", label: "رخصة العمل", date: employee.workPermitExpiry },
+      ] : []),
+      ...(employee.contractType === "fixed_term" ? [
+        { kind: "employment-contract", label: "عقد العمل", date: employee.contractEndDate },
       ] : []),
     ];
     for (const expiry of expiries) {

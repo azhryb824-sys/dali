@@ -464,6 +464,9 @@ export const employees = pgTable(
     gosiNumber: text("gosi_number"),
     nationalId: text("national_id"),
     nationality: text("nationality"),
+    residencyType: text("residency_type", { enum: ["citizen", "resident"] })
+      .notNull()
+      .default("resident"),
     sponsorshipType: text("sponsorship_type").notNull().default("dali"),
     sponsorName: text("sponsor_name"),
     iqamaExpiry: text("iqama_expiry"),
@@ -505,6 +508,10 @@ export const employees = pgTable(
       table.iqamaExpiry,
       table.workPermitExpiry,
       table.contractEndDate,
+    ),
+    check(
+      "employees_residency_type_check",
+      sql`${table.residencyType} in ('citizen','resident')`,
     ),
     check(
       "employees_sponsorship_type_check",
@@ -1123,6 +1130,7 @@ export const contractPaymentSchedules = pgTable(
       .references(() => workforceContracts.id, { onDelete: "cascade" }),
     installmentNumber: integer("installment_number").notNull(),
     title: text("title").notNull(),
+    titleEn: text("title_en"),
     dueDate: text("due_date").notNull(),
     percentageBps: integer("percentage_bps").notNull(),
     amountHalalas: integer("amount_halalas").notNull(),

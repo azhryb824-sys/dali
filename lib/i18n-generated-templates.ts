@@ -302,7 +302,7 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
   },
   {
     "source": "استحقاق المورد للدفعة رقم {{0}} ({{1}}) من عقد شراء العمالة {{2}}.",
-    "en": "Supplier's worthy of payment number {{0}} ({{1}}) of the contract of purchase of work {{2}}.",
+    "en": "Supplier payable for installment No. {{0}} ({{1}}) under manpower purchase contract {{2}}.",
     "bn": "শ্রমশক্তি ক্রয় চুক্তি {{2}}-এর {{0}} নম্বর কিস্তি ({{1}})-এর জন্য সরবরাহকারীর পাওনা।"
   },
   {
@@ -602,8 +602,8 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
   },
   {
     "source": "خصم غياب العمالة قبل الضريبة: {{0}} ر.س.",
-    "en": "Discount for the absence of employment before tax: {{0}} R.S.",
-    "bn": "ট্যাক্সের আগে কর্মসংস্থান অনুপস্থিতি জন্য ডিসকাউন্ট: {{0}} R.S."
+    "en": "Manpower absence deduction before VAT: {{0}} SAR.",
+    "bn": "ভ্যাটের আগে জনবল অনুপস্থিতির কর্তন: {{0}} সৌদি রিয়াল।"
   },
   {
     "source": "خصم غياب العمالة قبل الضريبة: {{0}} ر.س. {{1}}",
@@ -712,8 +712,13 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
   },
   {
     "source": "فاتورة الدفعة رقم {{0}} ({{1}}) من العقد {{2}}.",
-    "en": "Payment bill number {{0}} ({{1}}) of the contract {{2}}.",
+    "en": "Invoice for installment No. {{0}} ({{1}}) under contract {{2}}.",
     "bn": "চুক্তি {{2}}-এর {{0}} নম্বর কিস্তির ({{1}}) চালান।"
+  },
+  {
+    "source": "عنوان الدفعة بالإنجليزية {{0}}",
+    "en": "English installment title {{0}}",
+    "bn": "কিস্তির ইংরেজি শিরোনাম {{0}}"
   },
   {
     "source": "فتح {{0}}",

@@ -32,6 +32,7 @@ export type IssuedDocumentInput = {
   clientRepresentative?: string;
   clientRepresentativeTitle?: string;
   title: string;
+  titleEn?: string;
   issueDate: string;
   expiryDate?: string;
   amountHalalas?: number;
@@ -45,6 +46,7 @@ export type IssuedDocumentInput = {
   transportParty?: string;
   specialTerms?: string;
   details: string;
+  detailsEn?: string;
   workSite?: string;
   profession?: string;
   workerCount?: number;
@@ -57,7 +59,7 @@ export type IssuedDocumentInput = {
     ajirContractStatus?: "not_applicable" | "with_ajir" | "without_ajir" | null;
     assignedWorkers?: Array<{ fullName: string; iqamaNumber: string | null }>;
   }>;
-  paymentSchedule?: Array<{ title: string; dueDate: string; percentageBps: number; amountHalalas: number }>;
+  paymentSchedule?: Array<{ title: string; titleEn?: string | null; dueDate: string; percentageBps: number; amountHalalas: number }>;
   startDate?: string;
   endDate?: string;
   activityLabel?: string;
@@ -131,11 +133,24 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
   };
   const ensure = (height: number) => { if (y - height < 72) addPage(); };
   const heading = (value: string) => { ensure(34); drawLeft(page, value, y, resources.latinBold, 16, COLORS.navy); page.drawRectangle({ x: PAGE.margin, y: y - 11, width: 34, height: 3, color: COLORS.red }); y -= 30; };
-  const row = (label: string, value: string) => { const lines = wrapWords(resources.latinRegular, value || "Not specified", 8, PAGE.width - PAGE.margin * 2 - 24); const height = 16 + lines.length * 10; ensure(height + 2); page.drawRectangle({ x: PAGE.margin, y: y - height + 5, width: PAGE.width - PAGE.margin * 2, height, color: COLORS.pale, borderColor: COLORS.line, borderWidth: .5 }); drawLeft(page, label, y - 2, resources.latinBold, 7, COLORS.red, PAGE.margin + 12); lines.forEach((line, index) => drawLeft(page, line, y - 14 - index * 10, resources.latinRegular, 8, COLORS.text, PAGE.margin + 12)); y -= height + 2; };
+  const row = (label: string, value: string) => {
+    const displayed = value || "Not specified";
+    const hasArabic = /[\u0600-\u06ff]/.test(displayed);
+    const valueFont = hasArabic ? resources.regular : resources.latinRegular;
+    const lines = wrapWords(valueFont, displayed, 8, PAGE.width - PAGE.margin * 2 - 24);
+    const height = 16 + lines.length * 10;
+    ensure(height + 2);
+    page.drawRectangle({ x: PAGE.margin, y: y - height + 5, width: PAGE.width - PAGE.margin * 2, height, color: COLORS.pale, borderColor: COLORS.line, borderWidth: .5 });
+    drawLeft(page, label, y - 2, resources.latinBold, 7, COLORS.red, PAGE.margin + 12);
+    lines.forEach((line, index) => hasArabic
+      ? drawRight(page, line, y - 14 - index * 10, valueFont, 8, COLORS.text, PAGE.width - PAGE.margin - 12)
+      : drawLeft(page, line, y - 14 - index * 10, valueFont, 8, COLORS.text, PAGE.margin + 12));
+    y -= height + 2;
+  };
   addPage();
   heading(englishDocumentLabels[input.documentType]);
   row("Reference", input.referenceCode); row("Issue date", input.issueDate); row("Client / Entity", input.clientName);
-  row("Document title", englishText(input.title));
+  row("Document title", input.titleEn || englishText(input.title));
   if (input.expiryDate) row("Due date", input.expiryDate);
   if (input.clientCr) row("Commercial registration", input.clientCr);
   if (input.clientVat) row("VAT number", input.clientVat);
@@ -153,9 +168,9 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
     input.professions.forEach((item, index) => row(`Requirement ${index + 1}`, `${englishText(item.profession)} | Required: ${input.quantityMode === "open" ? "Open" : item.requiredCount}`));
   }
   if (input.amountHalalas) { row("Subtotal", `${((input.subtotalHalalas || input.amountHalalas) / 100).toFixed(2)} SAR`); if (input.vatHalalas) row("VAT", `${(input.vatHalalas / 100).toFixed(2)} SAR`); row("Total", `${(input.amountHalalas / 100).toFixed(2)} SAR`); }
-  if (input.paymentSchedule?.length) { heading("Payment Schedule"); input.paymentSchedule.forEach((payment, index) => row(`Installment ${index + 1}`, `${englishText(payment.title)} | Due: ${payment.dueDate} | ${(payment.percentageBps / 100).toFixed(2)}% | ${(payment.amountHalalas / 100).toFixed(2)} SAR`)); }
+  if (input.paymentSchedule?.length) { heading("Payment Schedule"); input.paymentSchedule.forEach((payment, index) => row(`Installment ${index + 1}`, `${payment.titleEn || englishText(payment.title)} | Due: ${payment.dueDate} | ${(payment.percentageBps / 100).toFixed(2)}% | ${(payment.amountHalalas / 100).toFixed(2)} SAR`)); }
   if (input.documentType === "workforce_contract") {
-    row("Scope", englishText(input.details));
+    row("Scope", input.detailsEn || englishText(input.details));
     if (input.paymentTerms) row("Payment terms", englishText(input.paymentTerms));
     if (input.specialTerms) row("Special terms", englishText(input.specialTerms));
     addPage(); heading("Contract Terms and Conditions");
@@ -186,8 +201,8 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
     const counterpartyRole = input.contractDirection === "dali_purchaser" ? "Supplier" : "Purchaser";
     row("Approval and Signatures", `This contract becomes effective only after approval and signature by both parties. Appendices, schedules and linked versions form part of it. First Party: Dali Operations & Maintenance Co. (${daliRole}) | Second Party: ${counterpartyRole}.`);
   } else {
-    heading("Terms and Details");
-    row("Scope", englishText(input.details));
+    heading(input.documentType === "official_letter" ? "Letter Body" : input.documentType === "invoice" ? "Invoice Details" : "Terms and Details");
+    row(input.documentType === "official_letter" ? "Letter text" : input.documentType === "invoice" ? "Description" : "Scope", input.detailsEn || englishText(input.details));
     if (input.paymentTerms) row("Payment terms", englishText(input.paymentTerms));
     if (input.specialTerms) row("Special terms", englishText(input.specialTerms));
   }
@@ -1092,7 +1107,8 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
   composer.heading(issuedDocumentLabels[input.documentType]);
   composer.pair("الرقم المرجعي", input.referenceCode, "تاريخ الإصدار", dateLabel(input.issueDate), true);
   composer.pair("العميل / الجهة", input.clientName, input.clientCr ? "السجل التجاري للعميل" : "نوع المستند", input.clientCr ? arabicDigits(input.clientCr) : issuedDocumentLabels[input.documentType]);
-  if (input.clientVat) composer.pair("الرقم الضريبي للعميل", arabicDigits(input.clientVat), "عنوان المستند", input.title);
+  if (input.clientVat) composer.pair("الرقم الضريبي للعميل", arabicDigits(input.clientVat), input.documentType === "official_letter" ? "موضوع الخطاب" : "عنوان المستند", input.title);
+  else composer.field(input.documentType === "official_letter" ? "موضوع الخطاب" : "عنوان المستند", input.title);
   if (input.documentType === "workforce_contract") {
     const professions = input.professions?.length
       ? input.professions

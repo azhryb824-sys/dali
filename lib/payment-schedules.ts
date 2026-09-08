@@ -1,5 +1,6 @@
 export type PaymentScheduleDraft = {
   title: string;
+  titleEn?: string | null;
   dueDate: string;
   percentageBps: number;
 };
@@ -18,6 +19,7 @@ export function parsePaymentSchedule(value: unknown): PaymentScheduleDraft[] {
     const row = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
     return {
       title: typeof row.title === "string" ? row.title.trim().slice(0, 160) : "",
+      titleEn: typeof row.titleEn === "string" ? row.titleEn.trim().slice(0, 160) || null : null,
       dueDate: typeof row.dueDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.dueDate) ? row.dueDate : "",
       percentageBps: Math.round(Number(row.percentage ?? Number(row.percentageBps || 0) / 100) * 100),
     };

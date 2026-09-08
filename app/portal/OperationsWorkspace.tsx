@@ -12,6 +12,7 @@ import {
 import IntegrationManager from "./IntegrationManager";
 import ContractBillingWorkspace from "./ContractBillingWorkspace";
 import PaymentManagementDashboard from "./PaymentManagementDashboard";
+import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
 import { createWhatsAppUrl } from "@/lib/whatsapp";
 
 type Client = {
@@ -1680,8 +1681,8 @@ function QuoteForm({
     "dali",
   );
   const [payments, setPayments] = useState([
-    { key: "payment-1", title: "الدفعة الأولى", percentage: 50, dueDate: "" },
-    { key: "payment-2", title: "الدفعة الثانية", percentage: 50, dueDate: "" },
+    { key: "payment-1", title: "الدفعة الأولى", titleEn: "First installment", percentage: 50, dueDate: "" },
+    { key: "payment-2", title: "الدفعة الثانية", titleEn: "Second installment", percentage: 50, dueDate: "" },
   ]);
   const [items, setItems] = useState<Line[]>([
     { key: "line-1", ...activities.workforce.seed },
@@ -1750,8 +1751,9 @@ function QuoteForm({
             paymentSchedule:
               seasonType === "regular"
                 ? []
-                : payments.map(({ title, percentage, dueDate }) => ({
+                : payments.map(({ title, titleEn, percentage, dueDate }, index) => ({
                     title,
+                    titleEn: invoicePaymentTitleEnglish(title, titleEn, index + 1),
                     percentage,
                     dueDate,
                   })),
@@ -2097,6 +2099,21 @@ function QuoteForm({
                   )
                 }
               />
+              <input
+                aria-label={`عنوان الدفعة بالإنجليزية ${index + 1}`}
+                required
+                dir="ltr"
+                value={payment.titleEn}
+                onChange={(event) =>
+                  setPayments((rows) =>
+                    rows.map((row) =>
+                      row.key === payment.key
+                        ? { ...row, titleEn: event.target.value }
+                        : row,
+                    ),
+                  )
+                }
+              />
               <label>
                 النسبة %
                 <input
@@ -2157,6 +2174,7 @@ function QuoteForm({
                   {
                     key: `payment-${Date.now()}`,
                     title: `الدفعة ${rows.length + 1}`,
+                    titleEn: `Installment ${rows.length + 1}`,
                     percentage: 0,
                     dueDate: "",
                   },

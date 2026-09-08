@@ -2,10 +2,11 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyAssets, companyDocuments, contractPaymentSchedules, financialRecords, workforceContracts } from "@/db/schema";
 import { generateIssuedPdf, issuedDocumentLabels, type IssuedDocumentInput, type IssuedDocumentType } from "@/lib/pdf-generator";
+import { contractInvoicePdfCopy } from "@/lib/invoice-pdf-copy";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { regenerateWorkforceContractPdf } from "@/lib/workforce-contract-pdf";
 
-export const CURRENT_ISSUED_PDF_TEMPLATE = "letterhead-v4-english-invoice";
+export const CURRENT_ISSUED_PDF_TEMPLATE = "letterhead-v5-english-invoice-copy";
 
 function record(value: string | null) {
   try { return value ? JSON.parse(value) as Record<string, unknown> : {}; }
@@ -34,9 +35,8 @@ export async function regenerateIssuedDocumentPdf(documentId: number, pdfLanguag
   ]);
   const purchaser = (text(metadata.contractDirection) || contract?.contractDirection) === "dali_purchaser";
   const absenceDeductionHalalas = number(metadata.absenceDeductionHalalas) || payment?.absenceDeductionHalalas || 0;
-  const legacyInvoiceDetails = payment && contract
-    ? `خصم غياب العمالة قبل الضريبة: ${(absenceDeductionHalalas / 100).toFixed(2)} ر.س.\n${purchaser ? `استحقاق المورد للدفعة رقم ${payment.installmentNumber} (${payment.title}) من عقد شراء العمالة ${contract.referenceCode}.` : `فاتورة الدفعة رقم ${payment.installmentNumber} (${payment.title}) من العقد ${contract.referenceCode}.`}`
-    : undefined;
+  const legacyInvoiceCopy = payment && contract ? contractInvoicePdfCopy({ purchaser, paymentTitle: payment.title, paymentTitleEn: payment.titleEn, installmentNumber: payment.installmentNumber, contractReference: contract.referenceCode, absenceDeductionHalalas }) : undefined;
+  const legacyInvoiceDetails = legacyInvoiceCopy?.detailsAr;
   const details = text(metadata.details) || legacyInvoiceDetails || financial?.notes || document.title;
   const input: IssuedDocumentInput = {
     pdfLanguage,
@@ -50,6 +50,7 @@ export async function regenerateIssuedDocumentPdf(documentId: number, pdfLanguag
     clientRepresentative: text(metadata.clientRepresentative),
     clientRepresentativeTitle: text(metadata.clientRepresentativeTitle),
     title: document.title,
+    titleEn: text(metadata.titleEn) || legacyInvoiceCopy?.titleEn,
     issueDate: text(metadata.issueDate) || document.createdAt.slice(0, 10),
     expiryDate: document.expiryDate || undefined,
     amountHalalas: number(metadata.amountHalalas) || number(metadata.netAmountHalalas) || financial?.amountHalalas || undefined,
@@ -58,6 +59,7 @@ export async function regenerateIssuedDocumentPdf(documentId: number, pdfLanguag
     vatRateBps: number(metadata.vatRateBps) || financial?.vatRateBps || undefined,
     quantityMode: metadata.quantityMode === "open" ? "open" : "fixed",
     details,
+    detailsEn: text(metadata.detailsEn) || legacyInvoiceCopy?.detailsEn,
     workSite: text(metadata.workSite),
     paymentTerms: text(metadata.paymentTerms),
   };

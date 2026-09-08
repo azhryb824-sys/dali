@@ -8,6 +8,7 @@ import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
+import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
 import { parseWorkforceContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -42,7 +43,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (editedProfessions && (!editedProfessions.length || editedProfessions.some((item) => !item.profession || (contract.quantityMode !== "open" && item.requiredCount < 1) || item.unitSalaryHalalas < 1 || item.actualSalaryHalalas < 0))) return jsonNoStore({ error: "أكمل المهنة والعدد وسعر العامل لكل صف" }, { status: 400 });
   if (editedProfessions && new Set(editedProfessions.map((item) => `${item.profession}|${item.sponsorshipType}|${item.sponsorName || ""}|${item.ajirContractStatus}`)).size !== editedProfessions.length) return jsonNoStore({ error: "يوجد تكرار في توزيع المهنة والكفيل وأجير" }, { status: 400 });
   const paymentPayload = Array.isArray(payload.paymentSchedule) ? payload.paymentSchedule as Array<Record<string, unknown>> : null;
-  const editedPayments = paymentPayload?.map((item) => ({ id: Number(item.id), title: clean(item.title, 160), dueDate: cleanDate(item.dueDate), percentageBps: Math.round(Number(item.percentageBps)) })) || null;
+  const editedPayments = paymentPayload?.map((item, index) => { const title = clean(item.title, 160); return { id: Number(item.id), title, titleEn: invoicePaymentTitleEnglish(title, clean(item.titleEn, 160), index + 1), dueDate: cleanDate(item.dueDate), percentageBps: Math.round(Number(item.percentageBps)) }; }) || null;
   if (editedPayments && (!editedPayments.length || editedPayments.some((item) => !Number.isInteger(item.id) || item.id < 1 || item.title.length < 2 || !item.dueDate || item.percentageBps < 1) || editedPayments.reduce((sum, item) => sum + item.percentageBps, 0) !== 10000)) return jsonNoStore({ error: "جدول الدفعات غير صحيح؛ يجب أن يكون مجموع النسب 100%" }, { status: 400 });
   const contractDirection:WorkforceContractDirection=payload.contractDirection==="dali_purchaser"?"dali_purchaser":payload.contractDirection==="dali_supplier"?"dali_supplier":contract.contractDirection as WorkforceContractDirection;
   const professions=await db.select().from(contractProfessions).where(eq(contractProfessions.contractId,id));
@@ -105,6 +106,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         const dueDate = annualSchedule.dueDates[index];
         await tx.update(contractPaymentSchedules).set({
           title: `استحقاق رواتب شهر ${dueDate.slice(0, 7)}`,
+          titleEn: `Salary installment for ${dueDate.slice(0, 7)}`,
           dueDate,
           servicePeriod: dueDate.slice(0, 7),
           subtotalHalalas: monthlySubtotalHalalas,
@@ -124,7 +126,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       for (const payment of editedPayments) {
         const subtotalHalalas = Math.round(contractSubtotalHalalas * payment.percentageBps / 10000);
         const vatHalalas = Math.round(subtotalHalalas * vatRateBps / 10000);
-        await tx.update(contractPaymentSchedules).set({ title: payment.title, dueDate: payment.dueDate!, percentageBps: payment.percentageBps, subtotalHalalas, vatHalalas, vatRateBps, amountHalalas: subtotalHalalas + vatHalalas, status: payment.dueDate! <= now.slice(0, 10) ? "due" : "scheduled", updatedAt: now }).where(eq(contractPaymentSchedules.id, payment.id));
+        await tx.update(contractPaymentSchedules).set({ title: payment.title, titleEn: payment.titleEn, dueDate: payment.dueDate!, percentageBps: payment.percentageBps, subtotalHalalas, vatHalalas, vatRateBps, amountHalalas: subtotalHalalas + vatHalalas, status: payment.dueDate! <= now.slice(0, 10) ? "due" : "scheduled", updatedAt: now }).where(eq(contractPaymentSchedules.id, payment.id));
       }
     }
     if (clauses) {

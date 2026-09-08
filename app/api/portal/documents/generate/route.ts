@@ -27,6 +27,7 @@ import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, requestCorrelationId, validateUploadedFile } from "@/lib/security";
 import { annualContractSchedule, parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
+import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
 import { parseWorkforceContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 const prefixes: Record<IssuedDocumentType, string> = {
@@ -42,7 +43,7 @@ const prefixes: Record<IssuedDocumentType, string> = {
 };
 
 type ProfessionInput = { profession: string; requiredCount: number; unitSalaryHalalas: number; actualSalaryHalalas: number; sponsorshipType: "dali" | "other"; sponsorName: string | null; ajirContractStatus: "not_applicable" | "with_ajir" | "without_ajir"; workerIds: number[] };
-type PaymentInput = { title: string; dueDate: string; percentageBps: number; subtotalHalalas: number; vatHalalas: number; amountHalalas: number; billingBasis: "monthly_salary" | "seasonal_percentage"; servicePeriod: string | null };
+type PaymentInput = { title: string; titleEn: string; dueDate: string; percentageBps: number; subtotalHalalas: number; vatHalalas: number; amountHalalas: number; billingBasis: "monthly_salary" | "seasonal_percentage"; servicePeriod: string | null };
 
 function isDocumentType(value: string): value is IssuedDocumentType {
   return value in issuedDocumentLabels;
@@ -88,12 +89,13 @@ function parsePayments(value: unknown, contractSubtotalHalalas: number, vatRateB
   let raw: unknown = value;
   if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch { raw = null; } }
   if (!Array.isArray(raw)) return [];
-  const payments: PaymentInput[] = raw.map((item) => {
+  const payments: PaymentInput[] = raw.map((item, index) => {
     const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
     const percentageBps = Math.round(Number(row.percentage || 0) * 100);
     const subtotalHalalas = Math.round(contractSubtotalHalalas * percentageBps / 10000);
     const vatHalalas = Math.round(subtotalHalalas * vatRateBps / 10000);
-    return { title: cleanText(row.title, 160), dueDate: cleanDate(row.dueDate) || "", percentageBps, subtotalHalalas, vatHalalas, amountHalalas: subtotalHalalas + vatHalalas, billingBasis: "seasonal_percentage", servicePeriod: null };
+    const title = cleanText(row.title, 160);
+    return { title, titleEn: invoicePaymentTitleEnglish(title, cleanText(row.titleEn, 160), index + 1), dueDate: cleanDate(row.dueDate) || "", percentageBps, subtotalHalalas, vatHalalas, amountHalalas: subtotalHalalas + vatHalalas, billingBasis: "seasonal_percentage", servicePeriod: null };
   });
   if (payments.length && payments.reduce((sum, item) => sum + item.percentageBps, 0) === 10000) {
     const last = payments[payments.length - 1];
@@ -147,6 +149,7 @@ export async function POST(request: Request) {
     const issueDate = cleanDate(payload.issueDate);
     const expiryDate = cleanDate(payload.expiryDate, true);
     const details = cleanText(payload.details, 4000);
+    const detailsEn = cleanText(payload.detailsEn, 4000);
     const workSite = cleanText(payload.workSite, 180);
     const clientAddress = cleanText(payload.clientAddress, 240);
     const clientRepresentative = cleanText(payload.clientRepresentative, 160);
@@ -187,11 +190,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
     }
     const title = `${issuedDocumentLabels[documentType]} — ${clientName}`;
+    const titleEn = documentType === "invoice" ? `Invoice - ${clientName}` : undefined;
     if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000 || (documentType === "workforce_contract" && quantityMode === "fixed" && seasonType !== "regular" && amount <= 0)) {
       return Response.json({ error: "قيمة المستند غير صحيحة" }, { status: 400 });
     }
     if (documentType === "quotation" && (!expiryDate || amount <= 0)) {
       return Response.json({ error: "صلاحية العرض وقيمة الخدمة من متطلبات نموذج عرض السعر" }, { status: 400 });
+    }
+    if (documentType === "invoice" && /[\u0600-\u06ff]/.test(details) && detailsEn.length < 5) {
+      return Response.json({ error: "أدخل البيان الإنجليزي للفاتورة حتى تكون نسخة PDF الإنجليزية مكتملة" }, { status: 400 });
     }
     if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100 || (vatEnabled && !clientVat)) {
       return Response.json({ error: vatEnabled && !clientVat ? "أدخل الرقم الضريبي للعميل عند تفعيل الضريبة" : "نسبة الضريبة غير صحيحة" }, { status: 400 });
@@ -229,7 +236,7 @@ export async function POST(request: Request) {
           const finalInstallment = index === dueDates.length - 1;
           const installmentVatHalalas = finalInstallment ? totalVatHalalas - standardVatHalalas * index : standardVatHalalas;
           const percentageBps = finalInstallment ? 10000 - standardPercentageBps * index : standardPercentageBps;
-          return { title: `استحقاق رواتب شهر ${dueDate.slice(0,7)}`, dueDate, percentageBps, subtotalHalalas: monthlySubtotal, vatHalalas: installmentVatHalalas, amountHalalas: monthlySubtotal + installmentVatHalalas, billingBasis: "monthly_salary", servicePeriod: dueDate.slice(0,7) };
+          return { title: `استحقاق رواتب شهر ${dueDate.slice(0,7)}`, titleEn: `Salary installment for ${dueDate.slice(0,7)}`, dueDate, percentageBps, subtotalHalalas: monthlySubtotal, vatHalalas: installmentVatHalalas, amountHalalas: monthlySubtotal + installmentVatHalalas, billingBasis: "monthly_salary", servicePeriod: dueDate.slice(0,7) };
         });
       } else if (quantityMode === "fixed") {
         paymentSchedule = parsePayments(payload.paymentSchedule, contractAmountHalalas, vatRateBpsForSchedule);
@@ -274,7 +281,7 @@ export async function POST(request: Request) {
     if (sourceQuote && seasonType !== "regular" && quantityMode === "fixed") {
       const sourceSchedule = parsePaymentSchedule(sourceQuote.paymentScheduleJson);
       if (!validateSeasonalSchedule(sourceSchedule)) return Response.json({ error: "عرض السعر الموسمي المرتبط لا يحتوي جدول دفعات معتمدًا" }, { status: 409 });
-      paymentSchedule = parsePayments(sourceSchedule.map((row) => ({ title: row.title, dueDate: row.dueDate, percentage: row.percentageBps / 100 })), contractAmountHalalas, vatEnabled ? Math.round(vatRate * 100) : 0);
+      paymentSchedule = parsePayments(sourceSchedule.map((row) => ({ title: row.title, titleEn: row.titleEn, dueDate: row.dueDate, percentage: row.percentageBps / 100 })), contractAmountHalalas, vatEnabled ? Math.round(vatRate * 100) : 0);
     }
     const sourceOpportunity = sourceQuote ? await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, sourceQuote.opportunityId) }) : null;
     const sourceQuoteItems = sourceQuote ? await db.select().from(quoteItems).where(eq(quoteItems.quoteVersionId, sourceQuote.id)) : [];
@@ -344,6 +351,7 @@ export async function POST(request: Request) {
       clientCr: clientCr || undefined,
       clientVat: clientVat || undefined,
       title,
+      titleEn,
       issueDate,
       expiryDate: documentType === "workforce_contract" ? endDate || undefined : expiryDate || undefined,
       amountHalalas,
@@ -354,6 +362,7 @@ export async function POST(request: Request) {
       contractDirection,
       contractClauses: clauseInputs,
       details,
+      detailsEn: detailsEn || undefined,
       workSite: workSite || undefined,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
@@ -436,7 +445,7 @@ export async function POST(request: Request) {
         sizeBytes: pdfBytes.byteLength,
         expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
         source: "generated",
-        metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, sourceRequestId, representativeRequestId, salesRepresentativeId, quoteVersionId, quantityMode, contractDirection, contractClauses: clauseInputs, allWorkersWithAjir, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, workSite, startDate, endDate, paymentTerms, paymentSchedule, showPaymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: "letterhead-v5-contract-controls" }),
+        metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, sourceRequestId, representativeRequestId, salesRepresentativeId, quoteVersionId, quantityMode, contractDirection, contractClauses: clauseInputs, allWorkersWithAjir, clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, titleEn, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, detailsEn: detailsEn || null, workSite, startDate, endDate, paymentTerms, paymentSchedule, showPaymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: documentType === "invoice" ? "letterhead-v5-english-invoice-copy" : "letterhead-v5-contract-controls" }),
         createdBy: access.user.email,
       }).returning();
 
@@ -477,7 +486,7 @@ export async function POST(request: Request) {
         }).returning();
         if (representativeRequestId) await tx.update(representativeRequests).set({ status: "converted", updatedAt: new Date().toISOString() }).where(eq(representativeRequests.id, representativeRequestId));
         await tx.insert(contractClauses).values(clauseInputs.map((clause, index) => ({ contractId: contract!.id, clauseNumber: index + 1, section: clause.section, sectionEn: clause.sectionEn || null, title: clause.title, titleEn: clause.titleEn || null, body: clause.body, bodyEn: clause.bodyEn || null, isOptional: false, isIncluded: clause.included })));
-        if (paymentSchedule.length) await tx.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, subtotalHalalas: payment.subtotalHalalas, vatHalalas: payment.vatHalalas, vatRateBps, amountHalalas: payment.amountHalalas, billingBasis: payment.billingBasis, servicePeriod: payment.servicePeriod, status: payment.dueDate <= new Date().toISOString().slice(0, 10) ? "due" : "scheduled", createdBy: access.user.email })));
+        if (paymentSchedule.length) await tx.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, titleEn: payment.titleEn, dueDate: payment.dueDate, percentageBps: payment.percentageBps, subtotalHalalas: payment.subtotalHalalas, vatHalalas: payment.vatHalalas, vatRateBps, amountHalalas: payment.amountHalalas, billingBasis: payment.billingBasis, servicePeriod: payment.servicePeriod, status: payment.dueDate <= new Date().toISOString().slice(0, 10) ? "due" : "scheduled", createdBy: access.user.email })));
         for (const uploaded of uploadedClientFiles) {
           await tx.insert(companyDocuments).values({ referenceCode: makeReference("CLD"), title: `${uploaded.label} - ${clientName}`, category: "certificate", documentType: uploaded.kind, counterparty: clientName, fileName: uploaded.fileName, storageKey: uploaded.storageKey, contentType: uploaded.contentType, sizeBytes: uploaded.sizeBytes, source: "uploaded", validationStatus: "signature-validated", validationDetails: uploaded.validationDetails, metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, clientName, contractId: contract.id, contractReference: contract.referenceCode, documentKind: uploaded.kind }), createdBy: access.user.email });
         }

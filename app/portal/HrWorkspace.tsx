@@ -174,6 +174,8 @@ export default function HrWorkspace({
   });
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
+  const [profileEmployeeId, setProfileEmployeeId] = useState("");
+  const [profileUserEmail, setProfileUserEmail] = useState("");
   const load = useCallback(async () => {
     const response = await fetch("/api/portal/hr", { cache: "no-store" });
     const result = (await readApiJson(response)) as HrData & { error?: string };
@@ -588,7 +590,19 @@ export default function HrWorkspace({
             <form
               onSubmit={(event) => submitExtended(event, "employee-profile")}
             >
-              <select name="employeeId" required defaultValue="">
+              <select
+                name="employeeId"
+                required
+                value={profileEmployeeId}
+                onChange={(event) => {
+                  const employeeId = event.target.value;
+                  const employee = data.employees.find(
+                    (item) => String(item.id) === employeeId,
+                  );
+                  setProfileEmployeeId(employeeId);
+                  setProfileUserEmail(employee?.portalUserEmail || "");
+                }}
+              >
                 <option value="" disabled>
                   اختر الموظف
                 </option>
@@ -598,23 +612,27 @@ export default function HrWorkspace({
                   </option>
                 ))}
               </select>
-              <select name="portalUserEmail" defaultValue="">
+              <select
+                name="portalUserEmail"
+                value={profileUserEmail}
+                onChange={(event) => setProfileUserEmail(event.target.value)}
+              >
                 <option value="">بدون حساب مستخدم</option>
                 {data.users
-                  .filter((user) => user.status === "active")
+                  .filter(
+                    (user) =>
+                      user.status === "active" &&
+                      !data.employees.some(
+                        (employee) =>
+                          employee.portalUserEmail === user.email &&
+                          String(employee.id) !== profileEmployeeId,
+                      ),
+                  )
                   .map((user) => (
                     <option key={user.email} value={user.email}>
                       {user.displayName} · {user.email}
                     </option>
                   ))}
-              </select>
-              <select name="managerId" defaultValue="">
-                <option value="">بدون مدير مباشر</option>
-                {activeStaff.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.fullName}
-                  </option>
-                ))}
               </select>
               <input name="workLocation" placeholder="موقع العمل" />
               <select name="employmentType">

@@ -83,7 +83,7 @@ export async function regenerateWorkforceContractPdf(documentId: number, pdfLang
         .map((worker) => ({ fullName: worker.fullName, iqamaNumber: worker.iqamaNumber })),
     })),
     paymentSchedule: (contract.showPaymentSchedule ?? metadata.showPaymentSchedule ?? true)
-      ? paymentSchedule.sort((a, b) => a.installmentNumber - b.installmentNumber).map((payment) => ({ title: payment.title, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas }))
+      ? paymentSchedule.sort((a, b) => a.installmentNumber - b.installmentNumber).map((payment) => ({ title: payment.title, titleEn: payment.titleEn, dueDate: payment.dueDate, percentageBps: payment.percentageBps, amountHalalas: payment.amountHalalas }))
       : undefined,
   }, assets.map((asset) => ({ slot: asset.slot as "stamp" | "signature", storageKey: asset.storageKey, contentType: asset.contentType })));
 

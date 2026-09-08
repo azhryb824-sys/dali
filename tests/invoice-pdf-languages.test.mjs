@@ -32,12 +32,15 @@ test("manual, automatic and legacy invoices preserve the data needed by the Engl
     assert.match(sourceText, /clientCr:contract\.clientCr\|\|null/);
     assert.match(sourceText, /clientVat:contract\.clientVat\|\|null/);
     assert.match(sourceText, /details:invoiceDetails/);
-    assert.match(sourceText, /templateVersion:"letterhead-v4-english-invoice"/);
+    assert.match(sourceText, /titleEn:documentTitleEn/);
+    assert.match(sourceText, /detailsEn:invoiceDetailsEn/);
+    assert.match(sourceText, /templateVersion:"letterhead-v5-english-invoice-copy"/);
   }
-  assert.match(regeneration, /CURRENT_ISSUED_PDF_TEMPLATE = "letterhead-v4-english-invoice"/);
+  assert.match(regeneration, /CURRENT_ISSUED_PDF_TEMPLATE = "letterhead-v5-english-invoice-copy"/);
   assert.match(regeneration, /contractPaymentSchedules/);
   assert.match(regeneration, /workforceContracts/);
   assert.match(regeneration, /legacyInvoiceDetails/);
+  assert.match(regeneration, /legacyInvoiceCopy\?\.detailsEn/);
   assert.match(regeneration, /approvalState: "approved"/);
 });
 

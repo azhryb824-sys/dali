@@ -67,6 +67,7 @@ const catalogFiles = [
   "lib/i18n-public-catalog.ts",
   "lib/i18n-admin-catalog.ts",
   "lib/i18n-generated-catalog.ts",
+  "lib/i18n-employee-finance-catalog.ts",
 ].filter(fs.existsSync);
 const catalogTranslations = new Map();
 for (const file of catalogFiles) {

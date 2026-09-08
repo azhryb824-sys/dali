@@ -4,7 +4,7 @@ import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { requirementsForProfession, workforceNationalities, workforceProfessions } from "@/lib/workforce-requirements";
-import { bankNameFromSaudiIban, formatSaudiIban, saudiBanks } from "@/lib/saudi-banks";
+import { bankNameFromSaudiIban, formatSaudiIban, normalizeSaudiIban, saudiBanks } from "@/lib/saudi-banks";
 import OperationsWorkspace, { QuotationIssueModal, type OperationsTab } from "./OperationsWorkspace";
 import DocumentShareManager from "./DocumentShareManager";
 import WebsiteManager from "./WebsiteManager";
@@ -43,6 +43,7 @@ import LetterPdfLibrary from "./LetterPdfLibrary";
 import SystemGuide, { type SystemGuideView } from "./SystemGuide";
 import { defaultWorkforceContractClauses, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 import { ANNUAL_CONTRACT_MONTHS, annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
+import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
 import { readApiJson } from "@/lib/client-api";
 
 type PortalRole = "admin" | "manager" | "employee";
@@ -146,8 +147,14 @@ type EmployeeRecord = {
   mobile: string;
   email: string | null;
   portalUserEmail: string | null;
+  managerId: number | null;
+  workLocation: string | null;
+  employmentType: string;
+  contractType: string;
+  gosiNumber: string | null;
   nationalId: string | null;
   nationality: string | null;
+  residencyType: "citizen" | "resident";
   bankName: string | null;
   iban: string | null;
   sponsorshipType: string;
@@ -162,6 +169,7 @@ type EmployeeRecord = {
   annualLeaveDays: number;
   leaveBalanceDays: number;
   hireDate: string;
+  probationEndDate: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -554,6 +562,9 @@ function daysUntil(value: string | null) {
   if (!value) return Number.POSITIVE_INFINITY;
   const target = new Date(`${value}T00:00:00`).getTime();
   return Math.ceil((target - Date.now()) / 86400000);
+}
+function isSaudiNationalityLabel(value: string | null) {
+  return /^(?:سعودي|سعودية|السعودية|saudi|saudi arabian)$/i.test((value || "").trim());
 }
 function statusClass(status: string) {
   if (["active", "approved", "paid", "available", "assigned"].includes(status)) return "status-contacted";
@@ -1057,7 +1068,7 @@ export default function PortalDashboard({
   const workforceInvoicesTotal = finance.filter((item) => ["workforce_invoice", "progress_claim"].includes(item.category)).reduce((total, item) => total + item.amountHalalas, 0);
   const legalAlerts = legal.filter((item) => item.status !== "closed" && daysUntil(item.expiryDate) <= 45).length;
   const workerAlerts = workers.filter((item) => daysUntil(item.iqamaExpiry) <= 45).length;
-  const employeeComplianceAlerts = employees.reduce((total, item) => total + (daysUntil(item.iqamaExpiry) < 29 ? 1 : 0) + (item.sponsorshipType === "dali" && daysUntil(item.contractEndDate) < 29 ? 1 : 0) + (item.sponsorshipType === "dali" && daysUntil(item.workPermitExpiry) < 29 ? 1 : 0), 0);
+  const employeeComplianceAlerts = employees.reduce((total, item) => total + (item.residencyType === "resident" && daysUntil(item.iqamaExpiry) < 29 ? 1 : 0) + (item.contractType === "fixed_term" && daysUntil(item.contractEndDate) < 29 ? 1 : 0) + (item.residencyType === "resident" && daysUntil(item.workPermitExpiry) < 29 ? 1 : 0), 0);
   const incompleteWorkerFiles = workers.filter((worker) => workerRequirementStatus(worker, workerAttachments).missing.length > 0 || !workerRequirementStatus(worker, workerAttachments).hasPhoto || !worker.iqamaNumber).length;
   const activeBeneficiaries = new Set(workers.filter((item) => item.status === "assigned" && item.beneficiaryName).map((item) => item.beneficiaryName)).size;
   const expiringDocuments = documents.filter((item) => item.status === "active" && daysUntil(item.expiryDate) >= 0 && daysUntil(item.expiryDate) <= 30);
@@ -1417,14 +1428,17 @@ export default function PortalDashboard({
       });
       const result = (await readApiJson(response)) as {
         employee?: EmployeeRecord;
+        pendingChangeTypes?: string[];
         error?: string;
       };
       if (!response.ok || !result.employee) throw new Error(result.error || "تعذر تحديث الموظف");
       setEmployees((items) => items.map((item) => (item.id === id ? result.employee! : item)));
-      notify("تم تحديث الكفالة والاستحقاقات النظامية للموظف.");
+      notify(result.pendingChangeTypes?.length ? "حُفظت البيانات العامة وأُرسلت التغييرات المالية أو التنظيمية للاعتماد المنفصل." : "تم تحديث جميع بيانات الموظف غير الحساسة وتواريخ الوثائق.");
       void refreshNotifications(true);
+      return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : "تعذر تحديث الموظف");
+      return false;
     } finally {
       setBusy(null);
     }
@@ -2412,7 +2426,7 @@ export default function PortalDashboard({
                 <Metric label="ملفات موقوفة" value={employees.filter((item) => ["suspended", "ended"].includes(item.status.trim().toLowerCase())).length} note="تحتاج إلى متابعة" />
               </section>
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث باسم الموظف أو الرقم أو المسمى">
-                <EmployeeTable records={employees} query={query} canWrite={canWrite} canArchive={canArchiveEmployees} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} onUpdate={updateEmployeeCompliance} onDelete={deleteEmployee} />
+                <EmployeeTable records={employees} users={initialUsers} query={query} canWrite={canWrite} canArchive={canArchiveEmployees} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} onUpdate={updateEmployeeCompliance} onDelete={deleteEmployee} />
               </ManagementPanel>
               <HrWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} generalOnly />
             </ModuleSection>
@@ -4272,6 +4286,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
   type DraftPayment = {
     key: string;
     title: string;
+    titleEn: string;
     dueDate: string;
     percentage: number;
   };
@@ -4303,7 +4318,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
       ajirContractStatus: "not_applicable",
     },
   ]);
-  const [payments, setPayments] = useState<DraftPayment[]>([{ key: "payment-1", title: "الدفعة الأولى", dueDate: "", percentage: 100 }]);
+  const [payments, setPayments] = useState<DraftPayment[]>([{ key: "payment-1", title: "الدفعة الأولى", titleEn: "First installment", dueDate: "", percentage: 100 }]);
   // Opening a quote conversion intentionally hydrates the contract wizard state once.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -4317,6 +4332,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
       try {
         const rows = JSON.parse(quote.paymentScheduleJson) as Array<{
           title: string;
+          titleEn?: string | null;
           dueDate: string;
           percentageBps: number;
         }>;
@@ -4324,6 +4340,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
           rows.map((row, index) => ({
             key: `quote-payment-${index}`,
             title: row.title,
+            titleEn: invoicePaymentTitleEnglish(row.title, row.titleEn, index + 1),
             dueDate: row.dueDate,
             percentage: row.percentageBps / 100,
           })),
@@ -4620,6 +4637,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
       try {
         const rows = JSON.parse(quote.paymentScheduleJson) as Array<{
           title: string;
+          titleEn?: string | null;
           dueDate: string;
           percentageBps: number;
         }>;
@@ -4627,6 +4645,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
           rows.map((row, index) => ({
             key: `quote-payment-${index}`,
             title: row.title,
+            titleEn: invoicePaymentTitleEnglish(row.title, row.titleEn, index + 1),
             dueDate: row.dueDate,
             percentage: row.percentageBps / 100,
           })),
@@ -4689,8 +4708,9 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
   const serializedPayments = JSON.stringify(
     quantityMode === "open"
       ? []
-      : payments.map(({ title, dueDate, percentage }) => ({
+      : payments.map(({ title, titleEn, dueDate, percentage }) => ({
           title,
+          titleEn,
           dueDate,
           percentage,
         })),
@@ -4972,6 +4992,11 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
               التفاصيل والشروط
               <textarea name="details" required minLength={5} maxLength={4000} rows={6} placeholder={isContract ? "اكتب نطاق العمل، ساعات العمل، الالتزامات، وآلية الدفع..." : "اكتب بنود المستند وتفاصيل المبلغ والخدمة..."} />
             </label>
+            {documentType === "invoice" && <label className="span-two">
+              بيان الفاتورة بالإنجليزية
+              <textarea name="detailsEn" required minLength={5} maxLength={4000} rows={5} dir="ltr" placeholder="Enter the invoice description in English exactly as it should appear in the English PDF." />
+              <small>تُحفظ الترجمة مع الفاتورة وتُستخدم عند تنزيل النسخة الإنجليزية؛ لا تُستبدل بنص عربي داخل خط لاتيني.</small>
+            </label>}
           </div>
 
           {isContract && (
@@ -5249,6 +5274,10 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
                             <input required value={payment.title} onChange={(event) => setPayments((items) => items.map((item) => (item.key === payment.key ? { ...item, title: event.target.value } : item)))} placeholder="مثال: الدفعة المقدمة" />
                           </label>
                           <label>
+                            اسم الدفعة بالإنجليزية
+                            <input required dir="ltr" value={payment.titleEn} onChange={(event) => setPayments((items) => items.map((item) => (item.key === payment.key ? { ...item, titleEn: event.target.value } : item)))} placeholder="Example: Advance installment" />
+                          </label>
+                          <label>
                             تاريخ الاستحقاق
                             <input required type="date" value={payment.dueDate} onChange={(event) => setPayments((items) => items.map((item) => (item.key === payment.key ? { ...item, dueDate: event.target.value } : item)))} />
                           </label>
@@ -5294,6 +5323,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
                           {
                             key: `payment-${Date.now()}`,
                             title: `الدفعة ${items.length + 1}`,
+                            titleEn: `Installment ${items.length + 1}`,
                             dueDate: new Date().toISOString().slice(0, 10),
                             percentage: 0,
                           },
@@ -5469,7 +5499,7 @@ function filterRecords<T>(records: T[], query: string) {
   return needle ? records.filter((item) => JSON.stringify(item).toLowerCase().includes(needle)) : records;
 }
 
-function EmployeeTable({ records, query, canWrite, canArchive, busy, onStatus, onUpdate, onDelete }: { records: EmployeeRecord[]; query: string; canWrite: boolean; canArchive: boolean; busy: string | null; onStatus: (id: number, status: string) => void; onUpdate: (id: number, data: Record<string, string>) => Promise<void>; onDelete: (id: number) => Promise<void> }) {
+function EmployeeTable({ records, users, query, canWrite, canArchive, busy, onStatus, onUpdate, onDelete }: { records: EmployeeRecord[]; users: PortalUser[]; query: string; canWrite: boolean; canArchive: boolean; busy: string | null; onStatus: (id: number, status: string) => void; onUpdate: (id: number, data: Record<string, string>) => Promise<boolean>; onDelete: (id: number) => Promise<void> }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
   const rows = filterRecords(records, query);
@@ -5499,8 +5529,8 @@ function EmployeeTable({ records, query, canWrite, canArchive, busy, onStatus, o
                 <b dir="ltr">{item.mobile}</b>
               </span>
               <span>
-                <small>الإقامة</small>
-                <b className={daysUntil(item.iqamaExpiry) < 29 ? "date-alert" : ""}>{formatDate(item.iqamaExpiry)}</b>
+                <small>نوع الإقامة</small>
+                <b>{item.residencyType === "citizen" ? "مواطن" : "مقيم"}</b>
               </span>
             </div>
             <button
@@ -5522,16 +5552,32 @@ function EmployeeTable({ records, query, canWrite, canArchive, busy, onStatus, o
                     <dd dir="ltr">{item.email || "غير مسجل"}</dd>
                   </div>
                   <div>
+                    <dt>حساب النظام</dt>
+                    <dd dir="ltr">{item.portalUserEmail || "غير مرتبط"}</dd>
+                  </div>
+                  <div>
+                    <dt>{item.residencyType === "citizen" ? "رقم الهوية الوطنية" : "رقم الإقامة"}</dt>
+                    <dd dir="ltr">{item.nationalId || "غير مسجل"}</dd>
+                  </div>
+                  <div>
+                    <dt>الجنسية</dt>
+                    <dd>{item.nationality || "غير مسجلة"}</dd>
+                  </div>
+                  <div>
                     <dt>جهة الكفالة</dt>
-                    <dd>{item.sponsorshipType === "dali" ? "على كفالة دالي" : item.sponsorName || "كفالة أخرى"}</dd>
+                    <dd>{item.residencyType === "citizen" ? "لا تنطبق على المواطن" : item.sponsorshipType === "dali" ? "على كفالة دالي" : item.sponsorName || "كفالة أخرى"}</dd>
                   </div>
                   <div>
                     <dt>انتهاء عقد العمل</dt>
-                    <dd>{item.sponsorshipType === "dali" ? formatDate(item.contractEndDate) : "غير مطلوب"}</dd>
+                    <dd>{item.contractType === "indefinite" ? "عقد غير محدد المدة" : formatDate(item.contractEndDate)}</dd>
                   </div>
                   <div>
-                    <dt>انتهاء رخصة العمل</dt>
-                    <dd>{item.sponsorshipType === "dali" ? formatDate(item.workPermitExpiry) : "غير مطلوب"}</dd>
+                    <dt>{item.residencyType === "citizen" ? "متطلبات الإقامة" : "انتهاء الإقامة ورخصة العمل"}</dt>
+                    <dd>{item.residencyType === "citizen" ? "لا تنطبق" : `${formatDate(item.iqamaExpiry)} · ${formatDate(item.workPermitExpiry)}`}</dd>
+                  </div>
+                  <div>
+                    <dt>موقع العمل</dt>
+                    <dd>{item.workLocation || "غير محدد"}</dd>
                   </div>
                 </dl>
                 {canWrite && (
@@ -5545,11 +5591,12 @@ function EmployeeTable({ records, query, canWrite, canArchive, busy, onStatus, o
                 {editingId === item.id && (
                   <EmployeeComplianceEditor
                     employee={item}
+                    employees={records}
+                    users={users}
                     busy={busy === `employee-update-${item.id}`}
                     onCancel={() => setEditingId(null)}
                     onSave={async (data) => {
-                      await onUpdate(item.id, data);
-                      setEditingId(null);
+                      if (await onUpdate(item.id, data)) setEditingId(null);
                     }}
                   />
                 )}
@@ -5563,8 +5610,29 @@ function EmployeeTable({ records, query, canWrite, canArchive, busy, onStatus, o
   );
 }
 
-function EmployeeComplianceEditor({ employee, busy, onCancel, onSave }: { employee: EmployeeRecord; busy: boolean; onCancel: () => void; onSave: (data: Record<string, string>) => Promise<void> }) {
+function EmployeeComplianceEditor({ employee, employees, users, busy, onCancel, onSave }: { employee: EmployeeRecord; employees: EmployeeRecord[]; users: PortalUser[]; busy: boolean; onCancel: () => void; onSave: (data: Record<string, string>) => Promise<void> }) {
+  const [residencyType, setResidencyType] = useState<"citizen" | "resident">(employee.residencyType === "citizen" ? "citizen" : "resident");
+  const [nationality, setNationality] = useState(employee.nationality || "");
   const [sponsorshipType, setSponsorshipType] = useState<"dali" | "other">(employee.sponsorshipType === "other" ? "other" : "dali");
+  const [contractType, setContractType] = useState<"fixed_term" | "indefinite">(employee.contractType === "indefinite" ? "indefinite" : "fixed_term");
+  const [jobTitle, setJobTitle] = useState(employee.jobTitle);
+  const [department, setDepartment] = useState(employee.department);
+  const [managerId, setManagerId] = useState(employee.managerId ? String(employee.managerId) : "");
+  const [baseSalary, setBaseSalary] = useState((employee.baseSalaryHalalas / 100).toFixed(2));
+  const [housingAllowance, setHousingAllowance] = useState((employee.housingAllowanceHalalas / 100).toFixed(2));
+  const [transportAllowance, setTransportAllowance] = useState((employee.transportAllowanceHalalas / 100).toFixed(2));
+  const [otherAllowance, setOtherAllowance] = useState((employee.otherAllowanceHalalas / 100).toFixed(2));
+  const [iban, setIban] = useState(formatSaudiIban(employee.iban || "SA"));
+  const normalizedEditorIban = normalizeSaudiIban(iban);
+  const organizationalChanged = jobTitle.trim() !== employee.jobTitle || department.trim() !== employee.department || (managerId ? Number(managerId) : null) !== employee.managerId;
+  const financialChanged = Math.round(Number(baseSalary || 0) * 100) !== employee.baseSalaryHalalas
+    || Math.round(Number(housingAllowance || 0) * 100) !== employee.housingAllowanceHalalas
+    || Math.round(Number(transportAllowance || 0) * 100) !== employee.transportAllowanceHalalas
+    || Math.round(Number(otherAllowance || 0) * 100) !== employee.otherAllowanceHalalas
+    || (normalizedEditorIban === "SA" ? "" : normalizedEditorIban) !== (employee.iban || "");
+  const sensitiveChanged = organizationalChanged || financialChanged;
+  const linkedToOtherEmployee = new Set(employees.filter((item) => item.id !== employee.id).map((item) => item.portalUserEmail).filter((email): email is string => Boolean(email)));
+  const activeUsers = users.filter((user) => user.status === "active" && !linkedToOtherEmployee.has(user.email));
   return (
     <form
       className="employee-compliance-editor"
@@ -5574,17 +5642,36 @@ function EmployeeComplianceEditor({ employee, busy, onCancel, onSave }: { employ
         void onSave(Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value)])));
       }}
     >
+      <p className="span-two employee-editor-note">حدّث الملف من مكان واحد. تغييرات الراتب أو البنك أو المسمى أو القسم أو المدير تُرسل تلقائيًا لاعتماد مستخدم آخر، ولا تغيّر السجل قبل الاعتماد.</p>
+      <label className="span-two">
+        مستخدم الموظف
+        <select name="portalUserEmail" required defaultValue={employee.portalUserEmail || ""}>
+          <option value="" disabled>اختر مستخدمًا نشطًا غير مرتبط بموظف آخر</option>
+          {activeUsers.map((user) => <option key={user.email} value={user.email}>{user.displayName} · {user.email}</option>)}
+        </select>
+      </label>
+      <label>
+        الرقم الوظيفي
+        <input name="employeeNumber" required maxLength={30} defaultValue={employee.employeeNumber} dir="ltr" />
+      </label>
       <label>
         اسم الموظف
         <input name="fullName" required minLength={2} maxLength={120} defaultValue={employee.fullName} />
       </label>
       <label>
-        المسمى الوظيفي
-        <input name="jobTitle" required maxLength={100} defaultValue={employee.jobTitle} />
+        نوع الإقامة
+        <select name="residencyType" value={residencyType} onChange={(event) => { const next = event.target.value as "citizen" | "resident"; setResidencyType(next); setNationality(next === "citizen" ? "السعودية" : isSaudiNationalityLabel(nationality) ? "" : nationality); }}>
+          <option value="citizen">مواطن سعودي</option>
+          <option value="resident">مقيم غير سعودي</option>
+        </select>
       </label>
       <label>
-        الإدارة أو القسم
-        <input name="department" required maxLength={100} defaultValue={employee.department} />
+        {residencyType === "citizen" ? "رقم الهوية الوطنية" : "رقم الإقامة"}
+        <input name="nationalId" required inputMode="numeric" pattern={residencyType === "citizen" ? "1[0-9]{9}" : "2[0-9]{9}"} maxLength={10} defaultValue={employee.nationalId || ""} dir="ltr" />
+      </label>
+      <label>
+        الجنسية
+        <input name="nationality" required value={residencyType === "citizen" ? "السعودية" : nationality} readOnly={residencyType === "citizen"} onChange={(event) => setNationality(event.target.value)} maxLength={80} />
       </label>
       <label>
         رقم الجوال
@@ -5595,34 +5682,119 @@ function EmployeeComplianceEditor({ employee, busy, onCancel, onSave }: { employ
         <input name="email" type="email" maxLength={160} defaultValue={employee.email || ""} dir="ltr" />
       </label>
       <label>
+        تاريخ الالتحاق
+        <input name="hireDate" type="date" required defaultValue={employee.hireDate} />
+      </label>
+      <label>
+        نهاية فترة التجربة — اختيارية
+        <input name="probationEndDate" type="date" defaultValue={employee.probationEndDate || ""} />
+      </label>
+      <label>
+        موقع العمل
+        <input name="workLocation" maxLength={120} defaultValue={employee.workLocation || ""} />
+      </label>
+      <label>
+        نوع الدوام
+        <select name="employmentType" defaultValue={employee.employmentType || "full_time"}>
+          <option value="full_time">دوام كامل</option>
+          <option value="part_time">دوام جزئي</option>
+          <option value="temporary">مؤقت</option>
+        </select>
+      </label>
+      <label>
+        نوع العقد
+        <select name="contractType" value={contractType} onChange={(event) => setContractType(event.target.value as "fixed_term" | "indefinite")}>
+          <option value="fixed_term">محدد المدة</option>
+          <option value="indefinite">غير محدد المدة</option>
+        </select>
+      </label>
+      {contractType === "fixed_term" && <label>
+        تاريخ انتهاء عقد العمل
+        <input name="contractEndDate" type="date" required defaultValue={employee.contractEndDate || ""} />
+      </label>}
+      <label>
+        رقم التأمينات — اختياري
+        <input name="gosiNumber" inputMode="numeric" maxLength={40} defaultValue={employee.gosiNumber || ""} dir="ltr" />
+      </label>
+      <label>
+        رصيد الإجازة السنوي
+        <input name="annualLeaveDays" type="number" min="0" max="365" step="1" required defaultValue={employee.annualLeaveDays} dir="ltr" />
+      </label>
+      {residencyType === "resident" && <label>
         جهة الكفالة
         <select name="sponsorshipType" value={sponsorshipType} onChange={(event) => setSponsorshipType(event.target.value as "dali" | "other")}>
           <option value="dali">على كفالة دالي</option>
-          <option value="other">أخرى</option>
+          <option value="other">جهة أخرى</option>
         </select>
-      </label>
-      {sponsorshipType === "other" ? (
+      </label>}
+      {residencyType === "resident" && sponsorshipType === "other" && (
         <label>
           اسم جهة الكفالة
           <input name="sponsorName" required minLength={2} maxLength={160} defaultValue={employee.sponsorName || ""} />
         </label>
-      ) : (
+      )}
+      {residencyType === "resident" && (
         <>
           <label>
-            انتهاء عقد العمل
-            <input name="contractEndDate" type="date" required defaultValue={employee.contractEndDate || ""} />
+            تاريخ انتهاء الإقامة
+            <input name="iqamaExpiry" type="date" required defaultValue={employee.iqamaExpiry || ""} />
           </label>
           <label>
-            انتهاء رخصة العمل
+            تاريخ انتهاء رخصة العمل
             <input name="workPermitExpiry" type="date" required defaultValue={employee.workPermitExpiry || ""} />
           </label>
         </>
       )}
       <label>
-        انتهاء الإقامة
-        <input name="iqamaExpiry" type="date" required defaultValue={employee.iqamaExpiry || ""} />
+        المسمى الوظيفي
+        <input name="jobTitle" required maxLength={100} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} />
       </label>
-      <div>
+      <label>
+        الإدارة أو القسم
+        <input name="department" required maxLength={100} value={department} onChange={(event) => setDepartment(event.target.value)} />
+      </label>
+      <label>
+        المدير المباشر
+        <select name="managerId" value={managerId} onChange={(event) => setManagerId(event.target.value)}>
+          <option value="">بدون مدير مباشر</option>
+          {employees.filter((item) => item.id !== employee.id && isCurrentEmployee(item)).map((item) => <option key={item.id} value={item.id}>{item.fullName} · {item.employeeNumber}</option>)}
+        </select>
+      </label>
+      <label>
+        الراتب الأساسي
+        <input name="baseSalary" type="number" min="0" step="0.01" required value={baseSalary} onChange={(event) => setBaseSalary(event.target.value)} dir="ltr" />
+      </label>
+      <label>
+        بدل السكن
+        <input name="housingAllowance" type="number" min="0" step="0.01" required value={housingAllowance} onChange={(event) => setHousingAllowance(event.target.value)} dir="ltr" />
+      </label>
+      <label>
+        بدل النقل
+        <input name="transportAllowance" type="number" min="0" step="0.01" required value={transportAllowance} onChange={(event) => setTransportAllowance(event.target.value)} dir="ltr" />
+      </label>
+      <label>
+        بدلات أخرى
+        <input name="otherAllowance" type="number" min="0" step="0.01" required value={otherAllowance} onChange={(event) => setOtherAllowance(event.target.value)} dir="ltr" />
+      </label>
+      <label>
+        رقم الآيبان — اختياري
+        <input name="iban" value={iban} onChange={(event) => setIban(formatSaudiIban(event.target.value))} inputMode="numeric" maxLength={29} dir="ltr" />
+      </label>
+      <label>
+        اسم البنك — تلقائي
+        <input value={bankNameFromSaudiIban(iban) || ""} readOnly />
+      </label>
+      {sensitiveChanged && <>
+        <label>
+          تاريخ نفاذ التغيير الحساس
+          <input name="changeEffectiveDate" type="date" required />
+        </label>
+        <label className="span-two">
+          سبب التغيير الحساس
+          <textarea name="changeReason" required minLength={10} maxLength={500} placeholder="اشرح سبب تغيير الراتب أو البنك أو المسمى أو القسم أو المدير" />
+        </label>
+      </>}
+      <div className="span-two">
         <button type="button" onClick={onCancel}>
           إلغاء
         </button>
@@ -6438,7 +6610,10 @@ function WorkerTable({ records, attachments, query, onSelect }: { records: Worke
 function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSubmit }: { entity: Exclude<RecordEntity, "finance" | "workforce">; users: PortalUser[]; linkedEmployeeEmails: Set<string>; busy: boolean; onClose: () => void; onSubmit: (entity: RecordEntity, form: HTMLFormElement) => Promise<void> }) {
   const titles = { employees: "إضافة موظف", legal: "إضافة ملف قانوني" };
   const [iban, setIban] = useState("SA");
+  const [employeeResidency, setEmployeeResidency] = useState<"" | "citizen" | "resident">("");
+  const [employeeNationality, setEmployeeNationality] = useState("");
   const [employeeSponsorship, setEmployeeSponsorship] = useState<"dali" | "other">("dali");
+  const [employeeContractType, setEmployeeContractType] = useState<"fixed_term" | "indefinite">("fixed_term");
   const detectedBank = bankNameFromSaudiIban(iban) || "";
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6476,6 +6651,14 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
                 </select>
               </label>
               <label>
+                صفة الموظف النظامية
+                <select name="residencyType" required value={employeeResidency} onChange={(event) => { const next = event.target.value as "" | "citizen" | "resident"; setEmployeeResidency(next); setEmployeeNationality(next === "citizen" ? "السعودية" : ""); }}>
+                  <option value="" disabled>اختر مواطنًا أو مقيمًا</option>
+                  <option value="citizen">مواطن سعودي</option>
+                  <option value="resident">مقيم غير سعودي</option>
+                </select>
+              </label>
+              <label>
                 الرقم الوظيفي
                 <input name="employeeNumber" required maxLength={30} placeholder="EMP-001" dir="ltr" />
               </label>
@@ -6484,12 +6667,12 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
                 <input name="fullName" required maxLength={120} />
               </label>
               <label>
-                رقم الهوية أو الإقامة
-                <input name="nationalId" required inputMode="numeric" pattern="[0-9]{10}" maxLength={10} dir="ltr" />
+                {employeeResidency === "citizen" ? "رقم الهوية الوطنية" : employeeResidency === "resident" ? "رقم الإقامة" : "رقم الهوية أو الإقامة"}
+                <input name="nationalId" required inputMode="numeric" pattern={employeeResidency === "citizen" ? "1[0-9]{9}" : employeeResidency === "resident" ? "2[0-9]{9}" : "[0-9]{10}"} maxLength={10} dir="ltr" />
               </label>
               <label>
                 الجنسية
-                <input name="nationality" maxLength={80} />
+                <input name="nationality" required value={employeeNationality} readOnly={employeeResidency === "citizen"} onChange={(event) => setEmployeeNationality(event.target.value)} maxLength={80} placeholder={employeeResidency === "resident" ? "أدخل جنسية المقيم" : "تُحدد تلقائيًا للمواطن"} />
               </label>
               <label>
                 المسمى الوظيفي
@@ -6512,26 +6695,58 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
                 <input name="hireDate" required type="date" />
               </label>
               <label>
-                تاريخ انتهاء الإقامة
-                <input name="iqamaExpiry" required type="date" />
+                نهاية فترة التجربة — اختيارية
+                <input name="probationEndDate" type="date" />
               </label>
               <label>
+                موقع العمل — اختياري
+                <input name="workLocation" maxLength={120} />
+              </label>
+              <label>
+                نوع الدوام
+                <select name="employmentType" defaultValue="full_time">
+                  <option value="full_time">دوام كامل</option>
+                  <option value="part_time">دوام جزئي</option>
+                  <option value="temporary">مؤقت</option>
+                </select>
+              </label>
+              <label>
+                نوع العقد
+                <select name="contractType" value={employeeContractType} onChange={(event) => setEmployeeContractType(event.target.value as "fixed_term" | "indefinite")}>
+                  <option value="fixed_term">محدد المدة</option>
+                  <option value="indefinite">غير محدد المدة</option>
+                </select>
+              </label>
+              {employeeContractType === "fixed_term" && <label>
+                تاريخ انتهاء عقد العمل
+                <input name="contractEndDate" required type="date" />
+              </label>}
+              <label>
+                رقم التأمينات — اختياري
+                <input name="gosiNumber" inputMode="numeric" maxLength={40} dir="ltr" />
+              </label>
+              <label>
+                رصيد الإجازة السنوي
+                <input name="annualLeaveDays" required type="number" min="0" max="365" step="1" defaultValue="21" dir="ltr" />
+              </label>
+              {employeeResidency === "resident" && <label>
                 جهة الكفالة
                 <select name="sponsorshipType" value={employeeSponsorship} onChange={(event) => setEmployeeSponsorship(event.target.value as "dali" | "other")}>
                   <option value="dali">على كفالة دالي</option>
-                  <option value="other">أخرى</option>
+                  <option value="other">جهة أخرى</option>
                 </select>
-              </label>
-              {employeeSponsorship === "other" ? (
+              </label>}
+              {employeeResidency === "resident" && employeeSponsorship === "other" && (
                 <label>
                   اسم جهة الكفالة
                   <input name="sponsorName" required minLength={2} maxLength={160} />
                 </label>
-              ) : (
+              )}
+              {employeeResidency === "resident" && (
                 <>
                   <label>
-                    تاريخ انتهاء عقد العمل
-                    <input name="contractEndDate" required type="date" />
+                    تاريخ انتهاء الإقامة
+                    <input name="iqamaExpiry" required type="date" />
                   </label>
                   <label>
                     تاريخ انتهاء رخصة العمل
@@ -6569,7 +6784,7 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
                 <input name="photo" type="file" accept="image/png,image/jpeg" />
               </label>
               <label className="file-drop">
-                صورة الإقامة — إلزامية
+                {employeeResidency === "citizen" ? "صورة الهوية الوطنية — إلزامية" : "صورة الإقامة — إلزامية"}
                 <input name="iqamaDocument" type="file" required accept="application/pdf,image/png,image/jpeg" />
               </label>
               <label className="file-drop span-two">
