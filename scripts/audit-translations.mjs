@@ -68,6 +68,7 @@ const catalogFiles = [
   "lib/i18n-admin-catalog.ts",
   "lib/i18n-generated-catalog.ts",
   "lib/i18n-employee-finance-catalog.ts",
+  "lib/i18n-reviewed-overrides.ts",
 ].filter(fs.existsSync);
 const catalogTranslations = new Map();
 for (const file of catalogFiles) {
@@ -132,6 +133,11 @@ const terminologyRules = [
   { target: "en", source: /جار(?:ٍ|ي)/, forbidden: /\bneighbor\w*\b/i },
   { target: "en", source: /ترحيل/, forbidden: /\bdeportation\b/i },
   { target: "en", source: /مكة/, forbidden: /\bMecca\b/i },
+  { target: "en", source: /آيبان/, forbidden: /\b(?:iPhone|Saudi Arabs?)\b/i },
+  { target: "en", source: /تذكير/, forbidden: /\bmemor(?:y|ies)\b/i },
+  { target: "en", source: /عروض/, forbidden: /\bpresentations?\b/i },
+  { target: "en", source: /خطاب/, forbidden: /\bspeech(?:es)?\b/i },
+  { target: "en", source: /^على رأس العمل$/, forbidden: /\bhead of work\b/i },
   { target: "bn", source: /عامل/, forbidden: /ফ্যাক্টর/ },
   { target: "bn", source: /كفال|كفيل/, forbidden: /ওয়ারেন্টি|নিশ্চয়তা|জামিন|বেইল/ },
   { target: "bn", source: /إقام/, forbidden: /বাসস্থান/ },
@@ -140,6 +146,10 @@ const terminologyRules = [
   { target: "bn", source: /حج/, forbidden: /নামাজ|প্রার্থনা/ },
   { target: "bn", source: /جار(?:ٍ|ي)/, forbidden: /প্রতিবেশী/ },
   { target: "bn", source: /مهن(?!ي)/, forbidden: /ক্যারিয়ার/ },
+  { target: "bn", source: /آيبان/, forbidden: /আইফোন|সৌদি আরবের সংখ্যা/ },
+  { target: "bn", source: /تذكير/, forbidden: /স্মৃতি/ },
+  { target: "bn", source: /عروض/, forbidden: /উপস্থাপনা/ },
+  { target: "bn", source: /خطاب/, forbidden: /ভাষণ/ },
 ];
 
 function validTerminology(source, value, target) {

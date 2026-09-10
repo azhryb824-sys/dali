@@ -421,43 +421,6 @@ export default function ContractBillingWorkspace() {
   async function editContract(contract: Contract) {
     setEditingContract(contract);
   }
-  async function saveContractEdit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!editingContract) return;
-    const fd = new FormData(event.currentTarget),
-      clientName = String(fd.get("clientName") || ""),
-      title = String(fd.get("title") || ""),
-      startDate = String(fd.get("startDate") || ""),
-      endDate = String(fd.get("endDate") || "");
-    setBusy(-editingContract.id);
-    setNotice("");
-    try {
-      const response = await fetch(
-        `/api/portal/contracts/${editingContract.id}`,
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            clientName,
-            title,
-            startDate,
-            ...(editingContract.seasonType !== "regular" ? { endDate } : {}),
-          }),
-        },
-      );
-      const result = (await readApiJson(response)) as { error?: string };
-      if (!response.ok) throw new Error(result.error || "تعذر تعديل العقد");
-      setEditingContract(null);
-      await load();
-      setNotice(
-        `تم تعديل العقد ${editingContract.referenceCode} وإعادته للمسودة للاعتماد مجددًا.`,
-      );
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "تعذر تعديل العقد");
-    } finally {
-      setBusy(0);
-    }
-  }
   async function deleteContract(contract: Contract) {
     if (!window.confirm(`حذف مسودة العقد ${contract.referenceCode} نهائيًا؟`))
       return;

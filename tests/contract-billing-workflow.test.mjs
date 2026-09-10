@@ -106,8 +106,8 @@ test("owner referral, accounting invoice, payment recording and legal escalation
 });
 
 test("seasonal and annual payment schedules flow through quotes contracts finance and bilingual PDFs",async()=>{
-  const[helper,quoteApi,contractApi,statusApi,paymentsApi,quotePdf,documentPdf,generator,quoteUi,contractUi,schema,migration]=await Promise.all([
-    source("lib/payment-schedules.ts"),source("app/api/portal/operations/route.ts"),source("app/api/portal/documents/generate/route.ts"),source("app/api/portal/contracts/[id]/status/route.ts"),source("app/api/portal/contract-payments/route.ts"),source("app/api/portal/operations/quotes/[id]/pdf/route.ts"),source("app/api/portal/documents/[id]/route.ts"),source("lib/pdf-generator.ts"),source("app/portal/OperationsWorkspace.tsx"),source("app/portal/ContractBillingWorkspace.tsx"),source("db/schema.ts"),source("drizzle-pg/0034_payment_schedules_and_bilingual_pdfs.sql")
+  const[helper,quoteApi,contractApi,statusApi,paymentsApi,quotePdf,documentPdf,generator,quoteUi,contractUi,contractEditUi,schema,migration]=await Promise.all([
+    source("lib/payment-schedules.ts"),source("app/api/portal/operations/route.ts"),source("app/api/portal/documents/generate/route.ts"),source("app/api/portal/contracts/[id]/status/route.ts"),source("app/api/portal/contract-payments/route.ts"),source("app/api/portal/operations/quotes/[id]/pdf/route.ts"),source("app/api/portal/documents/[id]/route.ts"),source("lib/pdf-generator.ts"),source("app/portal/OperationsWorkspace.tsx"),source("app/portal/ContractBillingWorkspace.tsx"),source("app/portal/ContractFullEditDialog.tsx"),source("db/schema.ts"),source("drizzle-pg/0034_payment_schedules_and_bilingual_pdfs.sql")
   ]);
   assert.match(helper,/validateSeasonalSchedule/);assert.match(helper,/annualContractSchedule/);assert.match(helper,/ANNUAL_CONTRACT_MONTHS = 12/);
   assert.match(quoteApi,/seasonType/);assert.match(quoteApi,/paymentScheduleJson/);assert.match(quoteApi,/مجموع نسب 100%/);
@@ -117,7 +117,7 @@ test("seasonal and annual payment schedules flow through quotes contracts financ
   for(const sourceCode of [quotePdf,documentPdf]){assert.match(sourceCode,/language/);assert.match(sourceCode,/bilingual/);}
   assert.match(generator,/createBilingualIssuedPdf/);assert.match(generator,/PAGE\.width \* 2/);assert.match(generator,/x: PAGE\.width/);assert.match(generator,/Payment Schedule/);
   assert.match(quoteUi,/موسم رمضان/);assert.match(quoteUi,/موسم الحج/);assert.match(quoteUi,/مجموع النسب/);assert.match(quoteUi,/PDF عربي\/English/);
-  assert.match(contractUi,/تعديل موعد الدفعة/);assert.match(contractUi,/PDF عربي\/English/);assert.match(contractUi,/editingContract\.seasonType\s*!==\s*"regular"\s*\?\s*\{\s*endDate\s*\}\s*:\s*\{\s*\}/);
+  assert.match(contractUi,/تعديل موعد الدفعة/);assert.match(contractUi,/PDF عربي\/English/);assert.match(contractEditUi,/contract\.seasonType\s*!==\s*"regular"[\s\S]*\?\s*\{\s*endDate:\s*fd\.get\("endDate"\)\s*\}[\s\S]*:\s*\{\s*\}/);
   assert.match(schema,/paymentScheduleJson/);assert.match(schema,/seasonType/);assert.match(migration,/quote_versions_season_type_check/);
 });
 

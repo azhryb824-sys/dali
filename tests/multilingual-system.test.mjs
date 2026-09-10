@@ -33,6 +33,21 @@ test("Arabic, English and Bengali share a persistent direction-aware translation
   assert.match(publicApi, /SameSite=Lax/);
 });
 
+test("human-reviewed portal terms override unsafe literal translations", async () => {
+  const [i18n, reviewed, audit] = await Promise.all([
+    source("lib/i18n.ts"),
+    source("lib/i18n-reviewed-overrides.ts"),
+    source("scripts/audit-translations.mjs"),
+  ]);
+  assert.ok(i18n.indexOf("generatedUiTranslations") < i18n.indexOf("Object.assign(uiTranslations, reviewedUiTranslations)"));
+  assert.match(reviewed, /"رقم الآيبان — اختياري": \{ en: "IBAN — optional", bn: "আইবান — ঐচ্ছিক" \}/);
+  assert.match(reviewed, /"المهام والتذكيرات": \{ en: "Tasks & Reminders", bn: "কাজ ও অনুস্মারক" \}/);
+  assert.match(reviewed, /"العقود والعروض والخطابات": \{ en: "Contracts, Quotations & Letters"/);
+  assert.doesNotMatch(reviewed, /Number of iPhones|Tasks and Memories|Presentations and Speechs/);
+  assert.match(audit, /source: \/آيبان\//);
+  assert.match(audit, /source: \/تذكير\//);
+});
+
 test("non-admin portal users choose a saved language on first login while supervisors bypass onboarding", async () => {
   const [portal, onboarding, choice, api, access, schema, migration] = await Promise.all([
     source("app/portal/page.tsx"), source("app/portal/language/page.tsx"),

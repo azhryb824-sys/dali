@@ -3,6 +3,7 @@ import { generatedUiTranslations } from "@/lib/i18n-generated-catalog";
 import { generatedUiTemplates } from "@/lib/i18n-generated-templates";
 import { employeeFinanceUiTranslations } from "@/lib/i18n-employee-finance-catalog";
 import { publicUiTranslations } from "@/lib/i18n-public-catalog";
+import { reviewedUiTranslations } from "@/lib/i18n-reviewed-overrides";
 
 export const supportedLocales = ["ar", "en", "bn"] as const;
 export type AppLocale = typeof supportedLocales[number];
@@ -105,8 +106,9 @@ for (const [source, generated] of Object.entries(generatedUiTranslations)) {
   uiTranslations[source] = { ...uiTranslations[source], ...generated } as Translation;
 }
 Object.assign(uiTranslations, employeeFinanceUiTranslations);
+Object.assign(uiTranslations, reviewedUiTranslations);
 const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>string;ur:(match:RegExpMatchArray)=>string;bn?:(match:RegExpMatchArray)=>string}>=[
-  {pattern:/^مساحة عمل مهيأة لصلاحيات:\s*(.+)\.$/,en:m=>`Workspace configured for role: ${translateUi(m[1],"en")}.`,ur:m=>`کردار کے مطابق ورک اسپیس: ${m[1]}۔`,bn:m=>`ভূমিকা অনুযায়ী কর্মক্ষেত্র: ${m[1]}।`},
+  {pattern:/^مساحة عمل مهيأة لصلاحيات:\s*(.+)\.$/,en:m=>`Workspace configured for role: ${translateUi(m[1],"en")}.`,ur:m=>`کردار کے مطابق ورک اسپیس: ${m[1]}۔`,bn:m=>`ভূমিকা অনুযায়ী কর্মক্ষেত্র: ${translateUi(m[1],"bn")}।`},
   {pattern:/^مساحة عملك في قسم\s+(.+)\.$/,en:m=>`Your workspace in the ${translateUi(m[1],"en")} department.`,ur:m=>`${m[1]} شعبے میں آپ کا ورک اسپیس۔`,bn:m=>`${m[1]} বিভাগে আপনার কর্মক্ষেত্র।`},
   {pattern:/^(\d+)\s+على رأس العمل$/,en:m=>`${m[1]} active employees`,ur:m=>`${m[1]} فعال ملازمین`},
   {pattern:/^(.+)\s+إجمالي مسجّل$/,en:m=>`${m[1]} total recorded`,ur:m=>`${m[1]} کل ریکارڈ`},
