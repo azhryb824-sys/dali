@@ -51,7 +51,7 @@ test("server admits signed mobile sessions without weakening desktop or PWA acce
   assert.match(portalSession, /dali-mobile-v1:\$\{mobileAccess\.platform\}:\$\{mobileAccess\.nonce\}/);
   assert.match(portalSession, /requestUserAgentHash\(requestHeaders\)/);
   assert.match(proxy, /trustedNativeRequest = verifiedDesktopRequest \|\| verifiedMobileRequest/);
-  assert.match(proxy, /!trustedNativeRequest && !trustedPwaRequest && !permittedBootstrapRequest && !emergencyBrowserAccess/);
+  assert.match(proxy, /!trustedNativeRequest && !trustedPwaRequest && !permittedBootstrapRequest && !permittedLegacyDesktopBootstrapRequest && !emergencyBrowserAccess/);
   assert.match(proxy, /nativeBootstrapPath/);
   assert.match(proxy, /pwaAccessFromCookieHeader/);
   assert.match(proxy, /requestHeaders\.set\("x-dali-pathname"/);
