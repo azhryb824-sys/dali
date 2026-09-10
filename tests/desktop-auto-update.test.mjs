@@ -18,7 +18,7 @@ test("desktop build publishes the updater metadata with the installer", async ()
   const desktopPackage = JSON.parse(await readFile(new URL("desktop/package.json", root), "utf8"));
   const workflow = await readFile(new URL(".github/workflows/desktop-windows.yml", root), "utf8");
 
-  assert.equal(desktopPackage.version, "0.2.5");
+  assert.equal(desktopPackage.version, "0.2.6");
   assert.equal(desktopPackage.build.publish.provider, "github");
   assert.equal(desktopPackage.build.publish.owner, "azhryb824-sys");
   assert.equal(desktopPackage.build.publish.repo, "dali");
@@ -29,6 +29,9 @@ test("desktop build publishes the updater metadata with the installer", async ()
   assert.match(workflow, /--verify-tag/);
   assert.doesNotMatch(workflow, /inputs\.publish_update/);
   assert.match(workflow, /Create immutable release tag/);
+  assert.match(workflow, /id: desktop-version/);
+  assert.match(workflow, /steps\.desktop-version\.outputs\.version/);
+  assert.doesNotMatch(workflow, /Dali-Desktop-Setup-0\.2\.5/);
   assert.match(workflow, /git push origin \$tag/);
   assert.doesNotMatch(workflow, /tags: \["v\*"\]/);
   assert.match(workflow, /desktop\/dist\/latest\.yml/);
