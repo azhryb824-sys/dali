@@ -23,6 +23,9 @@ const sql = postgres(databaseUrl, { max: 1, prepare: false });
 try {
   await sql.begin(async (tx) => {
     await tx`select pg_advisory_xact_lock(644255071)`;
+    await tx.unsafe("set local lock_timeout = '10s'");
+    await tx.unsafe("set local statement_timeout = '5min'");
+    await tx.unsafe("set local idle_in_transaction_session_timeout = '6min'");
     await tx`create schema if not exists private`;
     await tx`create table if not exists private.__dali_migrations (name text primary key)`;
     await tx`alter table private.__dali_migrations add column if not exists checksum text`;

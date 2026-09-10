@@ -111,10 +111,34 @@ remote_head="$(git rev-parse FETCH_HEAD)"
 git merge-base --is-ancestor "$old_head" "$expected_commit" || die "server HEAD is not an ancestor of the approved release"
 git diff --check "$old_head" "$expected_commit"
 
-database_changes="$(git diff --name-only "$old_head" "$expected_commit" -- db/schema.ts drizzle drizzle-pg drizzle.config.ts)"
+database_changes="$(git diff --name-status "$old_head" "$expected_commit" -- db/schema.ts drizzle drizzle-pg drizzle.config.ts)"
+database_schema_changed=0
+declare -a release_migrations=()
 if [[ -n "$database_changes" ]]; then
-  printf '%s\n' "$database_changes" >&2
-  die "database/schema changes require the dedicated migration procedure"
+  while IFS=$'\t' read -r change_kind changed_path extra_path; do
+    [[ -n "$change_kind" && -n "$changed_path" ]] || continue
+    [[ -z "$extra_path" ]] || die "renamed database files are not supported by safe deployment"
+    case "$changed_path" in
+      db/schema.ts)
+        [[ "$change_kind" == "M" ]] || die "unexpected db/schema.ts change type: $change_kind"
+        database_schema_changed=1
+        ;;
+      drizzle-pg/*.sql)
+        [[ "$change_kind" == "A" ]] || die "existing migrations cannot be changed or removed: $changed_path"
+        migration_name="${changed_path##*/}"
+        [[ "$migration_name" =~ ^[0-9]{4,5}_[a-z0-9_-]+\.sql$ ]] || die "invalid migration filename: $migration_name"
+        release_migrations+=("$migration_name")
+        ;;
+      *)
+        die "unsupported database change requires manual deployment: $changed_path"
+        ;;
+    esac
+  done <<<"$database_changes"
+
+  if ((database_schema_changed == 1 && ${#release_migrations[@]} == 0)); then
+    die "db/schema.ts changed without a new PostgreSQL migration"
+  fi
+  printf 'DATABASE_CHANGE_OK MIGRATIONS=%s\n' "${release_migrations[*]:-none}"
 fi
 
 artifact_kb="$(du -sk "$repo/node_modules" "$repo/.next" | awk '{ total += $1 } END { print total + 0 }')"
@@ -130,6 +154,7 @@ canary_pid=""
 source_advanced=0
 swap_started=0
 stop_attempted=0
+declare -a retained_migrations=()
 stage="preflight"
 
 finish() {
@@ -201,11 +226,18 @@ finish() {
     fi
 
     if ((swap_started == 0 && stop_attempted == 0 && source_advanced == 0)); then
-      echo "PRODUCTION_UNCHANGED" >&2
+      if ((${#retained_migrations[@]} > 0)); then
+        echo "APPLICATION_UNCHANGED" >&2
+      else
+        echo "PRODUCTION_UNCHANGED" >&2
+      fi
     elif ((rollback_ok == 1 && (swap_started == 0 || rollback_ready == 1))); then
       echo "ROLLBACK_COMPLETE HEAD=$(git -C "$repo" rev-parse HEAD) BUILD_ID=$(<"$repo/.next/BUILD_ID")" >&2
     else
       echo "ROLLBACK_INCOMPLETE: inspect $service and $backup_root immediately" >&2
+    fi
+    if ((${#retained_migrations[@]} > 0)); then
+      echo "ADDITIVE_DATABASE_MIGRATIONS_RETAINED=${retained_migrations[*]}" >&2
     fi
   fi
 
@@ -260,7 +292,7 @@ find "$worktree/.next/static" -type f -name '*.css' -print -quit | grep -q . || 
 find "$worktree/.next/static" -type f -name '*.js' -print -quit | grep -q . || die "new artifact has no compiled JavaScript"
 new_build="$(<"$worktree/.next/BUILD_ID")"
 
-stage="canary_environment"
+stage="runtime_environment"
 service_pid="$(sudo systemctl show "$service" --property=MainPID --value)"
 [[ "$service_pid" =~ ^[1-9][0-9]*$ ]] || die "invalid $service MainPID"
 
@@ -280,6 +312,24 @@ case "$database_url" in
 esac
 (( ${#auth_secret} >= 32 )) || die "AUTH_SECRET is unavailable or too short in the running service"
 
+if ((${#release_migrations[@]} > 0)); then
+  stage="database_migration"
+  for migration_name in "${release_migrations[@]}"; do
+    (
+      cd "$worktree"
+      DATABASE_URL="$database_url" node scripts/apply-postgres-migration.mjs "$migration_name"
+    )
+    retained_migrations+=("$migration_name")
+  done
+  (
+    cd "$worktree"
+    DATABASE_URL="$database_url" npm run db:audit:postgres
+  )
+  printf 'DATABASE_MIGRATIONS_OK COUNT=%s NAMES=%s\n' \
+    "${#release_migrations[@]}" "${release_migrations[*]}"
+fi
+
+stage="canary_environment"
 if ss -ltnH "sport = :$canary_port" | grep -q .; then
   die "canary port $canary_port is already in use"
 fi
@@ -398,4 +448,5 @@ echo "SOURCE_COMMIT=$expected_commit"
 echo "OLD_BUILD=$old_build"
 echo "NEW_BUILD=$new_build"
 echo "BACKUP=$backup_root"
+echo "DATABASE_MIGRATIONS=${release_migrations[*]:-none}"
 echo "HEALTH=$final_health"
