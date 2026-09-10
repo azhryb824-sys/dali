@@ -25,18 +25,30 @@ try {
       f.vat_halalas,
       f.amount_halalas,
       GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas)::integer AS expected_subtotal,
-      ROUND(GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas) * p.vat_rate_bps / 10000.0)::integer AS expected_vat,
+      ROUND(
+        GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas)::numeric
+          * p.vat_rate_bps::numeric / 10000
+      )::integer AS expected_vat,
       GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas)
-        + ROUND(GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas) * p.vat_rate_bps / 10000.0)::integer AS expected_amount
+        + ROUND(
+          GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas)::numeric
+            * p.vat_rate_bps::numeric / 10000
+        )::integer AS expected_amount
     FROM contract_payment_schedules p
     JOIN financial_records f ON f.id = p.financial_record_id
     WHERE f.contract_payment_schedule_id IS DISTINCT FROM p.id
       OR f.contract_id IS DISTINCT FROM p.contract_id
       OR f.document_id IS DISTINCT FROM p.invoice_document_id
       OR f.subtotal_halalas IS DISTINCT FROM GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas)::integer
-      OR f.vat_halalas IS DISTINCT FROM ROUND(GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas) * p.vat_rate_bps / 10000.0)::integer
+      OR f.vat_halalas IS DISTINCT FROM ROUND(
+        GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas)::numeric
+          * p.vat_rate_bps::numeric / 10000
+      )::integer
       OR f.amount_halalas IS DISTINCT FROM GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas)
-        + ROUND(GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas) * p.vat_rate_bps / 10000.0)::integer
+        + ROUND(
+          GREATEST(0, p.subtotal_halalas - p.absence_deduction_halalas)::numeric
+            * p.vat_rate_bps::numeric / 10000
+        )::integer
   `;
 
   const invalidAssignments = await sql`

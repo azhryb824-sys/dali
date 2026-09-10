@@ -110,6 +110,9 @@ test("invoice issuance rejects a stale absence deduction snapshot", () => {
 test("audit reconciles client deductions rather than worker deductions", () => {
   const audit = read("scripts/audit-workforce-absence-finance.mjs");
   assert.match(audit, /SUM\(a\.client_deduction_halalas\)/);
+  assert.match(audit, /GREATEST\(0, p\.subtotal_halalas - p\.absence_deduction_halalas\)::numeric/);
+  assert.match(audit, /p\.vat_rate_bps::numeric/);
+  assert.doesNotMatch(audit, /deduction_halalas\) \* p\.vat_rate_bps/);
   assert.match(audit, /f\.contract_payment_schedule_id IS DISTINCT FROM p\.id/);
   assert.match(audit, /capacityOverruns/);
   assert.match(audit, /replacementAssignmentOverlaps/);
