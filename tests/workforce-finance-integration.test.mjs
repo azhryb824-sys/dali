@@ -12,18 +12,20 @@ test("contract profession separates client price from actual worker salary",()=>
 
 test("worker salary requires active assignment and a paid contract installment",()=>{
   const route=read("app/api/portal/records/route.ts");
-  assert.match(route,/العامل غير مسند فعليًا إلى العقد المحدد/);
-  assert.match(route,/payment\.status !== "paid"/);
+  assert.match(route,/لا يمكن ربط حركة العامل بعقد غير مسند إليه فعليًا/);
+  assert.match(route,/payments\[0\]\.status !== "paid"/);
   assert.match(route,/contractPaymentScheduleId: linkedPaymentScheduleId/);
   assert.match(route,/worker_violation/);
 });
 
 test("absence ranges exclude Friday and use actual salary",()=>{
   const route=read("app/api/portal/contracts/[id]/attendance/route.ts");
-  assert.match(route,/getUTCDay\(\)!==5/);
+  const integrity=read("lib/workforce-finance-integrity.ts");
+  assert.match(integrity,/getUTCDay\(\) !== 5/);
   assert.match(route,/profession\.actualSalaryHalalas/);
+  assert.match(route,/selectedWorker\?\.monthlySalaryHalalas/);
   assert.match(route,/absenceEndDate/);
   assert.match(route,/clientDailyRateHalalas/);
-  assert.match(route,/replacementWorkerId\?0:/);
-  assert.match(route,/workforce_supervisor/);
+  assert.match(route,/replacementWorkerId \? 0/);
+  assert.doesNotMatch(route,/\["system_owner",\s*"system_admin",\s*"workforce_supervisor"/);
 });

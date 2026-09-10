@@ -1,10 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { bankAccounts, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification, type NotificationModule, type NotificationSeverity } from "@/lib/portal-notifications";
-import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-access";
+import { canAccessPortalDepartment, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { rejectCrossSiteRequest } from "@/lib/security";
+import { isValidIsoDate, workerMonthlySalaryHalalas } from "@/lib/workforce-finance-integrity";
 
 type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
@@ -12,7 +13,7 @@ const entityStatuses: Record<RecordEntity, Set<string>> = {
   employees: new Set(["active", "leave", "suspended", "ended"]),
   finance: new Set(["pending", "approved", "paid", "overdue"]),
   legal: new Set(["active", "reviewing", "renewal", "closed"]),
-  workforce: new Set(["available", "assigned", "leave", "suspended"]),
+  workforce: new Set(["available", "leave", "suspended"]),
 };
 
 const financeCategories = new Set([
@@ -122,13 +123,16 @@ export async function POST(request: Request) {
       const paymentMethod = cleanText(data.paymentMethod, 30);
       const bankAccountId = Number(data.bankAccountId || 0) || null;
       const notes = cleanText(data.notes, 1000) || null;
-      if (!financeCategories.has(category) || description.length < 3 || !Number.isFinite(amount) || amount <= 0 || amount > 1000000000 || !dueDate || !paymentMethods.has(paymentMethod)) {
+      if (!financeCategories.has(category) || description.length < 3 || !Number.isFinite(amount) || amount <= 0 || amount > 1000000000 || !dueDate || !isValidIsoDate(dueDate) || !paymentMethods.has(paymentMethod)) {
         return Response.json({ error: "بيانات السجل المالي غير مكتملة أو غير صحيحة" }, { status: 400 });
+      }
+      if (category === "workforce_invoice") {
+        return Response.json({ error: "تُصدر فاتورة العمالة من دفعة العقد حتى تُطبّق قيود الغياب والضريبة ويظل المستند والقيد المالي متزامنين" }, { status: 409 });
       }
       if (workerFinanceCategories.has(category) && (!workerId || !Number.isInteger(workerId))) {
         return Response.json({ error: "يجب اختيار العامل لهذه الحركة المالية" }, { status: 400 });
       }
-      if (category === "worker_salary" && (!periodMonth || !/^\d{4}-\d{2}$/.test(periodMonth))) {
+      if (category === "worker_salary" && (!periodMonth || !isValidIsoDate(`${periodMonth}-01`))) {
         return Response.json({ error: "حدد شهر الراتب" }, { status: 400 });
       }
       if (category === "worker_expense" && !subCategory) {
@@ -140,43 +144,61 @@ export async function POST(request: Request) {
         const bank = await db.query.bankAccounts.findFirst({ where: eq(bankAccounts.id, bankAccountId) });
         if (!bank || bank.status !== "active") return Response.json({ error: "الحساب البنكي غير موجود أو غير نشط" }, { status: 400 });
       }
-      let selectedWorker: typeof workers.$inferSelect | null = null;
-      let linkedPaymentScheduleId: number | null = null;
-      if (workerId) {
-        selectedWorker = await db.query.workers.findFirst({ where: eq(workers.id, workerId) }) || null;
-        if (!selectedWorker || selectedWorker.archivedAt) return Response.json({ error: "العامل المحدد غير موجود أو مؤرشف" }, { status: 404 });
-      }
-      if (contractId) {
-        const contract = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.id, contractId) });
-        if (!contract) return Response.json({ error: "العقد المحدد غير موجود" }, { status: 404 });
-      }
-      if (category === "worker_salary") {
-        if (!contractId) return Response.json({ error: "يجب ربط راتب العامل بالعقد المستفيد" }, { status: 400 });
-        const assignment = await db.query.contractWorkerAssignments.findFirst({ where: and(eq(contractWorkerAssignments.workerId, workerId!), eq(contractWorkerAssignments.contractId, contractId), eq(contractWorkerAssignments.status, "active")) });
-        if (!assignment) return Response.json({ error: "العامل غير مسند فعليًا إلى العقد المحدد" }, { status: 409 });
-        const profession = await db.query.contractProfessions.findFirst({ where: eq(contractProfessions.id, assignment.contractProfessionId) });
-        const actualSalaryHalalas = profession?.actualSalaryHalalas || selectedWorker?.monthlySalaryHalalas || 0;
-        if (!actualSalaryHalalas || Math.round(amount * 100) !== actualSalaryHalalas) return Response.json({ error: "قيمة الراتب يجب أن تطابق الراتب الفعلي المعتمد في توزيع مهنة العقد" }, { status: 409 });
-        const payment = await db.query.contractPaymentSchedules.findFirst({ where: and(eq(contractPaymentSchedules.contractId, contractId), eq(contractPaymentSchedules.servicePeriod, periodMonth!)) });
-        if (!payment || payment.status !== "paid") return Response.json({ error: "لا يستحق راتب العامل قبل سداد دفعة العقد المرتبطة بالشهر" }, { status: 409 });
-        linkedPaymentScheduleId = payment.id;
-      }
-      const [saved] = await db.insert(financialRecords).values({
-        referenceCode: code("FIN"),
-        category,
-        description,
-        amountHalalas: Math.round(amount * 100),
-        dueDate,
-        workerId,
-        contractId,
-        contractPaymentScheduleId: linkedPaymentScheduleId,
-        bankAccountId: bankFunded ? bankAccountId : null,
-        periodMonth,
-        subCategory,
-        paymentMethod: paymentMethod || null,
-        notes,
-        updatedAt: now,
-      }).returning();
+      const saved = await db.transaction(async (tx) => {
+        if (contractId) await tx.execute(sql`select id from workforce_contracts where id = ${contractId} for update`);
+        if (workerId) await tx.execute(sql`select id from workers where id = ${workerId} for update`);
+        const [contract] = contractId
+          ? await tx.select().from(workforceContracts).where(eq(workforceContracts.id, contractId)).limit(1)
+          : [null];
+        const [selectedWorker] = workerId
+          ? await tx.select().from(workers).where(eq(workers.id, workerId)).limit(1)
+          : [null];
+        if (workerId && (!selectedWorker || selectedWorker.archivedAt)) throw new Error("WORKER_NOT_FOUND_OR_ARCHIVED");
+        if (contractId && !contract) throw new Error("CONTRACT_NOT_FOUND");
+
+        let linkedPaymentScheduleId: number | null = null;
+        let linkedAssignment: typeof contractWorkerAssignments.$inferSelect | null = null;
+        if (workerId && contractId && workerFinanceCategories.has(category)) {
+          [linkedAssignment] = await tx.select().from(contractWorkerAssignments).where(and(
+            eq(contractWorkerAssignments.workerId, workerId),
+            eq(contractWorkerAssignments.contractId, contractId),
+            eq(contractWorkerAssignments.status, "active"),
+          )).limit(1);
+          if (!linkedAssignment || selectedWorker?.status !== "assigned") throw new Error("WORKER_CONTRACT_MISMATCH");
+          if (dueDate < linkedAssignment.assignedAt.slice(0, 10) || (contract && dueDate > contract.endDate)) throw new Error("WORKER_FINANCE_OUTSIDE_ASSIGNMENT");
+        }
+        if (category === "worker_salary") {
+          if (!contractId) throw new Error("SALARY_CONTRACT_REQUIRED");
+          if (!linkedAssignment) throw new Error("WORKER_CONTRACT_MISMATCH");
+          const [profession] = await tx.select().from(contractProfessions).where(eq(contractProfessions.id, linkedAssignment.contractProfessionId)).limit(1);
+          const actualSalaryHalalas = workerMonthlySalaryHalalas(selectedWorker?.monthlySalaryHalalas || 0, profession?.actualSalaryHalalas || 0);
+          if (!actualSalaryHalalas || Math.round(amount * 100) !== actualSalaryHalalas) throw new Error("SALARY_AMOUNT_MISMATCH");
+          const payments = await tx.select().from(contractPaymentSchedules).where(and(
+            eq(contractPaymentSchedules.contractId, contractId),
+            eq(contractPaymentSchedules.servicePeriod, periodMonth!),
+          ));
+          if (payments.length !== 1 || payments[0].status !== "paid") throw new Error("SALARY_PAYMENT_NOT_PAID");
+          linkedPaymentScheduleId = payments[0].id;
+        }
+        const [created] = await tx.insert(financialRecords).values({
+          referenceCode: code("FIN"),
+          category,
+          description,
+          amountHalalas: Math.round(amount * 100),
+          dueDate,
+          workerId,
+          contractId,
+          contractPaymentScheduleId: linkedPaymentScheduleId,
+          bankAccountId: bankFunded ? bankAccountId : null,
+          periodMonth,
+          subCategory,
+          paymentMethod: paymentMethod || null,
+          notes,
+          updatedAt: now,
+        }).returning();
+        if (!created) throw new Error("FINANCIAL_RECORD_NOT_CREATED");
+        return created;
+      });
       await recordActivity(access.user.email, "financial-record-created", "financial-record", saved.id, undefined, saved);
       return Response.json({ record: saved }, { status: 201 });
     }
@@ -208,6 +230,13 @@ export async function POST(request: Request) {
     if (message.toLowerCase().includes("unique")) {
       return Response.json({ error: "الرقم المدخل مستخدم في سجل آخر" }, { status: 409 });
     }
+    if (message === "WORKER_NOT_FOUND_OR_ARCHIVED") return Response.json({ error: "العامل المحدد غير موجود أو مؤرشف" }, { status: 404 });
+    if (message === "CONTRACT_NOT_FOUND") return Response.json({ error: "العقد المحدد غير موجود" }, { status: 404 });
+    if (message === "WORKER_CONTRACT_MISMATCH") return Response.json({ error: "لا يمكن ربط حركة العامل بعقد غير مسند إليه فعليًا" }, { status: 409 });
+    if (message === "WORKER_FINANCE_OUTSIDE_ASSIGNMENT") return Response.json({ error: "تاريخ حركة العامل خارج مدة إسناده للعقد" }, { status: 409 });
+    if (message === "SALARY_CONTRACT_REQUIRED") return Response.json({ error: "يجب ربط راتب العامل بالعقد المستفيد" }, { status: 400 });
+    if (message === "SALARY_AMOUNT_MISMATCH") return Response.json({ error: "قيمة الراتب يجب أن تطابق الراتب الشهري المعتمد في ملف العامل" }, { status: 409 });
+    if (message === "SALARY_PAYMENT_NOT_PAID") return Response.json({ error: "لا يستحق راتب العامل قبل سداد دفعة العقد المرتبطة بالشهر" }, { status: 409 });
     return Response.json({ error: "تعذّر حفظ السجل حالياً" }, { status: 500 });
   }
 }
@@ -223,6 +252,9 @@ export async function PATCH(request: Request) {
     const status = cleanText(payload.status, 30);
     if (!isEntity(payload.entity) || !canAccessPortalDepartment(access, payload.entity, true)) {
       return Response.json({ error: "لا تملك صلاحية التعديل في هذا القسم" }, { status: 403 });
+    }
+    if (payload.entity === "workforce") {
+      return Response.json({ error: "تُدار حالة العامل من ملف العامل، ويُدار الإسناد من العقد؛ لا يمكن تغييرها من مسار السجلات العام" }, { status: 409 });
     }
     if (!Number.isInteger(id) || id < 1 || !entityStatuses[payload.entity].has(status)) {
       return Response.json({ error: "بيانات التحديث غير صحيحة" }, { status: 400 });
@@ -240,6 +272,14 @@ export async function PATCH(request: Request) {
     if (!existing) return Response.json({ error: "السجل غير موجود" }, { status: 404 });
     if (payload.entity === "legal" && !canManageLegalCases(access)) return Response.json({ error: "تحديث حالة الملف من صلاحيات مدير القضايا" }, { status: 403 });
     if (payload.entity === "legal" && status === "closed") return Response.json({ error: "أغلق القضية من مساحة إدارة القضايا بعد استكمال الإجراءات وكتابة السبب" }, { status: 409 });
+    if (payload.entity === "finance" && status === "approved" && !(await hasPortalPermission(access, "finance", "approve"))) return Response.json({ error: "اعتماد السجل المالي يتطلب صلاحية الاعتماد المالي" }, { status: 403 });
+    if (payload.entity === "finance" && status === "paid" && !(await hasPortalPermission(access, "finance", "pay"))) return Response.json({ error: "تسجيل السداد يتطلب صلاحية الدفع المالي" }, { status: 403 });
+    if (payload.entity === "finance") {
+      const financial = existing as typeof financialRecords.$inferSelect;
+      if (financial.contractPaymentScheduleId && ["workforce_invoice", "workforce_supplier_payable"].includes(financial.category)) {
+        return Response.json({ error: "تُدار حالة فاتورة العقد من مسار دفعات العقود لضمان تزامن الفاتورة والقيد المالي" }, { status: 409 });
+      }
+    }
     let updated: unknown;
     if (payload.entity === "employees") {
       [updated] = await db.update(employees).set({ status, updatedAt }).where(eq(employees.id, id)).returning();

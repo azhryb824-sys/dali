@@ -20,24 +20,27 @@ test("workforce supervisor has exact movement permissions without approvals",()=
 test("supervisor can assign and release individual workers at the contract site",()=>{
   const route=read("app/api/portal/contracts/[id]/workers/route.ts");
   assert.match(route,/hasPortalPermission\(access, "contracts", "write"\)/);
+  assert.match(route,/hasPortalPermission\(access, "workforce", "write"\)/);
+  assert.match(route,/db\.transaction/);
   assert.match(route,/clientSite: contract\.workSite/);
   assert.match(route,/contract-worker-assigned/);
   assert.match(route,/export async function DELETE/);
   assert.match(route,/status: "released"/);
-  assert.match(route,/status: "available"/);
+  assert.match(route,/updatedWorker\.status === "assigned" \? "available"/);
   assert.match(route,/assignmentId/);
 });
 
 test("owner records named or profession-count absence with an idempotent daily deduction",()=>{
   const route=read("app/api/portal/contracts/[id]/attendance/route.ts");
   const schema=read("db/schema.ts");
-  assert.match(route,/owner\(access\)/);
+  assert.match(route,/canRecordAbsence\(access\)/);
+  assert.doesNotMatch(route,/workforce_supervisor/);
   assert.match(route,/workerId/);
   assert.match(route,/absentCount/);
   assert.match(route,/contractProfessionId/);
-  assert.match(route,/Math\.round\(monthlyRate\/30\)/);
+  assert.match(route,/Math\.round\(monthlyRate \/ 30\)/);
   assert.match(route,/absenceDeductionHalalas/);
-  assert.match(route,/DEDUCTION_EXCEEDS_PAYMENT/);
+  assert.match(route,/PAYMENT_CHANGED_OR_DEDUCTION_EXCEEDS/);
   assert.match(route,/dedupeKey/);
   assert.match(route,/export async function DELETE/);
   assert.match(schema,/contractWorkerAbsences/);

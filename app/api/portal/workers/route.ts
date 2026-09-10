@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { contractWorkerAssignments, financialRecords, portalActivity, workerAttachments, workers } from "@/db/schema";
 import { cleanDate, cleanText, objectKey, safeFileName } from "@/lib/company-documents";
@@ -163,25 +163,34 @@ export async function PATCH(request: Request) {
       return Response.json({ error: "بيانات الإسناد غير صحيحة" }, { status: 400 });
     }
 
-    const current = await getDb().query.workers.findFirst({ where: eq(workers.id, id) });
-    if (!current) return Response.json({ error: "العامل غير موجود" }, { status: 404 });
-    if (current.status === "assigned") {
-      return Response.json({ error: "يجب إنهاء إسناد العامل من العقد النشط أولاً" }, { status: 409 });
-    }
-
-    const [updated] = await getDb().update(workers).set({
-      status,
-      beneficiaryName: null,
-      clientSite: "غير مسند",
-      assignmentStartDate: null,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(workers.id, id)).returning();
-    if (!updated) return Response.json({ error: "العامل غير موجود" }, { status: 404 });
-
-    await getDb().insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-assignment-updated", entityType: "worker", entityId: String(id) });
+    const db = getDb();
+    const updated = await db.transaction(async (tx) => {
+      await tx.execute(sql`select id from workers where id = ${id} for update`);
+      const [current] = await tx.select().from(workers).where(eq(workers.id, id)).limit(1);
+      if (!current) throw new Error("WORKER_NOT_FOUND");
+      if (current.archivedAt) throw new Error("WORKER_ARCHIVED");
+      const [activeAssignment] = await tx.select({ id: contractWorkerAssignments.id }).from(contractWorkerAssignments)
+        .where(and(eq(contractWorkerAssignments.workerId, id), eq(contractWorkerAssignments.status, "active"))).limit(1);
+      if (current.status === "assigned" || activeAssignment) throw new Error("WORKER_ASSIGNED");
+      const [saved] = await tx.update(workers).set({
+        status,
+        beneficiaryName: null,
+        clientSite: "غير مسند",
+        clientId: null,
+        assignmentStartDate: null,
+        updatedAt: new Date().toISOString(),
+      }).where(eq(workers.id, id)).returning();
+      if (!saved) throw new Error("WORKER_NOT_FOUND");
+      await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-assignment-updated", entityType: "worker", entityId: String(id) });
+      return saved;
+    });
     await emitPortalNotification({ eventType: "worker-status-updated", title: "تغيّرت حالة عامل", message: `${updated.fullName} — الحالة الجديدة: ${status}.`, severity: "info", module: "workforce", entityType: "worker", entityId: updated.id, actionView: "workforce", targetDepartment: "workforce" }).catch(() => undefined);
     return Response.json({ worker: updated });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "WORKER_NOT_FOUND") return Response.json({ error: "العامل غير موجود" }, { status: 404 });
+    if (message === "WORKER_ARCHIVED") return Response.json({ error: "ملف العامل مؤرشف ولا يمكن تغيير حالته" }, { status: 409 });
+    if (message === "WORKER_ASSIGNED") return Response.json({ error: "يجب إنهاء إسناد العامل من العقد النشط أولاً" }, { status: 409 });
     return Response.json({ error: "تعذّر تحديث إسناد العامل" }, { status: 500 });
   }
 }
@@ -196,18 +205,28 @@ export async function DELETE(request: Request) {
     const reason = cleanText(payload.reason, 1000);
     if (!Number.isInteger(id) || id < 1 || reason.length < 10) return Response.json({ error: "حدد العامل واكتب سبب حذف لا يقل عن 10 أحرف" }, { status: 400 });
     const db = getDb();
-    const worker = await db.query.workers.findFirst({ where: eq(workers.id, id) });
-    if (!worker) return Response.json({ error: "العامل غير موجود" }, { status: 404 });
-    if (worker.archivedAt) return Response.json({ error: "ملف العامل مؤرشف مسبقًا" }, { status: 409 });
-    const activeAssignment = await db.query.contractWorkerAssignments.findFirst({ where: and(eq(contractWorkerAssignments.workerId, id), eq(contractWorkerAssignments.status, "active")) });
-    if (activeAssignment) return Response.json({ error: "لا يمكن حذف عامل مرتبط بعقد نشط؛ أنهِ إسناده من العقد أولاً" }, { status: 409 });
-    const linkedFinancial = await db.select({ id: financialRecords.id }).from(financialRecords).where(eq(financialRecords.workerId, id));
     const now = new Date().toISOString();
-    const [archived] = await db.update(workers).set({ status: "suspended", archivedAt: now, archivedBy: access.user.email, archiveReason: reason, beneficiaryName: null, clientSite: "مؤرشف", assignmentStartDate: null, updatedAt: now }).where(eq(workers.id, id)).returning();
-    await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-profile-archived", entityType: "worker", entityId: String(id) });
-    await emitPortalNotification({ eventType: "worker-profile-archived", title: "أُرشف ملف عامل", message: `${worker.fullName} — حُفظت ${linkedFinancial.length} حركة مالية مرتبطة دون حذف.`, severity: "warning", module: "workforce", entityType: "worker", entityId: id, actionView: "workforce", targetRole: "admin" }).catch(() => undefined);
-    return Response.json({ worker: archived, preservedFinancialRecords: linkedFinancial.length });
-  } catch {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select id from workers where id = ${id} for update`);
+      const [worker] = await tx.select().from(workers).where(eq(workers.id, id)).limit(1);
+      if (!worker) throw new Error("WORKER_NOT_FOUND");
+      if (worker.archivedAt) throw new Error("WORKER_ARCHIVED");
+      const [activeAssignment] = await tx.select({ id: contractWorkerAssignments.id }).from(contractWorkerAssignments)
+        .where(and(eq(contractWorkerAssignments.workerId, id), eq(contractWorkerAssignments.status, "active"))).limit(1);
+      if (activeAssignment) throw new Error("WORKER_ASSIGNED");
+      const linkedFinancial = await tx.select({ id: financialRecords.id }).from(financialRecords).where(eq(financialRecords.workerId, id));
+      const [archived] = await tx.update(workers).set({ status: "suspended", archivedAt: now, archivedBy: access.user.email, archiveReason: reason, beneficiaryName: null, clientSite: "مؤرشف", clientId: null, assignmentStartDate: null, updatedAt: now }).where(eq(workers.id, id)).returning();
+      if (!archived) throw new Error("WORKER_NOT_FOUND");
+      await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-profile-archived", entityType: "worker", entityId: String(id) });
+      return { worker, archived, preservedFinancialRecords: linkedFinancial.length };
+    });
+    await emitPortalNotification({ eventType: "worker-profile-archived", title: "أُرشف ملف عامل", message: `${result.worker.fullName} — حُفظت ${result.preservedFinancialRecords} حركة مالية مرتبطة دون حذف.`, severity: "warning", module: "workforce", entityType: "worker", entityId: id, actionView: "workforce", targetRole: "admin" }).catch(() => undefined);
+    return Response.json({ worker: result.archived, preservedFinancialRecords: result.preservedFinancialRecords });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "WORKER_NOT_FOUND") return Response.json({ error: "العامل غير موجود" }, { status: 404 });
+    if (message === "WORKER_ARCHIVED") return Response.json({ error: "ملف العامل مؤرشف مسبقًا" }, { status: 409 });
+    if (message === "WORKER_ASSIGNED") return Response.json({ error: "لا يمكن حذف عامل مرتبط بعقد نشط؛ أنهِ إسناده من العقد أولاً" }, { status: 409 });
     return Response.json({ error: "تعذّر أرشفة ملف العامل" }, { status: 500 });
   }
 }

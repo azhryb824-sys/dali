@@ -924,5 +924,20 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "تثبيت نظام دالي الخاص: {{0}} رمز التفعيل: {{1}}",
     "en": "Private Dally System installation: {{0}} Activation code: {{1}}",
     "bn": "ব্যক্তিগত ডালি সিস্টেম ইনস্টলেশন: {{0}} সক্রিয়করণ কোড: {{1}}"
+  },
+  {
+    "source": "{{0}} — {{1}} عامل",
+    "en": "{{0}} — {{1}} worker(s)",
+    "bn": "{{0}} — {{1}} জন কর্মী"
+  },
+  {
+    "source": "البديل: {{0}}",
+    "en": "Replacement: {{0}}",
+    "bn": "বিকল্প: {{0}}"
+  },
+  {
+    "source": "تم تسجيل الغياب وخصم {{0}} من دفعة العميل قبل الضريبة.",
+    "en": "The absence was recorded and {{0}} was deducted from the client installment before tax.",
+    "bn": "অনুপস্থিতি নথিভুক্ত হয়েছে এবং করের আগে গ্রাহকের কিস্তি থেকে {{0}} কর্তন করা হয়েছে।"
   }
 ];

@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { clients, companyDocuments, contractPaymentSchedules, contractSignatureRequests, contractProfessions, contractWorkerAssignments, documentStamps, financialRecords, journalEntries, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { createReversalDraft } from "@/lib/accounting";
@@ -60,6 +60,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const plannedAssignments = status === "active"
       ? await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), eq(contractWorkerAssignments.status, "planned")))
       : [];
+    if (plannedAssignments.length && !(await hasPortalPermission(access, "workforce", "write"))) {
+      return jsonNoStore({ error: "تفعيل عقد يحتوي عمالة مخططة يتطلب صلاحية إدارة القوى العاملة" }, { status: 403 });
+    }
     if (status === "active") {
       for (const assignment of plannedAssignments) {
         const worker = await db.query.workers.findFirst({ where: eq(workers.id, assignment.workerId) });
@@ -127,6 +130,60 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         }
         await tx.update(workforceContracts).set({ firstPaymentDueDate: annualApprovalDueDates[0], updatedAt: now }).where(eq(workforceContracts.id, id));
       }
+      if (status === "active" && plannedAssignments.length) {
+        const professionIds = [...new Set(plannedAssignments.map((assignment) => assignment.contractProfessionId))].sort((a, b) => a - b);
+        const workerIds = [...new Set(plannedAssignments.map((assignment) => assignment.workerId))].sort((a, b) => a - b);
+        for (const professionId of professionIds) await tx.execute(sql`select id from contract_professions where id = ${professionId} for update`);
+        for (const workerId of workerIds) await tx.execute(sql`select id from workers where id = ${workerId} for update`);
+        for (const assignment of [...plannedAssignments].sort((a, b) => a.workerId - b.workerId)) {
+          const [assignedWorker] = await tx.update(workers).set({
+            status: "assigned",
+            beneficiaryName: contract.clientName,
+            clientSite: contract.workSite,
+            clientId: contract.clientId,
+            assignmentStartDate: now.slice(0, 10),
+            updatedAt: now,
+          }).where(and(eq(workers.id, assignment.workerId), eq(workers.status, "available"))).returning();
+          if (!assignedWorker) throw new Error(`تعذر تفعيل العقد لأن العامل رقم ${assignment.workerId} لم يعد متاحًا`);
+          const [activatedAssignment] = await tx.update(contractWorkerAssignments).set({ status: "active", assignedAt: now })
+            .where(and(eq(contractWorkerAssignments.id, assignment.id), eq(contractWorkerAssignments.status, "planned"))).returning();
+          if (!activatedAssignment) throw new Error(`تغير إسناد العامل رقم ${assignment.workerId} قبل تفعيل العقد`);
+        }
+      }
+      if (["cancelled", "terminated", "expired", "superseded"].includes(status)) {
+        await tx.execute(sql`
+          select id from contract_worker_assignments
+          where contract_id = ${id} and status in ('planned', 'active')
+          order by id for update
+        `);
+        const assignmentsToRelease = await tx.select().from(contractWorkerAssignments).where(and(
+          eq(contractWorkerAssignments.contractId, id),
+          inArray(contractWorkerAssignments.status, ["planned", "active"]),
+        ));
+        const workerIds = [...new Set(assignmentsToRelease.map((assignment) => assignment.workerId))].sort((a, b) => a - b);
+        for (const workerId of workerIds) await tx.execute(sql`select id from workers where id = ${workerId} for update`);
+        for (const assignment of assignmentsToRelease) {
+          await tx.update(contractWorkerAssignments).set({ status: "released", releasedAt: now })
+            .where(and(eq(contractWorkerAssignments.id, assignment.id), inArray(contractWorkerAssignments.status, ["planned", "active"])));
+        }
+        for (const workerId of workerIds) {
+          const [otherActive] = await tx.select({ id: contractWorkerAssignments.id }).from(contractWorkerAssignments).where(and(
+            eq(contractWorkerAssignments.workerId, workerId),
+            eq(contractWorkerAssignments.status, "active"),
+          )).limit(1);
+          if (!otherActive) {
+            const [worker] = await tx.select().from(workers).where(eq(workers.id, workerId)).limit(1);
+            if (worker) await tx.update(workers).set({
+              status: worker.archivedAt ? "suspended" : worker.status === "assigned" ? "available" : worker.status,
+              beneficiaryName: null,
+              clientSite: "غير مسند",
+              clientId: null,
+              assignmentStartDate: null,
+              updatedAt: now,
+            }).where(eq(workers.id, workerId));
+          }
+        }
+      }
       return annualApprovalDueDates.length
         ? { ...changed, firstPaymentDueDate: annualApprovalDueDates[0] }
         : changed;
@@ -140,11 +197,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (reasonCode !== "late_payment") {
         await db.update(financialRecords).set({ status: "cancelled", postingStatus: "not_applicable", notes: `أُلغي تبعًا لإلغاء العقد ${contract.referenceCode}: ${reason}`.slice(0,1000), updatedAt: now }).where(and(eq(financialRecords.contractId, id), eq(financialRecords.postingStatus, "unposted"), inArray(financialRecords.status, ["pending","due"])));
         await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), eq(contractPaymentSchedules.status, "invoiced")));
-      }
-      const assignments = await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), inArray(contractWorkerAssignments.status, ["planned", "active"])));
-      for (const assignment of assignments) {
-        await db.update(contractWorkerAssignments).set({ status: "released", releasedAt: now }).where(eq(contractWorkerAssignments.id, assignment.id));
-        await db.update(workers).set({ status: "available", beneficiaryName: null, clientSite: "غير مسند", assignmentStartDate: null, updatedAt: now }).where(eq(workers.id, assignment.workerId));
       }
       const [client, documents, finances, professions, allAssignments] = await Promise.all([
         contract.clientId ? db.query.clients.findFirst({ where: eq(clients.id, contract.clientId) }) : Promise.resolve(null),
@@ -187,22 +239,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const accountingReviewCount = finalFinances.filter((item) => item.postingStatus === "draft" || item.postingStatus === "posted").length;
       if (accountingReviewCount || reversalDraftIds.length) await emitPortalNotification({ eventType: "contract-cancellation-accounting-review", title: "مراجعة محاسبية لازمة لإلغاء عقد", message: `${contract.referenceCode} — أُنشئ ${reversalDraftIds.length} قيد عكسي مسودة، ويوجد ${accountingReviewCount} سجل مالي يحتاج متابعة الاعتماد والترحيل دون حذف الأثر التاريخي.`, severity: "critical", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
     }
-    if (status === "active") {
-      try {
-        for (const assignment of plannedAssignments) {
-          await db.update(contractWorkerAssignments).set({ status: "active", assignedAt: now }).where(and(eq(contractWorkerAssignments.id, assignment.id), eq(contractWorkerAssignments.status, "planned")));
-          const assignedWorkers = await db.update(workers).set({ status: "assigned", beneficiaryName: contract.clientName, clientSite: contract.workSite, assignmentStartDate: contract.startDate, updatedAt: now }).where(and(eq(workers.id, assignment.workerId), eq(workers.status, "available"))).returning();
-          if (!assignedWorkers.length) throw new Error(`تعارض إسناد العامل رقم ${assignment.workerId}`);
-        }
-      } catch (error) {
-        await db.update(workforceContracts).set({ status: contract.status, effectiveAt: null, updatedAt: now }).where(eq(workforceContracts.id, id)).catch(() => undefined);
-        for (const assignment of plannedAssignments) {
-          await db.update(contractWorkerAssignments).set({ status: "planned" }).where(eq(contractWorkerAssignments.id, assignment.id)).catch(() => undefined);
-          await db.update(workers).set({ status: "available", beneficiaryName: null, clientSite: "غير مسند", assignmentStartDate: null, updatedAt: now }).where(and(eq(workers.id, assignment.workerId), eq(workers.status, "assigned"), eq(workers.beneficiaryName, contract.clientName))).catch(() => undefined);
-        }
-        throw error;
-      }
-    }
     const correlationId = await recordStatusChange({ entityType: "workforce-contract", entityId: id, fromStatus: contract.status, toStatus: status, reason: reason || null, actorEmail: access.user.email });
     await auditPortalAction({ actorEmail: access.user.email, action: "workforce-contract-status-changed", entityType: "workforce-contract", entityId: id, before: contract, after: updated, reason: reason || null, correlationId });
     await emitPortalNotification({ eventType: "workforce-contract-status-changed", title: "تغيّرت حالة عقد عمالة", message: `${updated.referenceCode} — ${updated.clientName} — ${contract.status} ← ${status}.`, severity: ["cancelled", "terminated", "suspended"].includes(status) ? "warning" : "info", module: "workforce", entityType: "workforce-contract", entityId: id, actionView: "workforce", targetDepartment: "workforce" }).catch(() => undefined);
@@ -222,8 +258,24 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         targetDepartment: "workforce",
       }).catch(() => undefined);
     }
-    return jsonNoStore({ contract: updated, signatureUploadUrl, signatureUploadExpiresAt: signatureUploadExpiresAt || undefined });
+    const assignmentStateChanged = status === "active" || ["cancelled", "terminated", "expired", "superseded"].includes(status);
+    const synchronizedAssignments = assignmentStateChanged
+      ? await db.select().from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, id))
+      : [];
+    const synchronizedWorkerIds = [...new Set(synchronizedAssignments.map((assignment) => assignment.workerId))];
+    const synchronizedWorkers = synchronizedWorkerIds.length
+      ? await db.select().from(workers).where(inArray(workers.id, synchronizedWorkerIds))
+      : [];
+    return jsonNoStore({
+      contract: updated,
+      assignments: assignmentStateChanged ? synchronizedAssignments : undefined,
+      workers: assignmentStateChanged ? synchronizedWorkers : undefined,
+      signatureUploadUrl,
+      signatureUploadExpiresAt: signatureUploadExpiresAt || undefined,
+    });
   } catch (error) {
-    return jsonNoStore({ error: error instanceof Error ? error.message : "تعذّر تحديث العقد" }, { status: 400 });
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("WORKER_COVERING_ABSENCE")) return jsonNoStore({ error: "تعذر تفعيل العقد لأن أحد العمال مسجل كبديل لتغطية غياب اليوم" }, { status: 409 });
+    return jsonNoStore({ error: message || "تعذّر تحديث العقد" }, { status: 400 });
   }
 }

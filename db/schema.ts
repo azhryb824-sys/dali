@@ -1114,6 +1114,9 @@ export const financialRecords = pgTable(
     index("financial_records_bank_account_id_idx").on(table.bankAccountId),
     index("financial_records_period_month_idx").on(table.periodMonth),
     index("financial_records_posting_status_idx").on(table.postingStatus),
+    uniqueIndex("financial_records_worker_salary_period_unique")
+      .on(table.workerId, table.periodMonth)
+      .where(sql`${table.category} = 'worker_salary' and ${table.status} <> 'cancelled'`),
     check(
       "financial_records_posting_status_check",
       sql`${table.postingStatus} in ('unposted','draft','posted','reversed','not_applicable')`,
@@ -2096,6 +2099,11 @@ export const workers = pgTable(
     index("workers_profession_idx").on(table.profession),
     index("workers_beneficiary_name_idx").on(table.beneficiaryName),
     index("workers_iqama_expiry_idx").on(table.iqamaExpiry),
+    index("workers_archived_at_idx").on(table.archivedAt),
+    check(
+      "workers_monthly_salary_check",
+      sql`${table.monthlySalaryHalalas} >= 0`,
+    ),
   ],
 );
 
@@ -2507,7 +2515,9 @@ export const contractProfessions = pgTable(
   "contract_professions",
   {
     id: serial("id").primaryKey(),
-    contractId: integer("contract_id").notNull(),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => workforceContracts.id, { onDelete: "cascade" }),
     profession: text("profession").notNull(),
     requiredCount: integer("required_count").notNull(),
     unitSalaryHalalas: integer("unit_salary_halalas").notNull().default(0),
@@ -2536,9 +2546,15 @@ export const contractWorkerAssignments = pgTable(
   "contract_worker_assignments",
   {
     id: serial("id").primaryKey(),
-    contractId: integer("contract_id").notNull(),
-    contractProfessionId: integer("contract_profession_id").notNull(),
-    workerId: integer("worker_id").notNull(),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => workforceContracts.id, { onDelete: "cascade" }),
+    contractProfessionId: integer("contract_profession_id")
+      .notNull()
+      .references(() => contractProfessions.id, { onDelete: "restrict" }),
+    workerId: integer("worker_id")
+      .notNull()
+      .references(() => workers.id, { onDelete: "restrict" }),
     status: text("status").notNull().default("active"),
     assignedBy: text("assigned_by").notNull(),
     assignedAt: text("assigned_at")
@@ -2550,13 +2566,17 @@ export const contractWorkerAssignments = pgTable(
     uniqueIndex("contract_worker_assignments_contract_worker_unique").on(
       table.contractId,
       table.workerId,
-    ),
+    ).where(sql`${table.status} in ('planned','active')`),
     index("contract_worker_assignments_contract_id_idx").on(table.contractId),
     index("contract_worker_assignments_profession_id_idx").on(
       table.contractProfessionId,
     ),
     index("contract_worker_assignments_worker_id_idx").on(table.workerId),
     index("contract_worker_assignments_status_idx").on(table.status),
+    check(
+      "contract_worker_assignments_status_check",
+      sql`${table.status} in ('planned','active','released')`,
+    ),
   ],
 );
 
@@ -2623,6 +2643,10 @@ export const contractWorkerAbsences = pgTable(
     check(
       "contract_worker_absences_status_check",
       sql`${table.status} in ('active','void')`,
+    ),
+    check(
+      "contract_worker_absences_client_deduction_check",
+      sql`${table.clientDailyRateHalalas} >= 0 and ${table.clientDeductionHalalas} = case when ${table.replacementWorkerId} is null then ${table.clientDailyRateHalalas} * ${table.absentCount} else 0 end`,
     ),
   ],
 );

@@ -257,18 +257,22 @@ export async function POST(request: Request) {
       if (new Set(allSelected).size !== allSelected.length) {
         return Response.json({ error: "لا يمكن اختيار العامل نفسه في أكثر من مهنة داخل العقد" }, { status: 400 });
       }
+      if (allSelected.length && !(await hasPortalPermission(access, "workforce", "write"))) {
+        return Response.json({ error: "اختيار عمال للعقد يتطلب صلاحية إدارة القوى العاملة إضافة إلى صلاحية العقود" }, { status: 403 });
+      }
     }
     const allWorkersWithAjir = documentType === "workforce_contract" && professionInputs.length > 0 && professionInputs.every((item) => item.ajirContractStatus === "with_ajir");
     const clauseInputs = documentType === "workforce_contract" ? parseWorkforceContractClauses(payload.contractClauses, contractDirection, allWorkersWithAjir) : [];
     if (documentType === "workforce_contract" && !clauseInputs.length) return Response.json({ error: "يجب إبقاء بند تعاقدي واحد على الأقل" }, { status: 400 });
 
     const db = getDb();
-    const [sourceRequest, salesRepresentative, representativeRequest, sourceQuote, existingQuoteContract] = await Promise.all([
+    const [sourceRequest, salesRepresentative, representativeRequest, sourceQuote, existingQuoteContract, linkedContract] = await Promise.all([
       sourceRequestId ? db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) }) : Promise.resolve(null),
       salesRepresentativeId ? db.query.salesRepresentatives.findFirst({ where: eq(salesRepresentatives.id, salesRepresentativeId) }) : Promise.resolve(null),
       representativeRequestId ? db.query.representativeRequests.findFirst({ where: eq(representativeRequests.id, representativeRequestId) }) : Promise.resolve(null),
       quoteVersionId ? db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, quoteVersionId) }) : Promise.resolve(null),
       quoteVersionId ? db.query.workforceContracts.findFirst({ where: eq(workforceContracts.quoteVersionId, quoteVersionId) }) : Promise.resolve(null),
+      linkedContractId ? db.query.workforceContracts.findFirst({ where: eq(workforceContracts.id, linkedContractId) }) : Promise.resolve(null),
     ]);
     if (sourceRequestId && !sourceRequest) return Response.json({ error: "طلب الموقع المحدد غير موجود" }, { status: 404 });
     if (salesRepresentativeId && (!salesRepresentative || salesRepresentative.status !== "active")) return Response.json({ error: "المندوب المحدد غير موجود أو غير نشط" }, { status: 409 });
@@ -276,6 +280,8 @@ export async function POST(request: Request) {
     if (representativeRequestId && (!representativeRequest || representativeRequest.status !== "approved" || representativeRequest.requestType !== (contractDirection === "dali_purchaser" ? "purchase" : "sales"))) return Response.json({ error: "طلب المندوب غير معتمد أو لا يطابق اتجاه العقد" }, { status: 409 });
     if (quoteVersionId && (!sourceQuote || !["approved", "sent", "accepted"].includes(sourceQuote.status))) return Response.json({ error: "لا يمكن إنشاء عقد إلا من عرض سعر معتمد" }, { status: 409 });
     if (existingQuoteContract) return Response.json({ error: "تم تحويل عرض السعر إلى عقد سابقًا" }, { status: 409 });
+    if (linkedContractId && !linkedContract) return Response.json({ error: "العقد المرتبط غير موجود" }, { status: 404 });
+    if (documentType === "invoice" && linkedContract) return Response.json({ error: "تُصدر فاتورة العقد من جدول دفعات العقد حتى يدخل خصم الغياب في المبلغ والضريبة تلقائيًا" }, { status: 409 });
     if (sourceQuote && sourceQuote.quantityMode !== quantityMode) return Response.json({ error: "نوع العدد في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
     if (sourceQuote && sourceQuote.seasonType !== seasonType) return Response.json({ error: "نوع الموسم والفوترة في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
     if (sourceQuote && seasonType !== "regular" && quantityMode === "fixed") {

@@ -63,7 +63,7 @@ test("worker sponsorship, work contracts, salary accounting and safe deletion st
   const[workersRoute,financeRoute,portal,schema,migration]=await Promise.all([source("app/api/portal/workers/route.ts"),source("app/api/portal/records/route.ts"),source("app/portal/PortalDashboard.tsx"),source("db/schema.ts"),source("drizzle-pg/0022_worker_sponsorship_salary_and_archiving.sql")]);
   assert.match(workersRoute,/isCompanySponsored/);assert.doesNotMatch(workersRoute,/form\.get\("workContract"\)/);assert.doesNotMatch(workersRoute,/عقد العمل إلزامي للعامل/);
   assert.match(workersRoute,/export async function DELETE/);assert.match(workersRoute,/activeAssignment/);assert.match(workersRoute,/preservedFinancialRecords/);assert.doesNotMatch(workersRoute,/db\.delete\(workerAttachments\)/);
-  assert.match(financeRoute,/العامل غير مسند فعليًا إلى العقد/);assert.match(financeRoute,/monthlySalaryHalalas/);assert.match(financeRoute,/يجب ربط راتب العامل بالعقد المستفيد/);
+  assert.match(financeRoute,/لا يمكن ربط حركة العامل بعقد غير مسند إليه فعليًا/);assert.match(financeRoute,/monthlySalaryHalalas/);assert.match(financeRoute,/يجب ربط راتب العامل بالعقد المستفيد/);
   assert.match(portal,/جهة الكفالة/);assert.match(portal,/على كفالة شركة دالي/);assert.match(portal,/على كفالة جهة أخرى/);assert.doesNotMatch(portal,/workContract:/);assert.match(portal,/حذف العامل من النظام/);
   assert.match(schema,/archivedAt/);assert.match(migration,/financial_records_worker_salary_period_unique/);
 });

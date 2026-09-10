@@ -84,13 +84,15 @@ async function ProtectedPortal() {
 
   const db = getDb();
   const canManageRequests = await hasPortalPermission(access, "workforce", "write");
+  const canSeeFinance = canAccessPortalDepartment(access, "finance");
   const canAdministerUsers = canAdministerPortalUsers(access);
   const canSeeDocuments = canAccessPortalDocuments(access);
   const canAccessAssets = canAccessCompanyFiles(access);
-  const [canSeeContracts, canWriteContracts, canWriteFinance] = await Promise.all([
+  const [canSeeContracts, canWriteContracts, canWriteFinance, canReadFinance] = await Promise.all([
     hasPortalPermission(access, "contracts", "read"),
     hasPortalPermission(access, "contracts", "write"),
     hasPortalPermission(access, "finance", "write"),
+    hasPortalPermission(access, "finance", "read"),
   ]);
   const canLoadIssueAssets = canAccessAssets || canWriteContracts || canWriteFinance;
   const canSeeConversations = canAccessPortalConversations(access);
@@ -119,13 +121,13 @@ async function ProtectedPortal() {
     canAccessPortalDepartment(access, "employees")
       ? db.select().from(employees).where(isNull(employees.archivedAt)).orderBy(desc(employees.createdAt)).limit(500)
       : Promise.resolve([]),
-    canAccessPortalDepartment(access, "finance")
+    canSeeFinance
       ? db.select().from(financialRecords).orderBy(desc(financialRecords.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "legal")
       ? db.select().from(legalRecords).where(canManageLegalCases ? undefined : eq(legalRecords.assignedLawyerEmail, access.user.email.toLowerCase())).orderBy(desc(legalRecords.createdAt)).limit(500)
       : Promise.resolve([]),
-    canAccessPortalDepartment(access, "workforce")
+    canAccessPortalDepartment(access, "workforce") || canSeeFinance
       ? db.select().from(workers).where(isNull(workers.archivedAt)).orderBy(desc(workers.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "workforce")
@@ -176,13 +178,13 @@ async function ProtectedPortal() {
           updatedAt: companyAssets.updatedAt,
         }).from(companyAssets)
       : Promise.resolve([]),
-    canSeeContracts
+    canSeeContracts || canSeeFinance
       ? db.select().from(workforceContracts).orderBy(desc(workforceContracts.createdAt)).limit(500)
       : Promise.resolve([]),
     canSeeContracts
       ? db.select().from(contractProfessions).orderBy(desc(contractProfessions.createdAt)).limit(1000)
       : Promise.resolve([]),
-    canSeeContracts
+    canSeeContracts || canSeeFinance
       ? db.select().from(contractWorkerAssignments).orderBy(desc(contractWorkerAssignments.assignedAt)).limit(2000)
       : Promise.resolve([]),
     canSeeConversations
@@ -223,6 +225,9 @@ async function ProtectedPortal() {
     if (result.status === "rejected") console.error("portal-data-load-failed", index, result.reason instanceof Error ? result.reason.message : String(result.reason));
   });
   const [requests, replies, notifications, users, activity, employeeRecords, financeRecords, legalItems, workerRecords, workerFiles, documents, assets, contracts, professionItems, assignmentItems, conversations, conversationMessages] = settledPortalData.map((result) => result.status === "fulfilled" ? result.value : []) as unknown as PortalDataValues<typeof portalDataPromises>;
+  const permissionFilteredWorkerRecords = canReadFinance
+    ? workerRecords
+    : workerRecords.map((worker) => ({ ...worker, monthlySalaryHalalas: 0 }));
   const [businessHours, chatAutomation, websiteContent] = await Promise.all([
     getBusinessHoursState(),
     getChatAutomationConfig(),
@@ -255,7 +260,7 @@ async function ProtectedPortal() {
       initialEmployees={employeeRecords}
       initialFinance={financeRecords}
       initialLegal={legalItems}
-      initialWorkers={workerRecords}
+      initialWorkers={permissionFilteredWorkerRecords}
       initialWorkerAttachments={workerFiles}
       initialDocuments={documents}
       initialAssets={assets}

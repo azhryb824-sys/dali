@@ -324,6 +324,27 @@ type ContractAssignment = {
   assignedAt: string;
   releasedAt: string | null;
 };
+type ContractAbsence = {
+  id: number;
+  contractId: number;
+  paymentScheduleId: number;
+  workerId: number | null;
+  replacementWorkerId: number | null;
+  contractProfessionId: number;
+  profession: string;
+  absenceDate: string;
+  absenceEndDate: string | null;
+  chargeableDays: number;
+  absentCount: number;
+  deductionHalalas: number | null;
+  clientDeductionHalalas: number | null;
+  status: string;
+  notes: string | null;
+  recordedBy: string;
+  voidedBy: string | null;
+  voidedAt: string | null;
+  createdAt: string;
+};
 type VisitorConversation = {
   id: string;
   trackingCode: string;
@@ -909,6 +930,8 @@ export default function PortalDashboard({
   const canPayFinance = hasPermission("finance.pay");
   const canArchiveEmployees = hasPermission("employees.approve");
   const canArchiveWorkers = isRoot;
+  const canManageWorkerAssignments = hasPermission("contracts.write") && hasPermission("workforce.write");
+  const canViewWorkerFinance = hasPermission("finance.read");
   const canWrite = viewDepartment[view]
     ? canWriteDepartment(viewDepartment[view]!)
     : view === "operations"
@@ -1746,6 +1769,7 @@ export default function PortalDashboard({
       setContractAssignments((items) => [result.assignment as ContractAssignment, ...items]);
       setWorkers((items) => items.map((item) => (item.id === result.worker!.id ? (result.worker as WorkerRecord) : item)));
       notify("تم إسناد العامل إلى العقد وتحديث الجهة المستفيدة في ملفه.");
+      void refreshNotifications(true);
     } catch (error) {
       notify(error instanceof Error ? error.message : "تعذّر إسناد العامل.");
     } finally {
@@ -1770,6 +1794,7 @@ export default function PortalDashboard({
       setContractAssignments((items) => items.map((item) => (item.id === result.assignment!.id ? (result.assignment as ContractAssignment) : item)));
       setWorkers((items) => items.map((item) => (item.id === result.worker!.id ? (result.worker as WorkerRecord) : item)));
       notify("تم إنهاء الإسناد وأصبح العامل متاحاً للعقود الأخرى.");
+      void refreshNotifications(true);
     } catch (error) {
       notify(error instanceof Error ? error.message : "تعذّر إنهاء الإسناد.");
     } finally {
@@ -1808,11 +1833,24 @@ export default function PortalDashboard({
       });
       const result = (await readApiJson(response)) as {
         contract?: WorkforceContract;
+        assignments?: ContractAssignment[];
+        workers?: WorkerRecord[];
         error?: string;
         signatureUploadUrl?: string;
       };
       if (!response.ok || !result.contract) throw new Error(result.error || "تعذّر تحديث حالة العقد");
       setContracts((items) => items.map((item) => (item.id === contractId ? (result.contract as WorkforceContract) : item)));
+      if (result.assignments) {
+        const synchronized = new Map(result.assignments.map((assignment) => [assignment.id, assignment]));
+        setContractAssignments((items) => [
+          ...items.map((assignment) => synchronized.get(assignment.id) || assignment),
+          ...result.assignments!.filter((assignment) => !items.some((item) => item.id === assignment.id)),
+        ]);
+      }
+      if (result.workers) {
+        const synchronized = new Map(result.workers.map((worker) => [worker.id, worker]));
+        setWorkers((items) => items.map((worker) => synchronized.get(worker.id) || worker));
+      }
       window.dispatchEvent(
         new CustomEvent("dali-contract-updated", {
           detail: { contract: result.contract },
@@ -1858,14 +1896,41 @@ export default function PortalDashboard({
         }),
       });
       const result = (await readApiJson(response)) as {
-        absence?: { deductionHalalas: number };
+        absence?: ContractAbsence;
         error?: string;
       };
       if (!response.ok || !result.absence) throw new Error(result.error || "تعذر تسجيل الغياب");
-      notify(`تم تسجيل الغياب وخصم ${new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(result.absence.deductionHalalas / 100)} من دفعة الشهر قبل الضريبة.`);
+      const clientDeductionHalalas = result.absence.clientDeductionHalalas || 0;
+      const clientDeduction = new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(clientDeductionHalalas / 100);
+      notify(clientDeductionHalalas > 0
+        ? `تم تسجيل الغياب وخصم ${clientDeduction} من دفعة العميل قبل الضريبة.`
+        : "تم تسجيل الغياب مع عامل بديل دون خصم من دفعة العميل.");
       router.refresh();
+      void refreshNotifications(true);
+      return result.absence;
     } catch (error) {
       notify(error instanceof Error ? error.message : "تعذر تسجيل الغياب والخصم.");
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function voidContractAbsence(contractId: number, absenceId: number) {
+    setBusy(`contract-absence-void-${absenceId}`);
+    try {
+      const response = await fetch(`/api/portal/contracts/${contractId}/attendance?absenceId=${absenceId}`, {
+        method: "DELETE",
+      });
+      const result = (await readApiJson(response)) as { absence?: ContractAbsence; error?: string };
+      if (!response.ok || !result.absence) throw new Error(result.error || "تعذر إلغاء قيد الغياب");
+      notify("تم إلغاء قيد الغياب وإعادة أثره إلى دفعة العميل قبل إصدار الفاتورة.");
+      router.refresh();
+      void refreshNotifications(true);
+      return result.absence;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "تعذر إلغاء قيد الغياب.");
+      return null;
     } finally {
       setBusy(null);
     }
@@ -2579,7 +2644,7 @@ export default function PortalDashboard({
       </section>
 
       {modal && modal !== "workforce" && modal !== "finance" && <RecordModal entity={modal} users={initialUsers} linkedEmployeeEmails={new Set(employees.map((item) => item.portalUserEmail).filter((email): email is string => Boolean(email)))} busy={busy === `create-${modal}`} onClose={() => setModal(null)} onSubmit={modal === "employees" ? (_entity, form) => createEmployee(form) : createRecord} />}
-      {modal === "finance" && <FinanceRecordModal busy={busy === "create-finance"} workers={workers} contracts={contracts} onClose={() => setModal(null)} onSubmit={(form) => createRecord("finance", form)} />}
+      {modal === "finance" && <FinanceRecordModal busy={busy === "create-finance"} workers={workers} contracts={contracts} assignments={contractAssignments} onClose={() => setModal(null)} onSubmit={(form) => createRecord("finance", form)} />}
       {modal === "workforce" && <WorkerModal busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker} />}
       {documentModal === "upload" && <UploadDocumentModal busy={busy === "upload-document"} onClose={() => setDocumentModal(null)} onSubmit={uploadDocument} />}
       {documentModal === "issue" && issuePreset === "quotation" && (
@@ -2601,8 +2666,8 @@ export default function PortalDashboard({
       {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours} />}
       {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} canWrite={canWriteConversations} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus} />}
       {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply} />}
-      {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} canArchive={canArchiveWorkers} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment} />}
-      {selectedContract && <ContractDrawer contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus} onEdit={editContract} onDelete={deleteContract} onRecordAbsence={recordContractAbsence} />}
+      {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} canArchive={canArchiveWorkers} canViewFinance={canViewWorkerFinance} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment} />}
+      {selectedContract && <ContractDrawer key={selectedContract.id} contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} canManageWorkerAssignments={canManageWorkerAssignments} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={isRoot} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus} onEdit={editContract} onDelete={deleteContract} onRecordAbsence={recordContractAbsence} onVoidAbsence={voidContractAbsence} />}
       {pendingContractApproval && (
         <ContractApprovalStampDialog
           stamps={pendingContractApproval.stamps}
@@ -3931,9 +3996,12 @@ function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClo
   );
 }
 
-function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { busy: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, onSubmit }: { busy: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; assignments: ContractAssignment[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [category, setCategory] = useState("worker_salary");
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [selectedWorkerId, setSelectedWorkerId] = useState("");
+  const [selectedContractId, setSelectedContractId] = useState("");
+  const [amount, setAmount] = useState("");
   const [banks, setBanks] = useState<
     Array<{
       id: number;
@@ -3968,6 +4036,29 @@ function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { b
     };
   }, []);
   const workerRelated = ["worker_salary", "worker_advance", "worker_deduction", "worker_violation", "worker_expense"].includes(category);
+  const activeAssignments = useMemo(() => assignments.filter((assignment) => assignment.status === "active"), [assignments]);
+  const salaryWorkerIds = useMemo(() => new Set(activeAssignments.map((assignment) => assignment.workerId)), [activeAssignments]);
+  const eligibleWorkers = category === "worker_salary"
+    ? workers.filter((worker) => salaryWorkerIds.has(worker.id))
+    : workers;
+  const selectedWorker = workers.find((worker) => String(worker.id) === selectedWorkerId);
+  const assignedContractIds = new Set(activeAssignments.filter((assignment) => String(assignment.workerId) === selectedWorkerId).map((assignment) => assignment.contractId));
+  const eligibleContracts = workerRelated
+    ? contracts.filter((contract) => assignedContractIds.has(contract.id))
+    : contracts;
+  function changeFinanceCategory(nextCategory: string) {
+    setCategory(nextCategory);
+    setSelectedWorkerId("");
+    setSelectedContractId("");
+    if (nextCategory === "worker_salary") setAmount("");
+  }
+  function selectFinanceWorker(nextWorkerId: string) {
+    setSelectedWorkerId(nextWorkerId);
+    const worker = workers.find((item) => String(item.id) === nextWorkerId);
+    const workerAssignments = activeAssignments.filter((assignment) => String(assignment.workerId) === nextWorkerId);
+    setSelectedContractId(workerAssignments.length === 1 ? String(workerAssignments[0].contractId) : "");
+    if (category === "worker_salary") setAmount(worker ? (worker.monthlySalaryHalalas / 100).toFixed(2) : "");
+  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void onSubmit(event.currentTarget);
@@ -3988,13 +4079,12 @@ function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { b
         <form onSubmit={submit}>
           <label>
             نوع الحركة
-            <select name="category" value={category} onChange={(event) => setCategory(event.target.value)}>
+            <select name="category" value={category} onChange={(event) => changeFinanceCategory(event.target.value)}>
               <option value="worker_salary">راتب عامل</option>
               <option value="worker_advance">سلفة عامل</option>
               <option value="worker_deduction">خصم عامل</option>
               <option value="worker_violation">مخالفة عامل</option>
               <option value="worker_expense">مصروف خاص بالعمالة</option>
-              <option value="workforce_invoice">فاتورة عمالة</option>
               <option value="receipt_voucher">سند قبض</option>
               <option value="payment_voucher">سند صرف</option>
               <option value="progress_claim">مستخلص عمالة</option>
@@ -4002,33 +4092,35 @@ function FinanceRecordModal({ busy, workers, contracts, onClose, onSubmit }: { b
           </label>
           <label>
             المبلغ بالريال
-            <input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr" />
+            <input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr" value={amount} onChange={(event) => setAmount(event.target.value)} readOnly={category === "worker_salary" && Boolean(selectedWorker)} />
           </label>
           {workerRelated && (
             <label className="span-two">
               العامل
-              <select name="workerId" required defaultValue="">
+              <select name="workerId" required value={selectedWorkerId} onChange={(event) => selectFinanceWorker(event.target.value)}>
                 <option value="" disabled>
                   اختر العامل
                 </option>
-                {workers.map((worker) => (
+                {eligibleWorkers.map((worker) => (
                   <option value={worker.id} key={worker.id}>
                     {worker.fullName} — {worker.profession} — {worker.iqamaNumber}
                   </option>
                 ))}
               </select>
+              {category === "worker_salary" && selectedWorker && <small>الراتب الشهري المعتمد في ملف العامل: {new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(selectedWorker.monthlySalaryHalalas / 100)}</small>}
             </label>
           )}
           <label>
             العقد المرتبط
-            <select name="contractId" defaultValue="">
-              <option value="">دون عقد محدد</option>
-              {contracts.map((contract) => (
+            <select name="contractId" value={selectedContractId} required={category === "worker_salary"} onChange={(event) => setSelectedContractId(event.target.value)}>
+              <option value="">{category === "worker_salary" ? "اختر العامل المسند أولًا" : "دون عقد محدد"}</option>
+              {eligibleContracts.map((contract) => (
                 <option value={contract.id} key={contract.id}>
                   {contract.referenceCode} — {contract.clientName}
                 </option>
               ))}
             </select>
+            {category === "worker_salary" && !eligibleWorkers.length && <small>لا يوجد عامل مرتبط حاليًا بعقد نشط لإضافة راتب.</small>}
           </label>
           {category === "worker_salary" && (
             <label>
@@ -6154,6 +6246,7 @@ function ContractDrawer({
   assignments,
   workers,
   canWrite,
+  canManageWorkerAssignments,
   isAdmin,
   isOwner,
   busy,
@@ -6164,12 +6257,14 @@ function ContractDrawer({
   onEdit,
   onDelete,
   onRecordAbsence,
+  onVoidAbsence,
 }: {
   contract: WorkforceContract;
   professions: ContractProfession[];
   assignments: ContractAssignment[];
   workers: WorkerRecord[];
   canWrite: boolean;
+  canManageWorkerAssignments: boolean;
   isAdmin: boolean;
   isOwner: boolean;
   busy: string | null;
@@ -6188,7 +6283,8 @@ function ContractDrawer({
     },
   ) => Promise<void>;
   onDelete: (contract: WorkforceContract) => Promise<void>;
-  onRecordAbsence: (contractId: number, contractProfessionId: number, absenceDate: string, absenceEndDate: string, workerId: number | null, replacementWorkerId: number | null, absentCount: number, notes: string) => Promise<void>;
+  onRecordAbsence: (contractId: number, contractProfessionId: number, absenceDate: string, absenceEndDate: string, workerId: number | null, replacementWorkerId: number | null, absentCount: number, notes: string) => Promise<ContractAbsence | null>;
+  onVoidAbsence: (contractId: number, absenceId: number) => Promise<ContractAbsence | null>;
 }) {
   const [choices, setChoices] = useState<Record<number, string>>({});
   const [nextStatus, setNextStatus] = useState("");
@@ -6197,14 +6293,42 @@ function ContractDrawer({
   const [absenceProfessionId, setAbsenceProfessionId] = useState("");
   const [absenceWorkerId, setAbsenceWorkerId] = useState("");
   const [absenceCount, setAbsenceCount] = useState("1");
-  const [absenceDate, setAbsenceDate] = useState(new Date().toISOString().slice(0, 10));
-  const [absenceEndDate, setAbsenceEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [absenceDate, setAbsenceDate] = useState(() => new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  const [absenceEndDate, setAbsenceEndDate] = useState(() => new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  const [todayInSaudiArabia] = useState(() => new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10));
   const [replacementWorkerId, setReplacementWorkerId] = useState("");
   const [absenceNotes, setAbsenceNotes] = useState("");
+  const [absenceHistory, setAbsenceHistory] = useState<ContractAbsence[]>([]);
+  const [absenceHistoryLoading, setAbsenceHistoryLoading] = useState(true);
+  const [canRecordAbsence, setCanRecordAbsence] = useState(isOwner);
+  const [canViewAbsenceFinance, setCanViewAbsenceFinance] = useState(isOwner);
+  const [pendingVoidAbsenceId, setPendingVoidAbsenceId] = useState<number | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const activeAssignments = assignments.filter((item) => item.status === "active");
   const plannedAssignments = assignments.filter((item) => item.status === "planned");
   const requiredTotal = professions.reduce((sum, item) => sum + item.requiredCount, 0);
+  const maxAbsenceDate = [contract.endDate, todayInSaudiArabia].sort()[0];
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/portal/contracts/${contract.id}/attendance`, { cache: "no-store" })
+      .then(async (response) => {
+        const result = await readApiJson(response) as { absences?: ContractAbsence[]; canRecord?: boolean; canViewFinancialImpact?: boolean; error?: string };
+        if (!response.ok) throw new Error(result.error || "تعذر تحميل سجل الغياب");
+        if (!active) return;
+        setAbsenceHistory(result.absences || []);
+        setCanRecordAbsence(Boolean(result.canRecord));
+        setCanViewAbsenceFinance(Boolean(result.canViewFinancialImpact));
+      })
+      .catch(() => {
+        if (active) setAbsenceHistory([]);
+      })
+      .finally(() => {
+        if (active) setAbsenceHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [contract.id]);
   function submitContractEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
@@ -6352,7 +6476,7 @@ function ContractDrawer({
             </div>
           </section>
         )}
-        {isOwner && contract.status === "active" && (
+        {isOwner && canRecordAbsence && contract.status === "active" && (
           <section className="drawer-section contract-absence-panel">
             <h3>تسجيل غياب العمالة وخصم اليومية</h3>
             <p>اختر عاملًا محددًا، أو اترك العامل فارغًا وسجّل عدد المتغيبين من المهنة. اليومية = الراتب الفعلي ÷ 30، ويحسب النظام الأيام تلقائياً دون يوم الجمعة ثم يخصمها من دفعة شهر الغياب.</p>
@@ -6414,7 +6538,7 @@ function ContractDrawer({
                   type="date"
                   value={absenceDate}
                   min={contract.startDate}
-                  max={contract.endDate}
+                  max={maxAbsenceDate}
                   onChange={(event) => {
                     setAbsenceDate(event.target.value);
                     setAbsenceEndDate(event.target.value);
@@ -6423,19 +6547,66 @@ function ContractDrawer({
               </label>
               <label>
                 نهاية الغياب
-                <input type="date" value={absenceEndDate} min={absenceDate || contract.startDate} max={contract.endDate} onChange={(event) => setAbsenceEndDate(event.target.value)} />
+                <input type="date" value={absenceEndDate} min={absenceDate || contract.startDate} max={maxAbsenceDate} onChange={(event) => setAbsenceEndDate(event.target.value)} />
                 <small>لا تُحتسب أيام الجمعة تلقائياً.</small>
               </label>
               <label className="span-two">
                 ملاحظات
                 <input value={absenceNotes} maxLength={1000} onChange={(event) => setAbsenceNotes(event.target.value)} placeholder="سبب الغياب أو مرجع إثبات الحضور" />
               </label>
-              <button className="admin-primary span-two" disabled={!absenceProfessionId || !absenceDate || busy === `contract-absence-${contract.id}`} onClick={() => void onRecordAbsence(contract.id, Number(absenceProfessionId), absenceDate, absenceEndDate, absenceWorkerId ? Number(absenceWorkerId) : null, replacementWorkerId ? Number(replacementWorkerId) : null, absenceWorkerId ? 1 : Number(absenceCount), absenceNotes)}>
+              <button className="admin-primary span-two" disabled={!absenceProfessionId || !absenceDate || busy === `contract-absence-${contract.id}`} onClick={() => void onRecordAbsence(contract.id, Number(absenceProfessionId), absenceDate, absenceEndDate, absenceWorkerId ? Number(absenceWorkerId) : null, replacementWorkerId ? Number(replacementWorkerId) : null, absenceWorkerId ? 1 : Number(absenceCount), absenceNotes).then((saved) => {
+                if (!saved) return;
+                setAbsenceHistory((items) => [saved, ...items]);
+                setAbsenceNotes("");
+                setReplacementWorkerId("");
+              })}>
                 {busy === `contract-absence-${contract.id}` ? "جارٍ تسجيل الخصم..." : "تسجيل الغياب وخصم اليومية"}
               </button>
             </div>
           </section>
         )}
+        <section className="drawer-section contract-absence-history">
+          <h3>سجل غياب عمالة العقد</h3>
+          {absenceHistoryLoading && <p className="readonly-note">جارٍ تحميل سجل الغياب...</p>}
+          {!absenceHistoryLoading && !absenceHistory.length && <p className="empty-operational">لا توجد قيود غياب مسجلة على هذا العقد.</p>}
+          {absenceHistory.map((absence) => {
+            const absentWorker = workers.find((worker) => worker.id === absence.workerId);
+            const replacementWorker = workers.find((worker) => worker.id === absence.replacementWorkerId);
+            const workerCount = absence.chargeableDays > 0 ? Math.max(1, Math.round(absence.absentCount / absence.chargeableDays)) : 1;
+            return (
+              <article key={absence.id} className={absence.status === "void" ? "absence-void" : ""}>
+                <div>
+                  <strong>{absentWorker?.fullName || `${absence.profession} — ${workerCount} عامل`}</strong>
+                  <small>{absence.absenceDate} — {absence.absenceEndDate || absence.absenceDate} · {absence.chargeableDays} يوم مستحق</small>
+                  <small>{replacementWorker ? `البديل: ${replacementWorker.fullName}` : "دون عامل بديل"}</small>
+                  {absence.notes && <small>{absence.notes}</small>}
+                  {canViewAbsenceFinance && absence.clientDeductionHalalas !== null && (
+                    <small>خصم العامل: {new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format((absence.deductionHalalas || 0) / 100)} · خصم فاتورة العميل: {new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(absence.clientDeductionHalalas / 100)}</small>
+                  )}
+                </div>
+                <span className={`status-pill ${absence.status === "active" ? "status-reviewing" : "status-closed"}`}>{absence.status === "active" ? "نشط" : "ملغى"}</span>
+                {canRecordAbsence && absence.status === "active" && (
+                  <button
+                    className={pendingVoidAbsenceId === absence.id ? "danger-action" : ""}
+                    disabled={busy === `contract-absence-void-${absence.id}`}
+                    onClick={() => {
+                      if (pendingVoidAbsenceId !== absence.id) {
+                        setPendingVoidAbsenceId(absence.id);
+                        return;
+                      }
+                      void onVoidAbsence(contract.id, absence.id).then((voided) => {
+                        if (voided) setAbsenceHistory((items) => items.map((item) => item.id === voided.id ? voided : item));
+                        setPendingVoidAbsenceId(null);
+                      });
+                    }}
+                  >
+                    {busy === `contract-absence-void-${absence.id}` ? "جارٍ الإلغاء..." : pendingVoidAbsenceId === absence.id ? "تأكيد إلغاء القيد" : "إلغاء القيد"}
+                  </button>
+                )}
+              </article>
+            );
+          })}
+        </section>
         <div className="contract-profession-sections">
           {professions.map((profession) => {
             const professionActive = activeAssignments.filter((item) => item.contractProfessionId === profession.id);
@@ -6473,7 +6644,7 @@ function ContractDrawer({
                         {planned ? (
                           <b className="planned-assignment">مخطط</b>
                         ) : (
-                          canWrite && (
+                          canManageWorkerAssignments && (
                             <button disabled={busy === `contract-release-${assignment.id}`} onClick={() => void onRelease(contract.id, assignment.id)}>
                               {busy === `contract-release-${assignment.id}` ? "جارٍ..." : "إنهاء الإسناد"}
                             </button>
@@ -6484,7 +6655,7 @@ function ContractDrawer({
                   })}
                   {!visibleAssignments.length && <p className="empty-operational">لم تُحدّد عمالة لهذه المهنة بعد.</p>}
                 </div>
-                {canWrite && contract.status === "active" && remaining > 0 && (
+                {canManageWorkerAssignments && contract.status === "active" && remaining > 0 && (
                   <div className="contract-add-worker">
                     <label>
                       إضافة عامل متاح
@@ -7056,7 +7227,7 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
   );
 }
 
-function WorkerDrawer({ worker, attachments, contracts, contractAssignments, canWrite, canArchive, busy, onClose, onUploadAttachment }: { worker: WorkerRecord; attachments: WorkerAttachment[]; contracts: WorkforceContract[]; contractAssignments: ContractAssignment[]; canWrite: boolean; canArchive: boolean; busy: string | null; onClose: () => void; onUploadAttachment: (workerId: number, form: HTMLFormElement) => Promise<void> }) {
+function WorkerDrawer({ worker, attachments, contracts, contractAssignments, canWrite, canArchive, canViewFinance, busy, onClose, onUploadAttachment }: { worker: WorkerRecord; attachments: WorkerAttachment[]; contracts: WorkforceContract[]; contractAssignments: ContractAssignment[]; canWrite: boolean; canArchive: boolean; canViewFinance: boolean; busy: string | null; onClose: () => void; onUploadAttachment: (workerId: number, form: HTMLFormElement) => Promise<void> }) {
   const profile = workerRequirementStatus(worker, attachments);
   const photo = attachments.find((item) => item.documentType === "photo");
   const activeAssignment = contractAssignments.find((item) => item.workerId === worker.id && item.status === "active");
@@ -7130,6 +7301,10 @@ function WorkerDrawer({ worker, attachments, contracts, contractAssignments, can
               <dt>رقم الآيبان</dt>
               <dd dir="ltr">{worker.iban || "غير مسجل"}</dd>
             </div>
+            {canViewFinance && <div>
+              <dt>الراتب الشهري المعتمد</dt>
+              <dd>{new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(worker.monthlySalaryHalalas / 100)}</dd>
+            </div>}
             <div>
               <dt>انتهاء الإقامة</dt>
               <dd className={daysUntil(worker.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(worker.iqamaExpiry)}</dd>
