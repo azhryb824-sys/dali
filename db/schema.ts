@@ -1268,6 +1268,9 @@ export const legalRecords = pgTable(
     closedBy: text("closed_by"),
     closedAt: text("closed_at"),
     closureReason: text("closure_reason"),
+    deletedAt: text("deleted_at"),
+    deletedBy: text("deleted_by"),
+    deletionReason: text("deletion_reason"),
     expiryDate: text("expiry_date"),
     status: text("status").notNull().default("active"),
     createdAt: text("created_at")
@@ -1283,6 +1286,7 @@ export const legalRecords = pgTable(
     index("legal_records_client_id_idx").on(table.clientId),
     index("legal_records_contract_id_idx").on(table.contractId),
     index("legal_records_assigned_lawyer_idx").on(table.assignedLawyerId),
+    index("legal_records_deleted_at_idx").on(table.deletedAt),
   ],
 );
 
@@ -1306,6 +1310,9 @@ export const legalCaseAttachments = pgTable(
     sha256: text("sha256"),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
+    deletedAt: text("deleted_at"),
+    deletedBy: text("deleted_by"),
+    deletionReason: text("deletion_reason"),
     createdBy: text("created_by").notNull(),
     createdAt: text("created_at")
       .notNull()
@@ -1316,6 +1323,7 @@ export const legalCaseAttachments = pgTable(
       table.legalRecordId,
       table.createdAt,
     ),
+    index("legal_case_attachments_deleted_at_idx").on(table.deletedAt),
     check(
       "legal_case_attachments_size_check",
       sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 20971520`,
@@ -1367,6 +1375,88 @@ export const legalExternalShares = pgTable(
     check(
       "legal_external_shares_download_limit_check",
       sql`${table.maxDownloads} > 0 and ${table.downloadCount} >= 0`,
+    ),
+  ],
+);
+
+export const legalExternalShareBundles = pgTable(
+  "legal_external_share_bundles",
+  {
+    id: text("id").primaryKey(),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "restrict" }),
+    lawyerId: integer("lawyer_id")
+      .notNull()
+      .references(() => legalLawyers.id, { onDelete: "restrict" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    channel: text("channel").notNull().default("whatsapp"),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    revokedBy: text("revoked_by"),
+    maxDownloads: integer("max_downloads").notNull().default(200),
+    downloadCount: integer("download_count").notNull().default(0),
+    lastAccessedAt: text("last_accessed_at"),
+    itemCount: integer("item_count").notNull(),
+    sharedBy: text("shared_by").notNull(),
+    sharedAt: text("shared_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_external_share_bundles_record_idx").on(
+      table.legalRecordId,
+      table.sharedAt,
+    ),
+    index("legal_external_share_bundles_lawyer_idx").on(
+      table.lawyerId,
+      table.sharedAt,
+    ),
+    index("legal_external_share_bundles_expiry_idx").on(table.expiresAt),
+    check(
+      "legal_external_share_bundles_channel_check",
+      sql`${table.channel} in ('whatsapp')`,
+    ),
+    check(
+      "legal_external_share_bundles_download_limit_check",
+      sql`${table.maxDownloads} > 0 and ${table.downloadCount} >= 0 and ${table.itemCount} > 0`,
+    ),
+  ],
+);
+
+export const legalExternalShareBundleItems = pgTable(
+  "legal_external_share_bundle_items",
+  {
+    id: serial("id").primaryKey(),
+    bundleId: text("bundle_id")
+      .notNull()
+      .references(() => legalExternalShareBundles.id, { onDelete: "restrict" }),
+    attachmentId: integer("attachment_id").references(
+      () => legalCaseAttachments.id,
+      { onDelete: "restrict" },
+    ),
+    documentId: integer("document_id").references(() => companyDocuments.id, {
+      onDelete: "restrict",
+    }),
+    title: text("title").notNull(),
+    fileName: text("file_name").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_external_share_bundle_items_bundle_idx").on(table.bundleId),
+    uniqueIndex("legal_external_share_bundle_attachment_unique").on(
+      table.bundleId,
+      table.attachmentId,
+    ),
+    uniqueIndex("legal_external_share_bundle_document_unique").on(
+      table.bundleId,
+      table.documentId,
+    ),
+    check(
+      "legal_external_share_bundle_items_source_check",
+      sql`(${table.attachmentId} is not null and ${table.documentId} is null) or (${table.attachmentId} is null and ${table.documentId} is not null)`,
     ),
   ],
 );
@@ -1446,7 +1536,7 @@ export const legalCaseActionLog = pgTable(
     ),
     check(
       "legal_case_action_log_action_check",
-      sql`${table.action} in ('created','assigned','started','completed','cancelled','attachment_added')`,
+      sql`${table.action} in ('created','assigned','started','completed','cancelled','attachment_added','updated','deleted','status_changed','shared','share_revoked')`,
     ),
   ],
 );

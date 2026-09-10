@@ -1,4 +1,4 @@
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { clients, companyDocuments, contractPaymentSchedules, contractSignatureRequests, contractProfessions, contractWorkerAssignments, documentStamps, financialRecords, journalEntries, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { createReversalDraft } from "@/lib/accounting";
@@ -6,7 +6,7 @@ import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
-import { annualContractSchedule } from "@/lib/payment-schedules";
+import { annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
 import { hashShareToken } from "@/lib/company-documents";
 
 const transitions: Record<string, string[]> = {
@@ -72,15 +72,38 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const approvalInstallments = status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed"
       ? await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id))
       : [];
+    const approvalProfessions = status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed"
+      ? await db.select().from(contractProfessions).where(eq(contractProfessions.contractId, id))
+      : [];
     const annualApprovalDueDates = status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed"
       ? annualContractSchedule(contract.startDate).dueDates
       : [];
-    if (status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed" && (approvalInstallments.length !== 12 || annualApprovalDueDates.length !== 12)) {
-      return jsonNoStore({ error: "جدول العقد السنوي غير مكتمل؛ يجب أن يحتوي على 12 دفعة شهرية" }, { status: 409 });
+    if (status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed" && annualApprovalDueDates.length !== 12) {
+      return jsonNoStore({ error: "تعذر حساب جدول العقد السنوي من تاريخ البداية؛ صحح تاريخ بداية العقد" }, { status: 409 });
     }
-    if (approvalInstallments.some((payment) => !["scheduled", "due"].includes(payment.status))) {
+    if (approvalInstallments.some((payment) => !["scheduled", "due"].includes(payment.status) || payment.invoiceDocumentId || payment.financialRecordId)) {
       return jsonNoStore({ error: "تعذر اعتماد العقد لوجود دفعة تمت معالجتها ماليًا" }, { status: 409 });
     }
+    const annualScheduleNeedsRepair = annualApprovalDueDates.length === 12 && approvalInstallments.length !== 12;
+    const monthlySubtotalHalalas = annualScheduleNeedsRepair
+      ? approvalProfessions.reduce(
+          (sum, profession) =>
+            sum + profession.requiredCount * profession.unitSalaryHalalas,
+          0,
+        )
+      : 0;
+    if (annualScheduleNeedsRepair && monthlySubtotalHalalas < 1) {
+      return jsonNoStore({ error: "تعذر إصلاح جدول الاعتماد تلقائيًا لعدم اكتمال أسعار وأعداد المهن" }, { status: 409 });
+    }
+    const repairedPercentages = annualScheduleNeedsRepair
+      ? annualInstallmentPercentages(12)
+      : [];
+    const totalAnnualVatHalalas = annualScheduleNeedsRepair
+      ? Math.round(monthlySubtotalHalalas * 12 * contract.vatRateBps / 10000)
+      : 0;
+    const standardMonthlyVatHalalas = annualScheduleNeedsRepair
+      ? Math.round(monthlySubtotalHalalas * contract.vatRateBps / 10000)
+      : 0;
     const now = new Date().toISOString();
     const approvedDocument = status === "approved"
       ? await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, contract.documentId) })
@@ -122,7 +145,34 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           updatedAt: now,
         });
       }
-      if (annualApprovalDueDates.length) {
+      if (annualScheduleNeedsRepair) {
+        await tx.delete(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id));
+        await tx.insert(contractPaymentSchedules).values(
+          annualApprovalDueDates.map((dueDate, index) => {
+            const vatHalalas = index === annualApprovalDueDates.length - 1
+              ? totalAnnualVatHalalas - standardMonthlyVatHalalas * index
+              : standardMonthlyVatHalalas;
+            return {
+              contractId: id,
+              installmentNumber: index + 1,
+              title: `استحقاق رواتب شهر ${dueDate.slice(0, 7)}`,
+              titleEn: `Salary installment for ${dueDate.slice(0, 7)}`,
+              dueDate,
+              percentageBps: repairedPercentages[index],
+              subtotalHalalas: monthlySubtotalHalalas,
+              vatHalalas,
+              vatRateBps: contract.vatRateBps,
+              amountHalalas: monthlySubtotalHalalas + vatHalalas,
+              billingBasis: "monthly_salary",
+              servicePeriod: dueDate.slice(0, 7),
+              status: dueDate <= now.slice(0, 10) ? "due" : "scheduled",
+              createdBy: access.user.email,
+              updatedAt: now,
+            };
+          }),
+        );
+        await tx.update(workforceContracts).set({ firstPaymentDueDate: annualApprovalDueDates[0], updatedAt: now }).where(eq(workforceContracts.id, id));
+      } else if (annualApprovalDueDates.length) {
         const editable = approvalInstallments.sort((a, b) => a.installmentNumber - b.installmentNumber);
         for (const [index, payment] of editable.entries()) {
           const dueDate = annualApprovalDueDates[index];
@@ -192,15 +242,36 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (annualApprovalDueDates.length) {
       await emitPortalNotification({ eventType: "annual-contract-payments-scheduled", title: "جُدولت دفعات العقد السنوي", message: `${contract.referenceCode} — تبدأ الدفعة الأولى بعد شهر من بداية العقد في ${annualApprovalDueDates[0]}.`, severity: "info", module: "finance", entityType: "workforce-contract", entityId: id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
     }
+    if (annualScheduleNeedsRepair) {
+      await auditPortalAction({
+        actorEmail: access.user.email,
+        action: "contract-approval-schedule-repaired",
+        entityType: "workforce-contract",
+        entityId: id,
+        before: { installmentCount: approvalInstallments.length },
+        after: { installmentCount: 12, firstPaymentDueDate: annualApprovalDueDates[0] },
+        reason: "إصلاح آمن لجدول عقد سنوي غير مكتمل أثناء الاعتماد قبل أي معالجة مالية",
+      });
+      await emitPortalNotification({
+        eventType: "contract-approval-schedule-repaired",
+        title: "أُصلح جدول عقد أثناء الاعتماد",
+        message: `${contract.referenceCode} — أُعيد إنشاء 12 دفعة شهرية قبل الاعتماد دون وجود معالجة مالية سابقة.`,
+        severity: "warning",
+        module: "finance",
+        entityType: "workforce-contract",
+        entityId: id,
+        actionView: "contractual-documents",
+        targetRole: "admin",
+      }).catch(() => undefined);
+    }
     if (["cancelled", "terminated"].includes(status)) {
       await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), inArray(contractPaymentSchedules.status, ["scheduled", "due", "referred"])));
       if (reasonCode !== "late_payment") {
         await db.update(financialRecords).set({ status: "cancelled", postingStatus: "not_applicable", notes: `أُلغي تبعًا لإلغاء العقد ${contract.referenceCode}: ${reason}`.slice(0,1000), updatedAt: now }).where(and(eq(financialRecords.contractId, id), eq(financialRecords.postingStatus, "unposted"), inArray(financialRecords.status, ["pending","due"])));
         await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), eq(contractPaymentSchedules.status, "invoiced")));
       }
-      const [client, documents, finances, professions, allAssignments] = await Promise.all([
+      const [client, finances, professions, allAssignments] = await Promise.all([
         contract.clientId ? db.query.clients.findFirst({ where: eq(clients.id, contract.clientId) }) : Promise.resolve(null),
-        db.select().from(companyDocuments).where(or(eq(companyDocuments.id, contract.documentId), eq(companyDocuments.counterparty, contract.clientName))),
         db.select().from(financialRecords).where(eq(financialRecords.contractId, id)),
         db.select().from(contractProfessions).where(eq(contractProfessions.contractId, id)),
         db.select().from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, id)),
@@ -226,11 +297,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
       const finalFinances = await db.select().from(financialRecords).where(eq(financialRecords.contractId, id));
       const finalPayments = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id));
+      const documentIds = [...new Set([
+        contract.documentId,
+        ...finalFinances.map((item) => item.documentId),
+        ...finalPayments.map((item) => item.invoiceDocumentId),
+      ].filter((value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0))];
+      const documents = documentIds.length
+        ? await db.select().from(companyDocuments).where(inArray(companyDocuments.id, documentIds))
+        : [];
       const caseSnapshot = { capturedAt: now, cancellation: { status, reason, referredBy: access.user.email, reversalDraftIds }, client, contract: updated, documents, payments: finalPayments, finances: finalFinances, professions, assignments: allAssignments, workers: linkedWorkers };
       const legalReference = `LGL-CAN-${contract.referenceCode}`.slice(0, 120);
       const [createdLegal] = await db.insert(legalRecords).values({ referenceCode: legalReference, category: "case", title: `${status === "terminated" ? "إنهاء" : "إلغاء"} العقد ${contract.referenceCode}`, counterparty: contract.clientName, clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), expiryDate: null, status: "reviewing" }).onConflictDoNothing().returning();
       let legal = createdLegal || await db.query.legalRecords.findFirst({ where: eq(legalRecords.referenceCode, legalReference) });
-      if (legal && !createdLegal) [legal] = await db.update(legalRecords).set({ clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), status: "reviewing", updatedAt: now }).where(eq(legalRecords.id, legal.id)).returning();
+      if (legal && !createdLegal) [legal] = await db.update(legalRecords).set({ clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), status: "reviewing", deletedAt: null, deletedBy: null, deletionReason: null, updatedAt: now }).where(eq(legalRecords.id, legal.id)).returning();
       if (legal) {
         if(createdLegal)await db.insert(legalCaseActivities).values([{legalRecordId:legal.id,activityType:"task",title:"مراجعة العقد وسبب الإلغاء",details:"مراجعة البنود والإشعارات والمراسلات وتحديد المركز النظامي.",priority:"high",status:"open",assignedTo:null,createdBy:access.user.email},{legalRecordId:legal.id,activityType:"task",title:"مطابقة الرصيد المالي والفواتير",details:"مطابقة الدفعات المسددة والمستحقة والفواتير والقيود قبل أي مطالبة.",priority:"high",status:"open",assignedTo:null,createdBy:access.user.email},{legalRecordId:legal.id,activityType:"deadline",title:"تحديد مهلة الإشعار أو المطالبة",details:"تحديد الموعد وفق العقد والأنظمة بعد مراجعة قانونية بشرية.",priority:"critical",status:"open",dueAt:new Date(Date.now()+3*86400000).toISOString(),assignedTo:null,createdBy:access.user.email}]);
         await auditPortalAction({ actorEmail: access.user.email, action: "contract-cancellation-referred-legal", entityType: "legal-record", entityId: legal.id, after: { ...legal, snapshotCounts: { documents: documents.length, payments: finalPayments.length, finances: finalFinances.length, workers: linkedWorkers.length } }, reason });

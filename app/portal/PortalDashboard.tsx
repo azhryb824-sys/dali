@@ -408,8 +408,10 @@ const recordStatus: Record<RecordEntity, Record<string, string>> = {
   legal: {
     active: "ساري",
     reviewing: "قيد المراجعة",
+    in_progress: "قيد الإجراء",
     renewal: "يحتاج إلى تجديد",
     closed: "مغلق",
+    cancelled: "ملغى",
   },
   workforce: {
     available: "متاح",
@@ -1858,9 +1860,8 @@ export default function PortalDashboard({
         }),
       );
       if (status === "approved") {
-        if (!result.signatureUploadUrl) throw new Error("تم الاعتماد لكن لم يُنشأ رابط رفع النسخة الموقعة");
         let copied = false;
-        try {
+        if (result.signatureUploadUrl) try {
           await navigator.clipboard.writeText(result.signatureUploadUrl);
           copied = true;
         } catch {
@@ -1868,7 +1869,9 @@ export default function PortalDashboard({
         }
         setPendingContractApproval(null);
         notify(
-          copied
+          !result.signatureUploadUrl
+            ? "تم اعتماد العقد. يمكن رفع النسخة الموقعة من ملف العقد دون اعتبار غياب رابط المشاركة فشلًا في الاعتماد."
+            : copied
             ? `تم اعتماد العقد ونسخ رابط رفع النسخة الموقعة إلى الحافظة: ${result.signatureUploadUrl}`
             : `تم اعتماد العقد. رابط رفع النسخة الموقعة: ${result.signatureUploadUrl}`,
         );
@@ -2531,7 +2534,7 @@ export default function PortalDashboard({
                 <Metric label="تنبيهات التجديد" value={legalAlerts} note="خلال 45 يوماً" />
               </section>
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالعنوان أو الطرف أو المرجع">
-                <LegalTable records={legal} query={query} canWrite={canWrite && canManageLegalCases} busy={busy} onStatus={(id, status) => updateRecordStatus("legal", id, status)} />
+                <LegalTable records={legal} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("legal", id, status)} />
               </ManagementPanel>
               <LegalCaseWorkspace />
               <ComplianceWorkspace canWrite={canWrite} />
@@ -5567,10 +5570,13 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
   );
 }
 function StatusControl({ entity, id, value, canWrite, busy, onStatus }: { entity: RecordEntity; id: number; value: string; canWrite: boolean; busy: string | null; onStatus: (id: number, status: string) => void }) {
-  if (!canWrite || entity === "legal") return <span className={`status-pill ${statusClass(value)}`}>{recordStatus[entity][value] ?? value}</span>;
+  if (!canWrite || (entity === "legal" && ["closed", "cancelled"].includes(value))) return <span className={`status-pill ${statusClass(value)}`}>{recordStatus[entity][value] ?? value}</span>;
+  const statuses = Object.entries(recordStatus[entity]).filter(
+    ([status]) => entity !== "legal" || !["closed", "cancelled"].includes(status),
+  );
   return (
     <select className="status-select" value={value} disabled={busy === `${entity}-${id}`} onChange={(event) => onStatus(id, event.target.value)}>
-      {Object.entries(recordStatus[entity]).map(([status, label]) => (
+      {statuses.map(([status, label]) => (
         <option value={status} key={status}>
           {label}
         </option>

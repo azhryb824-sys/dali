@@ -369,10 +369,8 @@ export default function ContractBillingWorkspace() {
         signatureUploadUrl?: string;
       };
       if (!response.ok) throw new Error(result.error || "تعذر اعتماد العقد");
-      if (!result.signatureUploadUrl)
-        throw new Error("تم الاعتماد لكن لم يُنشأ رابط رفع النسخة الموقعة");
       let copied = false;
-      try {
+      if (result.signatureUploadUrl) try {
         await navigator.clipboard.writeText(result.signatureUploadUrl);
         copied = true;
       } catch {
@@ -381,7 +379,9 @@ export default function ContractBillingWorkspace() {
       await load();
       setPendingContractApproval(null);
       setNotice(
-        copied
+        !result.signatureUploadUrl
+          ? `تم اعتماد العقد ${contract.referenceCode}. يمكن رفع النسخة الموقعة من زر «رفع العقد الموقع».`
+          : copied
           ? `تم اعتماد العقد ${contract.referenceCode} ونسخ رابط رفع النسخة الموقعة إلى الحافظة: ${result.signatureUploadUrl}`
           : `تم اعتماد العقد ${contract.referenceCode}. رابط رفع النسخة الموقعة: ${result.signatureUploadUrl}`,
       );

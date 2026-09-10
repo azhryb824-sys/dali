@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import {
   legalCaseAttachments,
   legalExternalShares,
+  legalRecords,
   portalActivity,
 } from "@/db/schema";
 import { attachmentHeaders, hashShareToken } from "@/lib/company-documents";
@@ -44,10 +45,19 @@ export async function GET(
     where: and(
       eq(legalCaseAttachments.id, share.attachmentId),
       eq(legalCaseAttachments.legalRecordId, share.legalRecordId),
+      isNull(legalCaseAttachments.deletedAt),
     ),
   });
   if (!attachment)
     return Response.json({ error: "الملف غير متاح" }, { status: 404 });
+  const matter = await db.query.legalRecords.findFirst({
+    where: and(
+      eq(legalRecords.id, share.legalRecordId),
+      isNull(legalRecords.deletedAt),
+    ),
+  });
+  if (!matter)
+    return Response.json({ error: "الملف القانوني غير متاح" }, { status: 410 });
   const object = await getRuntimeEnv().BUCKET.get(attachment.storageKey);
   if (!object)
     return Response.json({ error: "محتوى الملف غير متاح" }, { status: 404 });

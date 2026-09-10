@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   bankAccounts,
@@ -7,6 +7,7 @@ import {
   legalCaseActionLog,
   legalCaseActivities,
   legalCaseAttachments,
+  legalExternalShareBundles,
   legalExternalShares,
   legalHearings,
   legalJudgmentPaymentRequests,
@@ -86,12 +87,16 @@ export async function GET() {
     ? await db
         .select()
         .from(legalRecords)
+        .where(isNull(legalRecords.deletedAt))
         .orderBy(asc(legalRecords.status), asc(legalRecords.createdAt))
     : await db
         .select()
         .from(legalRecords)
         .where(
-          eq(legalRecords.assignedLawyerEmail, actor.user.email.toLowerCase()),
+          and(
+            eq(legalRecords.assignedLawyerEmail, actor.user.email.toLowerCase()),
+            isNull(legalRecords.deletedAt),
+          ),
         )
         .orderBy(asc(legalRecords.status), asc(legalRecords.createdAt));
   const caseIds = cases.map((item) => item.id);
@@ -106,6 +111,7 @@ export async function GET() {
     banks,
     lawyers,
     externalShares,
+    externalShareBundles,
   ] =
     await Promise.all([
       db
@@ -120,9 +126,12 @@ export async function GET() {
         .select()
         .from(legalCaseAttachments)
         .where(
-          caseIds.length
-            ? inArray(legalCaseAttachments.legalRecordId, caseIds)
-            : sql`false`,
+          and(
+            caseIds.length
+              ? inArray(legalCaseAttachments.legalRecordId, caseIds)
+              : sql`false`,
+            isNull(legalCaseAttachments.deletedAt),
+          ),
         )
         .orderBy(asc(legalCaseAttachments.createdAt)),
       db
@@ -175,6 +184,29 @@ export async function GET() {
             : sql`false`,
         )
         .orderBy(desc(legalExternalShares.sharedAt)),
+      db
+        .select({
+          id: legalExternalShareBundles.id,
+          legalRecordId: legalExternalShareBundles.legalRecordId,
+          lawyerId: legalExternalShareBundles.lawyerId,
+          channel: legalExternalShareBundles.channel,
+          expiresAt: legalExternalShareBundles.expiresAt,
+          revokedAt: legalExternalShareBundles.revokedAt,
+          revokedBy: legalExternalShareBundles.revokedBy,
+          maxDownloads: legalExternalShareBundles.maxDownloads,
+          downloadCount: legalExternalShareBundles.downloadCount,
+          lastAccessedAt: legalExternalShareBundles.lastAccessedAt,
+          itemCount: legalExternalShareBundles.itemCount,
+          sharedBy: legalExternalShareBundles.sharedBy,
+          sharedAt: legalExternalShareBundles.sharedAt,
+        })
+        .from(legalExternalShareBundles)
+        .where(
+          caseIds.length
+            ? inArray(legalExternalShareBundles.legalRecordId, caseIds)
+            : sql`false`,
+        )
+        .orderBy(desc(legalExternalShareBundles.sharedAt)),
     ]);
   return jsonNoStore({
     cases,
@@ -185,6 +217,7 @@ export async function GET() {
     banks,
     lawyers,
     externalShares,
+    externalShareBundles,
     currentActorEmail: actor.user.email,
     currentActorRole: actorRole(actor),
     canWrite: await hasPortalPermission(actor, "legal", "write"),
@@ -441,7 +474,10 @@ export async function POST(request: Request) {
       );
     const db = getDb();
     const matter = await db.query.legalRecords.findFirst({
-      where: eq(legalRecords.id, legalRecordId),
+      where: and(
+        eq(legalRecords.id, legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
     });
     if (!matter)
       return jsonNoStore(
@@ -559,7 +595,10 @@ export async function POST(request: Request) {
     );
   const db = getDb();
   const matter = await db.query.legalRecords.findFirst({
-    where: eq(legalRecords.id, legalRecordId),
+    where: and(
+      eq(legalRecords.id, legalRecordId),
+      isNull(legalRecords.deletedAt),
+    ),
   });
   if (!matter)
     return jsonNoStore({ error: "الملف القانوني غير موجود" }, { status: 404 });
@@ -634,21 +673,103 @@ export async function PATCH(request: Request) {
   const body = parsed.value as Record<string, unknown>;
   const actionRequest = clean(body.action, 30);
   const db = getDb();
-  if (actionRequest === "update-case-details") {
-    if (!isCaseManager(actor))
+  if (actionRequest === "update-case-profile") {
+    const legalRecordId = Number(body.legalRecordId);
+    const before = await db.query.legalRecords.findFirst({
+      where: and(
+        eq(legalRecords.id, legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
+    });
+    if (!before)
       return jsonNoStore(
-        { error: "تحديث بيانات الملف من صلاحيات مدير القضايا" },
-        { status: 403 },
+        { error: "الملف القانوني غير موجود" },
+        { status: 404 },
       );
+    if (!canAccessMatter(actor, before))
+      return jsonNoStore({ error: "القضية غير مسندة إليك" }, { status: 403 });
+    const category = clean(body.category, 30),
+      title = clean(body.title, 180),
+      counterparty = clean(body.counterparty, 180),
+      referralReason = clean(body.referralReason, 5000) || null,
+      expiryDate = clean(body.expiryDate, 10) || null;
+    if (
+      !["contract", "case", "license", "compliance"].includes(category) ||
+      title.length < 3 ||
+      counterparty.length < 2 ||
+      (expiryDate && !/^\d{4}-\d{2}-\d{2}$/.test(expiryDate))
+    )
+      return jsonNoStore(
+        { error: "بيانات الملف القانوني غير مكتملة أو غير صحيحة" },
+        { status: 400 },
+      );
+    const now = new Date().toISOString();
+    const [row] = await db
+      .update(legalRecords)
+      .set({
+        category,
+        title,
+        counterparty,
+        referralReason,
+        expiryDate,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(legalRecords.id, legalRecordId),
+          eq(legalRecords.updatedAt, before.updatedAt),
+          isNull(legalRecords.deletedAt),
+        ),
+      )
+      .returning();
+    if (!row)
+      return jsonNoStore(
+        { error: "تغير الملف قبل حفظ التعديل؛ حدّث الصفحة وحاول مجددًا" },
+        { status: 409 },
+      );
+    await db.insert(legalCaseActionLog).values({
+      legalRecordId,
+      action: "updated",
+      details: `تعديل بيانات الملف: ${title}`,
+      actorEmail: actor.user.email,
+      actorRole: actorRole(actor),
+    });
+    await auditPortalAction({
+      actorEmail: actor.user.email,
+      action: "legal-case-profile-updated",
+      entityType: "legal-record",
+      entityId: legalRecordId,
+      before,
+      after: row,
+    });
+    await emitPortalNotification({
+      eventType: "legal-case-profile-updated",
+      title: "عُدّلت بيانات ملف قانوني",
+      message: `${row.referenceCode} — ${row.title}.`,
+      severity: "info",
+      module: "legal",
+      entityType: "legal-record",
+      entityId: legalRecordId,
+      actionView: "legal",
+      targetDepartment: "legal",
+    }).catch(() => undefined);
+    return jsonNoStore({ case: row });
+  }
+  if (actionRequest === "update-case-details") {
     const legalRecordId = Number(body.legalRecordId),
       before = await db.query.legalRecords.findFirst({
-        where: eq(legalRecords.id, legalRecordId),
+        where: and(
+          eq(legalRecords.id, legalRecordId),
+          isNull(legalRecords.deletedAt),
+        ),
       });
     if (!before)
       return jsonNoStore(
         { error: "الملف القانوني غير موجود" },
         { status: 404 },
       );
+    if (!canAccessMatter(actor, before))
+      return jsonNoStore({ error: "القضية غير مسندة إليك" }, { status: 403 });
     const toAmount = (value: unknown) => {
       const number = Math.round(Number(value || 0) * 100);
       return Number.isSafeInteger(number) && number >= 0 ? number : null;
@@ -678,8 +799,19 @@ export async function PATCH(request: Request) {
         litigationLevel: clean(body.litigationLevel, 100) || null,
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(legalRecords.id, legalRecordId))
+      .where(
+        and(
+          eq(legalRecords.id, legalRecordId),
+          eq(legalRecords.updatedAt, before.updatedAt),
+          isNull(legalRecords.deletedAt),
+        ),
+      )
       .returning();
+    if (!row)
+      return jsonNoStore(
+        { error: "تغير الملف قبل حفظ البيانات؛ حدّث الصفحة وحاول مجددًا" },
+        { status: 409 },
+      );
     await auditPortalAction({
       actorEmail: actor.user.email,
       action: "legal-case-details-updated",
@@ -688,32 +820,62 @@ export async function PATCH(request: Request) {
       before,
       after: row,
     });
+    await db.insert(legalCaseActionLog).values({
+      legalRecordId,
+      action: "updated",
+      details: "تعديل بيانات القضية والمحكمة",
+      actorEmail: actor.user.email,
+      actorRole: actorRole(actor),
+    });
+    await emitPortalNotification({
+      eventType: "legal-case-details-updated",
+      title: "عُدّلت بيانات قضية ومحكمتها",
+      message: `${row.referenceCode} — تم توثيق التعديل بواسطة ${actor.user.email}.`,
+      severity: "info",
+      module: "legal",
+      entityType: "legal-record",
+      entityId: legalRecordId,
+      actionView: "legal",
+      targetDepartment: "legal",
+    }).catch(() => undefined);
     return jsonNoStore({ case: row });
   }
   if (actionRequest === "update-case-status") {
-    if (!isCaseManager(actor))
-      return jsonNoStore(
-        { error: "تغيير حالة الملف من صلاحيات مدير القضايا" },
-        { status: 403 },
-      );
     const legalRecordId = Number(body.legalRecordId),
       status = clean(body.status, 30),
       reason = clean(body.reason, 1000);
     if (
       !Number.isInteger(legalRecordId) ||
-      !["reviewing", "active", "in_progress", "closed", "cancelled"].includes(
-        status,
-      )
+      ![
+        "reviewing",
+        "active",
+        "in_progress",
+        "renewal",
+        "closed",
+        "cancelled",
+      ].includes(status)
     )
       return jsonNoStore({ error: "حالة الملف غير صحيحة" }, { status: 400 });
     const matter = await db.query.legalRecords.findFirst({
-      where: eq(legalRecords.id, legalRecordId),
+      where: and(
+        eq(legalRecords.id, legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
     });
     if (!matter)
       return jsonNoStore(
         { error: "الملف القانوني غير موجود" },
         { status: 404 },
       );
+    if (!canAccessMatter(actor, matter))
+      return jsonNoStore({ error: "القضية غير مسندة إليك" }, { status: 403 });
+    if (["closed", "cancelled"].includes(status) && reason.length < 5)
+      return jsonNoStore(
+        { error: "اكتب سبب الإغلاق أو الإلغاء بوضوح لحفظه في سجل التدقيق" },
+        { status: 400 },
+      );
+    if (status === matter.status)
+      return jsonNoStore({ case: matter, unchanged: true });
     if (status === "closed") {
       const [openActivity, openPayment] = await Promise.all([
         db.query.legalCaseActivities.findFirst({
@@ -751,8 +913,19 @@ export async function PATCH(request: Request) {
         closedAt: status === "closed" ? now : null,
         updatedAt: now,
       })
-      .where(eq(legalRecords.id, legalRecordId))
+      .where(
+        and(
+          eq(legalRecords.id, legalRecordId),
+          eq(legalRecords.updatedAt, matter.updatedAt),
+          isNull(legalRecords.deletedAt),
+        ),
+      )
       .returning();
+    if (!row)
+      return jsonNoStore(
+        { error: "تغيرت حالة الملف قبل حفظ القرار" },
+        { status: 409 },
+      );
     await auditPortalAction({
       actorEmail: actor.user.email,
       action: "legal-case-status-updated",
@@ -762,6 +935,26 @@ export async function PATCH(request: Request) {
       after: row,
       reason,
     });
+    await db.insert(legalCaseActionLog).values({
+      legalRecordId,
+      action: "status_changed",
+      fromStatus: matter.status,
+      toStatus: status,
+      details: reason || `تغيير حالة الملف من ${matter.status} إلى ${status}`,
+      actorEmail: actor.user.email,
+      actorRole: actorRole(actor),
+    });
+    await emitPortalNotification({
+      eventType: "legal-case-status-updated",
+      title: "تغيّرت حالة ملف قانوني",
+      message: `${row.referenceCode} — ${matter.status} ← ${status}.`,
+      severity: ["closed", "cancelled"].includes(status) ? "warning" : "info",
+      module: "legal",
+      entityType: "legal-record",
+      entityId: legalRecordId,
+      actionView: "legal",
+      targetDepartment: "legal",
+    }).catch(() => undefined);
     return jsonNoStore({ case: row });
   }
   if (
@@ -866,7 +1059,10 @@ export async function PATCH(request: Request) {
         { status: 409 },
       );
     const matter = await db.query.legalRecords.findFirst({
-      where: eq(legalRecords.id, payment.legalRecordId),
+      where: and(
+        eq(legalRecords.id, payment.legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
     });
     if (!matter)
       return jsonNoStore(
@@ -1003,7 +1199,10 @@ export async function PATCH(request: Request) {
         { status: 400 },
       );
     const beforeCase = await db.query.legalRecords.findFirst({
-      where: eq(legalRecords.id, legalRecordId),
+      where: and(
+        eq(legalRecords.id, legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
     });
     if (!beforeCase)
       return jsonNoStore(
@@ -1076,6 +1275,108 @@ export async function PATCH(request: Request) {
     }).catch(() => undefined);
     return jsonNoStore({ case: updatedCase, lawyer: targetLawyer });
   }
+  if (actionRequest === "update-activity") {
+    const activityId = Number(body.activityId),
+      activityType = clean(body.activityType, 30),
+      title = clean(body.title, 180),
+      details = clean(body.details, 5000) || null,
+      priority = clean(body.priority, 20),
+      dueAt = clean(body.dueAt, 40) || null,
+      requestedAssignee = clean(body.assignedTo, 180) || null;
+    if (
+      !Number.isInteger(activityId) ||
+      activityId < 1 ||
+      title.length < 3 ||
+      ![
+        "task",
+        "deadline",
+        "note",
+        "communication",
+        "hearing",
+        "settlement",
+      ].includes(activityType) ||
+      !["low", "medium", "high", "critical"].includes(priority) ||
+      (dueAt && !validDateTime(dueAt))
+    )
+      return jsonNoStore(
+        { error: "بيانات الإجراء غير مكتملة أو غير صحيحة" },
+        { status: 400 },
+      );
+    const before = await db.query.legalCaseActivities.findFirst({
+      where: eq(legalCaseActivities.id, activityId),
+    });
+    if (!before)
+      return jsonNoStore({ error: "الإجراء غير موجود" }, { status: 404 });
+    const matter = await db.query.legalRecords.findFirst({
+      where: and(
+        eq(legalRecords.id, before.legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
+    });
+    if (!matter || !canAccessMatter(actor, matter))
+      return jsonNoStore({ error: "القضية غير مسندة إليك" }, { status: 403 });
+    if (["completed", "cancelled"].includes(before.status))
+      return jsonNoStore(
+        { error: "لا يمكن تعديل إجراء مكتمل أو ملغى" },
+        { status: 409 },
+      );
+    const assignedTo = isCaseManager(actor)
+      ? requestedAssignee
+      : actor.user.email;
+    const now = new Date().toISOString();
+    const [row] = await db
+      .update(legalCaseActivities)
+      .set({
+        activityType,
+        title,
+        details,
+        priority,
+        dueAt,
+        assignedTo,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(legalCaseActivities.id, activityId),
+          eq(legalCaseActivities.updatedAt, before.updatedAt),
+        ),
+      )
+      .returning();
+    if (!row)
+      return jsonNoStore(
+        { error: "تغير الإجراء قبل حفظ التعديل" },
+        { status: 409 },
+      );
+    await db.insert(legalCaseActionLog).values({
+      legalRecordId: before.legalRecordId,
+      activityId,
+      action: "updated",
+      details: `تعديل الإجراء: ${title}`,
+      actorEmail: actor.user.email,
+      actorRole: actorRole(actor),
+    });
+    await auditPortalAction({
+      actorEmail: actor.user.email,
+      action: "legal-case-activity-edited",
+      entityType: "legal-case-activity",
+      entityId: activityId,
+      before,
+      after: row,
+    });
+    await emitPortalNotification({
+      eventType: "legal-case-activity-edited",
+      title: "عُدّل إجراء في ملف قانوني",
+      message: `${matter.referenceCode} — ${title}.`,
+      severity: priority === "critical" ? "critical" : "info",
+      module: "legal",
+      entityType: "legal-record",
+      entityId: matter.id,
+      actionView: "legal",
+      targetDepartment: "legal",
+      targetEmail: assignedTo,
+    }).catch(() => undefined);
+    return jsonNoStore({ activity: row });
+  }
   const id = Number(body.id);
   const status = clean(body.status, 20);
   if (
@@ -1089,6 +1390,14 @@ export async function PATCH(request: Request) {
   });
   if (!before)
     return jsonNoStore({ error: "الإجراء غير موجود" }, { status: 404 });
+  const matter = await db.query.legalRecords.findFirst({
+    where: and(
+      eq(legalRecords.id, before.legalRecordId),
+      isNull(legalRecords.deletedAt),
+    ),
+  });
+  if (!matter || !canAccessMatter(actor, matter))
+    return jsonNoStore({ error: "القضية غير مسندة إليك" }, { status: 403 });
   if (
     !isCaseManager(actor) &&
     before.assignedTo?.toLowerCase() !== actor.user.email.toLowerCase() &&
@@ -1151,4 +1460,169 @@ export async function PATCH(request: Request) {
     after: { ...updated, actorRole: actorRole(actor) },
   });
   return jsonNoStore({ activity: updated });
+}
+
+export async function DELETE(request: Request) {
+  if (rejectCrossSiteRequest(request))
+    return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
+  const actor = await access(true);
+  if (!actor) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
+  const parsed = await readLimitedJson(request, 3000);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.value as Record<string, unknown>;
+  const entity = clean(body.entity, 30),
+    reason = clean(body.reason, 1000),
+    db = getDb(),
+    now = new Date().toISOString();
+  if (reason.length < 5)
+    return jsonNoStore(
+      { error: "اكتب سبب الحذف بوضوح لحفظه في سجل التدقيق" },
+      { status: 400 },
+    );
+  if (entity === "activity") {
+    const activityId = Number(body.activityId);
+    const before = await db.query.legalCaseActivities.findFirst({
+      where: eq(legalCaseActivities.id, activityId),
+    });
+    if (!before)
+      return jsonNoStore({ error: "الإجراء غير موجود" }, { status: 404 });
+    const matter = await db.query.legalRecords.findFirst({
+      where: and(
+        eq(legalRecords.id, before.legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
+    });
+    if (!matter || !canAccessMatter(actor, matter))
+      return jsonNoStore({ error: "القضية غير مسندة إليك" }, { status: 403 });
+    if (before.status === "completed")
+      return jsonNoStore(
+        { error: "لا يُحذف الإجراء المكتمل؛ يبقى محفوظًا ضمن الأثر القانوني" },
+        { status: 409 },
+      );
+    const [row] = await db
+      .update(legalCaseActivities)
+      .set({ status: "cancelled", updatedAt: now })
+      .where(
+        and(
+          eq(legalCaseActivities.id, activityId),
+          eq(legalCaseActivities.status, before.status),
+        ),
+      )
+      .returning();
+    if (!row)
+      return jsonNoStore(
+        { error: "تغير الإجراء قبل الحذف" },
+        { status: 409 },
+      );
+    await db.insert(legalCaseActionLog).values({
+      legalRecordId: before.legalRecordId,
+      activityId,
+      action: "deleted",
+      fromStatus: before.status,
+      toStatus: "cancelled",
+      details: `حذف الإجراء مع حفظ أثره: ${reason}`,
+      actorEmail: actor.user.email,
+      actorRole: actorRole(actor),
+    });
+    await auditPortalAction({
+      actorEmail: actor.user.email,
+      action: "legal-case-activity-deleted",
+      entityType: "legal-case-activity",
+      entityId: activityId,
+      before,
+      after: row,
+      reason,
+    });
+    return jsonNoStore({ activity: row, archived: true });
+  }
+  if (entity !== "case")
+    return jsonNoStore({ error: "نوع السجل غير صحيح" }, { status: 400 });
+  if (!isCaseManager(actor))
+    return jsonNoStore(
+      { error: "حذف الملف من صلاحيات مدير القضايا" },
+      { status: 403 },
+    );
+  const legalRecordId = Number(body.legalRecordId);
+  const before = await db.query.legalRecords.findFirst({
+    where: and(
+      eq(legalRecords.id, legalRecordId),
+      isNull(legalRecords.deletedAt),
+    ),
+  });
+  if (!before)
+    return jsonNoStore(
+      { error: "الملف القانوني غير موجود أو محذوف مسبقًا" },
+      { status: 404 },
+    );
+  const [row] = await db
+    .update(legalRecords)
+    .set({
+      status: "cancelled",
+      deletedAt: now,
+      deletedBy: actor.user.email,
+      deletionReason: reason,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(legalRecords.id, legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
+    )
+    .returning();
+  if (!row)
+    return jsonNoStore(
+      { error: "حُذف الملف من مستخدم آخر" },
+      { status: 409 },
+    );
+  await Promise.all([
+    db
+      .update(legalExternalShares)
+      .set({ revokedAt: now, revokedBy: actor.user.email })
+      .where(
+        and(
+          eq(legalExternalShares.legalRecordId, legalRecordId),
+          isNull(legalExternalShares.revokedAt),
+        ),
+      ),
+    db
+      .update(legalExternalShareBundles)
+      .set({ revokedAt: now, revokedBy: actor.user.email })
+      .where(
+        and(
+          eq(legalExternalShareBundles.legalRecordId, legalRecordId),
+          isNull(legalExternalShareBundles.revokedAt),
+        ),
+      ),
+  ]);
+  await db.insert(legalCaseActionLog).values({
+    legalRecordId,
+    action: "deleted",
+    fromStatus: before.status,
+    toStatus: "cancelled",
+    details: `حذف آمن للملف مع إبقاء الأثر القانوني: ${reason}`,
+    actorEmail: actor.user.email,
+    actorRole: actorRole(actor),
+  });
+  await auditPortalAction({
+    actorEmail: actor.user.email,
+    action: "legal-case-deleted",
+    entityType: "legal-record",
+    entityId: legalRecordId,
+    before,
+    after: row,
+    reason,
+  });
+  await emitPortalNotification({
+    eventType: "legal-case-deleted",
+    title: "حُذف ملف قانوني حذفًا آمنًا",
+    message: `${before.referenceCode} — بقي الأثر محفوظًا في سجل التدقيق.`,
+    severity: "warning",
+    module: "legal",
+    entityType: "legal-record",
+    entityId: legalRecordId,
+    actionView: "legal",
+    targetDepartment: "legal",
+  }).catch(() => undefined);
+  return jsonNoStore({ case: row, archived: true });
 }

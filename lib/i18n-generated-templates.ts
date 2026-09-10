@@ -939,5 +939,35 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "تم تسجيل الغياب وخصم {{0}} من دفعة العميل قبل الضريبة.",
     "en": "The absence was recorded and {{0}} was deducted from the client installment before tax.",
     "bn": "অনুপস্থিতি নথিভুক্ত হয়েছে এবং করের আগে গ্রাহকের কিস্তি থেকে {{0}} কর্তন করা হয়েছে।"
+  },
+  {
+    "source": "· واتساب {{0}}",
+    "en": "· WhatsApp {{0}}",
+    "bn": "· WhatsApp নম্বর {{0}}"
+  },
+  {
+    "source": "تسوية {{0}}",
+    "en": "Settlement {{0}}",
+    "bn": "সমঝোতা {{0}}"
+  },
+  {
+    "source": "تم اعتماد العقد {{0}}. يمكن رفع النسخة الموقعة من زر «رفع العقد الموقع».",
+    "en": "Contract {{0}} was approved. The signed copy can be uploaded using the Upload signed contract button.",
+    "bn": "চুক্তি {{0}} অনুমোদিত হয়েছে। স্বাক্ষরিত চুক্তি আপলোড বোতাম থেকে স্বাক্ষরিত কপি আপলোড করা যাবে।"
+  },
+  {
+    "source": "جلسة {{0}}",
+    "en": "Hearing {{0}}",
+    "bn": "শুনানি {{0}}"
+  },
+  {
+    "source": "جميع مرفقات العقد والملف ({{0}})",
+    "en": "All contract and case attachments ({{0}})",
+    "bn": "চুক্তি ও মামলার সব সংযুক্তি ({{0}})"
+  },
+  {
+    "source": "هل تريد حذف «{{0}}»؟ سيبقى الأثر القانوني وسجل التدقيق محفوظين.",
+    "en": "Remove “{{0}}”? The legal trace and audit log will remain preserved.",
+    "bn": "“{{0}}” অপসারণ করবেন? আইনি রেকর্ড ও অডিট লগ সংরক্ষিত থাকবে।"
   }
 ];

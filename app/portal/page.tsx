@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -125,7 +125,7 @@ async function ProtectedPortal() {
       ? db.select().from(financialRecords).orderBy(desc(financialRecords.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "legal")
-      ? db.select().from(legalRecords).where(canManageLegalCases ? undefined : eq(legalRecords.assignedLawyerEmail, access.user.email.toLowerCase())).orderBy(desc(legalRecords.createdAt)).limit(500)
+      ? db.select().from(legalRecords).where(and(isNull(legalRecords.deletedAt), canManageLegalCases ? undefined : eq(legalRecords.assignedLawyerEmail, access.user.email.toLowerCase()))).orderBy(desc(legalRecords.createdAt)).limit(500)
       : Promise.resolve([]),
     canAccessPortalDepartment(access, "workforce") || canSeeFinance
       ? db.select().from(workers).where(isNull(workers.archivedAt)).orderBy(desc(workers.createdAt)).limit(500)

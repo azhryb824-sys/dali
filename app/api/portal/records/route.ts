@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { bankAccounts, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
@@ -12,7 +12,7 @@ type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 const entityStatuses: Record<RecordEntity, Set<string>> = {
   employees: new Set(["active", "leave", "suspended", "ended"]),
   finance: new Set(["pending", "approved", "paid", "overdue"]),
-  legal: new Set(["active", "reviewing", "renewal", "closed"]),
+  legal: new Set(["active", "reviewing", "in_progress", "renewal", "closed", "cancelled"]),
   workforce: new Set(["available", "leave", "suspended"]),
 };
 
@@ -267,11 +267,15 @@ export async function PATCH(request: Request) {
       : payload.entity === "finance"
         ? await db.query.financialRecords.findFirst({ where: eq(financialRecords.id, id) })
         : payload.entity === "legal"
-          ? await db.query.legalRecords.findFirst({ where: eq(legalRecords.id, id) })
+          ? await db.query.legalRecords.findFirst({ where: and(eq(legalRecords.id, id), isNull(legalRecords.deletedAt)) })
           : await db.query.workers.findFirst({ where: eq(workers.id, id) });
     if (!existing) return Response.json({ error: "السجل غير موجود" }, { status: 404 });
-    if (payload.entity === "legal" && !canManageLegalCases(access)) return Response.json({ error: "تحديث حالة الملف من صلاحيات مدير القضايا" }, { status: 403 });
-    if (payload.entity === "legal" && status === "closed") return Response.json({ error: "أغلق القضية من مساحة إدارة القضايا بعد استكمال الإجراءات وكتابة السبب" }, { status: 409 });
+    if (payload.entity === "legal") {
+      const legalRecord = existing as typeof legalRecords.$inferSelect;
+      const assignedToActor = legalRecord.assignedLawyerEmail?.toLowerCase() === access.user.email.toLowerCase();
+      if (!canManageLegalCases(access) && !assignedToActor) return Response.json({ error: "الملف القانوني غير مسند إليك" }, { status: 403 });
+    }
+    if (payload.entity === "legal" && ["closed", "cancelled"].includes(status)) return Response.json({ error: "أغلق أو ألغِ الملف من مساحة إدارة القضايا بعد استكمال الإجراءات وكتابة السبب" }, { status: 409 });
     if (payload.entity === "finance" && status === "approved" && !(await hasPortalPermission(access, "finance", "approve"))) return Response.json({ error: "اعتماد السجل المالي يتطلب صلاحية الاعتماد المالي" }, { status: 403 });
     if (payload.entity === "finance" && status === "paid" && !(await hasPortalPermission(access, "finance", "pay"))) return Response.json({ error: "تسجيل السداد يتطلب صلاحية الدفع المالي" }, { status: 403 });
     if (payload.entity === "finance") {
@@ -286,7 +290,7 @@ export async function PATCH(request: Request) {
     } else if (payload.entity === "finance") {
       [updated] = await db.update(financialRecords).set({ status, updatedAt }).where(eq(financialRecords.id, id)).returning();
     } else if (payload.entity === "legal") {
-      [updated] = await db.update(legalRecords).set({ status, updatedAt }).where(eq(legalRecords.id, id)).returning();
+      [updated] = await db.update(legalRecords).set({ status, updatedAt }).where(and(eq(legalRecords.id, id), isNull(legalRecords.deletedAt), eq(legalRecords.status, (existing as typeof legalRecords.$inferSelect).status))).returning();
     } else {
       [updated] = await db.update(workers).set({ status, updatedAt }).where(eq(workers.id, id)).returning();
     }

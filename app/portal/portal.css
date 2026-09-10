@@ -298,4 +298,557 @@ body:has(.modal-layer) .video-desk{visibility:hidden;pointer-events:none}
 
 .employee-compliance-editor textarea{min-height:88px;border:1px solid rgba(12,76,91,.18);border-radius:9px;background:#fff;padding:9px 10px;font:inherit;resize:vertical}.employee-compliance-editor .employee-editor-note{grid-column:1/-1;margin:0;padding:11px 13px;border-radius:9px;background:#eef7f8;color:#315b65;line-height:1.8}.issue-modal .contract-payment-builder article{grid-template-columns:40px minmax(150px,1.2fr) minmax(170px,1.2fr) minmax(135px,.85fr) minmax(105px,.65fr) auto auto}@media(max-width:1200px){.issue-modal .contract-payment-builder article{grid-template-columns:40px minmax(0,1fr) minmax(0,1fr)}.issue-modal .contract-payment-builder article>.payment-index{grid-row:1/4}.issue-modal .contract-payment-builder article>label:nth-of-type(1),.issue-modal .contract-payment-builder article>label:nth-of-type(2){grid-column:auto}.issue-modal .contract-payment-builder article>label:nth-of-type(3),.issue-modal .contract-payment-builder article>.payment-calculated-amount{grid-column:2}.issue-modal .contract-payment-builder article>label:nth-of-type(4),.issue-modal .contract-payment-builder article>.remove-payment{grid-column:3}}@media(max-width:680px){.issue-modal .contract-payment-builder article,.employee-compliance-editor{grid-template-columns:1fr}.issue-modal .contract-payment-builder article>.payment-index{position:absolute;top:11px;left:11px}.issue-modal .contract-payment-builder article>label:nth-of-type(n),.issue-modal .contract-payment-builder article>.payment-calculated-amount,.issue-modal .contract-payment-builder article>.remove-payment{grid-column:1}}
 
+/* Professional legal operations workspace: clear hierarchy, audited actions and touch-safe controls. */
+.legal-matter-workspace {
+  border: 1px solid #d5e1e5;
+  border-radius: 18px;
+  background: #f4f7f8;
+  box-shadow: 0 14px 38px rgba(0, 29, 45, 0.08);
+}
+
+.legal-matter-workspace > header {
+  padding: 25px 26px;
+  background:
+    radial-gradient(circle at 85% 20%, rgba(201, 164, 91, 0.2), transparent 30%),
+    linear-gradient(135deg, #082f3e, #155264);
+  color: #fff;
+  border-bottom: 0;
+}
+
+.legal-matter-workspace > header span {
+  color: #d9bd7d;
+  font-size: 13px;
+}
+
+.legal-matter-workspace > header h2 {
+  margin: 7px 0 5px;
+  color: #fff;
+  font-size: clamp(21px, 2.4vw, 28px);
+}
+
+.legal-matter-workspace > header p {
+  max-width: 720px;
+  color: #d8e6e9;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.legal-matter-workspace > header .heading-actions > b {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.11);
+  color: #fff;
+}
+
+.legal-defense-kpis {
+  margin: 18px 20px;
+}
+
+.legal-defense-kpis article {
+  min-height: 104px;
+  padding: 18px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fff, #f8fbfc);
+  box-shadow: 0 7px 20px rgba(0, 29, 45, 0.05);
+}
+
+.legal-defense-kpis span,
+.legal-defense-kpis small,
+.legal-case-classification span,
+.legal-matter-layout > aside small {
+  font-size: 13px;
+}
+
+.legal-lawyer-register {
+  margin: 0 20px 18px;
+  border-radius: 14px;
+}
+
+.legal-lawyer-register > summary {
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  font-size: 15px;
+}
+
+.legal-matter-layout {
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  gap: 0;
+  border-top: 1px solid #d9e3e6;
+  background: #fff;
+}
+
+.legal-matter-layout > aside {
+  position: sticky;
+  top: 86px;
+  align-self: start;
+  max-height: calc(100dvh - 110px);
+  overflow: auto;
+  padding: 16px;
+  background: #edf3f5;
+}
+
+.legal-matter-layout > aside button {
+  min-height: 82px;
+  padding: 14px;
+  border-radius: 12px;
+}
+
+.legal-matter-layout > aside button:hover,
+.legal-matter-layout > aside button:focus-visible {
+  border-color: #9fb9c2;
+  background: #fff;
+  outline: none;
+}
+
+.legal-matter-layout > aside button.active {
+  border-color: #3d7684;
+  box-shadow: inset -4px 0 #a62b34, 0 8px 20px rgba(0, 29, 45, 0.08);
+}
+
+.legal-matter-layout > aside strong {
+  color: #0d3d4c;
+  font-size: 14px;
+}
+
+.legal-matter-layout > aside span {
+  color: #4d6570;
+  font-size: 14px;
+}
+
+.legal-matter-layout > main {
+  min-width: 0;
+  padding: 22px;
+  background: #f8fafb;
+}
+
+.legal-matter-head {
+  align-items: flex-start;
+  padding: 22px;
+  border: 1px solid #d7e3e7;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #fff, #f5f9fa);
+  box-shadow: 0 8px 24px rgba(0, 29, 45, 0.055);
+}
+
+.legal-matter-head > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.legal-matter-head h3 {
+  font-size: clamp(20px, 2.2vw, 25px);
+}
+
+.legal-matter-head p,
+.legal-linked-file p,
+.legal-case-files p,
+.legal-timeline p,
+.legal-action-audit p,
+.legal-share-history span {
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.legal-matter-head > span {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #e7f1f3;
+  color: #245766;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.legal-case-toolbar,
+.legal-row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.legal-case-toolbar {
+  margin: 13px 0;
+  padding-top: 12px;
+  border-top: 1px solid #e0e8eb;
+}
+
+.legal-case-toolbar small {
+  margin-inline-start: auto;
+  color: #647780;
+  font-size: 12px;
+}
+
+.legal-case-toolbar button,
+.legal-row-actions button,
+.legal-timeline button,
+.employee-related-list .legal-row-actions button {
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid #c9d7dc;
+  border-radius: 9px;
+  background: #fff;
+  color: #173f4c;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.legal-case-toolbar .danger,
+.legal-row-actions .danger,
+.legal-timeline .danger {
+  border-color: #ecc2c5;
+  background: #fff5f5;
+  color: #9b2931;
+}
+
+.legal-case-toolbar button:hover,
+.legal-row-actions button:hover,
+.legal-timeline button:hover {
+  border-color: #6d98a4;
+  box-shadow: 0 4px 12px rgba(0, 29, 45, 0.07);
+}
+
+.legal-status-control {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(240px, 1.5fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #cfe0e4;
+  border-radius: 12px;
+  background: #edf5f6;
+}
+
+.legal-status-control label,
+.legal-record-editor label {
+  display: grid;
+  gap: 7px;
+  color: #405d68;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.legal-status-control select,
+.legal-status-control input,
+.legal-record-editor input,
+.legal-record-editor select,
+.legal-record-editor textarea {
+  width: 100%;
+  min-height: 43px;
+  border: 1px solid #c8d8dd;
+  border-radius: 9px;
+  background: #fff;
+  padding: 9px 11px;
+  color: #173b48;
+  font: inherit;
+  font-size: 14px;
+}
+
+.legal-status-control button {
+  min-height: 43px;
+  border: 0;
+  border-radius: 9px;
+  background: #0f4a5a;
+  color: #fff;
+  padding: 0 17px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.legal-status-control button:disabled,
+.legal-row-actions button:disabled,
+.legal-case-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.legal-linked-file,
+.legal-case-files,
+.legal-share-history,
+.legal-judgment-payments,
+.legal-action-audit {
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid #d8e3e7;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 29, 45, 0.04);
+}
+
+.legal-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.legal-section-heading h3,
+.legal-section-heading p {
+  margin: 0;
+}
+
+.legal-section-heading p {
+  margin-top: 3px;
+  color: #6b7e86;
+}
+
+.legal-linked-file dt,
+.legal-related-counts span,
+.legal-linked-file dd,
+.legal-case-file-row small,
+.legal-share-history small,
+.legal-action-audit small,
+.legal-timeline small {
+  font-size: 13px;
+}
+
+.legal-linked-file dd {
+  line-height: 1.65;
+}
+
+.legal-case-file-row {
+  align-items: center;
+  min-height: 72px;
+  padding: 12px 0 0;
+}
+
+.legal-case-file-row > a strong {
+  font-size: 15px;
+}
+
+.legal-share-history > article {
+  min-height: 86px;
+  border-radius: 12px;
+}
+
+.legal-share-history > article.legal-share-bundle {
+  border-inline-start: 4px solid #1a7a59;
+  background: linear-gradient(110deg, #f4fbf7, #fff 45%);
+}
+
+.legal-share-history > article strong {
+  color: #143f4c;
+  font-size: 14px;
+}
+
+.legal-activity-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.legal-activity-form input,
+.legal-activity-form select,
+.legal-activity-form textarea,
+.legal-activity-form button {
+  min-height: 43px;
+  font-size: 14px;
+}
+
+.legal-activity-form textarea {
+  grid-column: auto;
+  min-height: 84px;
+  resize: vertical;
+}
+
+.legal-activity-form button {
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.legal-timeline article {
+  border-radius: 12px;
+  background: #fff;
+}
+
+.legal-timeline article > div:last-child {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.legal-record-editor {
+  width: min(780px, calc(100vw - 32px)) !important;
+}
+
+.legal-record-editor form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.legal-record-editor textarea {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.legal-record-editor .form-hint {
+  margin: 0;
+  padding: 12px;
+  border-radius: 9px;
+  background: #edf5f6;
+  color: #46636e;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.legal-share-modal {
+  width: min(650px, calc(100vw - 32px));
+}
+
+.legal-share-modal .legal-share-file {
+  border-inline-start: 4px solid #1a7a59;
+}
+
+.legal-matter-workspace button:focus-visible,
+.legal-matter-workspace a:focus-visible,
+.legal-matter-workspace input:focus-visible,
+.legal-matter-workspace select:focus-visible,
+.legal-matter-workspace textarea:focus-visible {
+  outline: 3px solid rgba(24, 112, 132, 0.2);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  .legal-matter-layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .legal-status-control {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .legal-status-control button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .legal-matter-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .legal-matter-layout > aside {
+    position: static;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 72%);
+    max-height: none;
+    overflow-x: auto;
+    border-left: 0;
+    border-bottom: 1px solid #d8e3e7;
+    scroll-snap-type: x proximity;
+  }
+
+  .legal-matter-layout > aside button {
+    scroll-snap-align: start;
+  }
+
+  .legal-matter-head {
+    display: grid;
+  }
+
+  .legal-matter-head > span {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 700px) {
+  .legal-matter-workspace > header {
+    display: grid;
+    padding: 21px 17px;
+  }
+
+  .legal-matter-workspace > header .heading-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .legal-matter-workspace > header .heading-actions > b,
+  .legal-matter-workspace > header .heading-actions button {
+    grid-column: 1;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .legal-defense-kpis,
+  .legal-lawyer-register {
+    margin-inline: 12px;
+  }
+
+  .legal-matter-layout > main {
+    padding: 12px;
+  }
+
+  .legal-matter-head,
+  .legal-linked-file,
+  .legal-case-files,
+  .legal-share-history,
+  .legal-judgment-payments,
+  .legal-action-audit {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .legal-status-control,
+  .legal-activity-form,
+  .legal-record-editor form {
+    grid-template-columns: 1fr;
+  }
+
+  .legal-status-control button,
+  .legal-record-editor .span-two,
+  .legal-record-editor .modal-actions {
+    grid-column: 1;
+  }
+
+  .legal-section-heading,
+  .legal-case-file-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .legal-section-heading .whatsapp-share-button,
+  .legal-row-actions,
+  .legal-row-actions button {
+    width: 100%;
+  }
+
+  .legal-row-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .legal-case-toolbar small {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+
+  .legal-timeline article {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .legal-timeline article > div:last-child {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .pwa-device-manager{overflow:hidden}.pwa-device-manager>header{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:22px 24px;border-bottom:1px solid var(--admin-border)}.pwa-device-manager>header span{color:var(--admin-gold);font-size:11px;font-weight:700}.pwa-device-manager>header h2{margin:4px 0;color:var(--admin-navy);font-size:18px}.pwa-device-manager>header p{margin:0;color:#718089;font-size:12px;line-height:1.7}.pwa-device-manager>header>strong{display:grid;place-items:center;min-width:78px;color:var(--admin-navy);font-size:27px}.pwa-device-manager>header>strong small{font-size:9px;color:#788891}.pwa-enrollment-form{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:12px;align-items:end;padding:20px 24px;background:#f8fafb;border-bottom:1px solid var(--admin-border)}.pwa-enrollment-form label{display:grid;gap:6px;color:#657780;font-size:10px}.pwa-enrollment-form input{height:42px;border:1px solid var(--admin-border);border-radius:8px;padding:0 12px;background:#fff;color:var(--admin-navy);font:500 12px Tajawal,sans-serif}.pwa-enrollment-form button,.pwa-issued-enrollment button,.pwa-issued-enrollment a,.pwa-pending-list button{min-height:40px;border:0;border-radius:7px;padding:0 15px;background:var(--admin-navy);color:#fff;font:700 10px Tajawal,sans-serif;display:grid;place-items:center;text-decoration:none;cursor:pointer}.pwa-issued-enrollment{display:grid;grid-template-columns:minmax(220px,1fr) repeat(3,auto);gap:10px;align-items:center;padding:17px 24px;background:#eef7f8;border-bottom:1px solid #cee5e8}.pwa-issued-enrollment>div{display:grid;gap:2px}.pwa-issued-enrollment span,.pwa-issued-enrollment small{color:#647881;font-size:9px}.pwa-issued-enrollment strong{color:var(--admin-navy);font:700 17px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:1px}.pwa-issued-enrollment a{background:#167c58}.pwa-pending-list{padding:18px 24px;border-bottom:1px solid var(--admin-border)}.pwa-pending-list h3{margin:0 0 10px;color:var(--admin-navy);font-size:13px}.pwa-pending-list article{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #edf1f2}.pwa-pending-list article>div{display:grid}.pwa-pending-list strong{font-size:11px;color:#314752}.pwa-pending-list small{font-size:9px;color:#7f8e95}.pwa-pending-list button{min-height:32px;background:#8d6320}.pwa-device-list{display:grid}.pwa-device-list>article{display:grid;grid-template-columns:42px minmax(180px,1fr) auto auto;gap:14px;align-items:center;padding:16px 24px;border-bottom:1px solid var(--admin-border)}.pwa-device-list>article.revoked{opacity:.62;background:#faf8f7}.pwa-device-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:10px;background:#e9f3f5;color:#006f83;font-size:26px}.pwa-device-list article>div:nth-child(2){display:grid;gap:2px}.pwa-device-list strong{color:#263d49;font-size:12px}.pwa-device-list small{color:#7b8b93;font-size:9px}.pwa-device-list em{color:#974939;font-size:9px;font-style:normal}.pwa-device-list button{min-height:34px;border:1px solid #e3b9b1;border-radius:7px;background:#fff;color:#9a3d2c;padding:0 12px;font:700 9px Tajawal,sans-serif;cursor:pointer}.pwa-revoke-form{margin:18px 24px;padding:18px;border:1px solid #e3b9b1;border-radius:10px;background:#fff8f6;display:grid;gap:12px}.pwa-revoke-form>div:first-child{display:grid}.pwa-revoke-form strong{color:#7e3024;font-size:13px}.pwa-revoke-form small{color:#926a63;font-size:10px}.pwa-revoke-form textarea{min-height:78px;border:1px solid #d8b5ae;border-radius:8px;padding:10px;font:500 11px Tajawal,sans-serif;resize:vertical}.pwa-revoke-form>div:last-child{display:flex;justify-content:flex-end;gap:9px}.pwa-revoke-form button{min-height:36px;border:1px solid var(--admin-border);border-radius:7px;background:#fff;padding:0 14px;font:700 10px Tajawal,sans-serif}.pwa-revoke-form button.danger-action{background:#8e3528;color:#fff;border-color:#8e3528}@media(max-width:780px){.pwa-issued-enrollment{grid-template-columns:1fr 1fr}.pwa-issued-enrollment>div{grid-column:1/-1}.pwa-device-list>article{grid-template-columns:42px 1fr}.pwa-device-list>article>span,.pwa-device-list>article>button{justify-self:start}.pwa-enrollment-form{grid-template-columns:1fr}.pwa-device-manager>header{padding:18px}.pwa-enrollment-form,.pwa-issued-enrollment,.pwa-pending-list,.pwa-device-list>article{padding-left:18px;padding-right:18px}}

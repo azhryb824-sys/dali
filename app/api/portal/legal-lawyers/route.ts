@@ -12,6 +12,7 @@ import {
 import { getDb } from "@/db";
 import {
   legalCaseActionLog,
+  legalExternalShareBundles,
   legalExternalShares,
   legalLawyers,
   legalRecords,
@@ -301,8 +302,12 @@ export async function PATCH(request: Request) {
         ? and(
             eq(legalRecords.assignedLawyerId, lawyerId),
             notInArray(legalRecords.status, ["closed", "cancelled"]),
+            isNull(legalRecords.deletedAt),
           )
-        : eq(legalRecords.assignedLawyerId, lawyerId);
+        : and(
+            eq(legalRecords.assignedLawyerId, lawyerId),
+            isNull(legalRecords.deletedAt),
+          );
     const transferred = await db.transaction(async (tx) => {
       const rows = await tx
         .update(legalRecords)
@@ -414,7 +419,12 @@ export async function PATCH(request: Request) {
               assignedLawyerEmail: details.portalUserEmail,
               updatedAt: now,
             })
-            .where(eq(legalRecords.assignedLawyerId, lawyerId));
+            .where(
+              and(
+                eq(legalRecords.assignedLawyerId, lawyerId),
+                isNull(legalRecords.deletedAt),
+              ),
+            );
         return row;
       });
       await auditPortalAction({
@@ -461,6 +471,7 @@ export async function PATCH(request: Request) {
       where: and(
         eq(legalRecords.assignedLawyerId, lawyerId),
         notInArray(legalRecords.status, ["closed", "cancelled"]),
+        isNull(legalRecords.deletedAt),
       ),
     });
     if (openMatter)
@@ -527,15 +538,19 @@ export async function DELETE(request: Request) {
         .where(eq(legalLawyers.id, lawyerId))
         .returning();
       if (!locked) throw new Error("LAWYER_NOT_FOUND");
-      const [assignedMatter, externalShare] = await Promise.all([
+      const [assignedMatter, externalShare, externalBundle] = await Promise.all([
         tx.query.legalRecords.findFirst({
           where: eq(legalRecords.assignedLawyerId, lawyerId),
         }),
         tx.query.legalExternalShares.findFirst({
           where: eq(legalExternalShares.lawyerId, lawyerId),
         }),
+        tx.query.legalExternalShareBundles.findFirst({
+          where: eq(legalExternalShareBundles.lawyerId, lawyerId),
+        }),
       ]);
-      if (assignedMatter || externalShare) throw new Error("LAWYER_IN_USE");
+      if (assignedMatter || externalShare || externalBundle)
+        throw new Error("LAWYER_IN_USE");
       const [row] = await tx
         .delete(legalLawyers)
         .where(eq(legalLawyers.id, lawyerId))

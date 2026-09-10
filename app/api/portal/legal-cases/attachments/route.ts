@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   legalCaseActionLog,
@@ -53,7 +53,10 @@ export async function POST(request: Request) {
       return Response.json({ error: validation.error }, { status: 400 });
     const db = getDb();
     const matter = await db.query.legalRecords.findFirst({
-      where: eq(legalRecords.id, legalRecordId),
+      where: and(
+        eq(legalRecords.id, legalRecordId),
+        isNull(legalRecords.deletedAt),
+      ),
     });
     if (!matter)
       return Response.json(

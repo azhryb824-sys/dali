@@ -40,6 +40,8 @@ type Matter = {
   opposingCounsel: string | null;
   litigationStage: string | null;
   litigationLevel: string | null;
+  outcome: string | null;
+  updatedAt: string;
 };
 type Lawyer = {
   id: number;
@@ -68,6 +70,21 @@ type ExternalShare = {
   maxDownloads: number;
   downloadCount: number;
   lastAccessedAt: string | null;
+  sharedBy: string;
+  sharedAt: string;
+};
+type ExternalShareBundle = {
+  id: string;
+  legalRecordId: number;
+  lawyerId: number;
+  channel: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  maxDownloads: number;
+  downloadCount: number;
+  lastAccessedAt: string | null;
+  itemCount: number;
   sharedBy: string;
   sharedAt: string;
 };
@@ -148,6 +165,7 @@ type Data = {
   banks: Bank[];
   lawyers: Lawyer[];
   externalShares: ExternalShare[];
+  externalShareBundles: ExternalShareBundle[];
   currentActorEmail: string;
   currentActorRole: string;
   canWrite: boolean;
@@ -162,6 +180,8 @@ type Hearing = {
   legalRecordId: number;
   hearingNumber: string;
   scheduledAt: string;
+  courtName: string | null;
+  circuitName: string | null;
   attendeesJson: string;
   requestsJson: string;
   decisionText: string | null;
@@ -221,6 +241,42 @@ const money = (value: unknown) =>
   new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(
     Number(value || 0) / 100,
   );
+const preciseTime = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("ar-SA", {
+        timeZone: "Asia/Riyadh",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        timeZoneName: "short",
+      }).format(new Date(value))
+    : "غير مسجل";
+const lines = (value: string) => {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String).join("\n") : "";
+  } catch {
+    return "";
+  }
+};
+const dateTimeInputValue = (value: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 16);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
+};
+type LegalEditor =
+  | { kind: "case"; record: Matter }
+  | { kind: "activity"; record: Activity }
+  | { kind: "attachment"; record: Attachment }
+  | { kind: "hearing"; record: Hearing }
+  | { kind: "submission"; record: Submission }
+  | { kind: "settlement"; record: Settlement };
 
 function LegalOverlayPortal({ children }: { children: ReactNode }) {
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
@@ -247,14 +303,14 @@ export default function LegalCaseWorkspace() {
     [lawyerBusy, setLawyerBusy] = useState(false),
     [assignmentBusy, setAssignmentBusy] = useState(false),
     [shareBusy, setShareBusy] = useState(false),
+    [recordBusy, setRecordBusy] = useState(false),
     [currentTime, setCurrentTime] = useState(0),
     [lawyerUsers, setLawyerUsers] = useState<LawyerUser[]>([]),
     [transferringLawyer, setTransferringLawyer] = useState<Lawyer | null>(
       null,
     ),
-    [sharingAttachment, setSharingAttachment] = useState<Attachment | null>(
-      null,
-    ),
+    [shareTarget, setShareTarget] = useState<Attachment | "all" | null>(null),
+    [editor, setEditor] = useState<LegalEditor | null>(null),
     [payingJudgment, setPayingJudgment] = useState<JudgmentPayment | null>(
       null,
     );
@@ -316,6 +372,13 @@ export default function LegalCaseWorkspace() {
       data?.externalShares.filter(
         (share) => share.legalRecordId === selected,
       ) || [],
+    [data, selected],
+  );
+  const matterShareBundles = useMemo(
+    () =>
+      (data?.externalShareBundles || []).filter(
+        (share) => share.legalRecordId === selected,
+      ),
     [data, selected],
   );
   const activities = useMemo(
@@ -663,7 +726,7 @@ export default function LegalCaseWorkspace() {
   }
   async function shareOnWhatsApp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!sharingAttachment) return;
+    if (!shareTarget) return;
     const popup = window.open("about:blank", "_blank");
     if (popup) popup.opener = null;
     const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -675,7 +738,9 @@ export default function LegalCaseWorkspace() {
         body: JSON.stringify({
           ...values,
           legalRecordId: selected,
-          attachmentId: sharingAttachment.id,
+          ...(shareTarget === "all"
+            ? { shareAll: true }
+            : { attachmentId: shareTarget.id }),
         }),
       });
       const result = (await readApiJson(response)) as {
@@ -684,8 +749,12 @@ export default function LegalCaseWorkspace() {
       };
       if (!response.ok || !result.whatsappUrl)
         throw new Error(result.error || "تعذر تجهيز مشاركة واتساب");
-      setSharingAttachment(null);
-      setNotice("تم تسجيل تاريخ وساعة المشاركة وفتح محادثة واتساب.");
+      setShareTarget(null);
+      setNotice(
+        shareTarget === "all"
+          ? "تم تسجيل وقت مشاركة جميع المرفقات بدقة وفتح محادثة واتساب للمحامي المسجل."
+          : "تم تسجيل تاريخ وساعة المشاركة وفتح محادثة واتساب.",
+      );
       if (popup) popup.location.href = result.whatsappUrl;
       else window.location.href = result.whatsappUrl;
       await load();
@@ -712,6 +781,27 @@ export default function LegalCaseWorkspace() {
       return;
     }
     setNotice("أُبطل رابط المشاركة مع بقاء سجلها وتاريخها محفوظين.");
+    await load();
+  }
+  async function revokeShareBundle(share: ExternalShareBundle) {
+    const reason =
+      (await appPrompt("سبب إبطال رابط جميع المرفقات", {
+        title: "إبطال مشاركة المرفقات",
+        multiline: true,
+        tone: "danger",
+      })) || "";
+    if (!reason.trim()) return;
+    const response = await fetch("/api/portal/legal-cases/shares", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ bundleId: share.id, reason }),
+    });
+    const result = (await readApiJson(response)) as { error?: string };
+    if (!response.ok) {
+      setNotice(result.error || "تعذر إبطال مشاركة المرفقات");
+      return;
+    }
+    setNotice("أُبطل رابط جميع المرفقات وبقي سجل المشاركة وتوقيتها محفوظين.");
     await load();
   }
   async function upload(event: FormEvent<HTMLFormElement>) {
@@ -767,10 +857,21 @@ export default function LegalCaseWorkspace() {
   async function updateCaseStatus(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    await legalDecision("update-case-status", {
-      legalRecordId: selected,
-      ...values,
-    });
+    const nextStatus = String(values.status || "");
+    const reason = String(values.reason || "").trim();
+    if (["closed", "cancelled"].includes(nextStatus) && reason.length < 5) {
+      setNotice("اكتب سبب الإغلاق أو الإلغاء بوضوح قبل تحديث الحالة.");
+      return;
+    }
+    setRecordBusy(true);
+    try {
+      await legalDecision("update-case-status", {
+        legalRecordId: selected,
+        ...values,
+      });
+    } finally {
+      setRecordBusy(false);
+    }
   }
   async function updateCaseDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -778,6 +879,110 @@ export default function LegalCaseWorkspace() {
       legalRecordId: selected,
       ...Object.fromEntries(new FormData(event.currentTarget)),
     });
+  }
+  async function saveEditor(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editor) return;
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    setRecordBusy(true);
+    setNotice("");
+    try {
+      let endpoint = "/api/portal/legal-cases";
+      let payload: Record<string, unknown> = values;
+      if (editor.kind === "case") {
+        payload = {
+          action: "update-case-profile",
+          legalRecordId: editor.record.id,
+          ...values,
+        };
+      } else if (editor.kind === "activity") {
+        payload = {
+          action: "update-activity",
+          activityId: editor.record.id,
+          ...values,
+        };
+      } else if (editor.kind === "attachment") {
+        endpoint = `/api/portal/legal-cases/attachments/${editor.record.id}`;
+      } else {
+        endpoint = "/api/portal/legal-cases/workflows";
+        payload = {
+          action: `${editor.kind}-update`,
+          [`${editor.kind}Id`]: editor.record.id,
+          ...values,
+        };
+      }
+      const response = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await readApiJson(response)) as { error?: string };
+      if (!response.ok)
+        throw new Error(result.error || "تعذر حفظ التعديل");
+      setEditor(null);
+      setNotice("تم حفظ التعديل وتوثيق المنفذ ووقت العملية.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر حفظ التعديل");
+    } finally {
+      setRecordBusy(false);
+    }
+  }
+  async function deleteLegalEntity(
+    kind: LegalEditor["kind"],
+    id: number,
+    label: string,
+  ) {
+    const confirmed = await appConfirm(
+      `هل تريد حذف «${label}»؟ سيبقى الأثر القانوني وسجل التدقيق محفوظين.`,
+      {
+        title: "حذف آمن",
+        tone: "danger",
+        confirmLabel: "حذف مع حفظ الأثر",
+      },
+    );
+    if (!confirmed) return;
+    const reason = (
+      await appPrompt("اكتب سبب الحذف", {
+        title: "سبب الحذف الإلزامي",
+        multiline: true,
+        tone: "danger",
+      })
+    )?.trim();
+    if (!reason) return;
+    setRecordBusy(true);
+    setNotice("");
+    try {
+      const endpoint =
+        kind === "attachment"
+          ? `/api/portal/legal-cases/attachments/${id}`
+          : kind === "case" || kind === "activity"
+            ? "/api/portal/legal-cases"
+            : "/api/portal/legal-cases/workflows";
+      const body =
+        kind === "case"
+          ? { entity: "case", legalRecordId: id, reason }
+          : kind === "activity"
+            ? { entity: "activity", activityId: id, reason }
+            : kind === "attachment"
+              ? { reason }
+              : { entity: kind, id, reason };
+      const response = await fetch(endpoint, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = (await readApiJson(response)) as { error?: string };
+      if (!response.ok) throw new Error(result.error || "تعذر الحذف");
+      setEditor(null);
+      if (kind === "case") setSelected(0);
+      setNotice("تم الحذف الآمن مع حفظ السبب والأثر القانوني في سجل التدقيق.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر الحذف");
+    } finally {
+      setRecordBusy(false);
+    }
   }
   async function workflowAction(
     method: "POST" | "PATCH",
@@ -1008,6 +1213,32 @@ export default function LegalCaseWorkspace() {
                   </div>
                   <h3>{matter.title}</h3>
                   <p>{matter.referralReason || "ملف قانوني مسجل يدويًا"}</p>
+                  <div className="legal-case-toolbar">
+                    {data.canWrite && (
+                      <button
+                        type="button"
+                        className="admin-secondary"
+                        onClick={() =>
+                          setEditor({ kind: "case", record: matter })
+                        }
+                      >
+                        تعديل بيانات الملف
+                      </button>
+                    )}
+                    {data.canManageCases && (
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={recordBusy}
+                        onClick={() =>
+                          void deleteLegalEntity("case", matter.id, matter.title)
+                        }
+                      >
+                        حذف الملف
+                      </button>
+                    )}
+                    <small>آخر تحديث: {preciseTime(matter.updatedAt)}</small>
+                  </div>
                   {matter.companyCapacity === "مدعى عليها" && (
                     <div className="legal-defense-dates">
                       <p>
@@ -1053,10 +1284,7 @@ export default function LegalCaseWorkspace() {
                   {matter.assignedAt && (
                     <p>
                       <strong>تاريخ ووقت الإسناد:</strong>{" "}
-                      {new Date(matter.assignedAt).toLocaleString("ar-SA", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
+                      {preciseTime(matter.assignedAt)}
                       {matter.assignedBy ? ` · أسندها ${matter.assignedBy}` : ""}
                     </p>
                   )}
@@ -1069,8 +1297,7 @@ export default function LegalCaseWorkspace() {
                     </p>
                   )}
                   {data.canManageCases && (
-                    <>
-                      <form
+                    <form
                         className="legal-assignment-control"
                         key={`assignment-${matter.id}-${matter.assignedLawyerId || 0}`}
                         onSubmit={assignCase}
@@ -1109,22 +1336,36 @@ export default function LegalCaseWorkspace() {
                               ? "إعادة إسناد القضية"
                               : "إسناد القضية"}
                         </button>
-                      </form>
-                      <form onSubmit={updateCaseStatus}>
+                    </form>
+                  )}
+                  {data.canWrite && (
+                      <form
+                        className="legal-status-control"
+                        key={`status-${matter.id}-${matter.status}`}
+                        onSubmit={updateCaseStatus}
+                      >
+                        <label>
+                          حالة الملف
                         <select name="status" defaultValue={matter.status}>
                           <option value="reviewing">قيد المراجعة</option>
                           <option value="active">مفتوح</option>
                           <option value="in_progress">قيد العمل</option>
+                          <option value="renewal">يتطلب تجديدًا</option>
                           <option value="closed">مغلق</option>
                           <option value="cancelled">ملغى</option>
                         </select>
+                        </label>
+                        <label>
+                          سبب القرار
                         <input
                           name="reason"
                           placeholder="سبب الإغلاق أو تغيير الحالة"
                         />
-                        <button>تحديث حالة الملف</button>
+                        </label>
+                        <button type="submit" disabled={recordBusy}>
+                          تحديث حالة الملف
+                        </button>
                       </form>
-                    </>
                   )}
                 </div>
                 <span>
@@ -1139,7 +1380,12 @@ export default function LegalCaseWorkspace() {
               </div>
               {snapshot && (
                 <section className="legal-linked-file">
-                  <h3>العقد والملف المحال</h3>
+                  <div className="legal-section-heading">
+                    <div>
+                      <h3>العقد والملف المحال</h3>
+                      <p>نسخة الإحالة المحفوظة ومرفقاتها النظامية</p>
+                    </div>
+                  </div>
                   <dl>
                     <div>
                       <dt>مرجع العقد</dt>
@@ -1193,7 +1439,7 @@ export default function LegalCaseWorkspace() {
                   ))}
                 </section>
               )}
-              {data.canManageCases && (
+              {data.canWrite && (
                 <details className="legal-linked-file">
                   <summary>بيانات القضية والمحكمة</summary>
                   <form
@@ -1318,7 +1564,11 @@ export default function LegalCaseWorkspace() {
                 )}
                 <div className="employee-related-list">
                   {workflows.hearings
-                    .filter((item) => item.legalRecordId === selected)
+                    .filter(
+                      (item) =>
+                        item.legalRecordId === selected &&
+                        item.status !== "cancelled",
+                    )
                     .map((item) => (
                       <article key={item.id}>
                         <div>
@@ -1329,6 +1579,32 @@ export default function LegalCaseWorkspace() {
                           </small>
                         </div>
                         <span>{item.decisionText || "لم يسجل قرار بعد"}</span>
+                        {data.canWrite &&
+                          ["scheduled", "postponed"].includes(item.status) && (
+                            <div className="legal-row-actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditor({ kind: "hearing", record: item })
+                                }
+                              >
+                                تعديل
+                              </button>
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() =>
+                                  void deleteLegalEntity(
+                                    "hearing",
+                                    item.id,
+                                    `جلسة ${item.hearingNumber}`,
+                                  )
+                                }
+                              >
+                                حذف
+                              </button>
+                            </div>
+                          )}
                       </article>
                     ))}
                 </div>
@@ -1380,7 +1656,11 @@ export default function LegalCaseWorkspace() {
                 )}
                 <div className="employee-related-list">
                   {workflows.submissions
-                    .filter((item) => item.legalRecordId === selected)
+                    .filter(
+                      (item) =>
+                        item.legalRecordId === selected &&
+                        item.status !== "superseded",
+                    )
                     .map((item) => (
                       <article key={item.id}>
                         <div>
@@ -1404,6 +1684,35 @@ export default function LegalCaseWorkspace() {
                             إرسال للمراجعة
                           </button>
                         )}
+                        {data.canWrite &&
+                          ["draft", "review"].includes(item.status) && (
+                            <div className="legal-row-actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditor({
+                                    kind: "submission",
+                                    record: item,
+                                  })
+                                }
+                              >
+                                تعديل
+                              </button>
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() =>
+                                  void deleteLegalEntity(
+                                    "submission",
+                                    item.id,
+                                    item.title,
+                                  )
+                                }
+                              >
+                                حذف
+                              </button>
+                            </div>
+                          )}
                         {workflows.canSupervise && item.status === "review" && (
                           <button
                             onClick={() =>
@@ -1475,7 +1784,11 @@ export default function LegalCaseWorkspace() {
                 )}
                 <div className="employee-related-list">
                   {workflows.settlements
-                    .filter((item) => item.legalRecordId === selected)
+                    .filter(
+                      (item) =>
+                        item.legalRecordId === selected &&
+                        item.status !== "cancelled",
+                    )
                     .map((item) => (
                       <article key={item.id}>
                         <div>
@@ -1485,6 +1798,35 @@ export default function LegalCaseWorkspace() {
                           </small>
                         </div>
                         <span>{item.concessions || "دون تنازلات"}</span>
+                        {data.canWrite &&
+                          ["draft", "pending_approval"].includes(item.status) && (
+                            <div className="legal-row-actions">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditor({
+                                    kind: "settlement",
+                                    record: item,
+                                  })
+                                }
+                              >
+                                تعديل
+                              </button>
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() =>
+                                  void deleteLegalEntity(
+                                    "settlement",
+                                    item.id,
+                                    `تسوية ${money(item.amountHalalas)}`,
+                                  )
+                                }
+                              >
+                                حذف
+                              </button>
+                            </div>
+                          )}
                         {workflows.canApproveSettlement &&
                           item.status === "pending_approval" && (
                             <>
@@ -1620,7 +1962,25 @@ export default function LegalCaseWorkspace() {
                 )}
               </section>
               <section className="legal-case-files">
-                <h3>مرفقات الشؤون القانونية</h3>
+                <div className="legal-section-heading">
+                  <div>
+                    <h3>مرفقات الشؤون القانونية والعقد</h3>
+                    <p>المستندات المحالة مع العقد والمرفقات المضافة إلى القضية</p>
+                  </div>
+                  {data.canShareExternally &&
+                    externalLawyers.length > 0 &&
+                    ((snapshot?.documents?.length ||
+                      (matter?.contractId ? 1 : 0)) + attachments.length >
+                      0) && (
+                      <button
+                        type="button"
+                        className="whatsapp-share-button"
+                        onClick={() => setShareTarget("all")}
+                      >
+                        مشاركة جميع المرفقات عبر واتساب
+                      </button>
+                    )}
+                </div>
                 {attachments.map((item) => (
                   <article className="legal-case-file-row" key={item.id}>
                     <a
@@ -1634,15 +1994,45 @@ export default function LegalCaseWorkspace() {
                         {(item.sizeBytes / 1024 / 1024).toFixed(2)} م.ب
                       </small>
                     </a>
-                    {data.canShareExternally && externalLawyers.length > 0 && (
-                      <button
-                        type="button"
-                        className="whatsapp-share-button"
-                        onClick={() => setSharingAttachment(item)}
-                      >
-                        مشاركة عبر واتساب
-                      </button>
-                    )}
+                    <div className="legal-row-actions">
+                      {data.canWrite && (
+                        <>
+                          <button
+                            type="button"
+                            className="admin-secondary"
+                            onClick={() =>
+                              setEditor({ kind: "attachment", record: item })
+                            }
+                          >
+                            تعديل
+                          </button>
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={recordBusy}
+                            onClick={() =>
+                              void deleteLegalEntity(
+                                "attachment",
+                                item.id,
+                                item.title,
+                              )
+                            }
+                          >
+                            حذف
+                          </button>
+                        </>
+                      )}
+                      {data.canShareExternally &&
+                        externalLawyers.length > 0 && (
+                          <button
+                            type="button"
+                            className="whatsapp-share-button"
+                            onClick={() => setShareTarget(item)}
+                          >
+                            مشاركة عبر واتساب
+                          </button>
+                        )}
+                    </div>
                   </article>
                 ))}
                 {!attachments.length && (
@@ -1677,6 +2067,53 @@ export default function LegalCaseWorkspace() {
               </section>
               <section className="legal-share-history">
                 <h3>سجل مشاركة الملفات مع المحامين الخارجيين</h3>
+                {matterShareBundles.map((share) => {
+                  const lawyer = data.lawyers.find(
+                    (item) => item.id === share.lawyerId,
+                  );
+                  const expired = Date.parse(share.expiresAt) <= currentTime;
+                  const active = !share.revokedAt && !expired;
+                  return (
+                    <article className="legal-share-bundle" key={share.id}>
+                      <div>
+                        <strong>
+                          جميع مرفقات العقد والملف — {share.itemCount} مرفقًا
+                        </strong>
+                        <span>
+                          إلى {lawyer?.fullName || `محامٍ #${share.lawyerId}`}
+                          {lawyer?.mobile ? ` · واتساب ${lawyer.mobile}` : ""}
+                        </span>
+                        <small>
+                          شاركه {share.sharedBy} في {preciseTime(share.sharedAt)}
+                        </small>
+                        <small>
+                          التنزيلات {share.downloadCount}/{share.maxDownloads}
+                          {share.lastAccessedAt
+                            ? ` · آخر فتح ${preciseTime(share.lastAccessedAt)}`
+                            : " · لم يُفتح بعد"}
+                        </small>
+                      </div>
+                      <span
+                        className={`workflow-status ${active ? "active" : "cancelled"}`}
+                      >
+                        {share.revokedAt
+                          ? "مُبطل"
+                          : expired
+                            ? "منتهي"
+                            : `صالح حتى ${preciseTime(share.expiresAt)}`}
+                      </span>
+                      {active && data.canShareExternally && (
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => void revokeShareBundle(share)}
+                        >
+                          إبطال الرابط
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
                 {matterShares.map((share) => {
                   const lawyer = data.lawyers.find(
                     (item) => item.id === share.lawyerId,
@@ -1697,15 +2134,12 @@ export default function LegalCaseWorkspace() {
                         </span>
                         <small>
                           شاركه {share.sharedBy} في{" "}
-                          {new Date(share.sharedAt).toLocaleString("ar-SA", {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          })}
+                          {preciseTime(share.sharedAt)}
                         </small>
                         <small>
                           التنزيلات {share.downloadCount}/{share.maxDownloads}
                           {share.lastAccessedAt
-                            ? ` · آخر فتح ${new Date(share.lastAccessedAt).toLocaleString("ar-SA")}`
+                            ? ` · آخر فتح ${preciseTime(share.lastAccessedAt)}`
                             : " · لم يُفتح بعد"}
                         </small>
                       </div>
@@ -1714,7 +2148,7 @@ export default function LegalCaseWorkspace() {
                           ? "مُبطل"
                           : expired
                             ? "منتهي"
-                            : `صالح حتى ${new Date(share.expiresAt).toLocaleString("ar-SA")}`}
+                            : `صالح حتى ${preciseTime(share.expiresAt)}`}
                       </span>
                       {active && data.canShareExternally && (
                         <button
@@ -1728,7 +2162,7 @@ export default function LegalCaseWorkspace() {
                     </article>
                   );
                 })}
-                {!matterShares.length && (
+                  {!matterShares.length && !matterShareBundles.length && (
                   <p className="legal-empty">
                     لم تُسجل مشاركة خارجية لملفات هذه القضية.
                   </p>
@@ -1801,14 +2235,38 @@ export default function LegalCaseWorkspace() {
                       !["completed", "cancelled"].includes(item.status) && (
                         <div>
                           <button
+                            type="button"
                             onClick={() => void update(item.id, "in_progress")}
                           >
                             قيد التنفيذ
                           </button>
                           <button
+                            type="button"
                             onClick={() => void update(item.id, "completed")}
                           >
                             إكمال
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditor({ kind: "activity", record: item })
+                            }
+                          >
+                            تعديل
+                          </button>
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={recordBusy}
+                            onClick={() =>
+                              void deleteLegalEntity(
+                                "activity",
+                                item.id,
+                                item.title,
+                              )
+                            }
+                          >
+                            حذف
                           </button>
                         </div>
                       )}
@@ -2224,12 +2682,352 @@ export default function LegalCaseWorkspace() {
           </section>
         </div>
       )}
-      {sharingAttachment && (
+      {editor && (
+        <div className="modal-layer legal-lawyer-modal-layer">
+          <button
+            className="drawer-backdrop"
+            aria-label="إغلاق نموذج التعديل"
+            onClick={() => setEditor(null)}
+          />
+          <section
+            className="record-modal legal-lawyer-modal legal-record-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="legal-record-editor-title"
+          >
+            <div className="drawer-head">
+              <div>
+                <span>تعديل موثق في السجل القانوني</span>
+                <h2 id="legal-record-editor-title">
+                  {editor.kind === "case"
+                    ? "تعديل بيانات الملف"
+                    : editor.kind === "activity"
+                      ? "تعديل الإجراء"
+                      : editor.kind === "attachment"
+                        ? "تعديل بيانات المرفق"
+                        : editor.kind === "hearing"
+                          ? "تعديل الجلسة"
+                          : editor.kind === "submission"
+                            ? "تعديل المذكرة"
+                            : "تعديل التسوية"}
+                </h2>
+              </div>
+              <button type="button" onClick={() => setEditor(null)}>
+                ×
+              </button>
+            </div>
+            <form key={`${editor.kind}-${editor.record.id}`} onSubmit={saveEditor}>
+              {editor.kind === "case" && (
+                <>
+                  <label>
+                    نوع الملف
+                    <select name="category" defaultValue={editor.record.category}>
+                      <option value="case">قضية أو مطالبة</option>
+                      <option value="contract">عقد</option>
+                      <option value="license">ترخيص</option>
+                      <option value="compliance">امتثال</option>
+                    </select>
+                  </label>
+                  <label>
+                    عنوان الملف
+                    <input
+                      name="title"
+                      required
+                      minLength={3}
+                      maxLength={180}
+                      defaultValue={editor.record.title}
+                    />
+                  </label>
+                  <label>
+                    الطرف الآخر
+                    <input
+                      name="counterparty"
+                      required
+                      minLength={2}
+                      maxLength={180}
+                      defaultValue={editor.record.counterparty}
+                    />
+                  </label>
+                  <label>
+                    تاريخ الانتهاء أو التجديد
+                    <input
+                      name="expiryDate"
+                      type="date"
+                      defaultValue={editor.record.expiryDate || ""}
+                    />
+                  </label>
+                  <label className="span-two">
+                    سبب الإحالة ووصف الملف
+                    <textarea
+                      name="referralReason"
+                      rows={4}
+                      maxLength={5000}
+                      defaultValue={editor.record.referralReason || ""}
+                    />
+                  </label>
+                </>
+              )}
+              {editor.kind === "activity" && (
+                <>
+                  <label>
+                    نوع الإجراء
+                    <select
+                      name="activityType"
+                      defaultValue={editor.record.activityType}
+                    >
+                      {Object.entries(types).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    الأولوية
+                    <select name="priority" defaultValue={editor.record.priority}>
+                      <option value="low">منخفض</option>
+                      <option value="medium">متوسط</option>
+                      <option value="high">عالٍ</option>
+                      <option value="critical">عاجل</option>
+                    </select>
+                  </label>
+                  <label className="span-two">
+                    عنوان الإجراء
+                    <input
+                      name="title"
+                      required
+                      minLength={3}
+                      maxLength={180}
+                      defaultValue={editor.record.title}
+                    />
+                  </label>
+                  <label>
+                    الموعد
+                    <input
+                      name="dueAt"
+                      type="datetime-local"
+                      defaultValue={dateTimeInputValue(editor.record.dueAt)}
+                    />
+                  </label>
+                  <label>
+                    المسؤول بالبريد
+                    <input
+                      name="assignedTo"
+                      type="email"
+                      defaultValue={editor.record.assignedTo || ""}
+                    />
+                  </label>
+                  <label className="span-two">
+                    التفاصيل
+                    <textarea
+                      name="details"
+                      rows={4}
+                      maxLength={5000}
+                      defaultValue={editor.record.details || ""}
+                    />
+                  </label>
+                </>
+              )}
+              {editor.kind === "attachment" && (
+                <>
+                  <label className="span-two">
+                    اسم المرفق
+                    <input
+                      name="title"
+                      required
+                      minLength={2}
+                      maxLength={180}
+                      defaultValue={editor.record.title}
+                    />
+                  </label>
+                  <label className="span-two">
+                    تصنيف المرفق
+                    <select
+                      name="documentCategory"
+                      defaultValue={editor.record.documentCategory}
+                    >
+                      <option value="general">عام</option>
+                      <option value="evidence">دليل</option>
+                      <option value="judgment">حكم</option>
+                      <option value="pleading">مذكرة أو لائحة</option>
+                      <option value="settlement">اتفاق تسوية</option>
+                      <option value="correspondence">مراسلات</option>
+                    </select>
+                  </label>
+                  <p className="form-hint span-two">
+                    لا يتغير محتوى الملف أو بصمته؛ يُحدّث الاسم والتصنيف فقط.
+                  </p>
+                </>
+              )}
+              {editor.kind === "hearing" && (
+                <>
+                  <label>
+                    رقم الجلسة
+                    <input
+                      name="hearingNumber"
+                      required
+                      maxLength={80}
+                      defaultValue={editor.record.hearingNumber}
+                    />
+                  </label>
+                  <label>
+                    الموعد
+                    <input
+                      name="scheduledAt"
+                      type="datetime-local"
+                      required
+                      defaultValue={dateTimeInputValue(editor.record.scheduledAt)}
+                    />
+                  </label>
+                  <label>
+                    المحكمة
+                    <input
+                      name="courtName"
+                      maxLength={180}
+                      defaultValue={editor.record.courtName || ""}
+                    />
+                  </label>
+                  <label>
+                    الدائرة
+                    <input
+                      name="circuitName"
+                      maxLength={180}
+                      defaultValue={editor.record.circuitName || ""}
+                    />
+                  </label>
+                  <label>
+                    الحالة
+                    <select name="status" defaultValue={editor.record.status}>
+                      <option value="scheduled">مجدولة</option>
+                      <option value="postponed">مؤجلة</option>
+                    </select>
+                  </label>
+                  <label>
+                    الجلسة التالية
+                    <input
+                      name="nextHearingAt"
+                      type="datetime-local"
+                      defaultValue={dateTimeInputValue(editor.record.nextHearingAt)}
+                    />
+                  </label>
+                  <label>
+                    الحضور — كل اسم في سطر
+                    <textarea
+                      name="attendees"
+                      rows={4}
+                      defaultValue={lines(editor.record.attendeesJson)}
+                    />
+                  </label>
+                  <label>
+                    الطلبات — كل طلب في سطر
+                    <textarea
+                      name="requests"
+                      rows={4}
+                      defaultValue={lines(editor.record.requestsJson)}
+                    />
+                  </label>
+                  <label className="span-two">
+                    قرار الجلسة
+                    <textarea
+                      name="decisionText"
+                      rows={4}
+                      maxLength={5000}
+                      defaultValue={editor.record.decisionText || ""}
+                    />
+                  </label>
+                </>
+              )}
+              {editor.kind === "submission" && (
+                <>
+                  <label>
+                    نوع المذكرة
+                    <select
+                      name="submissionType"
+                      defaultValue={editor.record.submissionType}
+                    >
+                      <option value="memorandum">مذكرة</option>
+                      <option value="pleading">لائحة</option>
+                      <option value="response">رد</option>
+                      <option value="appeal">استئناف</option>
+                    </select>
+                  </label>
+                  <label>
+                    العنوان
+                    <input
+                      name="title"
+                      required
+                      minLength={3}
+                      maxLength={180}
+                      defaultValue={editor.record.title}
+                    />
+                  </label>
+                  <label className="span-two">
+                    المحتوى
+                    <textarea
+                      name="content"
+                      rows={8}
+                      maxLength={20000}
+                      defaultValue={editor.record.content || ""}
+                    />
+                  </label>
+                  <p className="form-hint span-two">
+                    عند تعديل مذكرة تحت المراجعة تعاد تلقائيًا إلى المسودة قبل اعتمادها.
+                  </p>
+                </>
+              )}
+              {editor.kind === "settlement" && (
+                <>
+                  <label>
+                    قيمة التسوية
+                    <input
+                      name="amount"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      defaultValue={editor.record.amountHalalas / 100}
+                    />
+                  </label>
+                  <label>
+                    جدول السداد — كل دفعة في سطر
+                    <textarea
+                      name="paymentSchedule"
+                      rows={4}
+                      defaultValue={lines(editor.record.paymentScheduleJson)}
+                    />
+                  </label>
+                  <label className="span-two">
+                    التنازلات والشروط
+                    <textarea
+                      name="concessions"
+                      rows={5}
+                      maxLength={5000}
+                      defaultValue={editor.record.concessions || ""}
+                    />
+                  </label>
+                  <p className="form-hint span-two">
+                    يحفظ التعديل ويعيد التسوية إلى انتظار اعتماد المالك.
+                  </p>
+                </>
+              )}
+              <div className="modal-actions span-two">
+                <button type="button" onClick={() => setEditor(null)}>
+                  إلغاء
+                </button>
+                <button className="admin-primary" disabled={recordBusy}>
+                  {recordBusy ? "جارٍ الحفظ..." : "حفظ التعديل"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {shareTarget && (
         <div className="modal-layer">
           <button
             className="drawer-backdrop"
             aria-label="إغلاق نموذج مشاركة واتساب"
-            onClick={() => setSharingAttachment(null)}
+            onClick={() => setShareTarget(null)}
           />
           <section
             className="record-modal legal-share-modal"
@@ -2240,20 +3038,42 @@ export default function LegalCaseWorkspace() {
             <div className="drawer-head">
               <div>
                 <span>{matter?.referenceCode}</span>
-                <h2 id="legal-share-title">مشاركة ملف مع محامٍ خارجي</h2>
+                <h2 id="legal-share-title">
+                  {shareTarget === "all"
+                    ? "مشاركة جميع المرفقات مع محامٍ خارجي"
+                    : "مشاركة ملف مع محامٍ خارجي"}
+                </h2>
               </div>
-              <button type="button" onClick={() => setSharingAttachment(null)}>
+              <button type="button" onClick={() => setShareTarget(null)}>
                 ×
               </button>
             </div>
             <form onSubmit={shareOnWhatsApp}>
               <p className="legal-share-file span-two">
-                <strong>{sharingAttachment.title}</strong>
-                <span>{sharingAttachment.fileName}</span>
+                <strong>
+                  {shareTarget === "all"
+                    ? `جميع مرفقات العقد والملف (${(snapshot?.documents?.length || (matter?.contractId ? 1 : 0)) + attachments.length})`
+                    : shareTarget.title}
+                </strong>
+                <span>
+                  {shareTarget === "all"
+                    ? "رابط مشفر واحد يعرض الملفات المتاحة وقت المشاركة"
+                    : shareTarget.fileName}
+                </span>
               </p>
               <label>
                 المحامي الخارجي
-                <select name="lawyerId" required defaultValue="">
+                <select
+                  name="lawyerId"
+                  required
+                  defaultValue={
+                    assignedLawyer &&
+                    !assignedLawyer.portalUserEmail &&
+                    assignedLawyer.mobile
+                      ? assignedLawyer.id
+                      : ""
+                  }
+                >
                   <option value="" disabled>
                     اختر حساب واتساب
                   </option>
@@ -2274,12 +3094,12 @@ export default function LegalCaseWorkspace() {
                 </select>
               </label>
               <p className="form-hint span-two">
-                سيُفتح واتساب مباشرة بعد إنشاء رابط مشفر مؤقت. تُسجل ساعة
-                المشاركة واسم المشارك والمحامي وعدد مرات فتح الملف، ويمكن إبطال
-                الرابط من سجل المشاركة.
+                سيُفتح واتساب على الرقم المسجل للمحامي بعد إنشاء رابط مشفر مؤقت.
+                يسجل النظام وقت المشاركة بالثانية واسم المشارك والمحامي وعمليات
+                الفتح والتنزيل، ويمكن إبطال الرابط من سجل المشاركة.
               </p>
               <div className="modal-actions span-two">
-                <button type="button" onClick={() => setSharingAttachment(null)}>
+                <button type="button" onClick={() => setShareTarget(null)}>
                   إلغاء
                 </button>
                 <button className="admin-primary" disabled={shareBusy}>

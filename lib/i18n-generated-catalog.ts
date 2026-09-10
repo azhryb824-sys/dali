@@ -17755,5 +17755,209 @@ export const generatedUiTranslations: Record<string,{en?:string;bn?:string}> = {
   "iPhone الإدارة": {
     "en": "Administration iPhone",
     "bn": "প্রশাসনের iPhone"
+  },
+  "آخر تحديث:": {
+    "en": "Last updated:",
+    "bn": "সর্বশেষ হালনাগাদ:"
+  },
+  "إبطال مشاركة المرفقات": {
+    "en": "Revoke attachment sharing",
+    "bn": "সংযুক্তি শেয়ার বাতিল করুন"
+  },
+  "أُبطل رابط جميع المرفقات وبقي سجل المشاركة وتوقيتها محفوظين.": {
+    "en": "The all-attachments link was revoked while its sharing record and timestamp were retained.",
+    "bn": "সব সংযুক্তির লিংক বাতিল করা হয়েছে; শেয়ারের রেকর্ড ও সময় সংরক্ষিত রয়েছে।"
+  },
+  "إغلاق نموذج التعديل": {
+    "en": "Close edit form",
+    "bn": "সম্পাদনা ফর্ম বন্ধ করুন"
+  },
+  "اكتب سبب الإغلاق أو الإلغاء بوضوح قبل تحديث الحالة.": {
+    "en": "Clearly state the reason for closure or cancellation before updating the status.",
+    "bn": "অবস্থা হালনাগাদের আগে বন্ধ বা বাতিলের কারণ স্পষ্টভাবে লিখুন।"
+  },
+  "اكتب سبب الحذف": {
+    "en": "Enter the deletion reason",
+    "bn": "মুছে ফেলার কারণ লিখুন"
+  },
+  "الجلسة التالية": {
+    "en": "Next hearing",
+    "bn": "পরবর্তী শুনানি"
+  },
+  "الحضور — كل اسم في سطر": {
+    "en": "Attendees — one name per line",
+    "bn": "উপস্থিত ব্যক্তি — প্রতি লাইনে একটি নাম"
+  },
+  "الطلبات — كل طلب في سطر": {
+    "en": "Requests — one request per line",
+    "bn": "আবেদনসমূহ — প্রতি লাইনে একটি আবেদন"
+  },
+  "المحتوى": {
+    "en": "Content",
+    "bn": "বিষয়বস্তু"
+  },
+  "المستندات المحالة مع العقد والمرفقات المضافة إلى القضية": {
+    "en": "Documents referred with the contract and attachments added to the case",
+    "bn": "চুক্তির সঙ্গে পাঠানো নথি এবং মামলায় যোগ করা সংযুক্তি"
+  },
+  "الموعد": {
+    "en": "Date and time",
+    "bn": "তারিখ ও সময়"
+  },
+  "تصنيف المرفق": {
+    "en": "Attachment category",
+    "bn": "সংযুক্তির শ্রেণি"
+  },
+  "تعديل الإجراء": {
+    "en": "Edit action",
+    "bn": "পদক্ষেপ সম্পাদনা করুন"
+  },
+  "تعديل التسوية": {
+    "en": "Edit settlement",
+    "bn": "সমঝোতা সম্পাদনা করুন"
+  },
+  "تعديل الجلسة": {
+    "en": "Edit hearing",
+    "bn": "শুনানি সম্পাদনা করুন"
+  },
+  "تعديل المذكرة": {
+    "en": "Edit submission",
+    "bn": "আইনি নথি সম্পাদনা করুন"
+  },
+  "تعديل بيانات المرفق": {
+    "en": "Edit attachment details",
+    "bn": "সংযুক্তির তথ্য সম্পাদনা করুন"
+  },
+  "تعديل بيانات الملف": {
+    "en": "Edit case details",
+    "bn": "মামলার তথ্য সম্পাদনা করুন"
+  },
+  "تعديل موثق في السجل القانوني": {
+    "en": "Change documented in the legal record",
+    "bn": "আইনি রেকর্ডে নথিভুক্ত পরিবর্তন"
+  },
+  "تعذر إبطال مشاركة المرفقات": {
+    "en": "Could not revoke attachment sharing",
+    "bn": "সংযুক্তি শেয়ার বাতিল করা যায়নি"
+  },
+  "تعذر حفظ التعديل": {
+    "en": "Could not save the changes",
+    "bn": "পরিবর্তন সংরক্ষণ করা যায়নি"
+  },
+  "تم اعتماد العقد. يمكن رفع النسخة الموقعة من ملف العقد دون اعتبار غياب رابط المشاركة فشلًا في الاعتماد.": {
+    "en": "The contract was approved. The signed copy can be uploaded from the contract file; a missing share link does not mean approval failed.",
+    "bn": "চুক্তি অনুমোদিত হয়েছে। চুক্তির ফাইল থেকে স্বাক্ষরিত কপি আপলোড করা যাবে; শেয়ার লিংক না থাকাকে অনুমোদন ব্যর্থতা হিসেবে ধরা হবে না।"
+  },
+  "تم الحذف الآمن مع حفظ السبب والأثر القانوني في سجل التدقيق.": {
+    "en": "The item was safely removed, with the reason and legal trace retained in the audit log.",
+    "bn": "কারণ ও আইনি রেকর্ড অডিট লগে রেখে আইটেমটি নিরাপদে অপসারণ করা হয়েছে।"
+  },
+  "تم تسجيل وقت مشاركة جميع المرفقات بدقة وفتح محادثة واتساب للمحامي المسجل.": {
+    "en": "The exact time of sharing all attachments was recorded, and a WhatsApp chat was opened for the registered lawyer.",
+    "bn": "সব সংযুক্তি শেয়ারের সঠিক সময় নথিভুক্ত হয়েছে এবং নিবন্ধিত আইনজীবীর WhatsApp কথোপকথন খোলা হয়েছে।"
+  },
+  "تم حفظ التعديل وتوثيق المنفذ ووقت العملية.": {
+    "en": "The change was saved with the actor and operation time documented.",
+    "bn": "পরিবর্তন সংরক্ষিত হয়েছে এবং কার্যসম্পাদনকারী ও সময় নথিভুক্ত হয়েছে।"
+  },
+  "جدول السداد — كل دفعة في سطر": {
+    "en": "Payment schedule — one payment per line",
+    "bn": "পরিশোধের সময়সূচি — প্রতি লাইনে একটি পরিশোধ"
+  },
+  "جميع مرفقات العقد والملف —": {
+    "en": "All contract and case attachments —",
+    "bn": "চুক্তি ও মামলার সব সংযুক্তি —"
+  },
+  "حالة الملف": {
+    "en": "Case status",
+    "bn": "মামলার অবস্থা"
+  },
+  "حذف آمن": {
+    "en": "Safe removal",
+    "bn": "নিরাপদ অপসারণ"
+  },
+  "حذف الملف": {
+    "en": "Remove case",
+    "bn": "মামলা অপসারণ করুন"
+  },
+  "حذف مع حفظ الأثر": {
+    "en": "Remove and retain audit trail",
+    "bn": "অডিট রেকর্ড রেখে অপসারণ করুন"
+  },
+  "حفظ التعديل": {
+    "en": "Save changes",
+    "bn": "পরিবর্তন সংরক্ষণ করুন"
+  },
+  "رابط مشفر واحد يعرض الملفات المتاحة وقت المشاركة": {
+    "en": "One encrypted link showing the files available at the time of sharing",
+    "bn": "শেয়ারের সময় উপলভ্য ফাইল দেখানোর জন্য একটি এনক্রিপ্টেড লিংক"
+  },
+  "سبب إبطال رابط جميع المرفقات": {
+    "en": "Reason for revoking the all-attachments link",
+    "bn": "সব সংযুক্তির লিংক বাতিলের কারণ"
+  },
+  "سبب الإحالة ووصف الملف": {
+    "en": "Referral reason and case description",
+    "bn": "রেফারেলের কারণ ও মামলার বিবরণ"
+  },
+  "سبب الحذف الإلزامي": {
+    "en": "Required deletion reason",
+    "bn": "অপসারণের আবশ্যিক কারণ"
+  },
+  "سيُفتح واتساب على الرقم المسجل للمحامي بعد إنشاء رابط مشفر مؤقت. يسجل النظام وقت المشاركة بالثانية واسم المشارك والمحامي وعمليات الفتح والتنزيل، ويمكن إبطال الرابط من سجل المشاركة.": {
+    "en": "WhatsApp will open for the lawyer's registered number after a temporary encrypted link is created. The system records the sharing time to the second, the sender, the lawyer, and every open and download; the link can be revoked from the sharing log.",
+    "bn": "অস্থায়ী এনক্রিপ্টেড লিংক তৈরির পর আইনজীবীর নিবন্ধিত নম্বরে WhatsApp খুলবে। সিস্টেম সেকেন্ডসহ শেয়ারের সময়, প্রেরক, আইনজীবী এবং প্রতিটি খোলা ও ডাউনলোড নথিভুক্ত করে; শেয়ার লগ থেকে লিংক বাতিল করা যায়।"
+  },
+  "عند تعديل مذكرة تحت المراجعة تعاد تلقائيًا إلى المسودة قبل اعتمادها.": {
+    "en": "Editing a submission under review automatically returns it to draft before approval.",
+    "bn": "পর্যালোচনাধীন আইনি নথি সম্পাদনা করলে অনুমোদনের আগে সেটি স্বয়ংক্রিয়ভাবে খসড়ায় ফিরে যায়।"
+  },
+  "عنوان الملف": {
+    "en": "Case title",
+    "bn": "মামলার শিরোনাম"
+  },
+  "قضية أو مطالبة": {
+    "en": "Case or claim",
+    "bn": "মামলা বা দাবি"
+  },
+  "قيد الإجراء": {
+    "en": "In progress",
+    "bn": "প্রক্রিয়াধীন"
+  },
+  "لا يتغير محتوى الملف أو بصمته؛ يُحدّث الاسم والتصنيف فقط.": {
+    "en": "The file content and fingerprint remain unchanged; only the name and category are updated.",
+    "bn": "ফাইলের বিষয়বস্তু ও ফিঙ্গারপ্রিন্ট অপরিবর্তিত থাকে; শুধু নাম ও শ্রেণি হালনাগাদ হয়।"
+  },
+  "مرفقًا": {
+    "en": "attachments",
+    "bn": "সংযুক্তি"
+  },
+  "مرفقات الشؤون القانونية والعقد": {
+    "en": "Legal case and contract attachments",
+    "bn": "আইনি মামলা ও চুক্তির সংযুক্তি"
+  },
+  "مشاركة جميع المرفقات عبر واتساب": {
+    "en": "Share all attachments via WhatsApp",
+    "bn": "WhatsApp-এর মাধ্যমে সব সংযুক্তি শেয়ার করুন"
+  },
+  "مشاركة جميع المرفقات مع محامٍ خارجي": {
+    "en": "Share all attachments with external counsel",
+    "bn": "বহিরাগত আইনজীবীর সঙ্গে সব সংযুক্তি শেয়ার করুন"
+  },
+  "نسخة الإحالة المحفوظة ومرفقاتها النظامية": {
+    "en": "Stored referral snapshot and its governed attachments",
+    "bn": "সংরক্ষিত রেফারেল স্ন্যাপশট ও নিয়ন্ত্রিত সংযুক্তি"
+  },
+  "نوع الإجراء": {
+    "en": "Action type",
+    "bn": "পদক্ষেপের ধরন"
+  },
+  "نوع المذكرة": {
+    "en": "Submission type",
+    "bn": "আইনি নথির ধরন"
+  },
+  "يحفظ التعديل ويعيد التسوية إلى انتظار اعتماد المالك.": {
+    "en": "Saves the changes and returns the settlement to pending owner approval.",
+    "bn": "পরিবর্তন সংরক্ষণ করে এবং সমঝোতাকে মালিকের অনুমোদনের অপেক্ষায় ফেরত পাঠায়।"
   }
 };

@@ -1,4 +1,4 @@
-import { desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   companyDocuments,
@@ -158,7 +158,7 @@ export async function refreshOperationalNotifications(options: { force?: boolean
 
   const [documents, legalItems, lawyerItems, legalActivities, paymentItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems, employeeItems] = await Promise.all([
     db.select().from(companyDocuments).where(eq(companyDocuments.status, "active")).limit(1000),
-    db.select().from(legalRecords).where(ne(legalRecords.status, "closed")).limit(1000),
+    db.select().from(legalRecords).where(and(ne(legalRecords.status, "closed"), ne(legalRecords.status, "cancelled"), isNull(legalRecords.deletedAt))).limit(1000),
     db.select().from(legalLawyers).where(eq(legalLawyers.status, "active")).limit(1000),
     db.select().from(legalCaseActivities).where(ne(legalCaseActivities.status, "completed")).limit(5000),
     db.select().from(contractPaymentSchedules).where(ne(contractPaymentSchedules.status, "paid")).limit(5000),
@@ -228,7 +228,8 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   }
 
   for(const payment of paymentItems){if(payment.status==="cancelled")continue;const days=daysUntil(payment.dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`contract-payment-due:${payment.id}:${payment.dueDate}`,eventType:days<0?"contract-payment-overdue":"contract-payment-due",title:days<0?"دفعة عقد متأخرة":"دفعة عقد تقترب من الاستحقاق",message:`الدفعة ${payment.installmentNumber} — ${payment.title} — ${formatAlertDate(payment.dueDate)}.`,severity:days<0?"critical":days<=2?"warning":"info",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance"})}
-  for(const activity of legalActivities){if(!activity.dueAt||activity.status==="cancelled")continue;const dueDate=activity.dueAt.slice(0,10);const days=daysUntil(dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`legal-activity-due:${activity.id}:${dueDate}`,eventType:days<0?"legal-activity-overdue":"legal-activity-due",title:days<0?"إجراء قانوني متأخر":"موعد قانوني قريب",message:`${activity.title} — ${formatAlertDate(dueDate)}.`,severity:days<0||activity.priority==="critical"?"critical":"warning",module:"legal",entityType:"legal-record",entityId:activity.legalRecordId,actionView:"legal",targetDepartment:"legal",targetEmail:activity.assignedTo})}
+  const activeLegalRecordIds = new Set(legalItems.map((item) => item.id));
+  for(const activity of legalActivities){if(!activeLegalRecordIds.has(activity.legalRecordId)||!activity.dueAt||activity.status==="cancelled")continue;const dueDate=activity.dueAt.slice(0,10);const days=daysUntil(dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`legal-activity-due:${activity.id}:${dueDate}`,eventType:days<0?"legal-activity-overdue":"legal-activity-due",title:days<0?"إجراء قانوني متأخر":"موعد قانوني قريب",message:`${activity.title} — ${formatAlertDate(dueDate)}.`,severity:days<0||activity.priority==="critical"?"critical":"warning",module:"legal",entityType:"legal-record",entityId:activity.legalRecordId,actionView:"legal",targetDepartment:"legal",targetEmail:activity.assignedTo})}
 
   for (const request of privacyRequests) {
     const dueDays = Math.ceil((new Date(request.dueAt).getTime() - Date.now()) / 86400000);

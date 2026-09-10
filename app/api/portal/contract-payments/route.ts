@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
 import { getDb } from "@/db";
-import { bankAccounts, chartOfAccounts, clientContacts, companyAssets, companyDocuments, contractPaymentSchedules, contractProfessions, financialRecords, journalEntries, legalRecords, workforceContracts } from "@/db/schema";
+import { bankAccounts, chartOfAccounts, clientContacts, clients, companyAssets, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, financialRecords, journalEntries, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { createDraftJournal } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
 import { cleanText, makeReference, objectKey } from "@/lib/company-documents";
@@ -103,7 +103,35 @@ export async function PATCH(request:Request){
   }
   if(action==="refer-legal"){
     if(contract.contractDirection==="dali_purchaser")return jsonNoStore({error:"عقد شراء العمالة لا يحال كملف عميل متأخر؛ عالج التزام المورد من المشتريات أو الشؤون القانونية"},{status:409});
-    if(!owner(access))return jsonNoStore({error:"إحالة ملف العميل للشؤون القانونية من صلاحيات المالك فقط"},{status:403});if(payment.status==="paid"||payment.dueDate>=now.slice(0,10))return jsonNoStore({error:"لا يمكن الإحالة القانونية قبل التأخر الفعلي في السداد"},{status:409});const reason=cleanText(body.reason,1000);if(reason.length<10)return jsonNoStore({error:"اكتب سبب إحالة واضحاً لا يقل عن 10 أحرف"},{status:400});const referenceCode=`LGL-${contract.referenceCode}`.slice(0,120);let[legal]=await db.insert(legalRecords).values({referenceCode,category:"case",title:`تحصيل متأخر - ${contract.referenceCode}`,counterparty:contract.clientName,expiryDate:null,status:"reviewing"}).onConflictDoNothing().returning();if(!legal)legal=(await db.query.legalRecords.findFirst({where:eq(legalRecords.referenceCode,referenceCode)}))!;await auditPortalAction({actorEmail:access.user.email,action:"client-file-referred-legal",entityType:"legal-record",entityId:legal.id,after:{...legal,contractId:contract.id,paymentId:payment.id,reason},reason,correlationId:requestCorrelationId(request)});await emitPortalNotification({eventType:"client-file-referred-legal",title:"أُحيل ملف عميل متأخر للشؤون القانونية",message:`${contract.clientName} - ${contract.referenceCode}: ${reason}`,severity:"critical",module:"legal",entityType:"legal-record",entityId:legal.id,actionView:"legal",targetDepartment:"legal"}).catch(()=>undefined);return jsonNoStore({legalRecord:legal});
+    if(!owner(access))return jsonNoStore({error:"إحالة ملف العميل للشؤون القانونية من صلاحيات المالك فقط"},{status:403});
+    if(payment.status==="paid"||payment.dueDate>=now.slice(0,10))return jsonNoStore({error:"لا يمكن الإحالة القانونية قبل التأخر الفعلي في السداد"},{status:409});
+    const reason=cleanText(body.reason,1000);
+    if(reason.length<10)return jsonNoStore({error:"اكتب سبب إحالة واضحاً لا يقل عن 10 أحرف"},{status:400});
+    const [client,finances,professions,assignments,allPayments]=await Promise.all([
+      contract.clientId?db.query.clients.findFirst({where:eq(clients.id,contract.clientId)}):Promise.resolve(null),
+      db.select().from(financialRecords).where(eq(financialRecords.contractId,contract.id)),
+      db.select().from(contractProfessions).where(eq(contractProfessions.contractId,contract.id)),
+      db.select().from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId,contract.id)),
+      db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId,contract.id)),
+    ]);
+    const documentIds=[...new Set([
+      contract.documentId,
+      ...finances.map(item=>item.documentId),
+      ...allPayments.map(item=>item.invoiceDocumentId),
+    ].filter((value):value is number=>typeof value==="number"&&Number.isInteger(value)&&value>0))];
+    const documents=documentIds.length?await db.select().from(companyDocuments).where(inArray(companyDocuments.id,documentIds)):[];
+    const workerIds=[...new Set(assignments.map(item=>item.workerId))];
+    const linkedWorkers=workerIds.length?await db.select().from(workers).where(inArray(workers.id,workerIds)):[];
+    const snapshot={capturedAt:now,referral:{reason,referredBy:access.user.email,paymentId:payment.id,overdueSince:payment.dueDate},client,contract,documents,payments:allPayments,finances,professions,assignments,workers:linkedWorkers};
+    const referenceCode=`LGL-${contract.referenceCode}`.slice(0,120);
+    const [created]=await db.insert(legalRecords).values({referenceCode,category:"case",title:`تحصيل متأخر - ${contract.referenceCode}`,counterparty:contract.clientName,clientId:contract.clientId,contractId:contract.id,referralReason:reason,referredBy:access.user.email,referredAt:now,fileSnapshotJson:JSON.stringify(snapshot),expiryDate:null,status:"reviewing"}).onConflictDoNothing().returning();
+    let legal=created||await db.query.legalRecords.findFirst({where:eq(legalRecords.referenceCode,referenceCode)});
+    if(!legal)return jsonNoStore({error:"تعذر إنشاء الملف القانوني"},{status:409});
+    if(!created){const[updatedLegal]=await db.update(legalRecords).set({clientId:contract.clientId,contractId:contract.id,referralReason:reason,referredBy:access.user.email,referredAt:now,fileSnapshotJson:JSON.stringify(snapshot),status:"reviewing",deletedAt:null,deletedBy:null,deletionReason:null,updatedAt:now}).where(eq(legalRecords.id,legal.id)).returning();if(!updatedLegal)return jsonNoStore({error:"تغير الملف القانوني قبل تحديث الإحالة"},{status:409});legal=updatedLegal;}
+    if(created)await db.insert(legalCaseActivities).values([{legalRecordId:legal.id,activityType:"task",title:"مراجعة ملف التحصيل المتأخر",details:`مراجعة العقد والمرفقات والدفعة رقم ${payment.installmentNumber}.`,priority:"high",status:"open",createdBy:access.user.email,updatedAt:now},{legalRecordId:legal.id,activityType:"deadline",title:"تحديد إجراء المطالبة النظامية",details:"مراجعة مهلة الإشعار والمطالبة وفق العقد والأنظمة.",priority:"critical",status:"open",dueAt:new Date(Date.now()+3*86400000).toISOString(),createdBy:access.user.email,updatedAt:now}]);
+    await auditPortalAction({actorEmail:access.user.email,action:"client-file-referred-legal",entityType:"legal-record",entityId:legal.id,after:{...legal,paymentId:payment.id,snapshotCounts:{documents:documents.length,payments:allPayments.length,finances:finances.length,workers:linkedWorkers.length}},reason,correlationId:requestCorrelationId(request)});
+    await emitPortalNotification({eventType:"client-file-referred-legal",title:"أُحيل ملف عميل متأخر للشؤون القانونية",message:`${contract.clientName} - ${contract.referenceCode} — ${documents.length} مرفقات عقد: ${reason}`,severity:"critical",module:"legal",entityType:"legal-record",entityId:legal.id,actionView:"legal",targetDepartment:"legal"}).catch(()=>undefined);
+    return jsonNoStore({legalRecord:legal});
   }
   return jsonNoStore({error:"الإجراء غير معروف"},{status:400});
 }
