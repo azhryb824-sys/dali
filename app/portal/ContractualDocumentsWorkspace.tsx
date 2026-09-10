@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 import OperationsWorkspace from "./OperationsWorkspace";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -72,11 +73,11 @@ export default function ContractualDocumentsWorkspace({
       fetch("/api/portal/letters", { cache: "no-store" }),
       fetch("/api/portal/operations?limit=100", { cache: "no-store" }),
     ]);
-    const letterData = (await letterResponse.json()) as {
+    const letterData = (await readApiJson(letterResponse)) as {
       letters?: Letter[];
       error?: string;
     };
-    const operationData = (await operationResponse.json()) as {
+    const operationData = (await readApiJson(operationResponse)) as {
       quotes?: Quote[];
     };
     if (!letterResponse.ok)
@@ -126,7 +127,7 @@ export default function ContractualDocumentsWorkspace({
         const status = letter.status === "draft" ? "approved" : "cancelled";
         const reason =
           status === "cancelled"
-            ? window.prompt("سبب الإلغاء (10 أحرف على الأقل)") || ""
+            ? await appPrompt("سبب الإلغاء (10 أحرف على الأقل)", { title: "إلغاء الخطاب", multiline: true, minLength: 10, tone: "danger" }) || ""
             : "";
         if (status === "cancelled" && reason.length < 10)
           throw new Error("سبب الإلغاء مطلوب");
@@ -176,7 +177,7 @@ export default function ContractualDocumentsWorkspace({
     }
   }
   async function remove(letter: Letter) {
-    if (!window.confirm(`حذف مسودة ${letter.referenceCode}؟`)) return;
+    if (!await appConfirm(`حذف مسودة ${letter.referenceCode}؟`, { title: "حذف مسودة الخطاب", tone: "danger", confirmLabel: "حذف" })) return;
     setBusy(letter.id);
     try {
       const response = await fetch(`/api/portal/letters?id=${letter.id}`, {

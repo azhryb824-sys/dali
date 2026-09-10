@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appConfirm } from "@/app/components/AppDialogProvider";
 
 
 import { useCallback, useEffect, useState } from "react";
@@ -28,7 +29,7 @@ export default function IntegrationManager() {
   }, [load]);
 
   async function action(name: "dispatch" | "retry" | "cleanup-transient", id?: string) {
-    if (name === "cleanup-transient" && !window.confirm("سيتم حذف سجلات التقييد والعمليات والجلسات المنتهية وأحداث التكامل المعالجة الأقدم من 90 يوماً. هل تريد المتابعة؟")) return;
+    if (name === "cleanup-transient" && !await appConfirm("سيتم حذف سجلات التقييد والعمليات والجلسات المنتهية وأحداث التكامل المعالجة الأقدم من 90 يوماً. هل تريد المتابعة؟", { title: "تنظيف السجلات القديمة", tone: "danger", confirmLabel: "تنظيف السجلات" })) return;
     setBusy(id || name); setNotice("");
     try {
       const response = await fetch("/api/portal/integrations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: name, id }) });

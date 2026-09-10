@@ -1,5 +1,6 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Device = {
@@ -31,7 +32,7 @@ function dateTime(value: string | null) {
 }
 
 async function responseJson<T>(response: Response) {
-  const payload = await response.json().catch(() => ({})) as T & { error?: string };
+  const payload = await readApiJson<T & { error?: string }>(response).catch(() => ({} as T & { error?: string }));
   if (!response.ok) throw new Error(payload.error || "تعذّر تنفيذ العملية");
   return payload;
 }

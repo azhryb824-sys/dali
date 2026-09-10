@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appConfirm } from "@/app/components/AppDialogProvider";
 
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -168,7 +169,7 @@ export default function LiveChatWidget() {
 
   async function requestVideoInterview(){setVideoBusy(true);setError("");try{const response=await fetch("/api/video-interviews",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});const result=await readApiJson(response)as{interview?:PublicVideoInterview;businessHours?:BusinessHours;error?:string};if(!response.ok||!result.interview)throw new Error(result.error||"تعذّر طلب المقابلة المرئية");setVideoInterview(result.interview);if(result.businessHours)setBusinessHours(result.businessHours)}catch(videoError){setError(videoError instanceof Error?videoError.message:"تعذّر طلب المقابلة المرئية")}finally{setVideoBusy(false)}}
 
-  async function endConversation(){if(!window.confirm("هل تريد إنهاء المحادثة والانتقال إلى التقييم؟"))return;setSending(true);setError("");try{const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"end"})});const result=await readApiJson(response)as{conversation?:PublicConversation;error?:string};if(!response.ok||!result.conversation)throw new Error(result.error||"تعذّر إنهاء المحادثة");setConversation(current=>current?{...current,...result.conversation}:current)}catch(endError){setError(endError instanceof Error?endError.message:"تعذّر إنهاء المحادثة")}finally{setSending(false)}}
+  async function endConversation(){if(!await appConfirm("هل تريد إنهاء المحادثة والانتقال إلى التقييم؟",{title:"إنهاء المحادثة"}))return;setSending(true);setError("");try{const response=await fetch("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"end"})});const result=await readApiJson(response)as{conversation?:PublicConversation;error?:string};if(!response.ok||!result.conversation)throw new Error(result.error||"تعذّر إنهاء المحادثة");setConversation(current=>current?{...current,...result.conversation}:current)}catch(endError){setError(endError instanceof Error?endError.message:"تعذّر إنهاء المحادثة")}finally{setSending(false)}}
 
   async function submitRating(event:FormEvent<HTMLFormElement>,channel:"chat"|"video"){event.preventDefault();setRatingBusy(true);setError("");try{const values=Object.fromEntries(new FormData(event.currentTarget));const endpoint=channel==="chat"?"/api/chat":"/api/video-interviews";const response=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"rate",...(channel==="video"?{interviewId:videoInterview?.id}:{}),...values})});const result=await readApiJson(response)as{error?:string};if(!response.ok)throw new Error(result.error||"تعذّر إرسال التقييم");if(channel==="chat")setConversation(current=>current?{...current,ratingSubmitted:true}:current);else setVideoInterview(null)}catch(ratingError){setError(ratingError instanceof Error?ratingError.message:"تعذّر إرسال التقييم")}finally{setRatingBusy(false)}}
 

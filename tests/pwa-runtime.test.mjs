@@ -101,7 +101,8 @@ test("temporary PWA access cannot replace the user's normal login", async () => 
   assert.match(launch, /رقم هويته وكلمة مروره/);
   assert.match(proxy, /desktopOnlyPath/);
   assert.match(proxy, /pwaAccessFromCookieHeader/);
-  assert.match(proxy, /trustedNativeRequest = desktopRequest \|\| verifiedMobileRequest/);
+  assert.match(proxy, /trustedNativeRequest = verifiedDesktopRequest \|\| verifiedMobileRequest/);
+  assert.match(proxy, /permittedBootstrapRequest = nativeBootstrapPath\.test/);
   assert.match(proxy, /!trustedNativeRequest && !trustedPwaRequest/);
   assert.match(login, /hasAuthorizedApplicationEntry/);
   assert.match(login, /pwaDevices\.status/);

@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appConfirm } from "@/app/components/AppDialogProvider";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createWhatsAppUrl } from "@/lib/whatsapp";
@@ -334,7 +335,7 @@ export default function ContractBillingWorkspace() {
       const stampResponse = await fetch("/api/portal/document-stamps", {
           cache: "no-store",
         }),
-        stampData = (await stampResponse.json()) as {
+        stampData = (await readApiJson(stampResponse)) as {
           stamps?: Array<{ id: number; name: string }>;
           error?: string;
         };
@@ -422,7 +423,7 @@ export default function ContractBillingWorkspace() {
     setEditingContract(contract);
   }
   async function deleteContract(contract: Contract) {
-    if (!window.confirm(`حذف مسودة العقد ${contract.referenceCode} نهائيًا؟`))
+    if (!await appConfirm(`حذف مسودة العقد ${contract.referenceCode} نهائيًا؟`, { title: "حذف مسودة العقد", tone: "danger", confirmLabel: "حذف" }))
       return;
     setBusy(-contract.id);
     setNotice("");

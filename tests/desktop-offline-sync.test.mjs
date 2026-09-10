@@ -20,7 +20,9 @@ test("desktop uses the same production portal with encrypted local persistence",
 test("administrative entry is desktop-only while public pages remain available",async()=>{
   const [proxy,main,desktopPackage]=await Promise.all([read("proxy.ts"),read("desktop/main.mjs"),read("desktop/package.json")]);
   assert.match(proxy,/desktopOnlyPath/);
-  assert.match(proxy,/x-dali-desktop-app/);
+  assert.match(proxy,/desktopDeviceId/);
+  assert.match(proxy,/desktopAccessFromCookieHeader/);
+  assert.match(proxy,/verifiedDesktopRequest/);
   assert.match(proxy,/DALI_ALLOW_BROWSER_PORTAL/);
   assert.match(main,/webRequest\.onBeforeSendHeaders/);
   assert.match(main,/dali-desktop-v1/);
@@ -47,10 +49,15 @@ test("desktop entry uses a short-lived device-bound link that only opens login",
   assert.match(token,/HttpOnly; SameSite=Strict/);
   assert.match(issue,/enforcePublicRateLimit/);
   assert.match(redeem,/verifyDesktopEntryToken/);
+  assert.match(redeem,/issueDesktopAccessToken/);
+  assert.match(redeem,/desktopAccessCookie/);
+  assert.match(redeem,/responseHeaders\.append\("set-cookie", desktopAccessCookie/);
   assert.match(redeem,/\/login\?returnTo=%2Fportal/);
   assert.doesNotMatch(redeem,/createIdentityToken|issuePortalSession/);
   assert.match(login,/hasVerifiedDesktopEntry/);
   assert.match(proxy,/desktop-access/);
+  assert.match(token,/DESKTOP_ACCESS_SECONDS = 8 \* 60 \* 60/);
+  assert.match(token,/__Host-dali_desktop_access/);
 });
 
 test("macOS packaging keeps the Arabic bundle name byte-identical to Electron helpers",async()=>{

@@ -8,6 +8,7 @@ import { WebsiteContentProvider } from "@/app/components/WebsiteContentProvider"
 import { SITE } from "@/lib/site";
 import { getWebsiteContent, toPublicWebsiteContent } from "@/lib/website-content";
 import { TodayDateDefaults } from "@/app/components/TodayDateDefaults";
+import { AppDialogProvider } from "@/app/components/AppDialogProvider";
 import { cookies, headers } from "next/headers";
 import LocaleRuntime from "@/app/components/LocaleRuntime";
 import { localeCookieName, localeDirection, normalizeAppLocale } from "@/lib/i18n";
@@ -71,5 +72,5 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const content = await getWebsiteContent();
   const stored=(await cookies()).get(localeCookieName)?.value;const locale=normalizeAppLocale(stored)??"ar";
-  return <html lang={locale} dir={localeDirection(locale)}><body><LocaleRuntime initialLocale={locale} websiteTranslations={locale === "ar" ? {} : content.translations[locale]}/><TodayDateDefaults/><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></body></html>;
+  return <html lang={locale} dir={localeDirection(locale)}><body><LocaleRuntime initialLocale={locale} websiteTranslations={locale === "ar" ? {} : content.translations[locale]}/><TodayDateDefaults/><AppDialogProvider><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></AppDialogProvider></body></html>;
 }

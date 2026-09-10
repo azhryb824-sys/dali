@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb, getSqlClient } from "@/db";
 import { passwordResetTokens, portalAuthCredentials, pwaDevices } from "@/db/schema";
 import { createIdentityToken, identityCookie, sha256, verifyPasswordHash } from "@/lib/credential-auth";
-import { DESKTOP_APP_HEADER, DESKTOP_APP_MARKER } from "@/lib/desktop-entry";
+import { desktopAccessCookie, desktopDeviceId, desktopEntryFromCookieHeader, issueDesktopAccessToken } from "@/lib/desktop-entry";
 import { issueMobileAccessToken, mobileAccessCookie, mobileAccessFromCookieHeader } from "@/lib/mobile-access";
 import { isDaliMobileRequest, mobileAppPlatform } from "@/lib/mobile-entry";
 import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-error";
@@ -18,7 +18,8 @@ function safePortalReturnPath(value: string) {
 type LoginCredential = { identifier: string; email: string; displayName: string; passwordHash: string; mustChangePassword: boolean };
 
 async function hasAuthorizedApplicationEntry(request: Request) {
-  if (request.headers.get(DESKTOP_APP_HEADER) === DESKTOP_APP_MARKER) return true;
+  if (desktopDeviceId(request.headers)) return true;
+  if (await desktopEntryFromCookieHeader(request.headers, request.headers.get("cookie"))) return true;
   if (isDaliMobileRequest(request.headers)) return true;
   if (await mobileAccessFromCookieHeader(request.headers.get("cookie"))) return true;
   if (process.env.DALI_ALLOW_BROWSER_PORTAL === "true") return true;
@@ -143,6 +144,10 @@ export async function POST(request: Request) {
     });
     headers.append("set-cookie", identityCookie(request, token));
     if (mobilePlatform) headers.append("set-cookie", mobileAccessCookie(request, await issueMobileAccessToken(mobilePlatform)));
+    if (desktopDeviceId(request.headers)) {
+      const desktopAccessToken = await issueDesktopAccessToken(request.headers);
+      if (desktopAccessToken) headers.append("set-cookie", desktopAccessCookie(request, desktopAccessToken));
+    }
     return new Response(null, {
       status: 303,
       headers,

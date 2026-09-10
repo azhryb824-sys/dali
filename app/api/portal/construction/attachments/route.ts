@@ -13,9 +13,10 @@ const MAX_BYTES = 20 * 1024 * 1024;
 const engineeringTypes = new Set(["daily_log", "document", "rfi", "submittal", "inspection", "ncr", "safety", "handover"]);
 const reviewStatuses = new Set(["under_review", "approved", "approved_as_noted", "revise_resubmit", "rejected"]);
 const text = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
+type PortalApiAccess = NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>;
 
-async function authorization(recordId: number, write = false) {
-  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+async function authorization(recordId: number, write = false, verifiedAccess?: PortalApiAccess) {
+  const access = verifiedAccess || await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access) return null;
   const scopes = await getActivePortalScopes(access);
   const permitted = await hasPortalPermission(access, "construction", write ? "write" : "read");
@@ -29,9 +30,11 @@ async function authorization(recordId: number, write = false) {
 }
 
 export async function GET(request: Request) {
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access) return jsonNoStore({ error: "غير مصرح بعرض ملفات هذا السجل" }, { status: 403 });
   const recordId = Number(new URL(request.url).searchParams.get("recordId"));
   if (!Number.isInteger(recordId) || recordId < 1) return jsonNoStore({ error: "معرف السجل غير صحيح" }, { status: 400 });
-  if (!(await authorization(recordId))) return jsonNoStore({ error: "غير مصرح بعرض ملفات هذا السجل" }, { status: 403 });
+  if (!(await authorization(recordId, false, access))) return jsonNoStore({ error: "غير مصرح بعرض ملفات هذا السجل" }, { status: 403 });
   const attachments = await getDb().select().from(constructionRecordAttachments)
     .where(eq(constructionRecordAttachments.recordId, recordId)).orderBy(desc(constructionRecordAttachments.revision));
   return jsonNoStore({ attachments });
@@ -39,11 +42,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access) return jsonNoStore({ error: "غير مصرح برفع ملف لهذا السجل" }, { status: 403 });
   let storageKey = "";
   try {
     const form = await request.formData();
     const recordId = Number(form.get("recordId"));
-    const auth = Number.isInteger(recordId) && recordId > 0 ? await authorization(recordId, true) : null;
+    const auth = Number.isInteger(recordId) && recordId > 0 ? await authorization(recordId, true, access) : null;
     if (!auth) return jsonNoStore({ error: "غير مصرح برفع ملف لهذا السجل" }, { status: 403 });
     const file = form.get("file");
     const title = text(form.get("title"), 180);
@@ -74,6 +79,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access) return jsonNoStore({ error: "غير مصرح بمراجعة هذا الإصدار" }, { status: 403 });
   const parsed = await readLimitedJson(request, 8_000);
   if (!parsed.ok) return parsed.response;
   const body = parsed.value as Record<string, unknown>;
@@ -83,7 +90,7 @@ export async function PATCH(request: Request) {
   const db = getDb();
   const current = await db.query.constructionRecordAttachments.findFirst({ where: eq(constructionRecordAttachments.id, id) });
   if (!current) return jsonNoStore({ error: "الإصدار غير موجود" }, { status: 404 });
-  const auth = await authorization(current.recordId, true);
+  const auth = await authorization(current.recordId, true, access);
   if (!auth) return jsonNoStore({ error: "غير مصرح بمراجعة هذا الإصدار" }, { status: 403 });
   if (!(await hasPortalPermission(auth.access, "construction", "approve"))) return jsonNoStore({ error: "قرار مراجعة الإصدار يتطلب صلاحية اعتماد المقاولات" }, { status: 403 });
   if (current.createdBy === auth.access.user.email && !canApproveOwn(auth.scopes)) return jsonNoStore({ error: "فصل الواجبات يمنع منشئ الإصدار من اعتماده" }, { status: 409 });

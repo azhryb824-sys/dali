@@ -7,6 +7,7 @@ import { auditPortalAction } from "@/lib/audit";
 import { closeAttendanceSession, enforceNightlyAttendanceCutoff, startAttendanceSession, touchAttendanceSession } from "@/lib/attendance-governance";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { mobileAccessFromCookieHeader } from "@/lib/mobile-access";
+import { desktopAccessFromCookieHeader } from "@/lib/desktop-entry";
 import { isSecureExternalRequest } from "@/lib/request-origin";
 import { requestSourceHash, sha256 } from "@/lib/security";
 
@@ -74,6 +75,8 @@ async function requestUserAgentHash(source: Pick<Headers, "get">) {
   try {
     const mobileAccess = await mobileAccessFromCookieHeader(source.get("cookie"));
     if (mobileAccess) return sha256(`dali-mobile-v1:${mobileAccess.platform}:${mobileAccess.nonce}`);
+    const desktopAccess = await desktopAccessFromCookieHeader(source, source.get("cookie"));
+    if (desktopAccess) return sha256(`dali-desktop-v2:${desktopAccess.deviceId}:${desktopAccess.nonce}`);
   } catch {
     // Preserve the existing browser binding if mobile token verification fails.
   }

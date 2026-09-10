@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import styles from "./signature.module.css";
+import { readApiJson } from "@/lib/client-api";
 
 type ContractInfo = { referenceCode: string; clientName: string; title: string; fileName: string; expiresAt: string };
 
@@ -16,7 +17,7 @@ export default function SignatureUploadClient({ token }: { token: string }) {
     let active = true;
     fetch(`/api/contracts/signature/${token}`, { cache: "no-store" })
       .then(async (response) => {
-        const data = await response.json() as { contract?: ContractInfo; error?: string };
+        const data = await readApiJson<{ contract?: ContractInfo; error?: string }>(response);
         if (!response.ok || !data.contract) throw new Error(data.error || "تعذّر فتح رابط العقد");
         if (active) { setContract(data.contract); setMessage(""); }
       })
@@ -30,7 +31,7 @@ export default function SignatureUploadClient({ token }: { token: string }) {
     try {
       const form = new FormData(event.currentTarget);
       const response = await fetch(`/api/contracts/signature/${token}`, { method: "POST", body: form });
-      const data = await response.json() as { error?: string; referenceCode?: string };
+      const data = await readApiJson<{ error?: string; referenceCode?: string }>(response);
       if (!response.ok) throw new Error(data.error || "تعذّر رفع العقد");
       setComplete(true);
       setMessage(`تم استلام العقد الموقع ${data.referenceCode || ""} وحفظه بنجاح.`);

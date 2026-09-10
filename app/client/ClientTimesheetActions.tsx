@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appPrompt } from "@/app/components/AppDialogProvider";
 
 
 import { useState } from "react";
@@ -11,7 +12,7 @@ export default function ClientTimesheetActions({ id, status, canApprove }: { id:
   const [notice, setNotice] = useState("");
   if (!canApprove || current !== "submitted") return <span className={`client-status ${current}`}>{current}</span>;
   async function decide(decision: "approved" | "rejected") {
-    const reason = decision === "rejected" ? window.prompt("اكتب سبب الرفض") || "" : "";
+    const reason = decision === "rejected" ? await appPrompt("اكتب سبب الرفض", { title: "رفض كشف الدوام", multiline: true }) || "" : "";
     if (decision === "rejected" && !reason) return;
     setBusy(true); setNotice("");
     try {

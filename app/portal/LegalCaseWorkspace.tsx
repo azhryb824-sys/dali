@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { readApiJson } from "@/lib/client-api";
+import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
 type Matter = {
   id: number;
@@ -602,12 +603,13 @@ export default function LegalCaseWorkspace() {
   }
   async function deleteLawyer(lawyer: Lawyer) {
     if (
-      !window.confirm(
+      !await appConfirm(
         `هل تريد حذف المحامي «${lawyer.fullName}» نهائيًا من السجل؟`,
+        { title: "حذف المحامي", tone: "danger", confirmLabel: "حذف" },
       )
     )
       return;
-    const reason = window.prompt("اكتب سبب حذف المحامي")?.trim() || "";
+    const reason = (await appPrompt("اكتب سبب حذف المحامي", { title: "سبب حذف المحامي", multiline: true, tone: "danger" }))?.trim() || "";
     if (!reason) return;
     setLawyerBusy(true);
     try {
@@ -697,7 +699,7 @@ export default function LegalCaseWorkspace() {
     }
   }
   async function revokeShare(share: ExternalShare) {
-    const reason = window.prompt("سبب إبطال رابط المشاركة") || "";
+    const reason = await appPrompt("سبب إبطال رابط المشاركة", { title: "إبطال رابط المشاركة", multiline: true, tone: "danger" }) || "";
     if (!reason) return;
     const response = await fetch("/api/portal/legal-cases/shares", {
       method: "DELETE",
@@ -1566,8 +1568,8 @@ export default function LegalCaseWorkspace() {
                           تم السداد
                         </button>
                         <button
-                          onClick={() => {
-                            const reason = window.prompt("سبب طلب التعديل");
+                          onClick={async () => {
+                            const reason = await appPrompt("سبب طلب التعديل", { title: "طلب تعديل السداد", multiline: true });
                             if (reason)
                               void legalDecision("request-judgment-changes", {
                                 paymentId: item.id,
@@ -1579,8 +1581,8 @@ export default function LegalCaseWorkspace() {
                         </button>
                         <button
                           className="danger"
-                          onClick={() => {
-                            const reason = window.prompt("سبب الرفض");
+                          onClick={async () => {
+                            const reason = await appPrompt("سبب الرفض", { title: "رفض طلب السداد", multiline: true, tone: "danger" });
                             if (reason)
                               void legalDecision("reject-judgment", {
                                 paymentId: item.id,
@@ -1596,8 +1598,8 @@ export default function LegalCaseWorkspace() {
                       item.requestedBy === data.currentActorEmail && (
                         <button
                           className="danger"
-                          onClick={() => {
-                            const reason = window.prompt("سبب إلغاء الطلب");
+                          onClick={async () => {
+                            const reason = await appPrompt("سبب إلغاء الطلب", { title: "إلغاء طلب السداد", multiline: true, tone: "danger" });
                             if (reason)
                               void legalDecision("cancel-judgment", {
                                 paymentId: item.id,

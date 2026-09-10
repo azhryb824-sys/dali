@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
 /* eslint-disable @next/next/no-img-element -- authenticated stamp previews use a protected API route */
 
@@ -282,7 +283,7 @@ export default function OperationsWorkspace({
     setData(result);
     if (stampResponse.ok)
       setStamps(
-        ((await stampResponse.json()) as { stamps: DocumentStamp[] }).stamps,
+        ((await readApiJson(stampResponse)) as { stamps: DocumentStamp[] }).stamps,
       );
   }, []);
 
@@ -328,8 +329,9 @@ export default function OperationsWorkspace({
 
   async function createQuoteRevision(quote: Quote) {
     if (
-      !window.confirm(
+      !await appConfirm(
         `إنشاء إصدار جديد من ${quote.quoteCode} v${quote.versionNumber} ووضع الإصدار الحالي كمتجاوز؟`,
+        { title: "إنشاء إصدار جديد" },
       )
     )
       return;
@@ -396,7 +398,7 @@ export default function OperationsWorkspace({
   }
 
   async function deleteQuote(quote: Quote) {
-    if (!window.confirm(`حذف مسودة عرض السعر ${quote.quoteCode} نهائيًا؟`))
+    if (!await appConfirm(`حذف مسودة عرض السعر ${quote.quoteCode} نهائيًا؟`, { title: "حذف مسودة عرض السعر", tone: "danger", confirmLabel: "حذف" }))
       return;
     setBusy(`delete-quote-${quote.id}`);
     setNotice("");
@@ -462,7 +464,7 @@ export default function OperationsWorkspace({
     setNotice("");
     try {
       const reason = ["lost", "rejected", "cancelled"].includes(status)
-        ? window.prompt("اكتب سبب القرار (10 أحرف على الأقل)") || ""
+        ? await appPrompt("اكتب سبب القرار (10 أحرف على الأقل)", { title: "توثيق سبب القرار", multiline: true, minLength: 10, tone: "danger" }) || ""
         : "";
       if (
         ["lost", "rejected", "cancelled"].includes(status) &&

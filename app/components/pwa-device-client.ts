@@ -1,5 +1,7 @@
 "use client";
 
+import { readApiJson } from "@/lib/client-api";
+
 const DATABASE_NAME = "dali-pwa-security-v1";
 const STORE_NAME = "trusted-device";
 const DEVICE_RECORD_KEY = "current";
@@ -72,7 +74,7 @@ async function api<T>(url: string, body: unknown): Promise<T> {
   });
   let payload: Record<string, unknown> = {};
   try {
-    payload = await response.json() as Record<string, unknown>;
+    payload = await readApiJson<Record<string, unknown>>(response);
   } catch {
     payload = {};
   }

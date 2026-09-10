@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appPrompt } from "@/app/components/AppDialogProvider";
 
 
 import { useState } from "react";
@@ -13,7 +14,7 @@ export default function ClientQuoteActions({ id, status, canApprove }: { id: num
   if (!canApprove || current !== "sent") return <span className={`client-status ${current}`}>{current}</span>;
 
   async function decide(decision: "accepted" | "rejected") {
-    const reason = decision === "rejected" ? window.prompt("اكتب سبب رفض العرض")?.trim() || "" : "";
+    const reason = decision === "rejected" ? (await appPrompt("اكتب سبب رفض العرض", { title: "رفض عرض السعر", multiline: true }))?.trim() || "" : "";
     if (decision === "rejected" && !reason) return;
     setBusy(true);
     setNotice("");

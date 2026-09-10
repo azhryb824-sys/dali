@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mobileAccessFromCookieHeader } from "@/lib/mobile-access";
 import { isDaliMobileRequest } from "@/lib/mobile-entry";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
+import { desktopAccessFromCookieHeader, desktopDeviceId, desktopEntryFromCookieHeader } from "@/lib/desktop-entry";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -24,21 +25,33 @@ const contentSecurityPolicy = [
 
 const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|pwa(?:\/|$)|desktop-access(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
 const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|desktop-access(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
-const desktopMarker = "dali-desktop-v1";
+const nativeBootstrapPath = /^\/(?:login(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|desktop-access(?:\/|$)|api\/portal\/desktop\/entry-link(?:\/|$))/;
+const portalPagePath = /^\/portal(?:\/|$)/;
 
 export async function proxy(request: NextRequest) {
   const emergencyBrowserAccess = process.env.DALI_ALLOW_BROWSER_PORTAL === "true";
-  const desktopRequest = request.headers.get("x-dali-desktop-app") === desktopMarker;
-  const mobileRequest = isDaliMobileRequest(request.headers);
-  let verifiedMobileRequest = mobileRequest;
-  if (desktopOnlyPath.test(request.nextUrl.pathname) && !verifiedMobileRequest) {
+  const desktopBootstrapRequest = Boolean(desktopDeviceId(request.headers));
+  const mobileBootstrapRequest = isDaliMobileRequest(request.headers);
+  let verifiedDesktopRequest = false;
+  let verifiedDesktopEntry = false;
+  let verifiedMobileRequest = false;
+  if (desktopOnlyPath.test(request.nextUrl.pathname)) {
+    try {
+      verifiedDesktopRequest = Boolean(await desktopAccessFromCookieHeader(request.headers, request.headers.get("cookie")));
+      verifiedDesktopEntry = Boolean(await desktopEntryFromCookieHeader(request.headers, request.headers.get("cookie")));
+    } catch {
+      verifiedDesktopRequest = false;
+      verifiedDesktopEntry = false;
+    }
     try {
       verifiedMobileRequest = Boolean(await mobileAccessFromCookieHeader(request.headers.get("cookie")));
     } catch {
       verifiedMobileRequest = false;
     }
   }
-  const trustedNativeRequest = desktopRequest || verifiedMobileRequest;
+  const trustedNativeRequest = verifiedDesktopRequest || verifiedMobileRequest;
+  const permittedBootstrapRequest = nativeBootstrapPath.test(request.nextUrl.pathname)
+    && (mobileBootstrapRequest || desktopBootstrapRequest || verifiedDesktopEntry);
   let trustedPwaRequest = false;
   if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest) {
     try {
@@ -47,7 +60,13 @@ export async function proxy(request: NextRequest) {
       trustedPwaRequest = false;
     }
   }
-  if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest && !trustedPwaRequest && !emergencyBrowserAccess) {
+  if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest && !trustedPwaRequest && !permittedBootstrapRequest && !emergencyBrowserAccess) {
+    if (portalPagePath.test(request.nextUrl.pathname) && request.method === "GET" && (mobileBootstrapRequest || desktopBootstrapRequest)) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.search = new URLSearchParams({ returnTo: `${request.nextUrl.pathname}${request.nextUrl.search}` }).toString();
+      return NextResponse.redirect(loginUrl, 307);
+    }
     if (request.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "النظام الإداري متاح عبر تطبيق دالي المعتمد فقط" }, { status: 403 });
     }

@@ -45,6 +45,7 @@ import { defaultWorkforceContractClauses, type WorkforceContractClause, type Wor
 import { ANNUAL_CONTRACT_MONTHS, annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
 import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
 import { readApiJson } from "@/lib/client-api";
+import { appAlert, appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
@@ -1468,7 +1469,7 @@ export default function PortalDashboard({
   }
 
   async function deleteEmployee(id: number) {
-    if (!window.confirm("سيُحذف الموظف من السجل النشط مع الاحتفاظ بتاريخه المالي والوظيفي. هل تريد المتابعة؟")) return;
+    if (!await appConfirm("سيُحذف الموظف من السجل النشط مع الاحتفاظ بتاريخه المالي والوظيفي. هل تريد المتابعة؟", { title: "حذف الموظف من السجل النشط", tone: "danger", confirmLabel: "حذف" })) return;
     setBusy(`employee-delete-${id}`);
     try {
       const response = await fetch(`/api/portal/employees?id=${id}`, {
@@ -1969,7 +1970,7 @@ export default function PortalDashboard({
   }
 
   async function deleteContract(contract: WorkforceContract) {
-    if (!window.confirm(`حذف مسودة العقد ${contract.referenceCode} وجميع بياناتها غير المحاسبية؟`)) return;
+    if (!await appConfirm(`حذف مسودة العقد ${contract.referenceCode} وجميع بياناتها غير المحاسبية؟`, { title: "حذف مسودة العقد", tone: "danger", confirmLabel: "حذف" })) return;
     setBusy(`contract-delete-${contract.id}`);
     try {
       const response = await fetch(`/api/portal/contracts/${contract.id}`, {
@@ -2044,7 +2045,7 @@ export default function PortalDashboard({
         await navigator.clipboard.writeText(result.shareUrl);
         notify("تم نسخ رابط مشاركة صالح لمدة 7 أيام.");
       } catch {
-        window.prompt("انسخ رابط المشاركة — صالح لمدة 7 أيام", result.shareUrl);
+        await appPrompt("انسخ رابط المشاركة — صالح لمدة 7 أيام", { title: "رابط مشاركة آمن", defaultValue: result.shareUrl, readOnly: true, copyable: true });
       }
     } catch (error) {
       notify(error instanceof Error ? error.message : "تعذّر إنشاء رابط المشاركة.");
@@ -3816,7 +3817,7 @@ function PdfDownloadButton({ href, title, label, icon, inline = false }: { href:
     try {
       const requestUrl = new URL(href, window.location.origin);
       if (/عقد|عرض سعر|فاتورة|contract|quotation|invoice/i.test(title)) {
-        const choice = window.prompt("اختر لغة ملف PDF: اكتب 1 للعربية فقط، أو 2 لعربي/English", "1");
+        const choice = await appPrompt("اختر لغة ملف PDF: اكتب 1 للعربية فقط، أو 2 لعربي/English", { title: "لغة ملف PDF", defaultValue: "1", inputMode: "numeric" });
         if (choice === null) return;
         if (!["1", "2"].includes(choice.trim())) throw new Error("اختيار اللغة غير صحيح؛ استخدم 1 أو 2");
         requestUrl.searchParams.set("language", choice.trim() === "2" ? "bilingual" : "ar");
@@ -4013,7 +4014,7 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
   useEffect(() => {
     let active = true;
     fetch("/api/portal/accounting", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((response) => (response.ok ? readApiJson(response) : Promise.reject()))
       .then((payload: unknown) => {
         if (active) {
           const data = payload as {
@@ -4263,7 +4264,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
   useEffect(() => {
     if (initialType !== "workforce_contract") return;
     void fetch("/api/portal/sales-representatives", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((response) => (response.ok ? readApiJson(response) : Promise.reject()))
       .then((data: unknown) => {
         const parsed = data as {
           representatives?: Array<{
@@ -4296,7 +4297,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
   useEffect(() => {
     if (initialType !== "workforce_contract") return;
     void fetch("/api/portal/operations?limit=100", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((response) => (response.ok ? readApiJson(response) : Promise.reject()))
       .then((raw: unknown) => {
         const data = raw as {
           quotes?: Array<{
@@ -4712,7 +4713,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
       );
       setContractClauses((items) => items.map((item) => ({ ...item, ...translatedByKey.get(item.key) })));
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "تعذرت الترجمة");
+      await appAlert(error instanceof Error ? error.message : "تعذرت الترجمة", { title: "تعذرت الترجمة", tone: "danger" });
     } finally {
       setTranslatingClauses(false);
     }
@@ -7237,7 +7238,7 @@ function WorkerDrawer({ worker, attachments, contracts, contractAssignments, can
     void onUploadAttachment(worker.id, event.currentTarget);
   }
   async function archiveWorker() {
-    const reason = window.prompt("اكتب سبب حذف/أرشفة العامل (10 أحرف على الأقل)");
+    const reason = await appPrompt("اكتب سبب حذف/أرشفة العامل (10 أحرف على الأقل)", { title: "أرشفة العامل", multiline: true, minLength: 10, tone: "danger" });
     if (!reason || reason.trim().length < 10) return;
     const response = await fetch("/api/portal/workers", {
       method: "DELETE",
@@ -7246,7 +7247,7 @@ function WorkerDrawer({ worker, attachments, contracts, contractAssignments, can
     });
     const result = (await readApiJson(response)) as { error?: string };
     if (!response.ok) {
-      window.alert(result.error || "تعذر حذف العامل");
+      await appAlert(result.error || "تعذر حذف العامل", { title: "تعذر أرشفة العامل", tone: "danger" });
       return;
     }
     window.location.reload();

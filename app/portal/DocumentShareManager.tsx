@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appPrompt } from "@/app/components/AppDialogProvider";
 
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -37,14 +38,14 @@ export default function DocumentShareManager({ documents }: { documents: Documen
       const result = await readApiJson(response) as { shareUrl?: string; error?: string };
       if (!response.ok || !result.shareUrl) throw new Error(result.error || "تعذّر إنشاء الرابط");
       try { await navigator.clipboard.writeText(result.shareUrl); setNotice("أُنشئ الرابط ونُسخ. لن يظهر رمزه السري مرة أخرى."); }
-      catch { window.prompt("انسخ الرابط؛ لن يظهر رمزه السري مرة أخرى", result.shareUrl); setNotice("أُنشئ الرابط بنجاح."); }
+      catch { await appPrompt("انسخ الرابط؛ لن يظهر رمزه السري مرة أخرى", { title: "رابط مشاركة آمن", defaultValue: result.shareUrl, readOnly: true, copyable: true }); setNotice("أُنشئ الرابط بنجاح."); }
       await load();
     } catch (error) { setNotice(error instanceof Error ? error.message : "تعذّر إنشاء الرابط"); }
     finally { setBusy(""); }
   }
 
   async function revoke(link: ShareLink) {
-    const reason = window.prompt("سبب إبطال الرابط")?.trim() || "";
+    const reason = (await appPrompt("سبب إبطال الرابط", { title: "إبطال رابط المشاركة", multiline: true, tone: "danger" }))?.trim() || "";
     if (!reason) return;
     setBusy(link.id); setNotice("");
     try {

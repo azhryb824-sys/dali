@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { appPrompt } from "@/app/components/AppDialogProvider";
 import { useDesktopLiveRefresh } from "@/lib/use-desktop-live-refresh";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -332,13 +333,13 @@ export default function HrWorkspace({
       setBusy("");
     }
   }
-  function payPayrollItem(run: PayrollRun, item: PayrollItem) {
+  async function payPayrollItem(run: PayrollRun, item: PayrollItem) {
     const remaining = (item.netPayHalalas - item.paidAmountHalalas) / 100;
-    const amountValue = window.prompt("مبلغ التحويل", String(remaining));
+    const amountValue = await appPrompt("مبلغ التحويل", { title: "تسجيل تحويل الراتب", defaultValue: String(remaining), inputMode: "decimal" });
     if (amountValue === null) return;
-    const reference = window.prompt(
+    const reference = await appPrompt(
       "مرجع التحويل البنكي",
-      item.paymentReference || "",
+      { title: "مرجع التحويل البنكي", defaultValue: item.paymentReference || "" },
     );
     if (reference === null) return;
     void action(
@@ -1111,7 +1112,7 @@ export default function HrWorkspace({
                         <div>
                           <button
                             disabled={busy === `item-${item.id}`}
-                            onClick={() => payPayrollItem(run, item)}
+                            onClick={() => void payPayrollItem(run, item)}
                           >
                             تحويل / إعادة محاولة
                           </button>
@@ -1138,9 +1139,10 @@ export default function HrWorkspace({
                           ) && (
                             <button
                               className="danger"
-                              onClick={() => {
-                                const reason = window.prompt(
+                              onClick={async () => {
+                                const reason = await appPrompt(
                                   "سبب فشل التحويل أو الاستثناء",
+                                  { title: "تسجيل فشل التحويل", multiline: true, tone: "danger" },
                                 );
                                 if (reason)
                                   void action(
