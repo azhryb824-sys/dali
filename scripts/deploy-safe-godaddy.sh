@@ -43,6 +43,39 @@ expect_status() {
   echo "CHECK_OK $label HTTP=$actual"
 }
 
+verify_working_tree() {
+  local context="$1"
+  local tracked_status
+  local status_line
+  local allowed_backups=0
+  local -a unexpected_untracked=()
+
+  tracked_status="$(git status --porcelain --untracked-files=no)"
+  if [[ -n "$tracked_status" ]]; then
+    printf '%s\n' "$tracked_status" >&2
+    die "$context: tracked working tree changes exist"
+  fi
+
+  while IFS= read -r status_line; do
+    [[ -n "$status_line" ]] || continue
+    case "$status_line" in
+      "?? .next.before-"*|"?? backups/"*)
+        allowed_backups=$((allowed_backups + 1))
+        ;;
+      "?? "*)
+        unexpected_untracked+=("${status_line#\?\? }")
+        ;;
+    esac
+  done < <(git status --porcelain --untracked-files=normal)
+
+  if ((${#unexpected_untracked[@]} > 0)); then
+    printf 'UNEXPECTED_UNTRACKED=%s\n' "${unexpected_untracked[@]}" >&2
+    die "$context: unexpected untracked files exist"
+  fi
+
+  echo "WORKTREE_OK $context LEGACY_BACKUP_GROUPS=$allowed_backups"
+}
+
 exec 9>"/tmp/dali-safe-deploy.lock"
 flock -n 9 || die "another Dali deployment is running"
 
@@ -56,10 +89,7 @@ cd "$repo"
 [[ "$(git branch --show-current)" == "$branch" ]] || die "expected branch $branch"
 
 git restore --staged --worktree -- tsconfig.tsbuildinfo 2>/dev/null || true
-if [[ -n "$(git status --porcelain)" ]]; then
-  git status --short >&2
-  die "working tree is not clean"
-fi
+verify_working_tree "preflight"
 
 node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 13) ? 0 : 1)' \
   || die "Node.js 22.13.0 or newer is required"
@@ -287,7 +317,7 @@ unset database_url auth_secret auth_mode
 
 stage="pre_swap_guard"
 [[ "$(git -C "$repo" rev-parse HEAD)" == "$old_head" ]] || die "server HEAD changed during validation"
-[[ -z "$(git -C "$repo" status --porcelain)" ]] || die "server working tree changed during validation"
+verify_working_tree "pre-swap"
 git fetch --no-tags origin "$branch"
 [[ "$(git rev-parse FETCH_HEAD)" == "$expected_commit" ]] || die "remote branch changed during validation"
 sudo systemctl is-active --quiet "$service" || die "$service stopped during validation"
