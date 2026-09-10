@@ -11,6 +11,7 @@ local_ready="http://127.0.0.1:3000/api/health/ready"
 public_origin="https://www.dally.info"
 canary_port="3101"
 desktop_device="00000000-0000-4000-8000-000000000001"
+legacy_desktop_user_agent="Mozilla/5.0 DaliDesktop/0.2.5 Electron/38.0.0"
 
 die() {
   echo "ABORT: $*" >&2
@@ -302,12 +303,20 @@ expect_status 200 "canary_desktop_login" \
   -H "x-dali-desktop-app: dali-desktop-v1" \
   -H "x-dali-desktop-device: $desktop_device" \
   "http://127.0.0.1:$canary_port/login"
+expect_status 200 "canary_legacy_desktop_login" \
+  -A "$legacy_desktop_user_agent" \
+  -H "x-dali-desktop-app: dali-desktop-v1" \
+  "http://127.0.0.1:$canary_port/login"
 expect_status 200 "canary_mobile_login" \
   -A "DaliMobile/1 Android" \
   "http://127.0.0.1:$canary_port/login"
 expect_status 403 "canary_unsigned_desktop_api_blocked" \
   -H "x-dali-desktop-app: dali-desktop-v1" \
   -H "x-dali-desktop-device: $desktop_device" \
+  "http://127.0.0.1:$canary_port/api/portal/notifications"
+expect_status 403 "canary_unsigned_legacy_desktop_api_blocked" \
+  -A "$legacy_desktop_user_agent" \
+  -H "x-dali-desktop-app: dali-desktop-v1" \
   "http://127.0.0.1:$canary_port/api/portal/notifications"
 
 kill "$canary_pid" >/dev/null 2>&1 || true
@@ -364,12 +373,20 @@ expect_status 200 "public_desktop_login" \
   -H "x-dali-desktop-app: dali-desktop-v1" \
   -H "x-dali-desktop-device: $desktop_device" \
   "$public_origin/login"
+expect_status 200 "public_legacy_desktop_login" \
+  -A "$legacy_desktop_user_agent" \
+  -H "x-dali-desktop-app: dali-desktop-v1" \
+  "$public_origin/login"
 expect_status 200 "public_mobile_login" \
   -A "DaliMobile/1 Android" \
   "$public_origin/login"
 expect_status 403 "public_unsigned_desktop_api_blocked" \
   -H "x-dali-desktop-app: dali-desktop-v1" \
   -H "x-dali-desktop-device: $desktop_device" \
+  "$public_origin/api/portal/notifications"
+expect_status 403 "public_unsigned_legacy_desktop_api_blocked" \
+  -A "$legacy_desktop_user_agent" \
+  -H "x-dali-desktop-app: dali-desktop-v1" \
   "$public_origin/api/portal/notifications"
 
 [[ "$(git rev-parse HEAD)" == "$expected_commit" ]] || die "post-deploy source verification failed"

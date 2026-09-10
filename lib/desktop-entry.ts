@@ -13,6 +13,9 @@ export const DESKTOP_ACCESS_COOKIE = "__Host-dali_desktop_access";
 const DEV_DESKTOP_ACCESS_COOKIE = "dali_desktop_access_dev";
 const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN_PART_PATTERN = /^[A-Za-z0-9_-]+$/;
+// The published Windows 0.2.5 build used Electron 38 and sent no device UUID.
+// It may bootstrap authentication only, then receives the normal signed access cookie.
+const LEGACY_ELECTRON_USER_AGENT_PATTERN = /\bElectron\/38\.\d+\.\d+\b/i;
 
 type HeaderReader = Pick<Headers, "get">;
 type DesktopEntryPayload = {
@@ -67,6 +70,25 @@ export function desktopDeviceId(source: HeaderReader) {
   return DEVICE_ID_PATTERN.test(deviceId) ? deviceId : null;
 }
 
+export function isLegacyDesktopRequest(source: HeaderReader) {
+  if (source.get(DESKTOP_APP_HEADER) !== DESKTOP_APP_MARKER) return false;
+  if (source.get(DESKTOP_DEVICE_HEADER)?.trim()) return false;
+  const userAgent = source.get("user-agent")?.trim() || "";
+  return userAgent.length <= 1024 && LEGACY_ELECTRON_USER_AGENT_PATTERN.test(userAgent);
+}
+
+async function desktopAccessBinding(source: HeaderReader) {
+  const deviceId = desktopDeviceId(source);
+  if (deviceId) return deviceId;
+  if (!isLegacyDesktopRequest(source)) return null;
+  const userAgent = source.get("user-agent")?.trim() || "";
+  const digest = new Uint8Array(await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`dali-desktop-legacy-v1:${userAgent}`),
+  ));
+  return `legacy-${base64UrlEncode(digest)}`;
+}
+
 export async function createDesktopEntryToken(source: HeaderReader) {
   const deviceId = desktopDeviceId(source);
   if (!deviceId) return null;
@@ -81,7 +103,7 @@ export async function createDesktopEntryToken(source: HeaderReader) {
 }
 
 export async function issueDesktopAccessToken(source: HeaderReader) {
-  const deviceId = desktopDeviceId(source);
+  const deviceId = await desktopAccessBinding(source);
   if (!deviceId) return null;
   const payload: DesktopAccessPayload = {
     version: 2,
@@ -126,7 +148,7 @@ export async function verifyDesktopEntryToken(source: HeaderReader, token: strin
 }
 
 export async function verifyDesktopAccessToken(source: HeaderReader, token: string) {
-  const deviceId = desktopDeviceId(source);
+  const deviceId = await desktopAccessBinding(source);
   if (!deviceId || token.length > 1000) return null;
   const parts = token.split(".");
   if (parts.length !== 2 || parts.some((part) => !part || !TOKEN_PART_PATTERN.test(part))) return null;

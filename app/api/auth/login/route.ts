@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb, getSqlClient } from "@/db";
 import { passwordResetTokens, portalAuthCredentials, pwaDevices } from "@/db/schema";
 import { createIdentityToken, identityCookie, sha256, verifyPasswordHash } from "@/lib/credential-auth";
-import { desktopAccessCookie, desktopDeviceId, desktopEntryFromCookieHeader, issueDesktopAccessToken } from "@/lib/desktop-entry";
+import { desktopAccessCookie, desktopDeviceId, desktopEntryFromCookieHeader, isLegacyDesktopRequest, issueDesktopAccessToken } from "@/lib/desktop-entry";
 import { issueMobileAccessToken, mobileAccessCookie, mobileAccessFromCookieHeader } from "@/lib/mobile-access";
 import { isDaliMobileRequest, mobileAppPlatform } from "@/lib/mobile-entry";
 import { OperationalError, safeOperationalErrorCode } from "@/lib/operational-error";
@@ -19,6 +19,7 @@ type LoginCredential = { identifier: string; email: string; displayName: string;
 
 async function hasAuthorizedApplicationEntry(request: Request) {
   if (desktopDeviceId(request.headers)) return true;
+  if (isLegacyDesktopRequest(request.headers)) return true;
   if (await desktopEntryFromCookieHeader(request.headers, request.headers.get("cookie"))) return true;
   if (isDaliMobileRequest(request.headers)) return true;
   if (await mobileAccessFromCookieHeader(request.headers.get("cookie"))) return true;
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
     });
     headers.append("set-cookie", identityCookie(request, token));
     if (mobilePlatform) headers.append("set-cookie", mobileAccessCookie(request, await issueMobileAccessToken(mobilePlatform)));
-    if (desktopDeviceId(request.headers)) {
+    if (desktopDeviceId(request.headers) || isLegacyDesktopRequest(request.headers)) {
       const desktopAccessToken = await issueDesktopAccessToken(request.headers);
       if (desktopAccessToken) headers.append("set-cookie", desktopAccessCookie(request, desktopAccessToken));
     }

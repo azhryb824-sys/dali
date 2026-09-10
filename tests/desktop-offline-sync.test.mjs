@@ -60,6 +60,39 @@ test("desktop entry uses a short-lived device-bound link that only opens login",
   assert.match(token,/__Host-dali_desktop_access/);
 });
 
+test("installed 0.2.5 desktop apps upgrade to signed access without opening portal APIs",async()=>{
+  const[proxy,desktop,login,loginPage,upgrade,deploy]=await Promise.all([
+    read("proxy.ts"),
+    read("lib/desktop-entry.ts"),
+    read("app/api/auth/login/route.ts"),
+    read("app/login/page.tsx"),
+    read("app/api/auth/desktop-upgrade/route.ts"),
+    read("scripts/deploy-safe-godaddy.sh"),
+  ]);
+  assert.match(desktop,/isLegacyDesktopRequest/);
+  assert.match(desktop,/LEGACY_ELECTRON_USER_AGENT_PATTERN/);
+  assert.match(desktop,/source\.get\(DESKTOP_DEVICE_HEADER\)\?\.trim\(\)/);
+  assert.match(desktop,/dali-desktop-legacy-v1:/);
+  assert.match(proxy,/legacyDesktopBootstrapPath/);
+  const legacyPath=proxy.match(/const legacyDesktopBootstrapPath = ([^;]+);/)?.[1]||"";
+  assert.match(legacyPath,/login/);
+  assert.match(legacyPath,/api\\\/auth/);
+  assert.doesNotMatch(legacyPath,/api\\\/portal/);
+  assert.match(login,/isLegacyDesktopRequest\(request\.headers\)/);
+  assert.match(login,/desktopAccessCookie/);
+  assert.match(loginPage,/api\/auth\/desktop-upgrade/);
+  assert.match(upgrade,/getChatGPTUser/);
+  assert.match(upgrade,/isLegacyDesktopRequest/);
+  assert.match(upgrade,/issueDesktopAccessToken/);
+  assert.match(upgrade,/desktopAccessCookie/);
+  assert.match(upgrade,/revokeCurrentPortalSession/);
+  assert.match(upgrade,/clearPortalSessionCookies/);
+  assert.match(deploy,/canary_legacy_desktop_login/);
+  assert.match(deploy,/canary_unsigned_legacy_desktop_api_blocked/);
+  assert.match(deploy,/public_legacy_desktop_login/);
+  assert.match(deploy,/public_unsigned_legacy_desktop_api_blocked/);
+});
+
 test("macOS packaging keeps the Arabic bundle name byte-identical to Electron helpers",async()=>{
   const[signing,workflow]=await Promise.all([
     read("desktop/scripts/adhoc-sign-mac.cjs"),

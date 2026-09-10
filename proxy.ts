@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mobileAccessFromCookieHeader } from "@/lib/mobile-access";
 import { isDaliMobileRequest } from "@/lib/mobile-entry";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
-import { desktopAccessFromCookieHeader, desktopDeviceId, desktopEntryFromCookieHeader } from "@/lib/desktop-entry";
+import { desktopAccessFromCookieHeader, desktopDeviceId, desktopEntryFromCookieHeader, isLegacyDesktopRequest } from "@/lib/desktop-entry";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -26,11 +26,13 @@ const contentSecurityPolicy = [
 const nonIndexablePath = /^\/(?:api(?:\/|$)|portal(?:\/|$)|pwa(?:\/|$)|desktop-access(?:\/|$)|client(?:\/|$)|worker(?:\/|$)|search(?:\/|$)|contracts\/signature(?:\/|$))/;
 const desktopOnlyPath = /^\/(?:portal(?:\/|$)|login(?:\/|$)|desktop-access(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|api\/portal(?:\/|$))/;
 const nativeBootstrapPath = /^\/(?:login(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$)|desktop-access(?:\/|$)|api\/portal\/desktop\/entry-link(?:\/|$))/;
+const legacyDesktopBootstrapPath = /^\/(?:login(?:\/|$)|forgot-password(?:\/|$)|reset-password(?:\/|$)|api\/auth(?:\/|$))/;
 const portalPagePath = /^\/portal(?:\/|$)/;
 
 export async function proxy(request: NextRequest) {
   const emergencyBrowserAccess = process.env.DALI_ALLOW_BROWSER_PORTAL === "true";
   const desktopBootstrapRequest = Boolean(desktopDeviceId(request.headers));
+  const legacyDesktopBootstrapRequest = isLegacyDesktopRequest(request.headers);
   const mobileBootstrapRequest = isDaliMobileRequest(request.headers);
   let verifiedDesktopRequest = false;
   let verifiedDesktopEntry = false;
@@ -52,6 +54,8 @@ export async function proxy(request: NextRequest) {
   const trustedNativeRequest = verifiedDesktopRequest || verifiedMobileRequest;
   const permittedBootstrapRequest = nativeBootstrapPath.test(request.nextUrl.pathname)
     && (mobileBootstrapRequest || desktopBootstrapRequest || verifiedDesktopEntry);
+  const permittedLegacyDesktopBootstrapRequest = legacyDesktopBootstrapPath.test(request.nextUrl.pathname)
+    && legacyDesktopBootstrapRequest;
   let trustedPwaRequest = false;
   if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest) {
     try {
@@ -60,8 +64,8 @@ export async function proxy(request: NextRequest) {
       trustedPwaRequest = false;
     }
   }
-  if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest && !trustedPwaRequest && !permittedBootstrapRequest && !emergencyBrowserAccess) {
-    if (portalPagePath.test(request.nextUrl.pathname) && request.method === "GET" && (mobileBootstrapRequest || desktopBootstrapRequest)) {
+  if (desktopOnlyPath.test(request.nextUrl.pathname) && !trustedNativeRequest && !trustedPwaRequest && !permittedBootstrapRequest && !permittedLegacyDesktopBootstrapRequest && !emergencyBrowserAccess) {
+    if (portalPagePath.test(request.nextUrl.pathname) && request.method === "GET" && (mobileBootstrapRequest || desktopBootstrapRequest || legacyDesktopBootstrapRequest)) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = "/login";
       loginUrl.search = new URLSearchParams({ returnTo: `${request.nextUrl.pathname}${request.nextUrl.search}` }).toString();

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Image from "next/image";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
-import { hasVerifiedDesktopEntry } from "@/lib/desktop-entry";
+import { hasVerifiedDesktopEntry, isLegacyDesktopRequest } from "@/lib/desktop-entry";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +20,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const query = await searchParams;
   const returnTo = query.returnTo?.startsWith("/portal") && !query.returnTo.startsWith("//") ? query.returnTo : "/portal";
   const currentUser = await getChatGPTUser();
-  if (currentUser) redirect(returnTo);
-  const desktopEntry = await hasVerifiedDesktopEntry();
   const requestHeaders = await headers();
+  if (currentUser) {
+    if (isLegacyDesktopRequest(requestHeaders)) {
+      redirect(`/api/auth/desktop-upgrade?returnTo=${encodeURIComponent(returnTo)}`);
+    }
+    redirect(returnTo);
+  }
+  const desktopEntry = await hasVerifiedDesktopEntry();
   const pwaEntry = Boolean(await pwaAccessFromCookieHeader(requestHeaders.get("cookie")));
 
   const retrySeconds = Number(query.retryAfter || 0);

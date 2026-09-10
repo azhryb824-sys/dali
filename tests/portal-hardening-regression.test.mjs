@@ -40,12 +40,13 @@ test("client interfaces use guarded API JSON parsing", async () => {
 });
 
 test("native application markers only bootstrap login and signed device access protects portal routes", async () => {
-  const [proxy, login, redeem, desktop, session] = await Promise.all([
+  const [proxy, login, redeem, desktop, session, legacyUpgrade] = await Promise.all([
     read("proxy.ts"),
     read("app/api/auth/login/route.ts"),
     read("app/desktop-access/[token]/route.ts"),
     read("lib/desktop-entry.ts"),
     read("lib/portal-session.ts"),
+    read("app/api/auth/desktop-upgrade/route.ts"),
   ]);
   assert.match(proxy, /desktopAccessFromCookieHeader/);
   assert.match(proxy, /mobileAccessFromCookieHeader/);
@@ -61,6 +62,11 @@ test("native application markers only bootstrap login and signed device access p
   assert.doesNotMatch(redeem, /createIdentityToken|issuePortalSession/);
   assert.match(desktop, /version:\s*2/);
   assert.match(desktop, /__Host-dali_desktop_access/);
+  assert.match(desktop, /isLegacyDesktopRequest/);
+  assert.match(desktop, /Electron\\\/38/);
+  assert.match(legacyUpgrade, /getChatGPTUser/);
+  assert.match(legacyUpgrade, /desktopAccessCookie/);
+  assert.doesNotMatch(legacyUpgrade, /issuePortalSession/);
   assert.match(session, /dali-desktop-v2:/);
 });
 
