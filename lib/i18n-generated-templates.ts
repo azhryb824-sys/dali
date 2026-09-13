@@ -969,5 +969,15 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "هل تريد حذف «{{0}}»؟ سيبقى الأثر القانوني وسجل التدقيق محفوظين.",
     "en": "Remove “{{0}}”? The legal trace and audit log will remain preserved.",
     "bn": "“{{0}}” অপসারণ করবেন? আইনি রেকর্ড ও অডিট লগ সংরক্ষিত থাকবে।"
+  },
+  {
+    "source": "— المرفق المطلوب: {{0}}",
+    "en": "— Required attachment: {{0}}",
+    "bn": "— প্রয়োজনীয় সংযুক্তি: {{0}}"
+  },
+  {
+    "source": "مشاركة {{0}} عبر واتساب",
+    "en": "Share {{0}} via WhatsApp",
+    "bn": "WhatsApp-এর মাধ্যমে {{0}} শেয়ার করুন"
   }
 ];

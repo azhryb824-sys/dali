@@ -1536,7 +1536,7 @@ export const legalCaseActionLog = pgTable(
     ),
     check(
       "legal_case_action_log_action_check",
-      sql`${table.action} in ('created','assigned','started','completed','cancelled','attachment_added','updated','deleted','status_changed','shared','share_revoked')`,
+      sql`${table.action} in ('created','assigned','started','completed','cancelled','attachment_added','updated','deleted','status_changed','shared','share_revoked','note_sent','returned_to_contracts','contracts_replied','coordination_resolved')`,
     ),
   ],
 );
@@ -2565,6 +2565,79 @@ export const workforceContracts = pgTable(
     check(
       "workforce_contracts_status_check",
       sql`${table.status} in ('draft','internal_review','legal_review','approved','sent','signed','active','suspended','expired','terminated','cancelled','superseded')`,
+    ),
+  ],
+);
+
+export const legalContractCorrespondence = pgTable(
+  "legal_contract_correspondence",
+  {
+    id: serial("id").primaryKey(),
+    legalRecordId: integer("legal_record_id")
+      .notNull()
+      .references(() => legalRecords.id, { onDelete: "restrict" }),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => workforceContracts.id, { onDelete: "restrict" }),
+    parentId: integer("parent_id"),
+    senderSide: text("sender_side").notNull(),
+    recipientSide: text("recipient_side").notNull(),
+    messageType: text("message_type").notNull(),
+    reasonCode: text("reason_code"),
+    requiredAttachmentName: text("required_attachment_name"),
+    message: text("message").notNull(),
+    documentId: integer("document_id").references(() => companyDocuments.id, {
+      onDelete: "restrict",
+    }),
+    requestStatus: text("request_status").notNull().default("open"),
+    createdBy: text("created_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    respondedAt: text("responded_at"),
+    resolvedBy: text("resolved_by"),
+    resolvedAt: text("resolved_at"),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("legal_contract_correspondence_record_idx").on(
+      table.legalRecordId,
+      table.createdAt,
+    ),
+    index("legal_contract_correspondence_contract_idx").on(
+      table.contractId,
+      table.createdAt,
+    ),
+    index("legal_contract_correspondence_parent_idx").on(table.parentId),
+    index("legal_contract_correspondence_status_idx").on(
+      table.requestStatus,
+      table.updatedAt,
+    ),
+    check(
+      "legal_contract_correspondence_sides_check",
+      sql`${table.senderSide} in ('legal','contracts') and ${table.recipientSide} in ('legal','workforce')`,
+    ),
+    check(
+      "legal_contract_correspondence_type_check",
+      sql`${table.messageType} in ('note','return_request','reply','attachment','resolution')`,
+    ),
+    check(
+      "legal_contract_correspondence_status_check",
+      sql`${table.requestStatus} in ('open','responded','resolved')`,
+    ),
+    check(
+      "legal_contract_correspondence_attachment_check",
+      sql`(${table.messageType} = 'attachment' and ${table.documentId} is not null) or (${table.messageType} <> 'attachment' and ${table.documentId} is null)`,
+    ),
+    check(
+      "legal_contract_correspondence_parent_shape_check",
+      sql`(${table.messageType} in ('note','return_request') and ${table.parentId} is null) or (${table.messageType} in ('reply','attachment','resolution') and ${table.parentId} is not null)`,
+    ),
+    check(
+      "legal_contract_correspondence_missing_file_check",
+      sql`${table.reasonCode} <> 'missing_attachment' or length(trim(${table.requiredAttachmentName})) >= 2`,
     ),
   ],
 );

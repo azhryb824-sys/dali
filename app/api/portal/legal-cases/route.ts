@@ -7,6 +7,7 @@ import {
   legalCaseActionLog,
   legalCaseActivities,
   legalCaseAttachments,
+  legalContractCorrespondence,
   legalExternalShareBundles,
   legalExternalShares,
   legalHearings,
@@ -851,6 +852,7 @@ export async function PATCH(request: Request) {
         "active",
         "in_progress",
         "renewal",
+        "awaiting_contracts",
         "closed",
         "cancelled",
       ].includes(status)
@@ -877,7 +879,7 @@ export async function PATCH(request: Request) {
     if (status === matter.status)
       return jsonNoStore({ case: matter, unchanged: true });
     if (status === "closed") {
-      const [openActivity, openPayment] = await Promise.all([
+      const [openActivity, openPayment, openCorrespondence] = await Promise.all([
         db.query.legalCaseActivities.findFirst({
           where: and(
             eq(legalCaseActivities.legalRecordId, legalRecordId),
@@ -893,12 +895,19 @@ export async function PATCH(request: Request) {
             ]),
           ),
         }),
+        db.query.legalContractCorrespondence.findFirst({
+          where: and(
+            eq(legalContractCorrespondence.legalRecordId, legalRecordId),
+            isNull(legalContractCorrespondence.parentId),
+            inArray(legalContractCorrespondence.requestStatus, ["open", "responded"]),
+          ),
+        }),
       ]);
-      if (openActivity || openPayment || reason.length < 5)
+      if (openActivity || openPayment || openCorrespondence || reason.length < 5)
         return jsonNoStore(
           {
             error:
-              "لا يُغلق الملف قبل اكتمال الإجراءات وطلبات السداد وكتابة سبب الإغلاق",
+              "لا يُغلق الملف قبل اكتمال الإجراءات وطلبات السداد والمراسلات المفتوحة وكتابة سبب الإغلاق",
           },
           { status: 409 },
         );

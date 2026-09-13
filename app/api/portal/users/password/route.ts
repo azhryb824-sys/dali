@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db";
-import { passwordResetTokens, portalAuthCredentials, portalUsers } from "@/db/schema";
+import { passwordResetTokens, portalAccessScopes, portalAuthCredentials, portalUsers } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { hashPassword } from "@/lib/credential-auth";
 import { requirePortalApiRole } from "@/lib/portal-access";
@@ -49,6 +49,9 @@ export async function POST(request: Request) {
     const db = getDb();
     const targetUser = await db.query.portalUsers.findFirst({ where: eq(portalUsers.email, email) });
     if (!targetUser) return jsonNoStore({ error: "المستخدم غير موجود" }, { status: 404 });
+    const targetOwnerScope = await db.query.portalAccessScopes.findFirst({ where: and(eq(portalAccessScopes.userEmail, email), eq(portalAccessScopes.functionalRole, "system_owner"), eq(portalAccessScopes.active, true)) });
+    if (targetOwnerScope && !access.functionalRoles.includes("system_owner"))
+      return jsonNoStore({ error: "لا يستطيع مشرف النظام إعادة تعيين كلمة مرور مالك النظام" }, { status: 403 });
 
     const passwordHash = await hashPassword(temporaryPassword);
     const now = new Date().toISOString();

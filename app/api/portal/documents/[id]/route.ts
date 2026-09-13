@@ -25,7 +25,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const db = getDb();
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, id) });
   if (!document || document.status !== "active") return Response.json({ error: "المستند غير موجود" }, { status: 404 });
-  const contractualTypes = new Set(["workforce_contract", "quotation", "official_letter", "contract", "letter"]);
+  const contractualTypes = new Set(["workforce_contract", "quotation", "official_letter", "contract", "letter", "legal_requested_attachment"]);
   const financialTypes = new Set(["invoice", "receipt", "payment_voucher", "progress_claim"]);
   const linkedContractPayment = canReadContracts && financialTypes.has(document.documentType || "")
     ? await db.query.contractPaymentSchedules.findFirst({ where: eq(contractPaymentSchedules.invoiceDocumentId, id) })

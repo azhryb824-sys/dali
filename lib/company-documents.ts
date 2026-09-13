@@ -1,5 +1,43 @@
 export const documentCategories = new Set(["license", "contract", "certificate", "finance", "legal", "hr", "other"]);
 
+export const corporateDocumentTypes = [
+  "commercial_registration",
+  "municipal_license",
+  "vat_certificate",
+  "national_address",
+  "chamber_membership",
+  "zakat_certificate",
+  "saudization_certificate",
+  "insurance_certificate",
+  "other_company_document",
+] as const;
+
+export type CorporateDocumentType = (typeof corporateDocumentTypes)[number];
+
+export const corporateDocumentTypeSet = new Set<string>(corporateDocumentTypes);
+
+export const corporateDocumentTypeLabels: Record<CorporateDocumentType, string> = {
+  commercial_registration: "السجل التجاري",
+  municipal_license: "رخصة البلدية",
+  vat_certificate: "شهادة ضريبة القيمة المضافة",
+  national_address: "العنوان الوطني",
+  chamber_membership: "اشتراك الغرفة التجارية",
+  zakat_certificate: "شهادة الزكاة والضريبة والجمارك",
+  saudization_certificate: "شهادة السعودة",
+  insurance_certificate: "وثيقة التأمين",
+  other_company_document: "مستند شركة آخر",
+};
+
+export function isCorporateDocument(document: { source: string; documentType: string | null }) {
+  return document.source === "uploaded" && Boolean(document.documentType && corporateDocumentTypeSet.has(document.documentType));
+}
+
+export function categoryForCorporateDocumentType(documentType: CorporateDocumentType) {
+  if (["commercial_registration", "municipal_license"].includes(documentType)) return "license";
+  if (["national_address", "other_company_document"].includes(documentType)) return "other";
+  return "certificate";
+}
+
 export const uploadContentTypes = new Set([
   "application/pdf",
   "application/msword",

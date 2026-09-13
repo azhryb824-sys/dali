@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, like, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clients, companyDocuments, constructionOpportunities, constructionProjects, constructionRecords, contractPaymentSchedules, employees, financialRecords, governmentPaymentRequests, governmentSites, legalLawyers, legalRecords, officialLetters, portalTasks, quoteVersions, salesOpportunities, timesheets, visitorConversations, videoInterviews, workers, workforceContracts, workforceRequests, workOrders, capacityPlans, dataSubjectRequests, portalUsers } from "@/db/schema";
+import { clients, companyDocuments, constructionOpportunities, constructionProjects, constructionRecords, contractPaymentSchedules, employees, financialRecords, governmentPaymentRequests, governmentSites, legalContractCorrespondence, legalLawyers, legalRecords, officialLetters, portalTasks, quoteVersions, salesOpportunities, timesheets, visitorConversations, videoInterviews, workers, workforceContracts, workforceRequests, workOrders, capacityPlans, dataSubjectRequests, portalUsers } from "@/db/schema";
 import { canAccessPortalConversations, canAccessPortalDocuments, canAdministerPortalUsers, canManageCompanyAssets, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore } from "@/lib/security";
 import { getWebsiteContent } from "@/lib/website-content";
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const canSearchUsers = canAdministerPortalUsers(access);
   const canSearchBrand = canManageCompanyAssets(access);
   try {
-    const [requestRows, workerRows, contractRows, paymentRows, conversationRows, interviewRows, employeeRows, financeRows, legalRows, lawyerRows, documentRows, clientRows, opportunityRows, quoteRows, orderRows, sheetRows, planRows, privacyRows, userRows, constructionOpportunityRows, constructionProjectRows, constructionRecordRows, governmentSiteRows, governmentPaymentRows, taskRows, letterRows] = await Promise.all([
+    const [requestRows, workerRows, contractRows, paymentRows, conversationRows, interviewRows, employeeRows, financeRows, legalRows, correspondenceRows, lawyerRows, documentRows, clientRows, opportunityRows, quoteRows, orderRows, sheetRows, planRows, privacyRows, userRows, constructionOpportunityRows, constructionProjectRows, constructionRecordRows, governmentSiteRows, governmentPaymentRows, taskRows, letterRows] = await Promise.all([
       canSearchWorkforce ? db.select().from(workforceRequests).where(or(like(workforceRequests.trackingCode, pattern), like(workforceRequests.fullName, pattern), like(workforceRequests.companyName, pattern), like(workforceRequests.mobile, pattern))).orderBy(desc(workforceRequests.updatedAt)).limit(6) : Promise.resolve([]),
       canSearchWorkforce ? db.select().from(workers).where(or(like(workers.fullName, pattern), like(workers.workerNumber, pattern), like(workers.iqamaNumber, pattern), like(workers.profession, pattern), like(workers.nationality, pattern))).orderBy(desc(workers.updatedAt)).limit(6) : Promise.resolve([]),
       canSearchContracts ? db.select().from(workforceContracts).where(or(like(workforceContracts.referenceCode, pattern), like(workforceContracts.clientName, pattern), like(workforceContracts.title, pattern), like(workforceContracts.workSite, pattern))).orderBy(desc(workforceContracts.updatedAt)).limit(6) : Promise.resolve([]),
@@ -42,6 +42,38 @@ export async function GET(request: Request) {
       canSearchEmployees ? db.select().from(employees).where(or(like(employees.fullName, pattern), like(employees.employeeNumber, pattern), like(employees.jobTitle, pattern))).orderBy(desc(employees.updatedAt)).limit(6) : Promise.resolve([]),
       canSearchFinance ? db.select().from(financialRecords).where(or(like(financialRecords.referenceCode, pattern), like(financialRecords.description, pattern))).orderBy(desc(financialRecords.updatedAt)).limit(6) : Promise.resolve([]),
       canSearchLegal ? db.select().from(legalRecords).where(and(or(like(legalRecords.referenceCode, pattern), like(legalRecords.title, pattern), like(legalRecords.counterparty, pattern)),isNull(legalRecords.deletedAt),legalCaseManager ? undefined : eq(legalRecords.assignedLawyerEmail,access.user.email.toLowerCase()))).orderBy(desc(legalRecords.updatedAt)).limit(6) : Promise.resolve([]),
+      canSearchContracts || canSearchLegal
+        ? db.select({
+            id: legalContractCorrespondence.id,
+            legalRecordId: legalContractCorrespondence.legalRecordId,
+            contractId: legalContractCorrespondence.contractId,
+            message: legalContractCorrespondence.message,
+            messageType: legalContractCorrespondence.messageType,
+            requiredAttachmentName: legalContractCorrespondence.requiredAttachmentName,
+            requestStatus: legalContractCorrespondence.requestStatus,
+            updatedAt: legalContractCorrespondence.updatedAt,
+            legalReference: legalRecords.referenceCode,
+            legalTitle: legalRecords.title,
+            contractReference: workforceContracts.referenceCode,
+          })
+          .from(legalContractCorrespondence)
+          .innerJoin(legalRecords, eq(legalRecords.id, legalContractCorrespondence.legalRecordId))
+          .innerJoin(workforceContracts, eq(workforceContracts.id, legalContractCorrespondence.contractId))
+          .where(and(
+            or(
+              like(legalContractCorrespondence.message, pattern),
+              like(legalContractCorrespondence.requiredAttachmentName, pattern),
+              like(legalRecords.referenceCode, pattern),
+              like(legalRecords.title, pattern),
+              like(workforceContracts.referenceCode, pattern),
+              like(workforceContracts.clientName, pattern),
+            ),
+            isNull(legalRecords.deletedAt),
+            canSearchContracts || legalCaseManager ? undefined : eq(legalRecords.assignedLawyerEmail, access.user.email.toLowerCase()),
+          ))
+          .orderBy(desc(legalContractCorrespondence.updatedAt))
+          .limit(8)
+        : Promise.resolve([]),
       canSearchLegal ? db.select().from(legalLawyers).where(or(like(legalLawyers.fullName, pattern), like(legalLawyers.licenseNumber, pattern), like(legalLawyers.email, pattern), like(legalLawyers.mobile, pattern))).orderBy(desc(legalLawyers.updatedAt)).limit(6) : Promise.resolve([]),
       canSearchDocuments ? db.select().from(companyDocuments).where(or(like(companyDocuments.referenceCode, pattern), like(companyDocuments.title, pattern), like(companyDocuments.counterparty, pattern))).orderBy(desc(companyDocuments.updatedAt)).limit(6) : Promise.resolve([]),
       canSearchOperations ? db.select().from(clients).where(or(like(clients.clientCode, pattern), like(clients.legalName, pattern), like(clients.commercialRegistration, pattern))).orderBy(desc(clients.updatedAt)).limit(6) : Promise.resolve([]),
@@ -86,6 +118,15 @@ export async function GET(request: Request) {
       ...employeeRows.map((item) => ({ key: `employee-${item.id}`, kind: "employee", id: item.id, view: "employees", title: item.fullName, meta: `موظف · ${item.jobTitle}`, searchValue: item.fullName })),
       ...financeRows.map((item) => ({ key: `finance-${item.id}`, kind: "finance", id: item.id, view: "finance", title: item.referenceCode, meta: `مالي · ${item.description}`, searchValue: item.referenceCode })),
       ...legalRows.map((item) => ({ key: `legal-${item.id}`, kind: "legal", id: item.id, view: "legal", title: item.title, meta: `قانوني · ${item.referenceCode}`, searchValue: item.referenceCode })),
+      ...correspondenceRows.map((item) => ({
+        key: `legal-contract-correspondence-${item.id}`,
+        kind: canSearchLegal ? "legal-correspondence" : "contract-correspondence",
+        id: canSearchLegal ? item.legalRecordId : item.contractId,
+        view: canSearchLegal ? "legal" : "contractual-documents",
+        title: `${item.contractReference} · ${item.requiredAttachmentName || item.legalTitle}`,
+        meta: `مراسلة قانونية · ${item.legalReference} · ${item.requestStatus}`,
+        searchValue: item.requiredAttachmentName || item.message || item.contractReference,
+      })),
       ...lawyerRows.map((item) => ({ key: `legal-lawyer-${item.id}`, kind: "legal-lawyer", id: item.id, view: "legal", title: item.fullName, meta: `محامي · ${item.licenseNumber || (item.portalUserEmail ? "مستخدم داخلي" : "خارجي")}`, searchValue: item.fullName })),
       ...documentRows.map((item) => ({ key: `document-${item.id}`, kind: "document", id: item.id, view: ["quotation","workforce_contract","contract","letter"].includes(item.documentType||"") ? "contractual-documents" : "documents", title: item.title, meta: `مستند · ${item.referenceCode}`, searchValue: item.referenceCode })),
       ...clientRows.map((item) => ({ key: `client-${item.id}`, kind: "client", id: item.id, view: "operations", title: item.legalName, meta: `عميل · ${item.clientCode}`, searchValue: item.legalName })),

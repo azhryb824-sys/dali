@@ -1,6 +1,6 @@
 import { getDb } from "@/db";
 import { companyDocuments, portalActivity } from "@/db/schema";
-import { cleanDate, cleanText, documentCategories, makeReference, objectKey, safeFileName, uploadContentTypes } from "@/lib/company-documents";
+import { categoryForCorporateDocumentType, cleanDate, cleanText, corporateDocumentTypeLabels, corporateDocumentTypeSet, makeReference, objectKey, safeFileName, uploadContentTypes, type CorporateDocumentType } from "@/lib/company-documents";
 import { canManagePortalDocuments, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
@@ -17,7 +17,8 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const file = form.get("file");
-    const category = cleanText(form.get("category"), 30);
+    const documentType = cleanText(form.get("documentType"), 60);
+    const requestedTitle = cleanText(form.get("title"), 180);
     const counterparty = cleanText(form.get("counterparty"), 160) || null;
     const expiryDate = cleanDate(form.get("expiryDate"), true);
     const retentionUntil = cleanDate(form.get("retentionUntil"), true);
@@ -28,12 +29,14 @@ export async function POST(request: Request) {
     }
     const validation = await validateUploadedFile(file, { contentTypes: uploadContentTypes, maxBytes: MAX_DOCUMENT_BYTES });
     if (!validation.valid) return Response.json({ error: validation.error }, { status: 400 });
-    if (!documentCategories.has(category) || expiryDate === "" || retentionUntil === "" || lockedUntil === "") {
+    if (!corporateDocumentTypeSet.has(documentType) || expiryDate === "" || retentionUntil === "" || lockedUntil === "") {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
     }
 
     const fileName = safeFileName(file.name);
-    const title = fileName.replace(/\.[^.]+$/, "").trim() || "مستند مرفوع";
+    const typedDocument = documentType as CorporateDocumentType;
+    const title = requestedTitle || corporateDocumentTypeLabels[typedDocument];
+    const category = categoryForCorporateDocumentType(typedDocument);
     storageKey = objectKey("company-documents", fileName);
     await getRuntimeEnv().BUCKET.put(storageKey, validation.bytes, {
       httpMetadata: { contentType: file.type },
@@ -42,9 +45,10 @@ export async function POST(request: Request) {
 
     const db = getDb();
     const [saved] = await db.insert(companyDocuments).values({
-      referenceCode: makeReference("DOC"),
+      referenceCode: makeReference("DALI-DOC"),
       title,
       category,
+      documentType: typedDocument,
       counterparty,
       fileName,
       storageKey,

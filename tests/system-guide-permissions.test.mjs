@@ -120,7 +120,7 @@ test("contracts, official letters, and stamps follow contractual permissions", (
   assert.match(letterPdf, /hasPortalPermission\(access,"contracts","read"\)/);
   assert.match(stamps, /hasPortalPermission\(access, "contracts", "read"\)/);
   assert.match(dashboard, /canManage=\{hasPermission\("contracts\.write"\)\}/);
-  assert.match(dashboard, /canApprove=\{hasPermission\("contracts\.approve"\)\}/);
+  assert.match(dashboard, /canApprove=\{isRoot\}/);
   assert.match(workspace, /\{canApprove && \(/);
 });
 

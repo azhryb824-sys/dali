@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { companyDocuments, contractClauses, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, workforceContracts } from "@/db/schema";
+import { companyDocuments, complianceObligations, contractClauses, contractPaymentSchedules, contractProfessions, contractSignatureRequests, contractWorkerAbsences, contractWorkerAssignments, costCenters, documentShareLinks, financialRecords, journalLines, legalExternalShareBundleItems, legalRecords, officialLetters, purchaseInvoices, representativeRequests, workforceContracts, workOrders } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { cleanDate } from "@/lib/company-documents";
 import { annualContractSchedule } from "@/lib/payment-schedules";
@@ -146,23 +146,96 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   const actor = await access();
   if (!actor) return jsonNoStore({ error: "غير مصرح بحذف العقد" }, { status: 403 });
   const id = Number((await context.params).id);
+  if (!Number.isSafeInteger(id) || id < 1) return jsonNoStore({ error: "رقم العقد غير صحيح" }, { status: 400 });
   const db = getDb();
-  const contract = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.id, id) });
-  if (!contract) return jsonNoStore({ error: "العقد غير موجود" }, { status: 404 });
-  if (contract.approvedBy || contract.status !== "draft") return jsonNoStore({ error: contract.status === "active" ? "لا يمكن حذف عقد ساري ومعتمد" : "لا يمكن حذف العقد بعد دخوله مسار الاعتماد؛ أعده للمسودة أو ألغِه وفق الصلاحية", code: "CONTRACT_DELETE_BLOCKED" }, { status: 409 });
-  const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, contract.documentId) });
-  await db.transaction(async (tx) => {
-    await tx.delete(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, id));
-    await tx.delete(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id));
-    await tx.delete(contractClauses).where(eq(contractClauses.contractId, id));
-    await tx.delete(contractProfessions).where(eq(contractProfessions.contractId, id));
-    await tx.delete(workforceContracts).where(and(eq(workforceContracts.id, id), eq(workforceContracts.status, "draft")));
-    if (document) await tx.delete(companyDocuments).where(eq(companyDocuments.id, document.id));
-  });
-  if (document) {
-    await getRuntimeEnv().BUCKET.delete(document.storageKey).catch(() => undefined);
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select id from workforce_contracts where id = ${id} for update`);
+      const contract = await tx.query.workforceContracts.findFirst({ where: eq(workforceContracts.id, id) });
+      if (!contract) return { kind: "missing" as const };
+      if (contract.approvedBy || contract.status !== "draft")
+        return {
+          kind: "blocked" as const,
+          error: contract.status === "active" ? "لا يمكن حذف عقد ساري ومعتمد" : "لا يمكن حذف العقد بعد دخوله مسار الاعتماد؛ ألغِه وفق الصلاحية للحفاظ على أثره النظامي",
+        };
+
+      const document = await tx.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, contract.documentId) });
+      const [
+        payments,
+        assignments,
+        absences,
+        legalMatter,
+        bundleItem,
+        signatureRequests,
+        financialLinks,
+        purchaseInvoiceLinks,
+        workOrderLinks,
+        costCenterLinks,
+        journalLinks,
+        complianceLinks,
+        letterLinks,
+        childContracts,
+      ] = await Promise.all([
+        tx.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id)),
+        tx.select({ id: contractWorkerAssignments.id, status: contractWorkerAssignments.status }).from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, id)),
+        tx.select({ id: contractWorkerAbsences.id }).from(contractWorkerAbsences).where(eq(contractWorkerAbsences.contractId, id)).limit(1),
+        tx.select({ id: legalRecords.id }).from(legalRecords).where(eq(legalRecords.contractId, id)).limit(1),
+        tx.select({ id: legalExternalShareBundleItems.id }).from(legalExternalShareBundleItems).where(eq(legalExternalShareBundleItems.documentId, contract.documentId)).limit(1),
+        tx.select().from(contractSignatureRequests).where(eq(contractSignatureRequests.contractId, id)),
+        tx.select({ id: financialRecords.id }).from(financialRecords).where(or(eq(financialRecords.contractId, id), eq(financialRecords.documentId, contract.documentId))).limit(1),
+        tx.select({ id: purchaseInvoices.id }).from(purchaseInvoices).where(or(eq(purchaseInvoices.contractId, id), eq(purchaseInvoices.documentId, contract.documentId))).limit(1),
+        tx.select({ id: workOrders.id }).from(workOrders).where(eq(workOrders.contractId, id)).limit(1),
+        tx.select({ id: costCenters.id }).from(costCenters).where(eq(costCenters.contractId, id)).limit(1),
+        tx.select({ id: journalLines.id }).from(journalLines).where(eq(journalLines.contractId, id)).limit(1),
+        tx.select({ id: complianceObligations.id }).from(complianceObligations).where(eq(complianceObligations.documentId, contract.documentId)).limit(1),
+        tx.select({ id: officialLetters.id }).from(officialLetters).where(eq(officialLetters.documentId, contract.documentId)).limit(1),
+        tx.select({ id: workforceContracts.id }).from(workforceContracts).where(eq(workforceContracts.parentContractId, id)).limit(1),
+      ]);
+      const hasFinancialEffect = payments.some((payment) =>
+        Boolean(payment.invoiceDocumentId || payment.financialRecordId || payment.paymentJournalEntryId) ||
+        !["scheduled", "due"].includes(payment.status),
+      );
+      const hasOperationalAssignment = assignments.some((assignment) => assignment.status !== "planned");
+      const hasSignedCopy = signatureRequests.some((signature) => signature.status === "uploaded" || Boolean(signature.signedStorageKey));
+      const hasProtectedLink = financialLinks.length || purchaseInvoiceLinks.length || workOrderLinks.length || costCenterLinks.length || journalLinks.length || complianceLinks.length || letterLinks.length || childContracts.length;
+      if (hasFinancialEffect || hasOperationalAssignment || absences.length || legalMatter.length || bundleItem.length || hasSignedCopy || hasProtectedLink)
+        return {
+          kind: "blocked" as const,
+          error: "لا يمكن حذف هذه المسودة لوجود أثر مالي أو تشغيلي أو قانوني أو نسخة موقعة؛ استخدم إلغاء العقد للحفاظ على السجل",
+        };
+
+      const storageKeys = new Set<string>();
+      if (document?.storageKey) storageKeys.add(document.storageKey);
+      for (const signature of signatureRequests) {
+        if (signature.originalStorageKey) storageKeys.add(signature.originalStorageKey);
+        if (signature.signedStorageKey) storageKeys.add(signature.signedStorageKey);
+      }
+      await tx.delete(contractSignatureRequests).where(eq(contractSignatureRequests.contractId, id));
+      await tx.delete(contractWorkerAbsences).where(eq(contractWorkerAbsences.contractId, id));
+      await tx.delete(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, id));
+      await tx.delete(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id));
+      await tx.delete(contractClauses).where(eq(contractClauses.contractId, id));
+      await tx.delete(contractProfessions).where(eq(contractProfessions.contractId, id));
+      if (document) await tx.delete(documentShareLinks).where(eq(documentShareLinks.documentId, document.id));
+      const [deleted] = await tx.delete(workforceContracts).where(and(eq(workforceContracts.id, id), eq(workforceContracts.status, "draft"), isNotNull(workforceContracts.documentId))).returning();
+      if (!deleted) throw new Error("CONTRACT_CHANGED_DURING_DELETE");
+      if (document) await tx.delete(companyDocuments).where(eq(companyDocuments.id, document.id));
+      if (deleted.representativeRequestId) {
+        const siblingContract = await tx.select({ id: workforceContracts.id }).from(workforceContracts).where(eq(workforceContracts.representativeRequestId, deleted.representativeRequestId)).limit(1);
+        if (!siblingContract.length)
+          await tx.update(representativeRequests).set({ status: "approved", updatedAt: new Date().toISOString() }).where(and(eq(representativeRequests.id, deleted.representativeRequestId), eq(representativeRequests.status, "converted")));
+      }
+      return { kind: "deleted" as const, contract: deleted, storageKeys: [...storageKeys] };
+    });
+    if (result.kind === "missing") return jsonNoStore({ error: "العقد غير موجود" }, { status: 404 });
+    if (result.kind === "blocked") return jsonNoStore({ error: result.error, code: "CONTRACT_DELETE_BLOCKED" }, { status: 409 });
+    await Promise.all(result.storageKeys.map((storageKey) => getRuntimeEnv().BUCKET.delete(storageKey).catch((error) => console.warn("contract-delete-storage-cleanup-failed", storageKey, error))));
+    await auditPortalAction({ actorEmail: actor.user.email, action: "workforce-contract-deleted", entityType: "workforce-contract", entityId: id, before: result.contract });
+    await emitPortalNotification({ eventType: "workforce-contract-deleted", title: "حُذفت مسودة عقد", message: `${result.contract.referenceCode} — ${result.contract.clientName}.`, severity: "warning", module: "workforce", entityType: "workforce-contract", entityId: id, actionView: "workforce", targetDepartment: "workforce" }).catch(() => undefined);
+    return jsonNoStore({ deleted: true, id });
+  } catch (error) {
+    console.error("workforce-contract-delete-failed", { id, error });
+    const changed = error instanceof Error && error.message === "CONTRACT_CHANGED_DURING_DELETE";
+    return jsonNoStore({ error: changed ? "تغيرت حالة العقد أثناء الحذف؛ حدّث الصفحة وحاول مجددًا" : "تعذر حذف المسودة لوجود سجل تابع محمي؛ استخدم إلغاء العقد أو راجع الارتباطات", code: "CONTRACT_DELETE_BLOCKED" }, { status: 409 });
   }
-  await auditPortalAction({ actorEmail: actor.user.email, action: "workforce-contract-deleted", entityType: "workforce-contract", entityId: id, before: contract });
-  await emitPortalNotification({ eventType: "workforce-contract-deleted", title: "حُذفت مسودة عقد", message: `${contract.referenceCode} — ${contract.clientName}.`, severity: "warning", module: "workforce", entityType: "workforce-contract", entityId: id, actionView: "workforce", targetDepartment: "workforce" }).catch(() => undefined);
-  return jsonNoStore({ deleted: true, id });
 }

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { requireChatGPTUser } from "@/app/chatgpt-auth";
 import { getDb } from "@/db";
-import { companyAssets, companyDocuments, contractProfessions, contractWorkerAssignments, employees, financialRecords, legalRecords, portalActivity, portalUsers, visitorConversations, visitorMessages, workerAttachments, workers, workforceContracts, workforceRequestReplies, workforceRequests } from "@/db/schema";
+import { companyAssets, companyDocuments, contractProfessions, contractWorkerAssignments, employees, financialRecords, legalRecords, portalAccessScopes, portalActivity, portalRoles, portalUserPermissions, portalUsers, visitorConversations, visitorMessages, workerAttachments, workers, workforceContracts, workforceRequestReplies, workforceRequests } from "@/db/schema";
 import { getBusinessHoursState } from "@/lib/business-hours";
 import { getChatAutomationConfig } from "@/lib/chat-automation";
 import { emailDeliveryConfigured } from "@/lib/email-delivery";
@@ -17,6 +17,7 @@ import PortalDashboard from "./PortalDashboard";
 import PortalAccessRequestForm from "./PortalAccessRequestForm";
 import { canReadConstruction, getActivePortalScopes } from "@/lib/access-policy";
 import { localeCookieName, normalizeAppLocale } from "@/lib/i18n";
+import { inferPermissionProfile, parseRolePermissions } from "@/lib/portal-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -113,7 +114,38 @@ async function ProtectedPortal() {
       : Promise.resolve([]),
     listPortalNotifications(access),
     canAdministerUsers
-      ? db.select().from(portalUsers).orderBy(desc(portalUsers.createdAt)).limit(150)
+      ? Promise.all([
+          db.select().from(portalUsers).orderBy(desc(portalUsers.createdAt)).limit(150),
+          db.select({ userEmail: portalAccessScopes.userEmail, functionalRole: portalAccessScopes.functionalRole })
+            .from(portalAccessScopes)
+            .where(eq(portalAccessScopes.active, true))
+            .limit(3000),
+          db.select().from(portalRoles).limit(500),
+          db.select({
+            userEmail: portalUserPermissions.userEmail,
+            resource: portalUserPermissions.resource,
+            action: portalUserPermissions.action,
+            allowed: portalUserPermissions.allowed,
+            scope: portalUserPermissions.scope,
+          }).from(portalUserPermissions).limit(20_000),
+        ]).then(([userRows, scopeRows, roleRows, permissionRows]) => {
+          const roleByKey = new Map(roleRows.map((role) => [role.roleKey, role]));
+          return userRows.map((row) => {
+            const functionalRoles = [...new Set(scopeRows.filter((scope) => scope.userEmail === row.email).map((scope) => scope.functionalRole))];
+            const rolePermissions = [...new Set(functionalRoles.flatMap((roleKey) => {
+              const role = roleByKey.get(roleKey);
+              return role ? parseRolePermissions(role.permissionsJson) : [];
+            }))];
+            return {
+              ...row,
+              functionalRoles,
+              permissionProfile: inferPermissionProfile(
+                rolePermissions,
+                permissionRows.filter((rule) => rule.userEmail === row.email),
+              ),
+            };
+          });
+        })
       : Promise.resolve([]),
     canManageRequests
       ? db.select().from(portalActivity).orderBy(desc(portalActivity.createdAt)).limit(12)

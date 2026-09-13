@@ -11,6 +11,7 @@ import ContractApprovalStampDialog, {
 } from "./ContractApprovalStampDialog";
 import LegalPaymentReferralDialog from "./LegalPaymentReferralDialog";
 import ContractFullEditDialog from "./ContractFullEditDialog";
+import LegalContractCorrespondence from "./LegalContractCorrespondence";
 type Contract = {
   id: number;
   documentId: number;
@@ -865,6 +866,11 @@ export default function ContractBillingWorkspace() {
                         </div>
                       ))}
                     </div>
+                    <LegalContractCorrespondence
+                      key={`contract-correspondence-${contract.id}`}
+                      mode="contracts"
+                      contractId={contract.id}
+                    />
                   </div>
                 )}
               </article>

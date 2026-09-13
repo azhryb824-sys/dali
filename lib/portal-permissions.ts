@@ -11,6 +11,14 @@ export const availableRolePermissions = [
 
 export type PortalPermission = (typeof availableRolePermissions)[number];
 export type PermissionProfile = "read_only" | "operator" | "role_default";
+export type PermissionProfileSelection = PermissionProfile | "custom";
+
+type StoredPermissionRule = {
+  resource: string;
+  action: string;
+  allowed: boolean;
+  scope?: string;
+};
 
 export function parseRolePermissions(value: string) {
   try {
@@ -35,4 +43,33 @@ export function permissionsForProfile(rolePermissions: string[], profile: Permis
         : roleAllows;
     return { resource, action, allowed };
   });
+}
+
+export function inferPermissionProfile(
+  rolePermissions: string[],
+  explicitRules: StoredPermissionRule[],
+): PermissionProfileSelection {
+  if (rolePermissions.includes("*")) return "role_default";
+  if (!explicitRules.length) return "role_default";
+
+  // Quick profiles are stored as one exhaustive rule per supported
+  // permission. Anything else may carry hand-tuned scope semantics and must
+  // not be silently flattened by the user editor.
+  if (explicitRules.length !== availableRolePermissions.length) return "custom";
+  const scopes = new Set(explicitRules.map((rule) => rule.scope || "department"));
+  if (scopes.size > 1) return "custom";
+  const byPermission = new Map<string, boolean>();
+  for (const rule of explicitRules) {
+    const permission = `${rule.resource}.${rule.action}`;
+    if (!availableRolePermissions.includes(permission as PortalPermission) || byPermission.has(permission))
+      return "custom";
+    byPermission.set(permission, rule.allowed);
+  }
+
+  for (const profile of ["role_default", "operator", "read_only"] as const) {
+    const expected = permissionsForProfile(rolePermissions, profile);
+    if (expected.every((rule) => byPermission.get(`${rule.resource}.${rule.action}`) === rule.allowed))
+      return profile;
+  }
+  return "custom";
 }

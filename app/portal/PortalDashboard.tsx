@@ -46,6 +46,7 @@ import { ANNUAL_CONTRACT_MONTHS, annualContractSchedule, annualInstallmentPercen
 import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
 import { readApiJson } from "@/lib/client-api";
 import { appAlert, appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
+import { corporateDocumentTypeLabels, corporateDocumentTypes, isCorporateDocument, type CorporateDocumentType } from "@/lib/company-documents";
 
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
@@ -130,6 +131,14 @@ type PortalUser = {
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
+  functionalRoles: string[];
+  permissionProfile: "read_only" | "operator" | "role_default" | "custom";
+};
+type PortalRoleDefinition = {
+  roleKey: string;
+  labelAr: string;
+  description: string | null;
+  active: boolean;
 };
 type Activity = {
   id: number;
@@ -454,8 +463,8 @@ const functionalRoleLabels: Record<string, string> = {
   legal_lawyer: "محامي فرعي",
   workforce_supervisor: "مشرف العمالة",
   legal_affairs: "شؤون قانونية",
-  sales_representative: "مندوب مبيعات",
-  purchasing_representative: "مندوب مشتريات",
+  "sales_representative": "مندوب مبيعات",
+  "purchasing_representative": "مندوب مشتريات",
   administrative_assistant: "مساعد إداري",
 };
 const departmentLabels: Record<PortalDepartment, string> = {
@@ -536,15 +545,6 @@ const documentCategoryLabels: Record<string, string> = {
   hr: "موارد بشرية",
   other: "أخرى",
 };
-const issuedTypeLabels: Record<string, string> = {
-  workforce_contract: "عقد توفير عمالة",
-  quotation: "عرض سعر",
-  progress_claim: "مستخلص أعمال",
-  invoice: "فاتورة",
-  receipt: "سند قبض",
-  payment_voucher: "سند صرف",
-};
-
 function safeRequestStatus(value: string): RequestStatus {
   return value in requestStatuses ? (value as RequestStatus) : "new";
 }
@@ -842,6 +842,7 @@ export default function PortalDashboard({
   const [requestReplies, setRequestReplies] = useState(initialRequestReplies);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [users, setUsers] = useState(initialUsers);
+  const [roleOptions, setRoleOptions] = useState<PortalRoleDefinition[]>([]);
   const [employees, setEmployees] = useState(initialEmployees);
   const [finance, setFinance] = useState(initialFinance);
   const [legal, setLegal] = useState(initialLegal);
@@ -862,6 +863,7 @@ export default function PortalDashboard({
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
+  const [selectedLegalRecordId, setSelectedLegalRecordId] = useState<number | null>(null);
   const [requestFilter, setRequestFilter] = useState<"all" | RequestStatus>("all");
   const [query, setQuery] = useState("");
   const [globalQuery, setGlobalQuery] = useState("");
@@ -935,6 +937,22 @@ export default function PortalDashboard({
   const canArchiveWorkers = isRoot;
   const canManageWorkerAssignments = hasPermission("contracts.write") && hasPermission("workforce.write");
   const canViewWorkerFinance = hasPermission("finance.read");
+  useEffect(() => {
+    if (!isRoot) return;
+    let active = true;
+    void fetch("/api/portal/role-definitions", { cache: "no-store" })
+      .then(async (response) => {
+        const result = (await readApiJson(response)) as { roles?: PortalRoleDefinition[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "تعذر تحميل الأدوار الوظيفية");
+        if (active) setRoleOptions((result.roles || []).filter((role) => role.active));
+      })
+      .catch((error) => {
+        if (active) notify(error instanceof Error ? error.message : "تعذر تحميل الأدوار الوظيفية");
+      });
+    return () => {
+      active = false;
+    };
+  }, [isRoot]);
   const canWrite = viewDepartment[view]
     ? canWriteDepartment(viewDepartment[view]!)
     : view === "operations"
@@ -1097,8 +1115,9 @@ export default function PortalDashboard({
   const employeeComplianceAlerts = employees.reduce((total, item) => total + (item.residencyType === "resident" && daysUntil(item.iqamaExpiry) < 29 ? 1 : 0) + (item.contractType === "fixed_term" && daysUntil(item.contractEndDate) < 29 ? 1 : 0) + (item.residencyType === "resident" && daysUntil(item.workPermitExpiry) < 29 ? 1 : 0), 0);
   const incompleteWorkerFiles = workers.filter((worker) => workerRequirementStatus(worker, workerAttachments).missing.length > 0 || !workerRequirementStatus(worker, workerAttachments).hasPhoto || !worker.iqamaNumber).length;
   const activeBeneficiaries = new Set(workers.filter((item) => item.status === "assigned" && item.beneficiaryName).map((item) => item.beneficiaryName)).size;
-  const expiringDocuments = documents.filter((item) => item.status === "active" && daysUntil(item.expiryDate) >= 0 && daysUntil(item.expiryDate) <= 30);
-  const expiredDocuments = documents.filter((item) => item.status === "active" && daysUntil(item.expiryDate) < 0);
+  const corporateDocuments = documents.filter(isCorporateDocument);
+  const expiringDocuments = corporateDocuments.filter((item) => item.status === "active" && daysUntil(item.expiryDate) >= 0 && daysUntil(item.expiryDate) <= 30);
+  const expiredDocuments = corporateDocuments.filter((item) => item.status === "active" && daysUntil(item.expiryDate) < 0);
   const documentAlerts = expiringDocuments.length + expiredDocuments.length;
   const unreadNotifications = notifications.filter((item) => !item.readAt).length;
   const unreadConversationMessages = conversationMessages.filter((item) => item.senderType === "visitor" && !item.readByStaffAt).length;
@@ -1355,6 +1374,7 @@ export default function PortalDashboard({
     if (item.entityType === "workforce-request" && item.entityId) setSelectedId(Number(item.entityId));
     if (item.entityType === "worker" && item.entityId) setSelectedWorkerId(Number(item.entityId));
     if (item.entityType === "workforce-contract" && item.entityId) setSelectedContractId(Number(item.entityId));
+    if (item.entityType === "legal-record" && item.entityId) setSelectedLegalRecordId(Number(item.entityId));
     if (item.entityType === "visitor-conversation" && item.entityId) void openConversation(item.entityId);
     if (item.entityType === "data-subject-request") setOperationsTab("privacy");
     if (item.entityType === "quote-version") setOperationsTab("quotes");
@@ -1602,13 +1622,13 @@ export default function PortalDashboard({
     }
   }
 
-  async function updateUser(email: string, role: PortalRole, department: PortalDepartment, status: "active" | "pending" | "suspended", reason: string) {
+  async function updateUser(email: string, status: "active" | "pending" | "suspended", reason: string, functionalRoles: string[], permissionProfile: "read_only" | "operator" | "role_default" | "custom") {
     setBusy(`user-${email}`);
     try {
       const response = await fetch("/api/portal/users", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, role, department, status, reason }),
+        body: JSON.stringify({ email, status, reason, functionalRoles, permissionProfile }),
       });
       const data = (await readApiJson(response)) as {
         user?: PortalUser;
@@ -1617,8 +1637,10 @@ export default function PortalDashboard({
       if (!response.ok || !data.user) throw new Error(data.error || "تعذّر تحديث صلاحية المستخدم.");
       setUsers((items) => items.map((item) => (item.email === email ? (data.user as PortalUser) : item)));
       notify("تم تحديث الصلاحية وإبطال الجلسات السابقة للمستخدم.");
+      return true;
     } catch (error) {
       notify(error instanceof Error ? error.message : "تعذّر تحديث صلاحيات المستخدم.");
+      return false;
     } finally {
       setBusy(null);
     }
@@ -2237,6 +2259,8 @@ export default function PortalDashboard({
               if (result.kind === "request") setSelectedId(result.id);
               if (result.kind === "worker") setSelectedWorkerId(result.id);
               if (result.kind === "contract") setSelectedContractId(result.id);
+              if (result.kind === "contract-correspondence") setSelectedContractId(result.id);
+              if (result.kind === "legal" || result.kind === "legal-correspondence") setSelectedLegalRecordId(result.id);
               if (result.kind === "conversation") void openConversation(result.stringId || "");
               const operationsKinds: Record<string, OperationsTab> = {
                 client: "crm",
@@ -2536,7 +2560,7 @@ export default function PortalDashboard({
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالعنوان أو الطرف أو المرجع">
                 <LegalTable records={legal} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("legal", id, status)} />
               </ManagementPanel>
-              <LegalCaseWorkspace />
+              <LegalCaseWorkspace key={selectedLegalRecordId || "legal-workspace"} initialRecordId={selectedLegalRecordId || undefined} />
               <ComplianceWorkspace canWrite={canWrite} />
             </ModuleSection>
           )}
@@ -2588,21 +2612,21 @@ export default function PortalDashboard({
 
           {view === "contractual-documents" && canAccessContracts && (
             <>
-              <ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={hasPermission("contracts.write")} canWrite={canWrite} canApprove={hasPermission("contracts.approve")} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} onCreateQuotation={() => openIssueDocument("quotation")} />
+              <ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={hasPermission("contracts.write")} canWrite={canWrite} canApprove={isRoot} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} onCreateQuotation={() => openIssueDocument("quotation")} />
               <LetterPdfLibrary />
             </>
           )}
 
           {view === "documents" && canAccessDocuments && (
             <DocumentCenter
-              documents={documents.filter((item) => !["quotation", "workforce_contract", "contract", "letter"].includes(item.documentType || ""))}
+              documents={corporateDocuments}
               contracts={contracts}
               assets={assets}
               query={query}
               setQuery={setQuery}
               canManageDocuments={canManageDocuments}
               canShareDocuments={canShareDocuments}
-              canIssueContracts={canIssueContracts}
+              canIssueContracts={false}
               canManageAssets={canManageAssets}
               busy={busy}
               expiringDocuments={expiringDocuments}
@@ -2614,7 +2638,7 @@ export default function PortalDashboard({
                 setOperationsTab("quotes");
                 changeView("operations");
               }}
-              canApprove={isRoot}
+              canApprove={false}
               onApproveContract={(contractId) => updateContractStatus(contractId, "approved", "اعتماد مباشر من مركز المستندات")}
               onShare={shareDocument}
               onUploadAsset={uploadAsset}
@@ -2635,7 +2659,16 @@ export default function PortalDashboard({
                 </div>
                 <div className="user-list">
                   {users.map((item) => (
-                    <UserAccessCard key={`${item.email}:${item.updatedAt}`} user={item} self={item.email === currentUser.email} busy={busy === `user-${item.email}` || busy === `user-password-${item.email}`} onSave={updateUser} onResetPassword={resetUserPassword} />
+                    <UserAccessCard
+                      key={`${item.email}:${item.updatedAt}`}
+                      user={item}
+                      roleOptions={roleOptions.filter((role) => isSystemOwner || role.roleKey !== "system_owner")}
+                      self={item.email === currentUser.email}
+                      protectedOwner={!isSystemOwner && item.functionalRoles?.includes("system_owner")}
+                      busy={busy === `user-${item.email}` || busy === `user-password-${item.email}`}
+                      onSave={updateUser}
+                      onResetPassword={resetUserPassword}
+                    />
                   ))}
                 </div>
               </section>
@@ -2666,7 +2699,7 @@ export default function PortalDashboard({
         />
       )}
       {documentModal === "issue" && issuePreset !== "quotation" && <IssueDocumentModal initialType={issuePreset} initialQuoteId={issueQuoteId} canIssueContracts={canIssueContracts} canIssueFinance={canIssueFinanceDocuments} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} requests={requests} onClose={() => setDocumentModal(null)} onSubmit={issueDocument} />}
-      {userModal && <CreateUserModal busy={busy === "create-user"} onClose={() => setUserModal(false)} onSubmit={createUser} />}
+      {userModal && <CreateUserModal roles={roleOptions.filter((role) => isSystemOwner || role.roleKey !== "system_owner")} busy={busy === "create-user"} onClose={() => setUserModal(false)} onSubmit={createUser} />}
       {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours} />}
       {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} canWrite={canWriteConversations} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus} />}
       {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply} />}
@@ -2693,20 +2726,40 @@ export default function PortalDashboard({
   );
 }
 
-function UserAccessCard({ user, self, busy, onSave, onResetPassword }: { user: PortalUser; self: boolean; busy: boolean; onSave: (email: string, role: PortalRole, department: PortalDepartment, status: "active" | "pending" | "suspended", reason: string) => Promise<void>; onResetPassword: (email: string, temporaryPassword: string) => Promise<boolean> }) {
-  const [role, setRole] = useState<PortalRole>(user.role as PortalRole);
-  const [department, setDepartment] = useState<PortalDepartment>(user.department as PortalDepartment);
+function UserAccessCard({ user, roleOptions, self, protectedOwner, busy, onSave, onResetPassword }: { user: PortalUser; roleOptions: PortalRoleDefinition[]; self: boolean; protectedOwner: boolean; busy: boolean; onSave: (email: string, status: "active" | "pending" | "suspended", reason: string, functionalRoles: string[], permissionProfile: "read_only" | "operator" | "role_default" | "custom") => Promise<boolean>; onResetPassword: (email: string, temporaryPassword: string) => Promise<boolean> }) {
   const [status, setStatus] = useState<"active" | "pending" | "suspended">(user.status as "active" | "pending" | "suspended");
+  const [functionalRoles, setFunctionalRoles] = useState<string[]>(user.functionalRoles || []);
+  const [permissionProfile, setPermissionProfile] = useState<"read_only" | "operator" | "role_default" | "custom">(user.permissionProfile || "role_default");
   const [reason, setReason] = useState("");
+  const [validationError, setValidationError] = useState("");
   const [passwordResetOpen, setPasswordResetOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [temporaryPasswordConfirmation, setTemporaryPasswordConfirmation] = useState("");
   const temporaryPasswordStrong = temporaryPassword.length >= 12 && temporaryPassword.length <= 128 && /[a-z]/.test(temporaryPassword) && /[A-Z]/.test(temporaryPassword) && /\d/.test(temporaryPassword) && /[^A-Za-z0-9]/.test(temporaryPassword);
   const temporaryPasswordsMatch = temporaryPassword === temporaryPasswordConfirmation;
   const requestComplete = Boolean(user.requestSubmittedAt && user.termsAcceptedAt);
+  const accessLocked = self || protectedOwner;
+  const rolesChanged = [...functionalRoles].sort().join(",") !== [...(user.functionalRoles || [])].sort().join(",");
+  function toggleRole(roleKey: string) {
+    setFunctionalRoles((current) => current.includes(roleKey) ? current.filter((key) => key !== roleKey) : [...current, roleKey]);
+    setValidationError("");
+  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void onSave(user.email, role, department, status, reason).then(() => setReason(""));
+    if (!functionalRoles.length) {
+      setValidationError("اختر دورًا وظيفيًا واحدًا على الأقل.");
+      return;
+    }
+    if (permissionProfile === "custom" && rolesChanged) {
+      setValidationError("اختر إحدى حزم الصلاحيات الثلاث عند تغيير الأدوار؛ الصلاحيات المخصصة الحالية لا يمكن نقلها تلقائيًا إلى أدوار مختلفة.");
+      return;
+    }
+    void onSave(user.email, status, reason, functionalRoles, permissionProfile).then((saved) => {
+      if (saved) {
+        setReason("");
+        setValidationError("");
+      }
+    });
   }
   return (
     <article className={`user-access-card ${user.status}`}>
@@ -2735,28 +2788,29 @@ function UserAccessCard({ user, self, busy, onSave, onResetPassword }: { user: P
           </div>
         )}
         <div className="user-access-controls">
-          <label>
-            الدور
-            <select value={role} disabled={self || busy} onChange={(event) => setRole(event.target.value as PortalRole)}>
-              <option value="admin">مدير النظام</option>
-              <option value="manager">الإدارة</option>
-              <option value="employee">موظف</option>
-            </select>
-          </label>
-          <label>
-            القسم
-            <select value={department} disabled={self || busy} onChange={(event) => setDepartment(event.target.value as PortalDepartment)}>
-              <option value="general">صلاحية عامة</option>
-              <option value="employees">إدارة الموظفين</option>
-              <option value="finance">الإدارة المالية</option>
-              <option value="legal">الشؤون القانونية</option>
-              <option value="workforce">شؤون العمالة</option>
-              <option value="construction">المقاولات والمشروعات</option>
-            </select>
-          </label>
+          <fieldset className="user-functional-role-editor">
+            <legend>الأدوار الوظيفية الفعلية</legend>
+            <div>
+              {roleOptions.map((roleOption) => (
+                <label key={roleOption.roleKey}>
+                  <input
+                    type="checkbox"
+                    checked={functionalRoles.includes(roleOption.roleKey)}
+                    disabled={accessLocked || busy}
+                    onChange={() => toggleRole(roleOption.roleKey)}
+                  />
+                  <span>
+                    <b>{roleOption.labelAr}</b>
+                    <small>{roleOption.description || "صلاحيات محددة حسب تعريف الدور"}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {!roleOptions.length && <small>جارٍ تحميل الأدوار المتاحة...</small>}
+          </fieldset>
           <label>
             الحالة
-            <select value={status} disabled={self || busy} onChange={(event) => setStatus(event.target.value as "active" | "pending" | "suspended")}>
+            <select value={status} disabled={accessLocked || busy} onChange={(event) => setStatus(event.target.value as "active" | "pending" | "suspended")}>
               <option value="active" disabled={!requestComplete && user.status !== "active"}>
                 نشط
               </option>
@@ -2764,8 +2818,17 @@ function UserAccessCard({ user, self, busy, onSave, onResetPassword }: { user: P
               <option value="suspended">موقوف</option>
             </select>
           </label>
+          <fieldset className="user-permission-profile">
+            <legend>مستوى الصلاحيات ضمن الأدوار</legend>
+            {permissionProfile === "custom" && <label><input type="radio" checked readOnly disabled /> صلاحيات مخصصة حالية — تُحفظ كما هي ما لم تختر حزمة أخرى</label>}
+            <label><input type="radio" checked={permissionProfile === "role_default"} disabled={accessLocked || busy} onChange={() => setPermissionProfile("role_default")} /> صلاحيات الدور كاملة</label>
+            <label><input type="radio" checked={permissionProfile === "operator"} disabled={accessLocked || busy} onChange={() => setPermissionProfile("operator")} /> تنفيذ دون اعتماد</label>
+            <label><input type="radio" checked={permissionProfile === "read_only"} disabled={accessLocked || busy} onChange={() => setPermissionProfile("read_only")} /> اطلاع فقط</label>
+          </fieldset>
+          <p className="user-derived-department">القسم الحالي: <strong>{departmentLabels[user.department as PortalDepartment] || user.department}</strong> · يُعاد تحديده تلقائيًا من الأدوار المختارة.</p>
         </div>
-        {!self && (
+        {validationError && <p className="form-error">{validationError}</p>}
+        {!accessLocked && (
           <div className="user-access-decision">
             <label>
               سبب القرار أو التغيير
@@ -2776,7 +2839,7 @@ function UserAccessCard({ user, self, busy, onSave, onResetPassword }: { user: P
             </button>
           </div>
         )}
-        {!self && !passwordResetOpen && (
+        {!self && !passwordResetOpen && !protectedOwner && (
           <div className="user-password-reset-trigger">
             <button type="button" className="admin-secondary" disabled={busy} onClick={() => setPasswordResetOpen(true)}>
               إعادة تعيين كلمة المرور
@@ -2784,7 +2847,7 @@ function UserAccessCard({ user, self, busy, onSave, onResetPassword }: { user: P
             <small>متاح للمالك ومشرف النظام وفق الصلاحية، ويُلزم المستخدم بتغييرها عند أول دخول.</small>
           </div>
         )}
-        {!self && passwordResetOpen && (
+        {!self && passwordResetOpen && !protectedOwner && (
           <div className="user-password-reset" role="group" aria-label={`إعادة تعيين كلمة مرور ${user.displayName}`}>
             <div className="user-password-reset-head">
               <strong>تعيين كلمة مرور مؤقتة</strong>
@@ -2831,56 +2894,22 @@ function UserAccessCard({ user, self, busy, onSave, onResetPassword }: { user: P
           </div>
         )}
         {self && <p className="self-access-note">لا يمكن تعديل صلاحية حسابك من جلستك الحالية؛ يمنع ذلك الرفع الذاتي للصلاحيات أو تعطيل حساب مدير النظام بالخطأ.</p>}
+        {protectedOwner && <p className="self-access-note">حساب مالك النظام محمي؛ يستطيع مالك نظام آخر فقط تعديل أدواره أو بيانات دخوله.</p>}
       </form>
     </article>
   );
 }
 
-function CreateUserModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
-  const [roles, setRoles] = useState<
-    Array<{
-      roleKey: string;
-      labelAr: string;
-      description: string | null;
-      active: boolean;
-    }>
-  >([]);
+function CreateUserModal({ roles, busy, onClose, onSubmit }: { roles: PortalRoleDefinition[]; busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [loadError, setLoadError] = useState("");
-  useEffect(() => {
-    let active = true;
-    void fetch("/api/portal/role-definitions", { cache: "no-store" })
-      .then(async (response) => {
-        const data = (await readApiJson(response)) as {
-          roles?: Array<{
-            roleKey: string;
-            labelAr: string;
-            description: string | null;
-            active: boolean;
-          }>;
-          error?: string;
-        };
-        if (!response.ok) throw new Error(data.error || "تعذر تحميل الأدوار");
-        if (active) {
-          const assignable = new Set(["system_owner", "system_admin", "hr_officer", "accountant", "government_relations_officer", "administrative_assistant", "lawyer", "workforce_supervisor", "sales_representative", "purchasing_representative"]);
-          const available = (data.roles || []).filter((role) => role.active && assignable.has(role.roleKey));
-          setRoles(available);
-          setSelectedRoles((current) => current.filter((key) => available.some((role) => role.roleKey === key)));
-        }
-      })
-      .catch((error) => {
-        if (active) setLoadError(error instanceof Error ? error.message : "تعذر تحميل الأدوار");
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const availableSelectedRoles = selectedRoles.filter((key) => roles.some((role) => role.roleKey === key));
   function toggleRole(roleKey: string) {
     setSelectedRoles((current) => (current.includes(roleKey) ? current.filter((key) => key !== roleKey) : [...current, roleKey]));
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedRoles.length) {
+    if (!availableSelectedRoles.length) {
       setLoadError("اختر دوراً وظيفياً واحداً على الأقل");
       return;
     }
@@ -2970,7 +2999,7 @@ function CreateUserModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: 
             <button type="button" onClick={onClose}>
               إلغاء
             </button>
-            <button className="admin-primary" type="submit" disabled={busy || !selectedRoles.length}>
+            <button className="admin-primary" type="submit" disabled={busy || !availableSelectedRoles.length}>
               {busy ? "جارٍ الإنشاء..." : "إنشاء المستخدم"}
             </button>
           </div>
@@ -3634,14 +3663,14 @@ function FinanceDocumentActions({ onIssue }: { onIssue: (type: string) => void }
 
 function DocumentCenter({ documents, contracts, assets, query, setQuery, canManageDocuments, canShareDocuments, canIssueContracts, canManageAssets, canApprove, busy, expiringDocuments, expiredDocuments, onUpload, onIssue, onIssueQuotation, onOpenQuoteApprovals, onApproveContract, onShare, onUploadAsset }: { documents: CompanyDocument[]; contracts: WorkforceContract[]; assets: CompanyAsset[]; query: string; setQuery: (value: string) => void; canManageDocuments: boolean; canShareDocuments: boolean; canIssueContracts: boolean; canManageAssets: boolean; busy: string | null; canApprove: boolean; onOpenQuoteApprovals: () => void; onApproveContract: (contractId: number) => Promise<void>; expiringDocuments: CompanyDocument[]; expiredDocuments: CompanyDocument[]; onUpload: () => void; onIssue: () => void; onIssueQuotation: () => void; onShare: (id: number) => Promise<void>; onUploadAsset: (slot: "stamp" | "signature", form: HTMLFormElement) => Promise<void> }) {
   const rows = filterRecords(documents, query);
-  const generatedCount = documents.filter((item) => item.source === "generated").length;
+  const representedTypes = new Set(documents.map((item) => item.documentType).filter(Boolean)).size;
   return (
     <>
       <div className="content-heading module-heading documents-heading">
         <div>
-          <p className="admin-eyebrow">الحفظ والإصدار الرسمي</p>
-          <h1>مركز المستندات</h1>
-          <span>إدارة ملفات الشركة، ومشاركة النسخ، ومتابعة الإصدارات الرسمية.</span>
+          <p className="admin-eyebrow">وثائق شركة دالي الرسمية</p>
+          <h1>مستندات الشركة</h1>
+          <span>السجل التجاري والتراخيص والشهادات النظامية الخاصة بشركة دالي فقط، مع متابعة دقيقة للصلاحية والتجديد.</span>
         </div>
         {(canManageDocuments || canIssueContracts) && (
           <div className="heading-actions">
@@ -3690,17 +3719,17 @@ function DocumentCenter({ documents, contracts, assets, query, setQuery, canMana
       )}
 
       <section className="metric-grid compact-metrics document-metrics">
-        <Metric label="إجمالي المستندات" value={documents.length} note="المرفوع والمُصدر" />
+        <Metric label="مستندات دالي" value={documents.length} note="وثائق الشركة الرسمية" />
         <Metric label="تنتهي خلال 30 يوماً" value={expiringDocuments.length} note="تحتاج إلى تجديد" />
         <Metric label="مستندات منتهية" value={expiredDocuments.length} note="تحتاج إلى إجراء" />
-        <Metric label="ملفات PDF صادرة" value={generatedCount} note="بالختم والتوقيع" />
+        <Metric label="أنواع موثقة" value={representedTypes} note="سجلات وتراخيص وشهادات" />
       </section>
 
       <section className="documents-layout">
         <article className="panel document-library">
           <div className="panel-head">
             <div>
-              <h2>مكتبة مستندات الشركة</h2>
+              <h2>مكتبة وثائق شركة دالي</h2>
               <p>تنزيل آمن وروابط مشاركة مؤقتة صالحة لمدة 7 أيام</p>
             </div>
             <span className="panel-count">{rows.length} مستند</span>
@@ -3708,7 +3737,7 @@ function DocumentCenter({ documents, contracts, assets, query, setQuery, canMana
           <div className="table-tools">
             <label className="search-box">
               <Icon name="search" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بالعنوان أو المرجع أو الجهة" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بنوع المستند أو المرجع أو الجهة المصدرة" />
             </label>
           </div>
           <DocumentTable documents={rows} contracts={contracts} canApprove={canApprove} canShare={canShareDocuments} busy={busy} onApproveContract={onApproveContract} onOpenQuoteApprovals={onOpenQuoteApprovals} onShare={onShare} />
@@ -3738,7 +3767,7 @@ function expiryText(value: string | null) {
 }
 
 function DocumentTable({ documents, contracts, canApprove, canShare, busy, onApproveContract, onOpenQuoteApprovals, onShare }: { documents: CompanyDocument[]; contracts: WorkforceContract[]; canApprove: boolean; canShare: boolean; busy: string | null; onApproveContract: (id: number) => Promise<void>; onOpenQuoteApprovals: () => void; onShare: (id: number) => Promise<void> }) {
-  if (!documents.length) return <EmptyRows label="ارفع أول مستند أو أنشئ ملف PDF ليظهر هنا." />;
+  if (!documents.length) return <EmptyRows label="ارفع أول وثيقة رسمية لشركة دالي لتظهر هنا." />;
   return (
     <div className="management-table-wrap">
       <table className="management-table documents-table">
@@ -3767,12 +3796,12 @@ function DocumentTable({ documents, contracts, canApprove, canShare, busy, onApp
                 <td>
                   <strong>{item.title}</strong>
                   <small>
-                    {item.source === "generated" ? issuedTypeLabels[item.documentType || ""] || "PDF صادر" : item.fileName}
+                    {item.fileName}
                     {item.lockedUntil ? ` · حجز نظامي حتى ${formatDate(item.lockedUntil)}` : item.retentionUntil ? ` · مراجعة الاحتفاظ ${formatDate(item.retentionUntil)}` : ""}
                   </small>
                 </td>
                 <td>
-                  <span className={`doc-kind ${item.source === "generated" ? "generated" : ""}`}>{item.source === "generated" ? "صادر من النظام" : documentCategoryLabels[item.category] || item.category}</span>
+                  <span className="doc-kind">{corporateDocumentTypeLabels[item.documentType as CorporateDocumentType] || documentCategoryLabels[item.category] || item.category}</span>
                 </td>
                 <td>{item.counterparty || "—"}</td>
                 <td>
@@ -3951,23 +3980,23 @@ function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClo
         </div>
         <form onSubmit={submit}>
           <label>
-            التصنيف
-            <select name="category" required defaultValue="">
+            نوع مستند دالي
+            <select name="documentType" required defaultValue="">
               <option value="" disabled>
-                اختر التصنيف
+                اختر نوع المستند
               </option>
-              <option value="license">ترخيص</option>
-              <option value="contract">عقد</option>
-              <option value="certificate">شهادة</option>
-              <option value="finance">مالي</option>
-              <option value="legal">قانوني</option>
-              <option value="hr">موارد بشرية</option>
-              <option value="other">أخرى</option>
+              {corporateDocumentTypes.map((documentType) => (
+                <option key={documentType} value={documentType}>{corporateDocumentTypeLabels[documentType]}</option>
+              ))}
             </select>
           </label>
           <label>
-            الجهة أو الطرف المرتبط
-            <input name="counterparty" maxLength={160} placeholder="اختياري" />
+            عنوان المستند
+            <input name="title" maxLength={180} placeholder="اختياري؛ يستخدم نوع المستند تلقائيًا" />
+          </label>
+          <label>
+            الجهة المصدرة
+            <input name="counterparty" maxLength={160} placeholder="مثال: وزارة التجارة أو البلدية" />
           </label>
           <label>
             تاريخ الانتهاء أو التجديد
@@ -3985,7 +4014,7 @@ function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClo
             الملف
             <input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" />
           </label>
-          <p className="form-hint span-two">الحد الأقصى 20 ميجابايت. يُشتق اسم المستند تلقائياً من اسم الملف. يُستخدم تاريخ الاحتفاظ للمراجعة الدورية، ويمنع الحجز النظامي أي حذف آلي قبل انتهائه.</p>
+          <p className="form-hint span-two">هذه الصفحة مخصصة لوثائق شركة دالي النظامية فقط. الحد الأقصى 20 ميجابايت، ويُستخدم تاريخ الانتهاء لتنبيه التجديد، ويمنع الحجز النظامي أي حذف آلي قبل انتهائه.</p>
           <div className="modal-actions span-two">
             <button type="button" onClick={onClose}>
               إلغاء

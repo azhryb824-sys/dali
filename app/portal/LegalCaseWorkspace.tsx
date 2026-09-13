@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { readApiJson } from "@/lib/client-api";
 import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
+import LegalContractCorrespondence from "./LegalContractCorrespondence";
 
 type Matter = {
   id: number;
@@ -291,9 +292,9 @@ function LegalOverlayPortal({ children }: { children: ReactNode }) {
   return portalRoot ? createPortal(children, portalRoot) : null;
 }
 
-export default function LegalCaseWorkspace() {
+export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRecordId?: number }) {
   const [data, setData] = useState<Data | null>(null),
-    [selected, setSelected] = useState(0),
+    [selected, setSelected] = useState(initialRecordId),
     [notice, setNotice] = useState(""),
     [uploading, setUploading] = useState(false),
     [companyCaseModal, setCompanyCaseModal] = useState(false),
@@ -341,7 +342,7 @@ export default function LegalCaseWorkspace() {
     }
     setData(result);
     setCurrentTime(Date.now());
-    setSelected((value) => value || result.cases[0]?.id || 0);
+    setSelected((value) => result.cases.some((item) => item.id === value) ? value : result.cases[0]?.id || 0);
   }, []);
   useEffect(() => {
     const timer = window.setTimeout(
@@ -1351,6 +1352,7 @@ export default function LegalCaseWorkspace() {
                           <option value="active">مفتوح</option>
                           <option value="in_progress">قيد العمل</option>
                           <option value="renewal">يتطلب تجديدًا</option>
+                          <option value="awaiting_contracts">بانتظار استكمال قسم العقود</option>
                           <option value="closed">مغلق</option>
                           <option value="cancelled">ملغى</option>
                         </select>
@@ -1438,6 +1440,13 @@ export default function LegalCaseWorkspace() {
                     </article>
                   ))}
                 </section>
+              )}
+              {matter.contractId && (
+                <LegalContractCorrespondence
+                  key={`legal-correspondence-${matter.id}`}
+                  mode="legal"
+                  legalRecordId={matter.id}
+                />
               )}
               {data.canWrite && (
                 <details className="legal-linked-file">
@@ -1967,20 +1976,33 @@ export default function LegalCaseWorkspace() {
                     <h3>مرفقات الشؤون القانونية والعقد</h3>
                     <p>المستندات المحالة مع العقد والمرفقات المضافة إلى القضية</p>
                   </div>
-                  {data.canShareExternally &&
-                    externalLawyers.length > 0 &&
-                    ((snapshot?.documents?.length ||
-                      (matter?.contractId ? 1 : 0)) + attachments.length >
-                      0) && (
+                  {data.canShareExternally && (
                       <button
                         type="button"
                         className="whatsapp-share-button"
+                        disabled={
+                          externalLawyers.length === 0 ||
+                          ((snapshot?.documents?.length ||
+                            (matter?.contractId ? 1 : 0)) + attachments.length === 0)
+                        }
+                        title={
+                          externalLawyers.length === 0
+                            ? "أضف محاميًا خارجيًا نشطًا ورقم واتساب إلى سجل المحامين"
+                            : ((snapshot?.documents?.length || (matter?.contractId ? 1 : 0)) + attachments.length === 0)
+                              ? "لا توجد ملفات قابلة للمشاركة في هذا الملف"
+                              : "مشاركة كل ملفات العقد والملف القانوني"
+                        }
                         onClick={() => setShareTarget("all")}
                       >
                         مشاركة جميع المرفقات عبر واتساب
                       </button>
                     )}
                 </div>
+                {data.canShareExternally && externalLawyers.length === 0 && (
+                  <p className="legal-share-requirement" role="status">
+                    زر المشاركة جاهز؛ أضف محاميًا خارجيًا نشطًا مع رقم واتساب في سجل المحامين لتفعيله.
+                  </p>
+                )}
                 {attachments.map((item) => (
                   <article className="legal-case-file-row" key={item.id}>
                     <a
@@ -2022,11 +2044,12 @@ export default function LegalCaseWorkspace() {
                           </button>
                         </>
                       )}
-                      {data.canShareExternally &&
-                        externalLawyers.length > 0 && (
+                      {data.canShareExternally && (
                           <button
                             type="button"
                             className="whatsapp-share-button"
+                            disabled={externalLawyers.length === 0}
+                            title={externalLawyers.length === 0 ? "يلزم تسجيل محامٍ خارجي ورقم واتساب أولًا" : `مشاركة ${item.title} عبر واتساب`}
                             onClick={() => setShareTarget(item)}
                           >
                             مشاركة عبر واتساب

@@ -12,6 +12,7 @@ import {
   financialRecords,
   dataSubjectRequests,
   integrationOutbox,
+  legalContractCorrespondence,
   legalLawyers,
   legalRecords,
   legalCaseActivities,
@@ -156,11 +157,32 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   if (!options.force && marker && now.getTime() - new Date(marker.updatedAt).getTime() < 5 * 60 * 1000) return;
   await db.insert(portalSettings).values({ key: "operational-notifications-last-refresh", valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() }).onConflictDoUpdate({ target: portalSettings.key, set: { valueJson: JSON.stringify({ refreshedAt: now.toISOString() }), updatedBy: "system", updatedAt: now.toISOString() } });
 
-  const [documents, legalItems, lawyerItems, legalActivities, paymentItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems, employeeItems] = await Promise.all([
+  const [documents, legalItems, lawyerItems, legalActivities, coordinationItems, paymentItems, workerItems, workerFiles, financeItems, users, contracts, professions, assignments, conversations, businessHours, privacyRequests, quotes, orders, approvals, outboxEvents, plans, constructionOpportunityItems, constructionProjectItems, employeeItems] = await Promise.all([
     db.select().from(companyDocuments).where(eq(companyDocuments.status, "active")).limit(1000),
     db.select().from(legalRecords).where(and(ne(legalRecords.status, "closed"), ne(legalRecords.status, "cancelled"), isNull(legalRecords.deletedAt))).limit(1000),
     db.select().from(legalLawyers).where(eq(legalLawyers.status, "active")).limit(1000),
     db.select().from(legalCaseActivities).where(ne(legalCaseActivities.status, "completed")).limit(5000),
+    db.select({
+      id: legalContractCorrespondence.id,
+      legalRecordId: legalContractCorrespondence.legalRecordId,
+      contractId: legalContractCorrespondence.contractId,
+      messageType: legalContractCorrespondence.messageType,
+      requiredAttachmentName: legalContractCorrespondence.requiredAttachmentName,
+      message: legalContractCorrespondence.message,
+      requestStatus: legalContractCorrespondence.requestStatus,
+      legalReference: legalRecords.referenceCode,
+      contractReference: workforceContracts.referenceCode,
+      clientName: workforceContracts.clientName,
+    })
+      .from(legalContractCorrespondence)
+      .innerJoin(legalRecords, eq(legalRecords.id, legalContractCorrespondence.legalRecordId))
+      .innerJoin(workforceContracts, eq(workforceContracts.id, legalContractCorrespondence.contractId))
+      .where(and(
+        isNull(legalContractCorrespondence.parentId),
+        ne(legalContractCorrespondence.requestStatus, "resolved"),
+        isNull(legalRecords.deletedAt),
+      ))
+      .limit(3000),
     db.select().from(contractPaymentSchedules).where(ne(contractPaymentSchedules.status, "paid")).limit(5000),
     db.select().from(workers).limit(2000),
     db.select().from(workerAttachments).limit(10000),
@@ -230,6 +252,26 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   for(const payment of paymentItems){if(payment.status==="cancelled")continue;const days=daysUntil(payment.dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`contract-payment-due:${payment.id}:${payment.dueDate}`,eventType:days<0?"contract-payment-overdue":"contract-payment-due",title:days<0?"دفعة عقد متأخرة":"دفعة عقد تقترب من الاستحقاق",message:`الدفعة ${payment.installmentNumber} — ${payment.title} — ${formatAlertDate(payment.dueDate)}.`,severity:days<0?"critical":days<=2?"warning":"info",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance"})}
   const activeLegalRecordIds = new Set(legalItems.map((item) => item.id));
   for(const activity of legalActivities){if(!activeLegalRecordIds.has(activity.legalRecordId)||!activity.dueAt||activity.status==="cancelled")continue;const dueDate=activity.dueAt.slice(0,10);const days=daysUntil(dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`legal-activity-due:${activity.id}:${dueDate}`,eventType:days<0?"legal-activity-overdue":"legal-activity-due",title:days<0?"إجراء قانوني متأخر":"موعد قانوني قريب",message:`${activity.title} — ${formatAlertDate(dueDate)}.`,severity:days<0||activity.priority==="critical"?"critical":"warning",module:"legal",entityType:"legal-record",entityId:activity.legalRecordId,actionView:"legal",targetDepartment:"legal",targetEmail:activity.assignedTo})}
+
+  for (const item of coordinationItems) {
+    const waitingForContracts = item.requestStatus === "open";
+    const requestedFile = item.requiredAttachmentName ? ` — المرفق المطلوب: ${item.requiredAttachmentName}` : "";
+    ensure({
+      dedupeKey: `legal-contract-correspondence:${item.id}`,
+      eventType: waitingForContracts ? "legal-contract-coordination-open" : "legal-contract-coordination-responded",
+      title: waitingForContracts
+        ? item.messageType === "return_request" ? "عقد معاد من القانونية ينتظر المعالجة" : "ملاحظة قانونية تنتظر رد قسم العقود"
+        : "رد قسم العقود ينتظر مراجعة القانونية",
+      message: `${item.contractReference} — ${item.clientName} — ${item.legalReference}${requestedFile} — ${item.message}`.slice(0, 700),
+      severity: waitingForContracts && item.messageType === "return_request" ? "warning" : "info",
+      module: waitingForContracts ? "contractual-documents" : "legal",
+      entityType: waitingForContracts ? "workforce-contract" : "legal-record",
+      entityId: waitingForContracts ? item.contractId : item.legalRecordId,
+      actionView: waitingForContracts ? "contractual-documents" : "legal",
+      targetDepartment: waitingForContracts ? "workforce" : "legal",
+      source: "system-check",
+    });
+  }
 
   for (const request of privacyRequests) {
     const dueDays = Math.ceil((new Date(request.dueAt).getTime() - Date.now()) / 86400000);
