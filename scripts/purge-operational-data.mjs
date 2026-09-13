@@ -32,6 +32,36 @@ const run = (command, args, extraEnv = {}) =>
     });
   });
 
+const postgresCliEnvironment = (value) => {
+  try {
+    const parsed = new URL(value);
+    if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
+      throw new Error("UNSUPPORTED_PROTOCOL");
+    }
+
+    const databaseName = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+    const userName = decodeURIComponent(parsed.username);
+    const password = decodeURIComponent(parsed.password);
+    if (!parsed.hostname || !databaseName || !userName) throw new Error("INCOMPLETE_CONNECTION");
+
+    const environment = {
+      PGHOST: parsed.hostname,
+      PGPORT: parsed.port || "5432",
+      PGUSER: userName,
+      PGDATABASE: databaseName,
+      PGCONNECT_TIMEOUT: "10",
+      PGAPPNAME: "dali-operational-purge-backup",
+    };
+    if (password) environment.PGPASSWORD = password;
+
+    const sslMode = parsed.searchParams.get("sslmode");
+    if (sslMode) environment.PGSSLMODE = sslMode;
+    return environment;
+  } catch {
+    throw new Error("DATABASE_URL_UNSUPPORTED_FOR_POSTGRES_CLI");
+  }
+};
+
 const sha256File = (path) =>
   new Promise((resolve, reject) => {
     const hash = createHash("sha256");
@@ -113,6 +143,7 @@ const sql = postgres(databaseUrl, {
   connect_timeout: 10,
   idle_timeout: 20,
 });
+const pgDumpEnvironment = postgresCliEnvironment(databaseUrl);
 
 const countTable = async (client, table) => {
   const [row] = await client.unsafe(
@@ -242,7 +273,7 @@ try {
         `--snapshot=${snapshot.snapshot_id}`,
         `--file=${backupPath}`,
       ],
-      { PGDATABASE: databaseUrl },
+      pgDumpEnvironment,
     );
     await run("pg_restore", ["--file=/dev/null", backupPath]);
     const backupSha256 = await sha256File(backupPath);
