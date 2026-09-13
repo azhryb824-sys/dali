@@ -13,6 +13,34 @@ die() {
   exit 1
 }
 
+run_storage_audit() {
+  local phase="$1"
+  local output_file="$2"
+  local pipeline_statuses
+  local audit_status
+  local tee_status
+
+  set +e
+  npm run db:audit:storage | tee "$output_file"
+  pipeline_statuses=("${PIPESTATUS[@]}")
+  set -e
+
+  audit_status="${pipeline_statuses[0]:-1}"
+  tee_status="${pipeline_statuses[1]:-1}"
+  [[ "$tee_status" -eq 0 ]] || die "storage audit report could not be written during $phase"
+
+  case "$audit_status" in
+    0)
+      ;;
+    2)
+      echo "STORAGE_AUDIT_WARNING phase=$phase preexisting_missing_references=true"
+      ;;
+    *)
+      die "storage audit failed during $phase with exit code $audit_status"
+      ;;
+  esac
+}
+
 for command in git node npm curl flock systemctl sudo awk tr date install pg_dump pg_restore sha256sum; do
   command -v "$command" >/dev/null 2>&1 || die "missing command: $command"
 done
@@ -66,7 +94,7 @@ export DATABASE_URL="$database_url"
 echo "PRECHECK schema"
 npm run db:audit:postgres | tee "$backup_dir/audit-schema-before.json"
 echo "PRECHECK storage"
-npm run db:audit:storage | tee "$backup_dir/audit-storage-before.json"
+run_storage_audit "precheck" "$backup_dir/audit-storage-before.json"
 echo "PRECHECK rbac"
 npm run db:audit:rbac | tee "$backup_dir/audit-rbac-before.json"
 echo "PRECHECK workforce_finance"
@@ -83,7 +111,7 @@ node scripts/purge-operational-data.mjs | tee "$backup_dir/purge-report.json"
 echo "POSTCHECK schema"
 npm run db:audit:postgres | tee "$backup_dir/audit-schema-after.json"
 echo "POSTCHECK storage"
-npm run db:audit:storage | tee "$backup_dir/audit-storage-after.json"
+run_storage_audit "postcheck" "$backup_dir/audit-storage-after.json"
 echo "POSTCHECK rbac"
 npm run db:audit:rbac | tee "$backup_dir/audit-rbac-after.json"
 echo "POSTCHECK workforce_finance"

@@ -127,6 +127,34 @@ const countAll = async (client, tables) => {
   return result;
 };
 
+const summarizeStorageReferences = async (client, tables) => {
+  const byTable = {};
+  let totalReferences = 0;
+  let missingObjects = 0;
+
+  for (const table of [...tables].sort()) {
+    const [counts] = await client.unsafe(`
+      select
+        count(*) filter (
+          where source.storage_key is not null and source.storage_key <> ''
+        )::int as references,
+        count(*) filter (
+          where source.storage_key is not null and source.storage_key <> ''
+            and stored.storage_key is null
+        )::int as missing
+      from public.${quoteIdentifier(table)} source
+      left join private.object_storage stored on stored.storage_key = source.storage_key
+    `);
+    const references = Number(counts?.references || 0);
+    const missing = Number(counts?.missing || 0);
+    byTable[table] = { references, missingObjects: missing };
+    totalReferences += references;
+    missingObjects += missing;
+  }
+
+  return { totalReferences, missingObjects, byTable };
+};
+
 const difference = (left, right) => [...left].filter((value) => !right.has(value)).sort();
 
 try {
@@ -231,6 +259,8 @@ try {
       where table_schema = 'public' and column_name = 'storage_key'
       order by table_name
     `;
+    const storageReferenceTables = storageKeyTables.map((row) => String(row.table_name));
+    const storageReferencesBefore = await summarizeStorageReferences(tx, storageReferenceTables);
     for (const row of storageKeyTables) {
       const table = row.table_name;
       if (deleteAllSet.has(table)) {
@@ -422,6 +452,31 @@ try {
       using _dali_purge_storage_keys candidates
       where stored.storage_key = candidates.storage_key
     `;
+    const storageReferencesAfter = await summarizeStorageReferences(tx, storageReferenceTables);
+
+    for (const table of storageReferenceTables) {
+      const beforeIntegrity = storageReferencesBefore.byTable[table];
+      const afterIntegrity = storageReferencesAfter.byTable[table];
+      if (afterIntegrity.missingObjects > beforeIntegrity.missingObjects) {
+        throw new Error(
+          `STORAGE_REFERENCE_REGRESSION:${table}:before=${beforeIntegrity.missingObjects}:after=${afterIntegrity.missingObjects}`,
+        );
+      }
+      if (
+        preservedTables.has(table) &&
+        afterIntegrity.missingObjects !== beforeIntegrity.missingObjects
+      ) {
+        throw new Error(
+          `PRESERVED_STORAGE_REFERENCE_CHANGED:${table}:before=${beforeIntegrity.missingObjects}:after=${afterIntegrity.missingObjects}`,
+        );
+      }
+      if (
+        deleteAllSet.has(table) &&
+        (afterIntegrity.references !== 0 || afterIntegrity.missingObjects !== 0)
+      ) {
+        throw new Error(`DELETED_TABLE_STORAGE_REFERENCES_REMAIN:${table}`);
+      }
+    }
 
     const after = await countAll(tx, expectedTables);
     for (const table of deleteAllTables) {
@@ -498,6 +553,9 @@ try {
         capturedOperationalKeys: capturedKeys.count,
         deletedOperationalObjects: String(storageDeleteResult.count ?? 0),
         after: selectiveAfter.stored_objects,
+        referenceIntegrityBefore: storageReferencesBefore,
+        referenceIntegrityAfter: storageReferencesAfter,
+        introducedMissingReferences: 0,
       },
       deletionOrder,
       nullifiedCycleConstraints,
