@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { readApiJson } from "@/lib/client-api";
+import { saudiBanks } from "@/lib/saudi-banks";
 
 type Movement = {
   id: number;
@@ -456,7 +457,14 @@ export default function EmployeeProfileWorkspace({
                 defaultValue="0"
                 placeholder="بدلات أخرى"
               />
-              <input name="bankName" placeholder="اسم البنك" />
+              <select name="bankName" defaultValue="">
+                <option value="">اختر البنك</option>
+                {saudiBanks.map((bank) => (
+                  <option key={bank} value={bank}>
+                    {bank}
+                  </option>
+                ))}
+              </select>
               <input
                 name="iban"
                 dir="ltr"

@@ -1,0 +1,53 @@
+{
+  "name": "dali-mac-universal",
+  "version": "1.0.0",
+  "description": "تطبيق ماك مستقل لنظام دالي الإداري لمعالجات Intel وApple Silicon",
+  "author": "Dally Corporation",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check main.mjs && node --check preload.mjs",
+    "build:mac": "electron-builder --mac dmg zip --universal --publish never",
+    "build:dir": "electron-builder --dir --mac --universal"
+  },
+  "devDependencies": {
+    "electron": "44.1.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "sa.dally.desktop.universal",
+    "productName": "Dali Admin Universal",
+    "artifactName": "Dali-Mac-Universal-${version}-${arch}.${ext}",
+    "asar": true,
+    "afterPack": "scripts/adhoc-sign-mac.cjs",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.mjs",
+      "preload.mjs",
+      "offline.html",
+      "assets/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "assets/dali-icon.png",
+      "identity": null,
+      "hardenedRuntime": true,
+      "minimumSystemVersion": "12.0.0",
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extendInfo": {
+        "CFBundleDisplayName": "نظام دالي الإداري الجديد",
+        "NSCameraUsageDescription": "يحتاج نظام دالي إلى الكاميرا للمكالمات المرئية.",
+        "NSMicrophoneUsageDescription": "يحتاج نظام دالي إلى الميكروفون للمكالمات المرئية."
+      }
+    }
+  }
+}

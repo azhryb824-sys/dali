@@ -1,6 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
+import { saudiBanks } from "@/lib/saudi-banks";
 import { useDesktopLiveRefresh } from "@/lib/use-desktop-live-refresh";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import FinanceEnterpriseWorkspace from "./FinanceEnterpriseWorkspace";
@@ -402,7 +403,16 @@ export default function AccountingWorkspace({
                 required
                 placeholder="رمز الحساب البنكي"
               />
-              <input name="bankName" required placeholder="اسم البنك" />
+              <select name="bankName" required defaultValue="">
+                <option value="" disabled>
+                  اختر البنك
+                </option>
+                {saudiBanks.map((bank) => (
+                  <option key={bank} value={bank}>
+                    {bank}
+                  </option>
+                ))}
+              </select>
               <input
                 name="accountName"
                 required

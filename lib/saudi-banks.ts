@@ -26,6 +26,7 @@ export const saudiBanks = [
   "بنك قطر الوطني",
   "بنك أبوظبي الأول",
   "بنك المشرق",
+  "أخرى",
 ] as const;
 
 export function isSaudiBank(value: string): value is (typeof saudiBanks)[number] {

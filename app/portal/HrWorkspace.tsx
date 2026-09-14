@@ -2,6 +2,7 @@
 
 import { readApiJson } from "@/lib/client-api";
 import { appPrompt } from "@/app/components/AppDialogProvider";
+import { saudiBanks } from "@/lib/saudi-banks";
 import { useDesktopLiveRefresh } from "@/lib/use-desktop-live-refresh";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -475,7 +476,14 @@ export default function HrWorkspace({
                 defaultValue="0"
                 placeholder="بدلات أخرى"
               />
-              <input name="bankName" maxLength={120} placeholder="اسم البنك" />
+              <select name="bankName" defaultValue="">
+                <option value="">اختر البنك</option>
+                {saudiBanks.map((bank) => (
+                  <option key={bank} value={bank}>
+                    {bank}
+                  </option>
+                ))}
+              </select>
               <input
                 name="iban"
                 dir="ltr"

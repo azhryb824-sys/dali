@@ -3,6 +3,8 @@
 # dependencies
 /node_modules
 /mobile/node_modules
+/desktop-universal/node_modules
+/desktop-universal/dist
 /.pnp
 .pnp.*
 .yarn/*

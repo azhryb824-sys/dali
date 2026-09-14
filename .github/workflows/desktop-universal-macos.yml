@@ -1,0 +1,89 @@
+name: Build Dali Universal macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [godaddy-preview]
+    paths:
+      - "desktop-universal/**"
+      - ".github/workflows/desktop-universal-macos.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  universal-installer:
+    name: macOS Universal
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-universal/package-lock.json
+      - name: Install independent desktop dependencies
+        working-directory: desktop-universal
+        run: npm ci
+      - name: Validate independent desktop source
+        working-directory: desktop-universal
+        run: npm run check
+      - name: Build one Universal package
+        working-directory: desktop-universal
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run build:mac
+      - name: Verify architectures, isolation, signature, and packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find desktop-universal/dist -maxdepth 2 -type d -name 'Dali Admin Universal.app' -print -quit)"
+          test -n "$app_path"
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
+          bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")"
+          minimum_system="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app_path/Contents/Info.plist")"
+          test "$bundle_id" = "sa.dally.desktop.universal"
+          test "$minimum_system" = "12.0.0"
+          architectures="$(lipo -archs "$app_path/Contents/MacOS/$executable")"
+          grep -qw arm64 <<<"$architectures"
+          grep -qw x86_64 <<<"$architectures"
+          /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
+          dmg_path="$(find desktop-universal/dist -maxdepth 1 -type f -name 'Dali-Mac-Universal-1.0.0-universal.dmg' -print -quit)"
+          zip_path="$(find desktop-universal/dist -maxdepth 1 -type f -name 'Dali-Mac-Universal-1.0.0-universal.zip' -print -quit)"
+          test -s "$dmg_path"
+          test -s "$zip_path"
+          hdiutil verify "$dmg_path"
+          shasum -a 256 "$dmg_path" "$zip_path"
+      - name: Smoke-test Universal application launch
+        shell: bash
+        env:
+          ELECTRON_ENABLE_LOGGING: "1"
+        run: |
+          set -euo pipefail
+          app_path="$(find desktop-universal/dist -maxdepth 2 -type d -name 'Dali Admin Universal.app' -print -quit)"
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
+          log_path="$RUNNER_TEMP/dali-universal.log"
+          "$app_path/Contents/MacOS/$executable" >"$log_path" 2>&1 &
+          app_pid=$!
+          sleep 15
+          if ! kill -0 "$app_pid" 2>/dev/null; then
+            set +e
+            sed -n '1,240p' "$log_path"
+            wait "$app_pid"
+            app_status=$?
+            find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -type f -mmin -5 -print -exec sed -n '1,260p' {} \;
+            exit "$app_status"
+          fi
+          kill "$app_pid"
+          wait "$app_pid" || true
+          sed -n '1,240p' "$log_path"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Dali-Mac-Universal-1.0.0
+          path: |
+            desktop-universal/dist/Dali-Mac-Universal-1.0.0-universal.dmg
+            desktop-universal/dist/Dali-Mac-Universal-1.0.0-universal.zip
+          if-no-files-found: error
+          retention-days: 14
