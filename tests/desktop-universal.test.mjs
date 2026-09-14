@@ -24,10 +24,11 @@ test("new macOS application is independent and does not alter the old applicatio
 });
 
 test("new macOS package is one Universal build for Intel and Apple Silicon", async () => {
-  const [desktopPackage, workflow, main] = await Promise.all([
+  const [desktopPackage, workflow, main, signingHook] = await Promise.all([
     read("desktop-universal/package.json").then(JSON.parse),
     read(".github/workflows/desktop-universal-macos.yml"),
     read("desktop-universal/main.mjs"),
+    read("desktop-universal/scripts/adhoc-sign-mac.cjs"),
   ]);
 
   assert.match(desktopPackage.scripts["build:mac"], /--universal/);
@@ -37,6 +38,7 @@ test("new macOS package is one Universal build for Intel and Apple Silicon", asy
   assert.match(workflow, /grep -qw x86_64/);
   assert.match(workflow, /codesign --verify --deep --strict/);
   assert.match(workflow, /hdiutil verify/);
+  assert.match(signingHook, /UNIVERSAL_INPUT_SUFFIX\.test\(context\.appOutDir\)/);
   assert.match(main, /render-process-gone/);
   assert.match(main, /MAX_RENDERER_RECOVERIES/);
   assert.match(main, /permission === "media"/);

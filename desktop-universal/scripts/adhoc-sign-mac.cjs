@@ -3,6 +3,8 @@ const { execFileSync } = require("node:child_process");
 const { lstatSync, readdirSync } = require("node:fs");
 const { join } = require("node:path");
 
+const UNIVERSAL_INPUT_SUFFIX = /-(?:x64|arm64)-temp$/;
+
 function walk(root, files, bundles) {
   for (const name of readdirSync(root)) {
     const fullPath = join(root, name);
@@ -46,6 +48,12 @@ function alignBundleNameWithHelpers(appPath) {
 
 exports.default = async function adhocSignMac(context) {
   if (process.platform !== "darwin") return;
+
+  // electron-builder invokes afterPack for each thin input before it merges
+  // them. Signing those inputs makes their CodeResources files differ and
+  // prevents @electron/universal from combining them. Sign only the finished
+  // Universal bundle (or a normal, explicitly requested single-arch build).
+  if (UNIVERSAL_INPUT_SUFFIX.test(context.appOutDir)) return;
 
   const appName = readdirSync(context.appOutDir).find((name) => name.endsWith(".app"));
   if (!appName) throw new Error(`No macOS application bundle found in ${context.appOutDir}`);
