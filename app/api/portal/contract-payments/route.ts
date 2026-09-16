@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import { getDb } from "@/db";
 import { bankAccounts, chartOfAccounts, clientContacts, clients, companyAssets, companyDocuments, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, financialRecords, journalEntries, legalCaseActivities, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { createDraftJournal } from "@/lib/accounting";
@@ -9,6 +9,8 @@ import { contractInvoicePdfCopy } from "@/lib/invoice-pdf-copy";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { issueDueContractInvoice } from "@/lib/contract-payment-invoicing";
+import { loadContractLegalDocuments } from "@/lib/contract-legal-documents";
+import { AUTOMATED_CONTRACT_BILLING_ACTOR, canAutomaticallyInvoiceContract, invoiceEligibleContractStatuses } from "@/lib/contract-payment-integrity";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
 
@@ -19,9 +21,13 @@ export async function GET(){
   const access=await requirePortalApiRole(["admin","manager","employee"]);
   if(!access||!(await hasPortalPermission(access,"contracts","read"))&&!(await hasPortalPermission(access,"finance","read")))return jsonNoStore({error:"غير مصرح"},{status:403});
   const db=getDb();const today=new Date().toISOString().slice(0,10);
-  await db.update(contractPaymentSchedules).set({status:"due",updatedAt:new Date().toISOString()}).where(and(eq(contractPaymentSchedules.status,"scheduled"),lte(contractPaymentSchedules.dueDate,today)));
-  const due=await db.select().from(contractPaymentSchedules).where(and(eq(contractPaymentSchedules.status,"due"),lte(contractPaymentSchedules.dueDate,today)));
-  for(const payment of due)await issueDueContractInvoice(payment.id,"system@dally-corporation.com").catch(async error=>{await emitPortalNotification({eventType:"contract-payment-auto-invoice-failed",title:"تعذر إنشاء فاتورة دفعة مستحقة",message:`الدفعة ${payment.id} — ${error instanceof Error?error.message:"خطأ غير معروف"}`,severity:"critical",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance",dedupeKey:`auto-invoice-failed:${payment.id}:${payment.dueDate}`}).catch(()=>undefined)});
+  const billableContracts=await db.select({id:workforceContracts.id}).from(workforceContracts).where(and(isNotNull(workforceContracts.approvedBy),inArray(workforceContracts.status,invoiceEligibleContractStatuses)));
+  const billableContractIds=billableContracts.map(item=>item.id);
+  if(billableContractIds.length){
+    await db.update(contractPaymentSchedules).set({status:"due",updatedAt:new Date().toISOString()}).where(and(inArray(contractPaymentSchedules.contractId,billableContractIds),eq(contractPaymentSchedules.status,"scheduled"),lte(contractPaymentSchedules.dueDate,today)));
+    const due=await db.select().from(contractPaymentSchedules).where(and(inArray(contractPaymentSchedules.contractId,billableContractIds),eq(contractPaymentSchedules.status,"due"),lte(contractPaymentSchedules.dueDate,today)));
+    for(const payment of due)await issueDueContractInvoice(payment.id,AUTOMATED_CONTRACT_BILLING_ACTOR).catch(async error=>{await emitPortalNotification({eventType:"contract-payment-auto-invoice-failed",title:"تعذر إنشاء فاتورة دفعة مستحقة",message:`الدفعة ${payment.id} — ${error instanceof Error?error.message:"خطأ غير معروف"}`,severity:"critical",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance",dedupeKey:`auto-invoice-failed:${payment.id}:${payment.dueDate}`}).catch(()=>undefined)});
+  }
   const [contracts,payments,professions,contacts,banks,paymentAccounts]=await Promise.all([db.select().from(workforceContracts).orderBy(asc(workforceContracts.startDate)),db.select().from(contractPaymentSchedules).orderBy(asc(contractPaymentSchedules.dueDate),asc(contractPaymentSchedules.installmentNumber)),db.select().from(contractProfessions),db.select().from(clientContacts),db.select().from(bankAccounts).where(eq(bankAccounts.status,"active")).orderBy(asc(bankAccounts.bankName)),db.select().from(chartOfAccounts).where(and(eq(chartOfAccounts.status,"active"),eq(chartOfAccounts.accountType,"asset"),eq(chartOfAccounts.isPosting,true))).orderBy(asc(chartOfAccounts.code))]);
   const clientMobiles=Object.fromEntries(contacts.filter(item=>item.mobile).sort((a,b)=>Number(b.isPrimary)-Number(a.isPrimary)).map(item=>[item.clientId,item.mobile]));
   return jsonNoStore({contracts,payments,professions,clientMobiles,banks,paymentAccounts,canManageContracts:owner(access)||await hasPortalPermission(access,"contracts","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment:await hasPortalPermission(access,"finance","pay"),canReferLegal:owner(access)});
@@ -32,7 +38,7 @@ export async function POST(request:Request){
   const access=await requirePortalApiRole(["admin","manager","employee"]);if(!access||!(await hasPortalPermission(access,"finance","write")))return jsonNoStore({error:"غير مصرح بإنشاء الفاتورة"},{status:403});
   const parsed=await readLimitedJson(request,6000);if(!parsed.ok)return parsed.response;const body=parsed.value as Record<string,unknown>;const paymentId=positiveId(body.paymentId);if(!paymentId)return jsonNoStore({error:"الدفعة غير صحيحة"},{status:400});
   const db=getDb();const payment=await db.query.contractPaymentSchedules.findFirst({where:eq(contractPaymentSchedules.id,paymentId)});if(!payment)return jsonNoStore({error:"الدفعة غير موجودة"},{status:404});if(payment.status!=="referred"||payment.invoiceDocumentId)return jsonNoStore({error:"الدفعة لم تُحل للمحاسبة أو سبق إصدار فاتورتها"},{status:409});
-  const contract=await db.query.workforceContracts.findFirst({where:eq(workforceContracts.id,payment.contractId)});if(!contract)return jsonNoStore({error:"العقد غير موجود"},{status:404});
+  const contract=await db.query.workforceContracts.findFirst({where:eq(workforceContracts.id,payment.contractId)});if(!contract)return jsonNoStore({error:"العقد غير موجود"},{status:404});if(!canAutomaticallyInvoiceContract(contract))return jsonNoStore({error:"لا يمكن إصدار فاتورة قبل اعتماد العقد أو بعد إغلاقه"},{status:409});
   const assets=await db.select().from(companyAssets);if(!assets.some(a=>a.slot==="stamp")||!assets.some(a=>a.slot==="signature"))return jsonNoStore({error:"يجب اعتماد الختم والتوقيع قبل إصدار الفاتورة"},{status:409});
   const absenceDeductionHalalas=payment.absenceDeductionHalalas||0;const netSubtotalHalalas=Math.max(0,payment.subtotalHalalas-absenceDeductionHalalas);const netVatHalalas=Math.round(netSubtotalHalalas*payment.vatRateBps/10000);const netAmountHalalas=netSubtotalHalalas+netVatHalalas;
   const purchaser=contract.contractDirection==="dali_purchaser";const referenceCode=makeReference(purchaser?"PAY":"INV");const documentType=purchaser?"payment_voucher":"invoice";const copy=contractInvoicePdfCopy({purchaser,paymentTitle:payment.title,paymentTitleEn:payment.titleEn,installmentNumber:payment.installmentNumber,contractReference:contract.referenceCode,absenceDeductionHalalas});const documentTitle=copy.titleAr;const documentTitleEn=copy.titleEn;const issueDate=new Date().toISOString().slice(0,10);const invoiceDetails=copy.detailsAr;const invoiceDetailsEn=copy.detailsEn;const bytes=await generateIssuedPdf({documentType,referenceCode,clientName:contract.clientName,clientCr:contract.clientCr||undefined,clientVat:contract.clientVat||undefined,title:`${documentTitle} - ${contract.referenceCode}`,titleEn:`${documentTitleEn} - ${contract.referenceCode}`,issueDate,expiryDate:payment.dueDate,amountHalalas:netAmountHalalas,subtotalHalalas:netSubtotalHalalas,vatHalalas:netVatHalalas,vatRateBps:payment.vatRateBps,details:invoiceDetails,detailsEn:invoiceDetailsEn},assets.map(a=>({slot:a.slot as "stamp"|"signature",storageKey:a.storageKey,contentType:a.contentType})));
@@ -59,7 +65,7 @@ export async function POST(request:Request){
 export async function PATCH(request:Request){
   if(rejectCrossSiteRequest(request))return jsonNoStore({error:"مصدر الطلب غير مسموح"},{status:403});const access=await requirePortalApiRole(["admin","manager","employee"]);if(!access)return jsonNoStore({error:"غير مصرح"},{status:403});const parsed=await readLimitedJson(request,8000);if(!parsed.ok)return parsed.response;const body=parsed.value as Record<string,unknown>;const action=cleanText(body.action,40);const paymentId=positiveId(body.paymentId);const db=getDb();const payment=paymentId?await db.query.contractPaymentSchedules.findFirst({where:eq(contractPaymentSchedules.id,paymentId)}):null;if(!payment)return jsonNoStore({error:"الدفعة غير موجودة"},{status:404});const contract=await db.query.workforceContracts.findFirst({where:eq(workforceContracts.id,payment.contractId)});if(!contract)return jsonNoStore({error:"العقد غير موجود"},{status:404});const now=new Date().toISOString();
   if(action==="refer-accounting"){
-    if(!owner(access))return jsonNoStore({error:"إحالة الدفعة للمحاسبة من صلاحيات المالك فقط"},{status:403});if(!["due","scheduled"].includes(payment.status)||payment.dueDate>now.slice(0,10))return jsonNoStore({error:"لا يمكن إحالة دفعة لم يحن موعدها أو تمت معالجتها"},{status:409});const[updated]=await db.update(contractPaymentSchedules).set({status:"referred",referredBy:access.user.email,referredAt:now,updatedAt:now}).where(and(eq(contractPaymentSchedules.id,payment.id),inArray(contractPaymentSchedules.status,["scheduled","due"]))).returning();if(!updated)return jsonNoStore({error:"تغيرت حالة الدفعة"},{status:409});await auditPortalAction({actorEmail:access.user.email,action:"contract-payment-referred",entityType:"contract-payment",entityId:payment.id,before:payment,after:updated,correlationId:requestCorrelationId(request)});await emitPortalNotification({eventType:"contract-payment-referred",title:"دفعة عقد محالة لإصدار فاتورة",message:`${contract.referenceCode} - ${contract.clientName} - ${payment.title}`,severity:"warning",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"finance",targetDepartment:"finance"}).catch(()=>undefined);return jsonNoStore({payment:updated});
+    if(!owner(access))return jsonNoStore({error:"إحالة الدفعة للمحاسبة من صلاحيات المالك فقط"},{status:403});if(!canAutomaticallyInvoiceContract(contract))return jsonNoStore({error:"لا يمكن إحالة دفعة للمحاسبة قبل اعتماد العقد أو بعد إغلاقه"},{status:409});if(!["due","scheduled"].includes(payment.status)||payment.dueDate>now.slice(0,10))return jsonNoStore({error:"لا يمكن إحالة دفعة لم يحن موعدها أو تمت معالجتها"},{status:409});const[updated]=await db.update(contractPaymentSchedules).set({status:"referred",referredBy:access.user.email,referredAt:now,updatedAt:now}).where(and(eq(contractPaymentSchedules.id,payment.id),inArray(contractPaymentSchedules.status,["scheduled","due"]))).returning();if(!updated)return jsonNoStore({error:"تغيرت حالة الدفعة"},{status:409});await auditPortalAction({actorEmail:access.user.email,action:"contract-payment-referred",entityType:"contract-payment",entityId:payment.id,before:payment,after:updated,correlationId:requestCorrelationId(request)});await emitPortalNotification({eventType:"contract-payment-referred",title:"دفعة عقد محالة لإصدار فاتورة",message:`${contract.referenceCode} - ${contract.clientName} - ${payment.title}`,severity:"warning",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"finance",targetDepartment:"finance"}).catch(()=>undefined);return jsonNoStore({payment:updated});
   }
   if(action==="reschedule"){
     if(!(await hasPortalPermission(access,"finance","write")))return jsonNoStore({error:"تعديل موعد الدفعة يتطلب صلاحية مالية"},{status:403});
@@ -104,6 +110,7 @@ export async function PATCH(request:Request){
   if(action==="refer-legal"){
     if(contract.contractDirection==="dali_purchaser")return jsonNoStore({error:"عقد شراء العمالة لا يحال كملف عميل متأخر؛ عالج التزام المورد من المشتريات أو الشؤون القانونية"},{status:409});
     if(!owner(access))return jsonNoStore({error:"إحالة ملف العميل للشؤون القانونية من صلاحيات المالك فقط"},{status:403});
+    if(!contract.approvedBy)return jsonNoStore({error:"لا يمكن إحالة عقد غير معتمد إلى الشؤون القانونية"},{status:409});
     if(payment.status==="paid"||payment.dueDate>=now.slice(0,10))return jsonNoStore({error:"لا يمكن الإحالة القانونية قبل التأخر الفعلي في السداد"},{status:409});
     const reason=cleanText(body.reason,1000);
     if(reason.length<10)return jsonNoStore({error:"اكتب سبب إحالة واضحاً لا يقل عن 10 أحرف"},{status:400});
@@ -114,12 +121,7 @@ export async function PATCH(request:Request){
       db.select().from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId,contract.id)),
       db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId,contract.id)),
     ]);
-    const documentIds=[...new Set([
-      contract.documentId,
-      ...finances.map(item=>item.documentId),
-      ...allPayments.map(item=>item.invoiceDocumentId),
-    ].filter((value):value is number=>typeof value==="number"&&Number.isInteger(value)&&value>0))];
-    const documents=documentIds.length?await db.select().from(companyDocuments).where(inArray(companyDocuments.id,documentIds)):[];
+    const documents=await loadContractLegalDocuments(db,contract,[...finances.map(item=>item.documentId),...allPayments.map(item=>item.invoiceDocumentId)]);
     const workerIds=[...new Set(assignments.map(item=>item.workerId))];
     const linkedWorkers=workerIds.length?await db.select().from(workers).where(inArray(workers.id,workerIds)):[];
     const snapshot={capturedAt:now,referral:{reason,referredBy:access.user.email,paymentId:payment.id,overdueSince:payment.dueDate},client,contract,documents,payments:allPayments,finances,professions,assignments,workers:linkedWorkers};

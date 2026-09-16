@@ -17959,5 +17959,9 @@ export const generatedUiTranslations: Record<string,{en?:string;bn?:string}> = {
   "يحفظ التعديل ويعيد التسوية إلى انتظار اعتماد المالك.": {
     "en": "Saves the changes and returns the settlement to pending owner approval.",
     "bn": "পরিবর্তন সংরক্ষণ করে এবং সমঝোতাকে মালিকের অনুমোদনের অপেক্ষায় ফেরত পাঠায়।"
+  },
+  "لا يمكن إصدار فاتورة قبل اعتماد العقد أو بعد إغلاقه": {
+    "en": "An invoice cannot be issued before the contract is approved or after it is closed.",
+    "bn": "চুক্তি অনুমোদনের আগে বা বন্ধ হওয়ার পরে চালান ইস্যু করা যাবে না।"
   }
 };

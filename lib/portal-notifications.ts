@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   companyDocuments,
@@ -33,6 +33,7 @@ import { emailDeliveryConfigured } from "@/lib/email-delivery";
 import type { PortalAccess, PortalDepartment, PortalRole } from "@/lib/portal-access";
 import { requirementsForProfession } from "@/lib/workforce-requirements";
 import { issueDueContractInvoice } from "@/lib/contract-payment-invoicing";
+import { AUTOMATED_CONTRACT_BILLING_ACTOR, canAutomaticallyInvoiceContract } from "@/lib/contract-payment-integrity";
 
 export type NotificationSeverity = "info" | "success" | "warning" | "critical";
 export type NotificationModule = "overview" | "notifications" | "employees" | "finance" | "legal" | "government" | "tasks" | "workforce" | "construction" | "conversations" | "documents" | "contractual-documents" | "users" | "sales" | "operations" | "representatives" | "privacy" | "capacity" | "website";
@@ -227,10 +228,17 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     }
   }
 
+  const paymentContractIds = [...new Set(paymentItems.map((payment) => payment.contractId))];
+  const paymentContracts = paymentContractIds.length
+    ? await db.select({ id: workforceContracts.id, status: workforceContracts.status, approvedBy: workforceContracts.approvedBy }).from(workforceContracts).where(inArray(workforceContracts.id, paymentContractIds))
+    : [];
+  const billableContractIds = new Set(paymentContracts.filter(canAutomaticallyInvoiceContract).map((contract) => contract.id));
+
   for(const payment of paymentItems){
+    if(!billableContractIds.has(payment.contractId))continue;
     if(["scheduled","due"].includes(payment.status)&&payment.dueDate<=now.toISOString().slice(0,10)){
       if(payment.status==="scheduled")await db.update(contractPaymentSchedules).set({status:"due",updatedAt:now.toISOString()}).where(eq(contractPaymentSchedules.id,payment.id));
-      await issueDueContractInvoice(payment.id,"system@dally-corporation.com").then(async result=>{if("document" in result)await emitPortalNotification({eventType:"contract-payment-auto-invoiced",title:"أُنشئت فاتورة دفعة مستحقة تلقائيًا",message:`${result.document.referenceCode} — ${result.contract.clientName} — ${payment.title}`,severity:"success",module:"finance",entityType:"company-document",entityId:result.document.id,actionView:"operations",targetDepartment:"finance"})}).catch(()=>undefined);
+      await issueDueContractInvoice(payment.id,AUTOMATED_CONTRACT_BILLING_ACTOR).then(async result=>{if("document" in result)await emitPortalNotification({eventType:"contract-payment-auto-invoiced",title:"أُنشئت فاتورة دفعة مستحقة تلقائيًا",message:`${result.document.referenceCode} — ${result.contract.clientName} — ${payment.title}`,severity:"success",module:"finance",entityType:"company-document",entityId:result.document.id,actionView:"operations",targetDepartment:"finance"})}).catch(()=>undefined);
     }
   }
 
@@ -249,7 +257,7 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     });
   }
 
-  for(const payment of paymentItems){if(payment.status==="cancelled")continue;const days=daysUntil(payment.dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`contract-payment-due:${payment.id}:${payment.dueDate}`,eventType:days<0?"contract-payment-overdue":"contract-payment-due",title:days<0?"دفعة عقد متأخرة":"دفعة عقد تقترب من الاستحقاق",message:`الدفعة ${payment.installmentNumber} — ${payment.title} — ${formatAlertDate(payment.dueDate)}.`,severity:days<0?"critical":days<=2?"warning":"info",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance"})}
+  for(const payment of paymentItems){if(payment.status==="cancelled"||!billableContractIds.has(payment.contractId))continue;const days=daysUntil(payment.dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`contract-payment-due:${payment.id}:${payment.dueDate}`,eventType:days<0?"contract-payment-overdue":"contract-payment-due",title:days<0?"دفعة عقد متأخرة":"دفعة عقد تقترب من الاستحقاق",message:`الدفعة ${payment.installmentNumber} — ${payment.title} — ${formatAlertDate(payment.dueDate)}.`,severity:days<0?"critical":days<=2?"warning":"info",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance"})}
   const activeLegalRecordIds = new Set(legalItems.map((item) => item.id));
   for(const activity of legalActivities){if(!activeLegalRecordIds.has(activity.legalRecordId)||!activity.dueAt||activity.status==="cancelled")continue;const dueDate=activity.dueAt.slice(0,10);const days=daysUntil(dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`legal-activity-due:${activity.id}:${dueDate}`,eventType:days<0?"legal-activity-overdue":"legal-activity-due",title:days<0?"إجراء قانوني متأخر":"موعد قانوني قريب",message:`${activity.title} — ${formatAlertDate(dueDate)}.`,severity:days<0||activity.priority==="critical"?"critical":"warning",module:"legal",entityType:"legal-record",entityId:activity.legalRecordId,actionView:"legal",targetDepartment:"legal",targetEmail:activity.assignedTo})}
 

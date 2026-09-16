@@ -17,6 +17,7 @@ import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { externalRequestUrl } from "@/lib/request-origin";
 import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
+import { loadContractLegalDocuments } from "@/lib/contract-legal-documents";
 import {
   jsonNoStore,
   readLimitedJson,
@@ -164,18 +165,19 @@ export async function POST(request: Request) {
         // Older manually entered files may not contain a valid contract snapshot.
       }
     }
-    if (matter.contractId) {
-      const contract = await db.query.workforceContracts.findFirst({
-        where: eq(workforceContracts.id, matter.contractId),
-      });
-      if (contract?.documentId) snapshotDocumentIds.add(contract.documentId);
-    }
-    const referredDocuments = snapshotDocumentIds.size
-      ? await db
-          .select()
-          .from(companyDocuments)
-          .where(inArray(companyDocuments.id, [...snapshotDocumentIds]))
-      : [];
+    const contract = matter.contractId
+      ? await db.query.workforceContracts.findFirst({
+          where: eq(workforceContracts.id, matter.contractId),
+        })
+      : null;
+    const referredDocuments = contract
+      ? await loadContractLegalDocuments(db, contract, [...snapshotDocumentIds])
+      : snapshotDocumentIds.size
+        ? await db
+            .select()
+            .from(companyDocuments)
+            .where(inArray(companyDocuments.id, [...snapshotDocumentIds]))
+        : [];
     const activeDocuments = referredDocuments.filter(
       (document) => document.status === "active",
     );

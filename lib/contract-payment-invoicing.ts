@@ -6,6 +6,7 @@ import { makeReference, objectKey } from "@/lib/company-documents";
 import { generateIssuedPdf } from "@/lib/pdf-generator";
 import { contractInvoicePdfCopy } from "@/lib/invoice-pdf-copy";
 import { getRuntimeEnv } from "@/lib/runtime-env";
+import { canAutomaticallyInvoiceContract } from "@/lib/contract-payment-integrity";
 
 export async function issueDueContractInvoice(paymentId:number,actorEmail:string){
   const db=getDb();
@@ -15,6 +16,7 @@ export async function issueDueContractInvoice(paymentId:number,actorEmail:string
   if(!["due","referred"].includes(payment.status))throw new Error("لم يحن موعد الدفعة بعد");
   const contract=await db.query.workforceContracts.findFirst({where:(table,{eq})=>eq(table.id,payment.contractId)});
   if(!contract)throw new Error("العقد غير موجود");
+  if(!canAutomaticallyInvoiceContract(contract))throw new Error("لا يمكن إصدار فاتورة قبل اعتماد العقد أو بعد إغلاقه");
   const assets=await db.select().from(companyAssets);
   if(!assets.some(a=>a.slot==="stamp")||!assets.some(a=>a.slot==="signature"))throw new Error("يجب اعتماد الختم والتوقيع قبل إصدار الفاتورة");
   const absenceDeductionHalalas=payment.absenceDeductionHalalas||0;const netSubtotalHalalas=Math.max(0,payment.subtotalHalalas-absenceDeductionHalalas);const netVatHalalas=Math.round(netSubtotalHalalas*payment.vatRateBps/10000);const netAmountHalalas=netSubtotalHalalas+netVatHalalas;

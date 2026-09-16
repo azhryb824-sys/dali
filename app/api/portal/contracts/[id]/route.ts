@@ -113,7 +113,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           vatHalalas: Math.round(monthlySubtotalHalalas * vatRateBps / 10000),
           vatRateBps,
           amountHalalas: monthlySubtotalHalalas + Math.round(monthlySubtotalHalalas * vatRateBps / 10000),
-          status: dueDate <= now.slice(0, 10) ? "due" : "scheduled",
+          status: "scheduled",
           updatedAt: now,
         }).where(eq(contractPaymentSchedules.id, payment.id));
       }
@@ -126,7 +126,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       for (const payment of editedPayments) {
         const subtotalHalalas = Math.round(contractSubtotalHalalas * payment.percentageBps / 10000);
         const vatHalalas = Math.round(subtotalHalalas * vatRateBps / 10000);
-        await tx.update(contractPaymentSchedules).set({ title: payment.title, titleEn: payment.titleEn, dueDate: payment.dueDate!, percentageBps: payment.percentageBps, subtotalHalalas, vatHalalas, vatRateBps, amountHalalas: subtotalHalalas + vatHalalas, status: payment.dueDate! <= now.slice(0, 10) ? "due" : "scheduled", updatedAt: now }).where(eq(contractPaymentSchedules.id, payment.id));
+        await tx.update(contractPaymentSchedules).set({ title: payment.title, titleEn: payment.titleEn, dueDate: payment.dueDate!, percentageBps: payment.percentageBps, subtotalHalalas, vatHalalas, vatRateBps, amountHalalas: subtotalHalalas + vatHalalas, status: "scheduled", updatedAt: now }).where(eq(contractPaymentSchedules.id, payment.id));
       }
     }
     if (clauses) {

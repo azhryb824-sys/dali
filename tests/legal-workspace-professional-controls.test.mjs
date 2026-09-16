@@ -92,7 +92,7 @@ test("all referred contract files can be shared in one audited WhatsApp bundle",
   assert.match(bundlePage, /content-security-policy/);
   assert.match(bundleItem, /downloadCount: sql/);
   assert.match(bundleItem, /legalAttachment\.sha256/);
-  assert.match(referral, /const documentIds=/);
+  assert.match(referral, /loadContractLegalDocuments\(db,contract/);
   assert.match(referral, /fileSnapshotJson:JSON\.stringify\(snapshot\)/);
   assert.doesNotMatch(referral, /companyDocuments\.counterparty,contract\.clientName/);
   assert.match(lawyerRoute, /legalExternalShareBundles/);

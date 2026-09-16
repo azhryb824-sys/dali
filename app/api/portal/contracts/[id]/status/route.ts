@@ -8,6 +8,8 @@ import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, rejectCrossSiteRequest } from "@/lib/security";
 import { annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
 import { hashShareToken } from "@/lib/company-documents";
+import { isRecoverablePreApprovalInvoice } from "@/lib/contract-payment-integrity";
+import { loadContractLegalDocuments } from "@/lib/contract-legal-documents";
 
 const transitions: Record<string, string[]> = {
   draft: ["internal_review", "approved", "cancelled"],
@@ -81,10 +83,40 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (status === "approved" && contract.seasonType === "regular" && contract.quantityMode === "fixed" && annualApprovalDueDates.length !== 12) {
       return jsonNoStore({ error: "تعذر حساب جدول العقد السنوي من تاريخ البداية؛ صحح تاريخ بداية العقد" }, { status: 409 });
     }
-    if (approvalInstallments.some((payment) => !["scheduled", "due"].includes(payment.status) || payment.invoiceDocumentId || payment.financialRecordId)) {
+    const processedApprovalInstallments = approvalInstallments.filter((payment) =>
+      !["scheduled", "due"].includes(payment.status) ||
+      Boolean(payment.invoiceDocumentId) ||
+      Boolean(payment.financialRecordId),
+    );
+    const processedDocumentIds = processedApprovalInstallments.flatMap((payment) => payment.invoiceDocumentId ? [payment.invoiceDocumentId] : []);
+    const processedFinancialIds = processedApprovalInstallments.flatMap((payment) => payment.financialRecordId ? [payment.financialRecordId] : []);
+    const [processedDocuments, processedFinancials] = await Promise.all([
+      processedDocumentIds.length ? db.select().from(companyDocuments).where(inArray(companyDocuments.id, processedDocumentIds)) : Promise.resolve([]),
+      processedFinancialIds.length ? db.select().from(financialRecords).where(inArray(financialRecords.id, processedFinancialIds)) : Promise.resolve([]),
+    ]);
+    const processedDocumentById = new Map(processedDocuments.map((document) => [document.id, document]));
+    const processedFinancialById = new Map(processedFinancials.map((financial) => [financial.id, financial]));
+    const recoverablePreApprovalInvoices = processedApprovalInstallments.length > 0 && processedApprovalInstallments.every((payment) =>
+      isRecoverablePreApprovalInvoice({
+        contractId: id,
+        expectedDueDate: annualApprovalDueDates[payment.installmentNumber - 1] || "",
+        payment,
+        document: payment.invoiceDocumentId ? processedDocumentById.get(payment.invoiceDocumentId) : undefined,
+        financial: payment.financialRecordId ? processedFinancialById.get(payment.financialRecordId) : undefined,
+      }),
+    );
+    if (processedApprovalInstallments.length && !recoverablePreApprovalInvoices) {
       return jsonNoStore({ error: "تعذر اعتماد العقد لوجود دفعة تمت معالجتها ماليًا" }, { status: 409 });
     }
-    const annualScheduleNeedsRepair = annualApprovalDueDates.length === 12 && approvalInstallments.length !== 12;
+    const installmentNumbers = new Set(approvalInstallments.map((payment) => payment.installmentNumber));
+    const annualScheduleNeedsRepair = annualApprovalDueDates.length === 12 && (
+      approvalInstallments.length !== 12 ||
+      installmentNumbers.size !== 12 ||
+      approvalInstallments.some((payment) => payment.installmentNumber < 1 || payment.installmentNumber > 12)
+    );
+    if (annualScheduleNeedsRepair && processedApprovalInstallments.length) {
+      return jsonNoStore({ error: "تعذر إصلاح جدول العقد لأن بعض دفعاته عولجت ماليًا" }, { status: 409 });
+    }
     const monthlySubtotalHalalas = annualScheduleNeedsRepair
       ? approvalProfessions.reduce(
           (sum, profession) =>
@@ -173,9 +205,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         );
         await tx.update(workforceContracts).set({ firstPaymentDueDate: annualApprovalDueDates[0], updatedAt: now }).where(eq(workforceContracts.id, id));
       } else if (annualApprovalDueDates.length) {
-        const editable = approvalInstallments.sort((a, b) => a.installmentNumber - b.installmentNumber);
-        for (const [index, payment] of editable.entries()) {
-          const dueDate = annualApprovalDueDates[index];
+        const editable = [...approvalInstallments].sort((a, b) => a.installmentNumber - b.installmentNumber);
+        for (const payment of editable) {
+          if (payment.invoiceDocumentId || payment.financialRecordId || !["scheduled", "due"].includes(payment.status)) continue;
+          const dueDate = annualApprovalDueDates[payment.installmentNumber - 1];
           await tx.update(contractPaymentSchedules).set({ dueDate, servicePeriod: dueDate.slice(0, 7), status: dueDate <= now.slice(0, 10) ? "due" : "scheduled", updatedAt: now }).where(eq(contractPaymentSchedules.id, payment.id));
         }
         await tx.update(workforceContracts).set({ firstPaymentDueDate: annualApprovalDueDates[0], updatedAt: now }).where(eq(workforceContracts.id, id));
@@ -264,6 +297,29 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         targetRole: "admin",
       }).catch(() => undefined);
     }
+    if (recoverablePreApprovalInvoices) {
+      const preservedPaymentIds = processedApprovalInstallments.map((payment) => payment.id);
+      await auditPortalAction({
+        actorEmail: access.user.email,
+        action: "contract-approved-with-preserved-legacy-auto-invoices",
+        entityType: "workforce-contract",
+        entityId: id,
+        before: { status: contract.status, approvedBy: contract.approvedBy, paymentIds: preservedPaymentIds },
+        after: { status: updated.status, approvedBy: updated.approvedBy, paymentIds: preservedPaymentIds },
+        reason: "اعتماد عقد قديم مع الحفاظ على فواتير تلقائية غير مرحلة أُنشئت قبل إضافة قيد الاعتماد",
+      });
+      await emitPortalNotification({
+        eventType: "contract-approved-with-preserved-legacy-auto-invoices",
+        title: "اعتمد عقد قديم مع فواتير تلقائية محفوظة",
+        message: `${contract.referenceCode} — حُفظت ${preservedPaymentIds.length} فواتير تلقائية غير مرحلة، ويلزم التحقق المحاسبي منها دون حذف السجل التاريخي.`,
+        severity: "warning",
+        module: "finance",
+        entityType: "workforce-contract",
+        entityId: id,
+        actionView: "finance",
+        targetDepartment: "finance",
+      }).catch(() => undefined);
+    }
     if (["cancelled", "terminated"].includes(status)) {
       await db.update(contractPaymentSchedules).set({ status: "cancelled", updatedAt: now }).where(and(eq(contractPaymentSchedules.contractId, id), inArray(contractPaymentSchedules.status, ["scheduled", "due", "referred"])));
       if (reasonCode !== "late_payment") {
@@ -297,14 +353,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
       const finalFinances = await db.select().from(financialRecords).where(eq(financialRecords.contractId, id));
       const finalPayments = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, id));
-      const documentIds = [...new Set([
-        contract.documentId,
+      const documents = await loadContractLegalDocuments(db, contract, [
         ...finalFinances.map((item) => item.documentId),
         ...finalPayments.map((item) => item.invoiceDocumentId),
-      ].filter((value): value is number => typeof value === "number" && Number.isInteger(value) && value > 0))];
-      const documents = documentIds.length
-        ? await db.select().from(companyDocuments).where(inArray(companyDocuments.id, documentIds))
-        : [];
+      ]);
       const caseSnapshot = { capturedAt: now, cancellation: { status, reason, referredBy: access.user.email, reversalDraftIds }, client, contract: updated, documents, payments: finalPayments, finances: finalFinances, professions, assignments: allAssignments, workers: linkedWorkers };
       const legalReference = `LGL-CAN-${contract.referenceCode}`.slice(0, 120);
       const [createdLegal] = await db.insert(legalRecords).values({ referenceCode: legalReference, category: "case", title: `${status === "terminated" ? "إنهاء" : "إلغاء"} العقد ${contract.referenceCode}`, counterparty: contract.clientName, clientId: contract.clientId, contractId: id, referralReason: reason, referredBy: access.user.email, referredAt: now, fileSnapshotJson: JSON.stringify(caseSnapshot), expiryDate: null, status: "reviewing" }).onConflictDoNothing().returning();
