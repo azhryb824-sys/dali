@@ -1,7 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
-import { appConfirm } from "@/app/components/AppDialogProvider";
+import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createWhatsAppUrl } from "@/lib/whatsapp";
@@ -12,6 +12,9 @@ import ContractApprovalStampDialog, {
 import LegalPaymentReferralDialog from "./LegalPaymentReferralDialog";
 import ContractFullEditDialog from "./ContractFullEditDialog";
 import LegalContractCorrespondence from "./LegalContractCorrespondence";
+import ContractPaymentSettlementDialog, {
+  type SettlementDialogAllocation,
+} from "./ContractPaymentSettlementDialog";
 type Contract = {
   id: number;
   documentId: number;
@@ -55,6 +58,10 @@ type Payment = {
   dueDate: string;
   percentageBps: number;
   amountHalalas: number;
+  invoiceAmountHalalas: number;
+  paidAmountHalalas: number;
+  remainingAmountHalalas: number;
+  isOverdue: boolean;
   absenceDeductionHalalas: number;
   subtotalHalalas?: number;
   vatRateBps?: number;
@@ -78,12 +85,35 @@ type PaymentAccount = {
   isPosting: boolean;
   status: string;
 };
+type Settlement = {
+  id: number;
+  paymentScheduleId: number;
+  referenceCode: string;
+  direction: "customer_receipt" | "supplier_payment";
+  amountHalalas: number;
+  paymentDate: string;
+  journalEntryId: number;
+  reversalJournalEntryId: number | null;
+  status: "active" | "reversal_pending" | "reversed" | "void";
+  recordedBy: string;
+  reversalReason: string | null;
+};
+type SettlementAllocation = {
+  id: number;
+  settlementId: number;
+  paymentMethod: "bank_transfer" | "cash" | "cheque" | "legacy";
+  amountHalalas: number;
+  bankAccountId: number | null;
+  paymentReference: string | null;
+};
 type Data = {
   contracts: Contract[];
   payments: Payment[];
   professions: Profession[];
   banks: Bank[];
   paymentAccounts: PaymentAccount[];
+  settlements: Settlement[];
+  settlementAllocations: SettlementAllocation[];
   clientMobiles: Record<string, string>;
   canManageContracts: boolean;
   canApproveContracts: boolean;
@@ -103,6 +133,7 @@ const labels: Record<string, string> = {
   due: "مستحقة",
   referred: "محالة للمحاسبة",
   invoiced: "صدرت الفاتورة",
+  partially_paid: "مسددة جزئيًا",
   paid: "مسددة",
   cancelled: "ملغاة",
 };
@@ -136,7 +167,6 @@ export default function ContractBillingWorkspace() {
     contract: Contract;
     stamps: ContractApprovalStamp[];
   } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const load = useCallback(async () => {
     const response = await fetch("/api/portal/contract-payments", {
       cache: "no-store",
@@ -242,27 +272,12 @@ export default function ContractBillingWorkspace() {
       return next;
     });
   }
-  async function settleSupplierPayment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function settleContractPayment(input: {
+    paymentDate: string;
+    allocations: SettlementDialogAllocation[];
+    notes: string;
+  }) {
     if (!settlingPayment) return;
-    const formData = new FormData(event.currentTarget),
-      bankAccountId = Number(formData.get("bankAccountId")),
-      paymentAccountId = Number(formData.get("paymentAccountId")),
-      paymentReference = String(formData.get("paymentReference") || "");
-    if (
-      paymentMethod !== "cash" &&
-      (!Number.isInteger(bankAccountId) || bankAccountId <= 0)
-    ) {
-      setNotice("اختر الحساب البنكي المرتبط بطريقة الدفع.");
-      return;
-    }
-    if (
-      paymentMethod === "cash" &&
-      (!Number.isInteger(paymentAccountId) || paymentAccountId <= 0)
-    ) {
-      setNotice("اختر حساب الصندوق النقدي.");
-      return;
-    }
     setBusy(settlingPayment.id);
     setNotice("");
     try {
@@ -271,25 +286,63 @@ export default function ContractBillingWorkspace() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           paymentId: settlingPayment.id,
-          action: "mark-paid",
-          paymentMethod,
-          bankAccountId,
-          paymentAccountId,
-          paymentReference,
+          action: "record-settlement",
+          ...input,
         }),
       });
       const result = (await readApiJson(response)) as { error?: string };
       if (!response.ok)
-        throw new Error(result.error || "تعذّر تسجيل سداد المورد");
+        throw new Error(result.error || "تعذّر تسجيل السداد");
       setSettlingPayment(null);
       await load();
       setNotice(
-        "تم تسجيل سداد المورد وإنشاء قيد تسوية بنكي مسودة بانتظار الاعتماد والترحيل.",
+        "تم تسجيل السداد وتوزيعه وإنشاء قيد متوازن مستقل بانتظار الاعتماد والترحيل.",
       );
     } catch (error) {
       setNotice(
-        error instanceof Error ? error.message : "تعذّر تسجيل سداد المورد",
+        error instanceof Error ? error.message : "تعذّر تسجيل السداد",
       );
+    } finally {
+      setBusy(0);
+    }
+  }
+  async function reverseSettlement(payment: Payment, settlement: Settlement) {
+    const reason = await appPrompt(
+      `اكتب سبب عكس السداد ${settlement.referenceCode} (10 أحرف على الأقل). إذا كان القيد مرحّلًا فسيُنشأ قيد عكسي بانتظار الاعتماد والترحيل.`,
+      {
+        title: "عكس سجل السداد",
+        multiline: true,
+        minLength: 10,
+        tone: "danger",
+      },
+    );
+    if (!reason) return;
+    setBusy(payment.id);
+    setNotice("");
+    try {
+      const response = await fetch("/api/portal/contract-payments", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "reverse-settlement",
+          paymentId: payment.id,
+          settlementId: settlement.id,
+          reason,
+        }),
+      });
+      const result = (await readApiJson(response)) as {
+        pending?: boolean;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(result.error || "تعذر عكس السداد");
+      await load();
+      setNotice(
+        result.pending
+          ? "أُنشئ القيد العكسي، ويظل أثر السداد قائمًا حتى اعتماده وترحيله."
+          : "أُلغي قيد السداد غير المرحّل وأعيد احتساب المتبقي والحالة المالية.",
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر عكس السداد");
     } finally {
       setBusy(0);
     }
@@ -757,16 +810,12 @@ export default function ContractBillingWorkspace() {
                             </small>
                           </p>
                           <b>
-                            {money(
-                              Math.round(
-                                Math.max(
-                                  0,
-                                  (payment.subtotalHalalas ??
-                                    payment.amountHalalas) -
-                                    (payment.absenceDeductionHalalas || 0),
-                                ) *
-                                  (1 + (payment.vatRateBps || 0) / 10000),
-                              ),
+                            {money(payment.invoiceAmountHalalas)}
+                            {payment.invoiceDocumentId && (
+                              <small>
+                                مسدد {money(payment.paidAmountHalalas)} · متبقي{" "}
+                                {money(payment.remainingAmountHalalas)}
+                              </small>
                             )}
                             {payment.absenceDeductionHalalas > 0 && (
                               <small>
@@ -836,22 +885,84 @@ export default function ContractBillingWorkspace() {
                               </button>
                             )}
                             {data.canRecordPayment &&
-                              purchaser &&
-                              payment.status === "invoiced" && (
+                              ["invoiced", "partially_paid"].includes(
+                                payment.status,
+                              ) &&
+                              payment.remainingAmountHalalas > 0 && (
                                 <button
                                   disabled={busy === payment.id}
-                                  onClick={() => {
-                                    setPaymentMethod("bank_transfer");
-                                    setSettlingPayment(payment);
-                                  }}
+                                  onClick={() => setSettlingPayment(payment)}
                                 >
-                                  تسجيل سداد المورد
+                                  {purchaser
+                                    ? "تسجيل سداد المورد"
+                                    : "تسجيل تحصيل العميل"}
                                 </button>
                               )}
+                            {data.settlements.some(
+                              (item) => item.paymentScheduleId === payment.id,
+                            ) && (
+                              <details className="payment-settlement-history">
+                                <summary>سجل السداد</summary>
+                                {data.settlements
+                                  .filter(
+                                    (item) =>
+                                      item.paymentScheduleId === payment.id,
+                                  )
+                                  .map((settlement) => {
+                                    const allocations =
+                                      data.settlementAllocations.filter(
+                                        (item) =>
+                                          item.settlementId === settlement.id,
+                                      );
+                                    return (
+                                      <article key={settlement.id}>
+                                        <p>
+                                          <strong>{settlement.referenceCode}</strong>
+                                          <small>
+                                            {settlement.paymentDate} ·{" "}
+                                            {allocations
+                                              .map(
+                                                (item) =>
+                                                  `${item.paymentMethod === "bank_transfer" ? "تحويل" : item.paymentMethod === "cash" ? "نقدي" : item.paymentMethod === "cheque" ? "شيك" : "سابق"} ${money(item.amountHalalas)}`,
+                                              )
+                                              .join(" + ") ||
+                                              money(settlement.amountHalalas)}
+                                          </small>
+                                        </p>
+                                        <span
+                                          className={`workflow-status ${settlement.status}`}
+                                        >
+                                          {settlement.status === "active"
+                                            ? "نشط"
+                                            : settlement.status ===
+                                                "reversal_pending"
+                                              ? "عكس بانتظار الترحيل"
+                                              : settlement.status === "reversed"
+                                                ? "معكوس"
+                                                : "ملغى"}
+                                        </span>
+                                        {data.canRecordPayment &&
+                                          settlement.status === "active" && (
+                                            <button
+                                              className="danger-action"
+                                              disabled={busy === payment.id}
+                                              onClick={() =>
+                                                void reverseSettlement(
+                                                  payment,
+                                                  settlement,
+                                                )
+                                              }
+                                            >
+                                              عكس السداد
+                                            </button>
+                                          )}
+                                      </article>
+                                    );
+                                  })}
+                              </details>
+                            )}
                             {data.canReferLegal &&
-                              payment.status !== "paid" &&
-                              payment.dueDate <
-                                new Date().toISOString().slice(0, 10) && (
+                              payment.isOverdue && (
                                 <button
                                   className="legal-referral"
                                   disabled={busy === payment.id}
@@ -1048,117 +1159,17 @@ export default function ContractBillingWorkspace() {
         />
       )}{" "}
       {settlingPayment && (
-        <div className="modal-layer">
-          <button
-            className="drawer-backdrop"
-            aria-label="إغلاق نموذج تسجيل سداد المورد"
-            onClick={() => setSettlingPayment(null)}
-          />
-          <section
-            className="record-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="تسجيل سداد المورد"
-          >
-            <div className="drawer-head">
-              <div>
-                <span>{settlingPayment.title}</span>
-                <h2>تسجيل سداد المورد من الحساب البنكي</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSettlingPayment(null)}
-                aria-label="إغلاق"
-              >
-                ×
-              </button>
-            </div>
-            <form className="feature-form" onSubmit={settleSupplierPayment}>
-              <label>
-                طريقة الدفع
-                <select
-                  name="paymentMethod"
-                  value={paymentMethod}
-                  onChange={(event) => setPaymentMethod(event.target.value)}
-                  required
-                >
-                  <option value="bank_transfer">تحويل بنكي</option>
-                  <option value="cash">نقدي</option>
-                  <option value="cheque">شيك</option>
-                </select>
-              </label>
-              {paymentMethod !== "cash" ? (
-                <label>
-                  الحساب البنكي
-                  <select name="bankAccountId" required defaultValue="">
-                    <option value="" disabled>
-                      اختر الحساب البنكي
-                    </option>
-                    {data.banks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.bankName} — {bank.accountName} — {bank.iban}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <label>
-                  حساب الصندوق
-                  <select name="paymentAccountId" required defaultValue="">
-                    <option value="" disabled>
-                      اختر حساب الصندوق
-                    </option>
-                    {data.paymentAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.code} — {account.nameAr}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <label className="span-two">
-                مرجع العملية
-                <input
-                  name="paymentReference"
-                  maxLength={180}
-                  placeholder={
-                    paymentMethod === "cheque"
-                      ? "رقم الشيك وتاريخه"
-                      : "رقم الحوالة أو مرجع السداد"
-                  }
-                />
-              </label>
-              {paymentMethod !== "cash" && data.banks.length === 0 && (
-                <p className="span-two">
-                  لا يوجد حساب بنكي نشط. أضف حسابًا من صفحة الأستاذ العام
-                  والحسابات البنكية أولًا.
-                </p>
-              )}
-              <p className="span-two">
-                سيُنشأ قيد تسوية مسودة: مدين حساب الموردين، ودائن الحساب المالي
-                المرتبط بطريقة الدفع. يلزم اعتماده وترحيله من القيود اليومية.
-              </p>
-              <div className="modal-actions span-two">
-                <button type="button" onClick={() => setSettlingPayment(null)}>
-                  إلغاء
-                </button>
-                <button
-                  className="admin-primary"
-                  disabled={
-                    busy === settlingPayment.id ||
-                    (paymentMethod !== "cash" && data.banks.length === 0) ||
-                    (paymentMethod === "cash" &&
-                      data.paymentAccounts.length === 0)
-                  }
-                >
-                  {busy === settlingPayment.id
-                    ? "جارٍ تسجيل السداد..."
-                    : "تسجيل السداد وإنشاء القيد"}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
+        <ContractPaymentSettlementDialog
+          payment={settlingPayment}
+          contract={data.contracts.find(
+            (item) => item.id === settlingPayment.contractId,
+          )!}
+          banks={data.banks}
+          paymentAccounts={data.paymentAccounts}
+          busy={busy === settlingPayment.id}
+          onClose={() => setSettlingPayment(null)}
+          onSubmit={settleContractPayment}
+        />
       )}
     </>
   );

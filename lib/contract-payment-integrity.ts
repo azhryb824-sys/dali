@@ -21,6 +21,7 @@ type ApprovalPayment = {
   installmentNumber: number;
   dueDate: string;
   status: string;
+  paidAmountHalalas?: number;
   invoiceDocumentId: number | null;
   financialRecordId: number | null;
   paymentJournalEntryId: number | null;
@@ -78,6 +79,7 @@ export function isRecoverablePreApprovalInvoice(input: {
     payment.invoiceDocumentId !== null &&
     payment.financialRecordId !== null &&
     payment.paymentJournalEntryId === null &&
+    (payment.paidAmountHalalas ?? 0) === 0 &&
     payment.invoicedBy === AUTOMATED_CONTRACT_BILLING_ACTOR &&
     payment.paidAt === null &&
     document?.id === payment.invoiceDocumentId &&

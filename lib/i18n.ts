@@ -1,4 +1,5 @@
 import { adminUiTranslations } from "@/lib/i18n-admin-catalog";
+import { contractPaymentUiTranslations } from "@/lib/i18n-contract-payment-catalog";
 import { generatedUiTranslations } from "@/lib/i18n-generated-catalog";
 import { generatedUiTemplates } from "@/lib/i18n-generated-templates";
 import { employeeFinanceUiTranslations } from "@/lib/i18n-employee-finance-catalog";
@@ -105,6 +106,7 @@ Object.assign(uiTranslations, {
 for (const [source, generated] of Object.entries(generatedUiTranslations)) {
   uiTranslations[source] = { ...uiTranslations[source], ...generated } as Translation;
 }
+Object.assign(uiTranslations, contractPaymentUiTranslations);
 Object.assign(uiTranslations, employeeFinanceUiTranslations);
 Object.assign(uiTranslations, reviewedUiTranslations);
 const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>string;ur:(match:RegExpMatchArray)=>string;bn?:(match:RegExpMatchArray)=>string}>=[

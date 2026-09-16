@@ -11,7 +11,7 @@ type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 const entityStatuses: Record<RecordEntity, Set<string>> = {
   employees: new Set(["active", "leave", "suspended", "ended"]),
-  finance: new Set(["pending", "approved", "paid", "overdue"]),
+  finance: new Set(["pending", "approved", "partially_paid", "paid", "overdue"]),
   legal: new Set(["active", "reviewing", "in_progress", "renewal", "closed", "cancelled"]),
   workforce: new Set(["available", "leave", "suspended"]),
 };
@@ -22,7 +22,7 @@ const financeCategories = new Set([
   "invoice", "expense", "payroll", "advance",
 ]);
 const workerFinanceCategories = new Set(["worker_salary", "worker_advance", "worker_deduction", "worker_violation", "worker_expense"]);
-const paymentMethods = new Set(["bank_transfer", "cash", "cheque", "payroll_file", "other", ""]);
+const paymentMethods = new Set(["bank_transfer", "cash", "cheque", "mixed", "payroll_file", "other", ""]);
 const legalCategories = new Set(["contract", "case", "license", "compliance"]);
 
 function isEntity(value: unknown): value is RecordEntity {

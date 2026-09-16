@@ -257,7 +257,62 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     });
   }
 
-  for(const payment of paymentItems){if(payment.status==="cancelled"||!billableContractIds.has(payment.contractId))continue;const days=daysUntil(payment.dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`contract-payment-due:${payment.id}:${payment.dueDate}`,eventType:days<0?"contract-payment-overdue":"contract-payment-due",title:days<0?"دفعة عقد متأخرة":"دفعة عقد تقترب من الاستحقاق",message:`الدفعة ${payment.installmentNumber} — ${payment.title} — ${formatAlertDate(payment.dueDate)}.`,severity:days<0?"critical":days<=2?"warning":"info",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance"})}
+  const contractFinanceByPaymentId = new Map(
+    financeItems
+      .filter((item) => item.contractPaymentScheduleId)
+      .map((item) => [item.contractPaymentScheduleId!, item]),
+  );
+  for (const payment of paymentItems) {
+    if (
+      payment.status === "cancelled" ||
+      !billableContractIds.has(payment.contractId)
+    )
+      continue;
+    const days = daysUntil(payment.dueDate);
+    if (!Number.isFinite(days) || days > 7) continue;
+    const financial = contractFinanceByPaymentId.get(payment.id);
+    const invoiceAmountHalalas =
+      financial?.amountHalalas ?? payment.amountHalalas;
+    const remainingAmountHalalas = Math.max(
+      0,
+      invoiceAmountHalalas - payment.paidAmountHalalas,
+    );
+    if (remainingAmountHalalas <= 0) continue;
+    if (
+      days < 0 &&
+      financial &&
+      ["pending", "partially_paid"].includes(financial.status)
+    ) {
+      await db
+        .update(financialRecords)
+        .set({ status: "overdue", updatedAt: now.toISOString() })
+        .where(
+          and(
+            eq(financialRecords.id, financial.id),
+            inArray(financialRecords.status, ["pending", "partially_paid"]),
+          ),
+        );
+    }
+    const partial = payment.paidAmountHalalas > 0;
+    ensure({
+      dedupeKey: `contract-payment-due:${payment.id}:${payment.dueDate}`,
+      eventType:
+        days < 0 ? "contract-payment-overdue" : "contract-payment-due",
+      title:
+        days < 0
+          ? partial
+            ? "جزء من دفعة عقد ما زال متأخرًا"
+            : "دفعة عقد متأخرة"
+          : "دفعة عقد تقترب من الاستحقاق",
+      message: `الدفعة ${payment.installmentNumber} — ${payment.title} — المتبقي ${(remainingAmountHalalas / 100).toFixed(2)} ر.س — ${formatAlertDate(payment.dueDate)}.`,
+      severity: days < 0 ? "critical" : days <= 2 ? "warning" : "info",
+      module: "finance",
+      entityType: "contract-payment",
+      entityId: payment.id,
+      actionView: "operations",
+      targetDepartment: "finance",
+    });
+  }
   const activeLegalRecordIds = new Set(legalItems.map((item) => item.id));
   for(const activity of legalActivities){if(!activeLegalRecordIds.has(activity.legalRecordId)||!activity.dueAt||activity.status==="cancelled")continue;const dueDate=activity.dueAt.slice(0,10);const days=daysUntil(dueDate);if(!Number.isFinite(days)||days>7)continue;ensure({dedupeKey:`legal-activity-due:${activity.id}:${dueDate}`,eventType:days<0?"legal-activity-overdue":"legal-activity-due",title:days<0?"إجراء قانوني متأخر":"موعد قانوني قريب",message:`${activity.title} — ${formatAlertDate(dueDate)}.`,severity:days<0||activity.priority==="critical"?"critical":"warning",module:"legal",entityType:"legal-record",entityId:activity.legalRecordId,actionView:"legal",targetDepartment:"legal",targetEmail:activity.assignedTo})}
 

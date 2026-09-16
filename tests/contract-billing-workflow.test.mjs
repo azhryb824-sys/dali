@@ -96,10 +96,10 @@ test("public quotation requests use the same structured requirements as quotatio
 });
 
 test("owner referral, accounting invoice, payment recording and legal escalation are separated",async()=>{
-  const[route,ui]=await Promise.all([source("app/api/portal/contract-payments/route.ts"),source("app/portal/ContractBillingWorkspace.tsx")]);
+  const[route,settlement,ui]=await Promise.all([source("app/api/portal/contract-payments/route.ts"),source("lib/contract-payment-settlements.ts"),source("app/portal/ContractBillingWorkspace.tsx")]);
   assert.match(route,/إحالة الدفعة للمحاسبة من صلاحيات المالك فقط/);
   assert.match(route,/hasPortalPermission\(access,"finance","write"\)/);
-  assert.match(route,/contract-payment-invoiced/);assert.match(route,/supplier-contract-payment-recorded/);assert.match(route,/client-file-referred-legal/);
+  assert.match(route,/contract-payment-invoiced/);assert.match(route,/recordContractPaymentSettlement/);assert.match(settlement,/contract-payment-settlement-recorded/);assert.match(route,/client-file-referred-legal/);
   assert.match(route,/issueDueContractInvoice\(payment\.id/);
   assert.match(route,/payment\.dueDate>=now\.slice\(0,10\)/);
   assert.match(ui,/PDF عربي/);assert.match(ui,/PDF عربي\/English/);assert.match(ui,/مشاركة/);assert.match(ui,/تسجيل السداد/);assert.match(ui,/إحالة الملف للقانونية/);

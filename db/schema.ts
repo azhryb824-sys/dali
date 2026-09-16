@@ -1077,6 +1077,7 @@ export const financialRecords = pgTable(
     category: text("category").notNull(),
     description: text("description").notNull(),
     amountHalalas: integer("amount_halalas").notNull(),
+    paidAmountHalalas: integer("paid_amount_halalas").notNull().default(0),
     subtotalHalalas: integer("subtotal_halalas"),
     vatHalalas: integer("vat_halalas").notNull().default(0),
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
@@ -1121,6 +1122,10 @@ export const financialRecords = pgTable(
       "financial_records_posting_status_check",
       sql`${table.postingStatus} in ('unposted','draft','posted','reversed','not_applicable')`,
     ),
+    check(
+      "financial_records_paid_amount_check",
+      sql`${table.paidAmountHalalas} >= 0 and ${table.paidAmountHalalas} <= ${table.amountHalalas}`,
+    ),
   ],
 );
 
@@ -1137,6 +1142,7 @@ export const contractPaymentSchedules = pgTable(
     dueDate: text("due_date").notNull(),
     percentageBps: integer("percentage_bps").notNull(),
     amountHalalas: integer("amount_halalas").notNull(),
+    paidAmountHalalas: integer("paid_amount_halalas").notNull().default(0),
     absenceDeductionHalalas: integer("absence_deduction_halalas")
       .notNull()
       .default(0),
@@ -1187,7 +1193,11 @@ export const contractPaymentSchedules = pgTable(
     ),
     check(
       "contract_payment_schedules_status_check",
-      sql`${table.status} in ('scheduled','due','referred','invoiced','paid','cancelled')`,
+      sql`${table.status} in ('scheduled','due','referred','invoiced','partially_paid','paid','cancelled')`,
+    ),
+    check(
+      "contract_payment_schedules_paid_amount_check",
+      sql`${table.paidAmountHalalas} >= 0`,
     ),
     check(
       "contract_payment_schedules_amount_check",
@@ -3912,6 +3922,109 @@ export const bankAccounts = pgTable(
     check(
       "bank_accounts_status_check",
       sql`${table.status} in ('active','inactive','closed')`,
+    ),
+  ],
+);
+
+export const contractPaymentSettlements = pgTable(
+  "contract_payment_settlements",
+  {
+    id: serial("id").primaryKey(),
+    paymentScheduleId: integer("payment_schedule_id")
+      .notNull()
+      .references(() => contractPaymentSchedules.id, { onDelete: "restrict" }),
+    referenceCode: text("reference_code").notNull().unique(),
+    direction: text("direction").notNull(),
+    amountHalalas: integer("amount_halalas").notNull(),
+    paymentDate: text("payment_date").notNull(),
+    journalEntryId: integer("journal_entry_id")
+      .notNull()
+      .references(() => journalEntries.id, { onDelete: "restrict" }),
+    reversalJournalEntryId: integer("reversal_journal_entry_id").references(
+      () => journalEntries.id,
+      { onDelete: "restrict" },
+    ),
+    status: text("status").notNull().default("active"),
+    notes: text("notes"),
+    recordedBy: text("recorded_by").notNull(),
+    reversedBy: text("reversed_by"),
+    reversedAt: text("reversed_at"),
+    reversalReason: text("reversal_reason"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("contract_payment_settlements_schedule_idx").on(
+      table.paymentScheduleId,
+      table.createdAt,
+    ),
+    uniqueIndex("contract_payment_settlements_journal_unique").on(
+      table.journalEntryId,
+    ),
+    uniqueIndex("contract_payment_settlements_reversal_unique").on(
+      table.reversalJournalEntryId,
+    ),
+    check(
+      "contract_payment_settlements_direction_check",
+      sql`${table.direction} in ('customer_receipt','supplier_payment')`,
+    ),
+    check(
+      "contract_payment_settlements_amount_check",
+      sql`${table.amountHalalas} > 0`,
+    ),
+    check(
+      "contract_payment_settlements_status_check",
+      sql`${table.status} in ('active','reversal_pending','reversed','void')`,
+    ),
+  ],
+);
+
+export const contractPaymentSettlementAllocations = pgTable(
+  "contract_payment_settlement_allocations",
+  {
+    id: serial("id").primaryKey(),
+    settlementId: integer("settlement_id")
+      .notNull()
+      .references(() => contractPaymentSettlements.id, {
+        onDelete: "restrict",
+      }),
+    paymentMethod: text("payment_method").notNull(),
+    amountHalalas: integer("amount_halalas").notNull(),
+    ledgerAccountId: integer("ledger_account_id").references(
+      () => chartOfAccounts.id,
+      { onDelete: "restrict" },
+    ),
+    bankAccountId: integer("bank_account_id").references(
+      () => bankAccounts.id,
+      { onDelete: "restrict" },
+    ),
+    paymentReference: text("payment_reference"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP::text`),
+  },
+  (table) => [
+    index("contract_payment_settlement_allocations_settlement_idx").on(
+      table.settlementId,
+    ),
+    index("contract_payment_settlement_allocations_bank_idx").on(
+      table.bankAccountId,
+    ),
+    check(
+      "contract_payment_settlement_allocations_method_check",
+      sql`${table.paymentMethod} in ('bank_transfer','cash','cheque','legacy')`,
+    ),
+    check(
+      "contract_payment_settlement_allocations_amount_check",
+      sql`${table.amountHalalas} > 0`,
+    ),
+    check(
+      "contract_payment_settlement_allocations_shape_check",
+      sql`${table.paymentMethod} = 'legacy' or (${table.paymentMethod} = 'cash' and ${table.ledgerAccountId} is not null and ${table.bankAccountId} is null) or (${table.paymentMethod} in ('bank_transfer','cheque') and ${table.ledgerAccountId} is not null and ${table.bankAccountId} is not null)`,
     ),
   ],
 );

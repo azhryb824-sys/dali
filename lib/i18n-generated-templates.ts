@@ -979,5 +979,60 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "مشاركة {{0}} عبر واتساب",
     "en": "Share {{0}} via WhatsApp",
     "bn": "WhatsApp-এর মাধ্যমে {{0}} শেয়ার করুন"
+  },
+  {
+    "source": "{{0}} — {{1}} — {{2}} — المتبقي {{3}}. القيد بانتظار الاعتماد والترحيل.",
+    "en": "{{0}} — {{1}} — {{2}} — Remaining {{3}}. The entry is awaiting approval and posting.",
+    "bn": "{{0}} — {{1}} — {{2}} — অবশিষ্ট {{3}}। এন্ট্রিটি অনুমোদন ও পোস্টিংয়ের অপেক্ষায় আছে।"
+  },
+  {
+    "source": "{{0}} — {{1}} — المتبقي {{2}}.",
+    "en": "{{0}} — {{1}} — Remaining {{2}}.",
+    "bn": "{{0}} — {{1}} — অবশিষ্ট {{2}}।"
+  },
+  {
+    "source": "{{0}} — المتبقي {{1}} ر.س.",
+    "en": "{{0}} — Remaining SAR {{1}}.",
+    "bn": "{{0}} — অবশিষ্ট {{1}} সৌদি রিয়াল।"
+  },
+  {
+    "source": "إجمالي السداد يتجاوز المتبقي {{0}}.",
+    "en": "The total payment exceeds the remaining balance of {{0}}.",
+    "bn": "মোট পরিশোধ অবশিষ্ট {{0}} অতিক্রম করেছে।"
+  },
+  {
+    "source": "اكتب سبب عكس السداد {{0}} (10 أحرف على الأقل). إذا كان القيد مرحّلًا فسيُنشأ قيد عكسي بانتظار الاعتماد والترحيل.",
+    "en": "Enter the reason for reversing payment {{0}} (at least 10 characters). If the entry is posted, a reversal entry will be created for approval and posting.",
+    "bn": "পরিশোধ {{0}} বিপরীত করার কারণ লিখুন (কমপক্ষে ১০ অক্ষর)। এন্ট্রি পোস্ট করা থাকলে অনুমোদন ও পোস্টিংয়ের জন্য একটি বিপরীত এন্ট্রি তৈরি হবে।"
+  },
+  {
+    "source": "الدفعة {{0}} — {{1}} — المتبقي {{2}} ر.س — {{3}}.",
+    "en": "Installment {{0}} — {{1}} — Remaining SAR {{2}} — {{3}}.",
+    "bn": "কিস্তি {{0}} — {{1}} — অবশিষ্ট {{2}} সৌদি রিয়াল — {{3}}।"
+  },
+  {
+    "source": "تسوية ذمة العميل — {{0}}",
+    "en": "Customer receivables settlement — {{0}}",
+    "bn": "গ্রাহক পাওনা সমন্বয় — {{0}}"
+  },
+  {
+    "source": "تسوية ذمة المورد — {{0}}",
+    "en": "Supplier payables settlement — {{0}}",
+    "bn": "সরবরাহকারী প্রদেয় সমন্বয় — {{0}}"
+  },
+  {
+    "source": "عجز {{0}}",
+    "en": "Shortage {{0}}",
+    "bn": "ঘাটতি {{0}}"
+  },
+  {
+    "source": "مبلغ السداد يتجاوز المتبقي {{0}}",
+    "en": "The payment amount exceeds the remaining balance of {{0}}",
+    "bn": "পরিশোধের পরিমাণ অবশিষ্ট {{0}} অতিক্রম করেছে"
+  },
+  {
+    "source": "متبقٍ {{0}}",
+    "en": "{{0}} remaining",
+    "bn": "{{0}} অবশিষ্ট"
   }
 ];

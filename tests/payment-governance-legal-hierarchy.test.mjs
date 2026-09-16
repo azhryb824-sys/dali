@@ -54,9 +54,11 @@ test("government service payment remains isolated and uses its own bank journal"
 });
 
 test("supplier, government and legal payments use distinct accounting sources",async()=>{
-  const[supplier,government,legal]=await Promise.all([read("app/api/portal/contract-payments/route.ts"),read("app/api/portal/government/route.ts"),read("app/api/portal/legal-cases/route.ts")]);
-  assert.match(supplier,/sourceType:"contract-payment-settlement"/);
-  assert.match(supplier,/accountId:payable\.id/);
+  const[supplierRoute,supplierService,government,legal]=await Promise.all([read("app/api/portal/contract-payments/route.ts"),read("lib/contract-payment-settlements.ts"),read("app/api/portal/government/route.ts"),read("app/api/portal/legal-cases/route.ts")]);
+  assert.match(supplierRoute,/recordContractPaymentSettlement/);
+  assert.match(supplierService,/sourceType: "contract-payment-settlement"/);
+  assert.match(supplierService,/"2100" : "1300"/);
+  assert.match(supplierService,/direction === "supplier_payment"[\s\S]*debitHalalas/);
   assert.match(government,/eq\(chartOfAccounts\.code,"5280"\)/);
   assert.match(legal,/resolvePostingRule\("legal_judgment_payment"/);
 });

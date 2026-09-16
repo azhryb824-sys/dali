@@ -190,9 +190,11 @@ type FinanceRecord = {
   category: string;
   description: string;
   amountHalalas: number;
+  paidAmountHalalas: number;
   dueDate: string;
   workerId: number | null;
   contractId: number | null;
+  contractPaymentScheduleId: number | null;
   documentId: number | null;
   periodMonth: string | null;
   subCategory: string | null;
@@ -411,6 +413,7 @@ const recordStatus: Record<RecordEntity, Record<string, string>> = {
   finance: {
     pending: "قيد المراجعة",
     approved: "معتمد",
+    partially_paid: "مدفوع جزئيًا",
     paid: "مدفوع",
     overdue: "متأخر",
   },
@@ -1600,6 +1603,32 @@ export default function PortalDashboard({
     }
   }
 
+  async function updateWorkerOperationalStatus(id: number, status: string) {
+    setBusy(`worker-status-${id}`);
+    try {
+      const response = await fetch("/api/portal/workers", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+      const result = (await readApiJson(response)) as {
+        worker?: WorkerRecord;
+        error?: string;
+      };
+      if (!response.ok || !result.worker)
+        throw new Error(result.error || "تعذر تحديث حالة العامل");
+      setWorkers((items) =>
+        items.map((item) => (item.id === id ? result.worker! : item)),
+      );
+      notify("تم تحديث الحالة التشغيلية للعامل وتوثيقها.");
+      void refreshNotifications(true);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "تعذر تحديث حالة العامل");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function updateRequestStatus(id: number, status: RequestStatus) {
     setBusy(`request-${id}`);
     try {
@@ -2608,7 +2637,7 @@ export default function PortalDashboard({
           {view === "representatives" && canAccessRepresentatives && <SalesRepresentativesWorkspace canWrite={canWriteRepresentatives} />}
           {view === "construction" && canAccessConstruction && <ConstructionWorkspace />}
 
-          {view === "workforce-supervision" && canAccessContracts && canAccess("workforce") && <WorkforceSupervisionWorkspace contracts={contracts} professions={contractProfessions} assignments={contractAssignments} workers={workers} onOpenContract={setSelectedContractId} />}
+          {view === "workforce-supervision" && canAccessContracts && canAccess("workforce") && <WorkforceSupervisionWorkspace contracts={contracts} professions={contractProfessions} assignments={contractAssignments} workers={workers} canManage={canManageWorkerAssignments} busy={busy} onOpenContract={setSelectedContractId} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onWorkerStatus={updateWorkerOperationalStatus} />}
 
           {view === "contractual-documents" && canAccessContracts && (
             <>
@@ -5973,6 +6002,14 @@ function FinanceTable({ records, workers, contracts, query, canWrite, busy, onSt
                 <td className={`money-cell ${item.category === "worker_deduction" ? "deduction" : ""}`}>
                   {item.category === "worker_deduction" ? "− " : ""}
                   {formatMoney(item.amountHalalas)}
+                  {item.contractPaymentScheduleId && item.paidAmountHalalas > 0 && (
+                    <small>
+                      مسدد {formatMoney(item.paidAmountHalalas)} · متبقي{" "}
+                      {formatMoney(
+                        Math.max(0, item.amountHalalas - item.paidAmountHalalas),
+                      )}
+                    </small>
+                  )}
                 </td>
                 <td>
                   <strong>{item.periodMonth || "—"}</strong>
@@ -5980,7 +6017,13 @@ function FinanceTable({ records, workers, contracts, query, canWrite, busy, onSt
                 </td>
                 <td>{formatDate(item.dueDate)}</td>
                 <td>
-                  <StatusControl entity="finance" id={item.id} value={item.status} canWrite={canWrite} busy={busy} onStatus={onStatus} />
+                  {item.contractPaymentScheduleId ? (
+                    <span className={`status-pill ${statusClass(item.status)}`}>
+                      {recordStatus.finance[item.status] ?? item.status}
+                    </span>
+                  ) : (
+                    <StatusControl entity="finance" id={item.id} value={item.status} canWrite={canWrite} busy={busy} onStatus={onStatus} />
+                  )}
                 </td>
               </tr>
             );

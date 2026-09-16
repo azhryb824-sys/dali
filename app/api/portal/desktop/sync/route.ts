@@ -8,7 +8,7 @@ const MAX_SYNC_BYTES=30*1024*1024;
 const DEVICE_PATTERN=/^[a-f0-9-]{20,80}$/i;
 const KEY_PATTERN=/^[a-f0-9]{64}$/i;
 const ALLOWED_METHODS=new Set(["POST","PATCH","DELETE"]);
-const ONLINE_ONLY_ACTIONS=new Set(["approve","post","mark-paid","pay-judgment","assign-case","initialize","add-bank","reset-password","activate"]);
+const ONLINE_ONLY_ACTIONS=new Set(["approve","post","mark-paid","record-settlement","reverse-settlement","pay-judgment","assign-case","initialize","add-bank","reset-password","activate"]);
 const ONLINE_ONLY_PATHS=[/^\/api\/portal\/users/,/^\/api\/portal\/role-definitions/,/^\/api\/portal\/access-scopes/,/^\/api\/portal\/accounting/,/^\/api\/portal\/finance\/posting/,/\/contracts\/\d+\/status/,/\/signed-document/];
 
 function clean(value:unknown,max:number){return typeof value==="string"?value.trim().slice(0,max):""}

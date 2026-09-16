@@ -9,6 +9,7 @@ import {
   journalLines,
 } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
+import { finalizeContractPaymentSettlementReversal } from "@/lib/contract-payment-settlement-state";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 
 export type JournalLineInput = {
@@ -253,6 +254,13 @@ export async function postJournal(entryId: number, actorEmail: string) {
   const entry = await db.query.journalEntries.findFirst({
     where: eq(journalEntries.id, entryId),
   });
+  if (entry?.status === "posted" && entry.reversalOfId) {
+    const recovered = await finalizeContractPaymentSettlementReversal(
+      entry.id,
+      actorEmail,
+    );
+    if (recovered) return entry;
+  }
   if (!entry || entry.status !== "approved")
     throw new Error("لا يمكن ترحيل قيد غير معتمد");
   if (entry.createdBy.trim().toLowerCase() === actorEmail.trim().toLowerCase())
@@ -317,6 +325,7 @@ export async function postJournal(entryId: number, actorEmail: string) {
       .update(financialRecords)
       .set({ postingStatus: "reversed", updatedAt: now })
       .where(eq(financialRecords.journalEntryId, posted.reversalOfId));
+    await finalizeContractPaymentSettlementReversal(posted.id, actorEmail);
   }
   await auditPortalAction({
     actorEmail,

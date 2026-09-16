@@ -114,10 +114,10 @@ const deleteAllTables = expectedTables.filter(
 );
 const deleteAllSet = new Set(deleteAllTables);
 
-if (expectedTables.length !== 121 || expectedTableSet.size !== 121) {
+if (expectedTables.length !== 123 || expectedTableSet.size !== 123) {
   throw new Error(`UNEXPECTED_REPOSITORY_SCHEMA_TABLE_COUNT:${expectedTables.length}`);
 }
-if (preservedTables.size !== 30 || selectiveTables.size !== 3 || deleteAllTables.length !== 88) {
+if (preservedTables.size !== 30 || selectiveTables.size !== 3 || deleteAllTables.length !== 90) {
   throw new Error("PURGE_CLASSIFICATION_INVARIANT_FAILED");
 }
 for (const table of [...preservedTables, ...selectiveTables]) {
@@ -210,16 +210,16 @@ try {
     );
   }
 
-  const migrationBytes = readFileSync("drizzle-pg/0069_legal_contract_correspondence.sql");
+  const migrationBytes = readFileSync("drizzle-pg/0070_contract_payment_partial_settlements.sql");
   const migrationChecksum = createHash("sha256").update(migrationBytes).digest("hex");
   const [migration] = await sql`
     select name, checksum
     from private.__dali_migrations
-    where name = '0069_legal_contract_correspondence.sql'
+    where name = '0070_contract_payment_partial_settlements.sql'
     limit 1
   `;
   if (!migration || migration.checksum !== migrationChecksum) {
-    throw new Error("LIVE_MIGRATION_0069_MISSING_OR_CHANGED");
+    throw new Error("LIVE_MIGRATION_0070_MISSING_OR_CHANGED");
   }
 
   const invalidIndexes = await sql`
@@ -559,7 +559,7 @@ try {
       schema: {
         expectedPublicTables: expectedTables.length,
         actualPublicTables: actualTables.size,
-        migration0069Verified: true,
+        migration0070Verified: true,
         invalidIndexes: 0,
       },
       backup: {
