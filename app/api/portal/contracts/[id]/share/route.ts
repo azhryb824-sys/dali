@@ -20,7 +20,12 @@ import {
   rejectCrossSiteRequest,
   requestCorrelationId,
 } from "@/lib/security";
-import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
+import {
+  createWhatsAppAppUrl,
+  createWhatsAppUrl,
+  createWhatsAppWebUrl,
+  normalizeSaudiWhatsAppNumber,
+} from "@/lib/whatsapp";
 import { createWhatsAppLaunchToken } from "@/lib/whatsapp-launch";
 
 type Access = NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>;
@@ -128,7 +133,11 @@ export async function POST(
     `رابط PDF الآمن صالح لمدة ${expiresInDays} أيام:`,
     shareUrl,
   ].join("\n");
-  const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  const whatsappUrl = createWhatsAppUrl(phone, message);
+  const whatsappAppUrl = createWhatsAppAppUrl(phone, message);
+  const whatsappWebUrl = createWhatsAppWebUrl(phone, message);
+  if (!whatsappUrl || !whatsappAppUrl || !whatsappWebUrl)
+    return jsonNoStore({ error: "رقم واتساب غير صحيح" }, { status: 400 });
   const whatsappLaunchToken = createWhatsAppLaunchToken(
     access.user.email,
     phone,
@@ -164,6 +173,8 @@ export async function POST(
   }).catch(() => undefined);
   return jsonNoStore({
     whatsappUrl,
+    whatsappAppUrl,
+    whatsappWebUrl,
     whatsappLaunchUrl,
     shareUrl,
     expiresAt,

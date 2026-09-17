@@ -1,6 +1,6 @@
 {
   "name": "dali-mac-universal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "تطبيق ماك مستقل لنظام دالي الإداري لمعالجات Intel وApple Silicon",
   "author": "Dally Corporation",
   "private": true,
@@ -8,7 +8,7 @@
   "main": "main.mjs",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.mjs && node --check preload.mjs",
+    "check": "node --check main.mjs && node --check external-navigation.mjs && node --check preload.mjs",
     "build:mac": "electron-builder --mac dmg zip --universal --publish never",
     "build:dir": "electron-builder --dir --mac --universal"
   },
@@ -28,6 +28,7 @@
     },
     "files": [
       "main.mjs",
+      "external-navigation.mjs",
       "preload.mjs",
       "offline.html",
       "assets/**/*",

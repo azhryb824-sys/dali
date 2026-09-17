@@ -95,7 +95,8 @@ test("external legal files use hashed expiring links and audited WhatsApp delive
   ]);
   assert.match(shareRoute, /hashShareToken\(token\)/);
   assert.match(shareRoute, /externalRequestUrl/);
-  assert.match(shareRoute, /https:\/\/wa\.me\//);
+  assert.match(shareRoute, /createWhatsAppAppUrl\(phone, message\)/);
+  assert.match(shareRoute, /createWhatsAppWebUrl\(phone, message\)/);
   assert.match(shareRoute, /legal-file-whatsapp-shared/);
   assert.match(shareRoute, /sharedAt/);
   assert.match(shareRoute, /mobile: "\[محجوب\]"/);

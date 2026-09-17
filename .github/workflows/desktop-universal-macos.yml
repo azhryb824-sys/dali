@@ -29,6 +29,12 @@ jobs:
       - name: Validate independent desktop source
         working-directory: desktop-universal
         run: npm run check
+      - name: Read Universal app version
+        id: universal-version
+        shell: bash
+        run: |
+          version="$(node -p 'require("./desktop-universal/package.json").version')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build one Universal package
         working-directory: desktop-universal
         env:
@@ -38,6 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          version="${{ steps.universal-version.outputs.version }}"
           app_path="$(find desktop-universal/dist -maxdepth 2 -type d -name 'Dali Admin Universal.app' -print -quit)"
           test -n "$app_path"
           executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
@@ -49,8 +56,8 @@ jobs:
           grep -qw arm64 <<<"$architectures"
           grep -qw x86_64 <<<"$architectures"
           /usr/bin/codesign --verify --deep --strict --verbose=4 "$app_path"
-          dmg_path="$(find desktop-universal/dist -maxdepth 1 -type f -name 'Dali-Mac-Universal-1.0.0-universal.dmg' -print -quit)"
-          zip_path="$(find desktop-universal/dist -maxdepth 1 -type f -name 'Dali-Mac-Universal-1.0.0-universal.zip' -print -quit)"
+          dmg_path="$(find desktop-universal/dist -maxdepth 1 -type f -name "Dali-Mac-Universal-$version-universal.dmg" -print -quit)"
+          zip_path="$(find desktop-universal/dist -maxdepth 1 -type f -name "Dali-Mac-Universal-$version-universal.zip" -print -quit)"
           test -s "$dmg_path"
           test -s "$zip_path"
           hdiutil verify "$dmg_path"
@@ -81,9 +88,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Dali-Mac-Universal-1.0.0
+          name: Dali-Mac-Universal-${{ steps.universal-version.outputs.version }}
           path: |
-            desktop-universal/dist/Dali-Mac-Universal-1.0.0-universal.dmg
-            desktop-universal/dist/Dali-Mac-Universal-1.0.0-universal.zip
+            desktop-universal/dist/Dali-Mac-Universal-${{ steps.universal-version.outputs.version }}-universal.dmg
+            desktop-universal/dist/Dali-Mac-Universal-${{ steps.universal-version.outputs.version }}-universal.zip
           if-no-files-found: error
           retention-days: 14

@@ -83,7 +83,8 @@ test("all referred contract files can be shared in one audited WhatsApp bundle",
 
   assert.match(shareRoute, /const shareAll =/);
   assert.match(shareRoute, /legalExternalShareBundleItems/);
-  assert.match(shareRoute, /https:\/\/wa\.me\/\$\{phone\}/);
+  assert.match(shareRoute, /createWhatsAppAppUrl\(phone, message\)/);
+  assert.match(shareRoute, /createWhatsAppWebUrl\(phone, message\)/);
   assert.match(shareRoute, /preciseSaudiTime\(sharedAt\)/);
   assert.match(shareRoute, /normalizeSaudiWhatsAppNumber\(lawyer\.mobile\)/);
   assert.match(shareRoute, /mobile: "\[محجوب\]"/);

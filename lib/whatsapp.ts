@@ -12,3 +12,23 @@ export function createWhatsAppUrl(value: string | null | undefined, message: str
   const mobile = normalizeSaudiWhatsAppNumber(value);
   return mobile ? `https://wa.me/${mobile}?text=${encodeURIComponent(message)}` : null;
 }
+
+export function createWhatsAppAppUrl(
+  value: string | null | undefined,
+  message: string,
+) {
+  const mobile = normalizeSaudiWhatsAppNumber(value);
+  return mobile
+    ? `whatsapp://send?phone=${mobile}&text=${encodeURIComponent(message)}`
+    : null;
+}
+
+export function createWhatsAppWebUrl(
+  value: string | null | undefined,
+  message: string,
+) {
+  const mobile = normalizeSaudiWhatsAppNumber(value);
+  return mobile
+    ? `https://web.whatsapp.com/send?phone=${mobile}&text=${encodeURIComponent(message)}`
+    : null;
+}

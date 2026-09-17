@@ -26,9 +26,17 @@ export const sharingUiTranslations: Record<
     en: "The share was recorded. If WhatsApp did not open automatically, select the button below.",
     bn: "শেয়ারটি নথিভুক্ত হয়েছে। হোয়াটসঅ্যাপ স্বয়ংক্রিয়ভাবে না খুললে নিচের বোতামটি চাপুন।",
   },
+  "فتح تطبيق واتساب": {
+    en: "Open the WhatsApp app",
+    bn: "হোয়াটসঅ্যাপ অ্যাপ খুলুন",
+  },
   "فتح واتساب الآن": {
     en: "Open WhatsApp now",
     bn: "এখন হোয়াটসঅ্যাপ খুলুন",
+  },
+  "المتابعة إلى واتساب ويب": {
+    en: "Continue to WhatsApp Web",
+    bn: "হোয়াটসঅ্যাপ ওয়েবে চালিয়ে যান",
   },
   "معاينة PDF المشترك": {
     en: "Preview shared PDF",

@@ -5,6 +5,7 @@ import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createWhatsAppUrl } from "@/lib/whatsapp";
+import { currentDaliWhatsAppRuntime } from "@/lib/whatsapp-runtime";
 import ContractCancellationDialog from "./ContractCancellationDialog";
 import ContractApprovalStampDialog, {
   type ContractApprovalStamp,
@@ -170,6 +171,7 @@ export default function ContractBillingWorkspace() {
   const [contractShareError, setContractShareError] = useState("");
   const [contractShareResult, setContractShareResult] = useState<{
     whatsappLaunchUrl: string;
+    whatsappWebUrl: string;
     shareUrl: string;
   } | null>(null);
   const [pendingContractApproval, setPendingContractApproval] = useState<{
@@ -639,7 +641,11 @@ export default function ContractBillingWorkspace() {
   async function shareApprovedContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sharingContract) return;
-    const popup = window.open("/portal/whatsapp-launch", "_blank");
+    const runtime = currentDaliWhatsAppRuntime();
+    const popup =
+      runtime === "browser"
+        ? window.open("/portal/whatsapp-launch", "_blank")
+        : null;
     const values = Object.fromEntries(new FormData(event.currentTarget));
     setContractShareBusy(true);
     setContractShareError("");
@@ -657,20 +663,39 @@ export default function ContractBillingWorkspace() {
       const result = (await readApiJson(response)) as {
         error?: string;
         whatsappUrl?: string;
+        whatsappAppUrl?: string;
+        whatsappWebUrl?: string;
         whatsappLaunchUrl?: string;
         shareUrl?: string;
       };
       const launchUrl = result.whatsappLaunchUrl || result.whatsappUrl || "";
-      if (!response.ok || !launchUrl || !result.shareUrl)
+      const preferredOpenUrl =
+        runtime === "mobile-app"
+          ? result.whatsappAppUrl || launchUrl
+          : runtime === "desktop-app"
+            ? result.whatsappUrl || launchUrl
+            : launchUrl;
+      if (
+        !response.ok ||
+        !preferredOpenUrl ||
+        !result.whatsappWebUrl ||
+        !result.shareUrl
+      )
         throw new Error(result.error || "تعذر تجهيز مشاركة العقد");
       setContractShareResult({
-        whatsappLaunchUrl: launchUrl,
+        whatsappLaunchUrl: preferredOpenUrl,
+        whatsappWebUrl: result.whatsappWebUrl,
         shareUrl: result.shareUrl,
       });
       setNotice(
         "أُنشئ رابط PDF آمن للعقد المعتمد وفُتحت محادثة واتساب على الرقم المدخل.",
       );
-      if (popup && !popup.closed) popup.location.replace(launchUrl);
+      if (runtime === "browser") {
+        if (popup && !popup.closed) popup.location.replace(launchUrl);
+        else window.location.assign(launchUrl);
+      } else {
+        window.location.assign(preferredOpenUrl);
+      }
     } catch (error) {
       popup?.close();
       const message =
@@ -1214,7 +1239,14 @@ export default function ContractBillingWorkspace() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      فتح واتساب الآن
+                      فتح تطبيق واتساب
+                    </a>
+                    <a
+                      href={contractShareResult.whatsappWebUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      المتابعة إلى واتساب ويب
                     </a>
                     <a
                       href={contractShareResult.shareUrl}

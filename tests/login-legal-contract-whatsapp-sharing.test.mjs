@@ -40,12 +40,16 @@ test("approved contracts require an entered WhatsApp number and role permissions
   assert.match(route, /approved-contract-whatsapp-share-created/);
   assert.match(route, /createWhatsAppLaunchToken/);
   assert.match(route, /whatsappLaunchUrl/);
+  assert.match(route, /whatsappAppUrl/);
+  assert.match(route, /whatsappWebUrl/);
   assert.match(api, /canShareApprovedContracts/);
   assert.match(ui, /name="whatsappNumber"/);
   assert.match(ui, /يجب كتابة الرقم عند كل مشاركة/);
   assert.match(ui, /مشاركة العقد عبر واتساب/);
   assert.match(ui, /window\.open\("\/portal\/whatsapp-launch", "_blank"\)/);
-  assert.match(ui, /فتح واتساب الآن/);
+  assert.match(ui, /currentDaliWhatsAppRuntime/);
+  assert.match(ui, /فتح تطبيق واتساب/);
+  assert.match(ui, /المتابعة إلى واتساب ويب/);
 });
 
 test("legal files expose current contract documents and share only with the assigned external lawyer", async () => {
@@ -67,11 +71,15 @@ test("legal files expose current contract documents and share only with the assi
   assert.match(shares, /الفاتورة محل الإشكال/);
   assert.match(shares, /createWhatsAppLaunchToken/);
   assert.match(shares, /whatsappLaunchUrl/);
+  assert.match(shares, /whatsappAppUrl/);
+  assert.match(shares, /whatsappWebUrl/);
   assert.match(ui, /assignedExternalLawyer/);
   assert.match(ui, /المحامي الخارجي المسندة إليه القضية/);
   assert.match(ui, /item\.legalDocumentRole === "disputed_invoice"/);
   assert.match(ui, /window\.open\("\/portal\/whatsapp-launch", "_blank"\)/);
-  assert.match(ui, /فتح واتساب الآن/);
+  assert.match(ui, /currentDaliWhatsAppRuntime/);
+  assert.match(ui, /فتح تطبيق واتساب/);
+  assert.match(ui, /المتابعة إلى واتساب ويب/);
   assert.doesNotMatch(ui, /externalLawyers\.map/);
 });
 

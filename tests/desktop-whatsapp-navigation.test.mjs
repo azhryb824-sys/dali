@@ -7,6 +7,10 @@ import {
   toWhatsAppAppUrl,
   toWhatsAppWebUrl,
 } from "../desktop/external-navigation.mjs";
+import {
+  toWhatsAppAppUrl as toMacWhatsAppAppUrl,
+  toWhatsAppWebUrl as toMacWhatsAppWebUrl,
+} from "../desktop-universal/external-navigation.mjs";
 
 test("desktop converts a verified wa.me share into the installed WhatsApp protocol", () => {
   const appUrl = toWhatsAppAppUrl(
@@ -16,6 +20,7 @@ test("desktop converts a verified wa.me share into the installed WhatsApp protoc
     appUrl,
     "whatsapp://send?phone=966501234567&text=%D9%85%D9%84%D9%81+%D8%A7%D9%84%D8%B9%D9%82%D8%AF",
   );
+  assert.equal(toMacWhatsAppAppUrl("https://wa.me/966501234567?text=test"), "whatsapp://send?phone=966501234567&text=test");
 });
 
 test("desktop preserves a safe web fallback when the WhatsApp protocol is unavailable", () => {
@@ -26,6 +31,7 @@ test("desktop preserves a safe web fallback when the WhatsApp protocol is unavai
     webUrl,
     "https://wa.me/966501234567?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7",
   );
+  assert.equal(toMacWhatsAppWebUrl("whatsapp://send?phone=966501234567&text=test"), "https://wa.me/966501234567?text=test");
 });
 
 test("desktop rejects unverified WhatsApp schemes and lookalike portal origins", () => {

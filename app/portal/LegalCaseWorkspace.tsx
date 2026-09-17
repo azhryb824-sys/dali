@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { readApiJson } from "@/lib/client-api";
 import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 import LegalContractCorrespondence from "./LegalContractCorrespondence";
+import { currentDaliWhatsAppRuntime } from "@/lib/whatsapp-runtime";
 
 type Matter = {
   id: number;
@@ -321,6 +322,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
     [shareBusy, setShareBusy] = useState(false),
     [shareError, setShareError] = useState(""),
     [shareLaunchUrl, setShareLaunchUrl] = useState(""),
+    [shareWebUrl, setShareWebUrl] = useState(""),
     [recordBusy, setRecordBusy] = useState(false),
     [currentTime, setCurrentTime] = useState(0),
     [lawyerUsers, setLawyerUsers] = useState<LawyerUser[]>([]),
@@ -750,11 +752,16 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
     event.preventDefault();
     if (!shareTarget) return;
     const currentShareTarget = shareTarget;
-    const popup = window.open("/portal/whatsapp-launch", "_blank");
+    const runtime = currentDaliWhatsAppRuntime();
+    const popup =
+      runtime === "browser"
+        ? window.open("/portal/whatsapp-launch", "_blank")
+        : null;
     const values = Object.fromEntries(new FormData(event.currentTarget));
     setShareBusy(true);
     setShareError("");
     setShareLaunchUrl("");
+    setShareWebUrl("");
     try {
       const response = await fetch("/api/portal/legal-cases/shares", {
         method: "POST",
@@ -770,18 +777,32 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
       const result = (await readApiJson(response)) as {
         error?: string;
         whatsappUrl?: string;
+        whatsappAppUrl?: string;
+        whatsappWebUrl?: string;
         whatsappLaunchUrl?: string;
       };
       const launchUrl = result.whatsappLaunchUrl || result.whatsappUrl || "";
-      if (!response.ok || !launchUrl)
+      const preferredOpenUrl =
+        runtime === "mobile-app"
+          ? result.whatsappAppUrl || launchUrl
+          : runtime === "desktop-app"
+            ? result.whatsappUrl || launchUrl
+            : launchUrl;
+      if (!response.ok || !preferredOpenUrl || !result.whatsappWebUrl)
         throw new Error(result.error || "تعذر تجهيز مشاركة واتساب");
-      setShareLaunchUrl(launchUrl);
+      setShareLaunchUrl(preferredOpenUrl);
+      setShareWebUrl(result.whatsappWebUrl);
       setNotice(
         currentShareTarget === "all"
           ? "تم تسجيل وقت مشاركة جميع المرفقات بدقة وفتح محادثة واتساب للمحامي المسجل."
           : "تم تسجيل تاريخ وساعة المشاركة وفتح محادثة واتساب.",
       );
-      if (popup && !popup.closed) popup.location.replace(launchUrl);
+      if (runtime === "browser") {
+        if (popup && !popup.closed) popup.location.replace(launchUrl);
+        else window.location.assign(launchUrl);
+      } else {
+        window.location.assign(preferredOpenUrl);
+      }
       await load();
     } catch (error) {
       popup?.close();
@@ -2019,6 +2040,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                         onClick={() => {
                           setShareError("");
                           setShareLaunchUrl("");
+                          setShareWebUrl("");
                           setShareTarget("all");
                         }}
                       >
@@ -2109,6 +2131,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                             onClick={() => {
                               setShareError("");
                               setShareLaunchUrl("");
+                              setShareWebUrl("");
                               setShareTarget(item);
                             }}
                           >
@@ -3114,6 +3137,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
               setShareTarget(null);
               setShareError("");
               setShareLaunchUrl("");
+              setShareWebUrl("");
             }}
           />
           <section
@@ -3137,6 +3161,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                   setShareTarget(null);
                   setShareError("");
                   setShareLaunchUrl("");
+                  setShareWebUrl("");
                 }}
               >
                 ×
@@ -3200,7 +3225,10 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                   </p>
                   <div>
                     <a href={shareLaunchUrl} target="_blank" rel="noreferrer">
-                      فتح واتساب الآن
+                      فتح تطبيق واتساب
+                    </a>
+                    <a href={shareWebUrl} target="_blank" rel="noreferrer">
+                      المتابعة إلى واتساب ويب
                     </a>
                   </div>
                 </div>
@@ -3212,6 +3240,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                     setShareTarget(null);
                     setShareError("");
                     setShareLaunchUrl("");
+                    setShareWebUrl("");
                   }}
                 >
                   {shareLaunchUrl ? "إغلاق" : "إلغاء"}

@@ -26,9 +26,18 @@ test("invalid numbers never open an unrelated WhatsApp account", () => {
 });
 
 test("WhatsApp URL targets the client and encodes the complete message", () => {
-  const url = whatsapp.createWhatsAppUrl("0566110144", "عرض سعر رقم 12: https://dally.info/share/abc");
+  const message = "عرض سعر رقم 12: https://dally.info/share/abc";
+  const url = whatsapp.createWhatsAppUrl("0566110144", message);
   assert.ok(url.startsWith("https://wa.me/966566110144?text="));
-  assert.equal(decodeURIComponent(url.split("?text=")[1]), "عرض سعر رقم 12: https://dally.info/share/abc");
+  assert.equal(decodeURIComponent(url.split("?text=")[1]), message);
+  assert.equal(
+    whatsapp.createWhatsAppAppUrl("0566110144", message),
+    `whatsapp://send?phone=966566110144&text=${encodeURIComponent(message)}`,
+  );
+  assert.equal(
+    whatsapp.createWhatsAppWebUrl("0566110144", message),
+    `https://web.whatsapp.com/send?phone=966566110144&text=${encodeURIComponent(message)}`,
+  );
 });
 
 test("portal visual system is loaded after module styles", () => {

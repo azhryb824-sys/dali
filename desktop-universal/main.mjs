@@ -11,6 +11,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import crypto from "node:crypto";
+import {
+  isSafeExternalHttpsUrl,
+  toWhatsAppAppUrl,
+  toWhatsAppWebUrl,
+} from "./external-navigation.mjs";
 
 const PORTAL_ORIGIN = "https://www.dally.info";
 const PORTAL_URL_OVERRIDE = process.env.DALI_DESKTOP_URL?.trim() || "";
@@ -26,6 +31,28 @@ let key;
 let desktopDeviceId;
 let mutationQueue = Promise.resolve();
 let rendererRecoveryAttempts = 0;
+
+async function openOutsideDesktop(value) {
+  const whatsappAppUrl = toWhatsAppAppUrl(value);
+  if (whatsappAppUrl) {
+    try {
+      await shell.openExternal(whatsappAppUrl);
+      return;
+    } catch (error) {
+      console.error("Dali Universal WhatsApp launch failed:", error?.message || error);
+      const whatsappWebUrl = toWhatsAppWebUrl(value);
+      if (whatsappWebUrl) await shell.openExternal(whatsappWebUrl);
+      return;
+    }
+  }
+  if (isSafeExternalHttpsUrl(value)) await shell.openExternal(value);
+}
+
+function handOffExternalNavigation(value) {
+  void openOutsideDesktop(value).catch((error) => {
+    console.error("Dali Universal external link failed:", error?.message || error);
+  });
+}
 
 app.setPath("userData", join(app.getPath("appData"), APP_DATA_DIRECTORY));
 app.setAppUserModelId("sa.dally.desktop.universal");
@@ -307,16 +334,18 @@ function openWindow() {
     const trustedUrl = trustedPortalUrl(url);
     if (trustedUrl) {
       void mainWindow?.loadURL(trustedUrl);
-    } else if (/^https:\/\//i.test(url)) {
-      void shell.openExternal(url);
+    } else {
+      handOffExternalNavigation(url);
     }
     return { action: "deny" };
   });
-  mainWindow.webContents.on("will-navigate", (event, url) => {
+  const handleNavigation = (event, url) => {
     if (trustedPortalUrl(url)) return;
     event.preventDefault();
-    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
-  });
+    handOffExternalNavigation(url);
+  };
+  mainWindow.webContents.on("will-navigate", handleNavigation);
+  mainWindow.webContents.on("will-redirect", handleNavigation);
 
   void loadPortal();
 }
