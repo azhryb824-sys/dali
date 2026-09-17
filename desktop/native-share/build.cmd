@@ -16,7 +16,7 @@ cl.exe /nologo /std:c++20 /permissive- /EHsc /O2 /MT /DUNICODE /D_UNICODE ^
   "%~dp0DaliNativeShare.cpp" ^
   /Fo:"%~dp0bin\DaliNativeShare.obj" ^
   /Fe:"%~dp0bin\DaliNativeShare.exe" ^
-  /link /SUBSYSTEM:WINDOWS windowsapp.lib shell32.lib crypt32.lib
+  /link /SUBSYSTEM:WINDOWS windowsapp.lib user32.lib shell32.lib crypt32.lib
 if errorlevel 1 exit /b 13
 
 if not exist "%~dp0bin\DaliNativeShare.exe" exit /b 14

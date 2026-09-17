@@ -69,11 +69,12 @@ test("desktop credential saving is encrypted and restricted to the login page", 
 });
 
 test("Windows desktop shares actual downloaded files through the native share UI", async () => {
-  const [main, preload, bridge, helper, workflow, desktopPackage] = await Promise.all([
+  const [main, preload, bridge, helper, buildScript, workflow, desktopPackage] = await Promise.all([
     readFile(new URL("desktop/main.mjs", root), "utf8"),
     readFile(new URL("desktop/preload.mjs", root), "utf8"),
     readFile(new URL("desktop/native-file-share.mjs", root), "utf8"),
     readFile(new URL("desktop/native-share/DaliNativeShare.cpp", root), "utf8"),
+    readFile(new URL("desktop/native-share/build.cmd", root), "utf8"),
     readFile(new URL(".github/workflows/desktop-windows.yml", root), "utf8"),
     readFile(new URL("desktop/package.json", root), "utf8").then(JSON.parse),
   ]);
@@ -89,6 +90,7 @@ test("Windows desktop shares actual downloaded files through the native share UI
   assert.match(helper, /SetStorageItems/);
   assert.match(helper, /ShowShareUIForWindow/);
   assert.match(helper, /TargetApplicationChosen/);
+  assert.match(buildScript, /user32\.lib/);
   assert.match(workflow, /Build native Windows file-share bridge/);
   assert.match(workflow, /native-share\\build\.cmd/);
   assert.match(JSON.stringify(desktopPackage.build.win.extraResources), /DaliNativeShare\.exe/);
