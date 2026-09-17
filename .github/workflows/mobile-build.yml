@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - "android-dali-1.0.1"
+      - "android-dali-1.0.2"
       - "godaddy-preview"
     paths:
       - "mobile/**"
@@ -78,13 +78,13 @@ jobs:
           test -x "$aapt2_path"
           test -x "$apksigner_path"
           "$aapt2_path" dump badging "$apk" | tee /tmp/dali-android-badging.txt
-          grep -Fq "package: name='sa.dally.mobile' versionCode='2' versionName='1.0.1'" /tmp/dali-android-badging.txt
+          grep -Fq "package: name='sa.dally.mobile' versionCode='3' versionName='1.0.2'" /tmp/dali-android-badging.txt
           grep -Fq "application-label:'نظام دالي الإداري'" /tmp/dali-android-badging.txt
           "$apksigner_path" verify --verbose --print-certs "$apk"
           sha256sum "$apk"
       - uses: actions/upload-artifact@v4
         with:
-          name: dali-android-1.0.1-debug
+          name: dali-android-1.0.2-debug
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

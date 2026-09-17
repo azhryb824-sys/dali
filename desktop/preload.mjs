@@ -125,9 +125,31 @@ async function flushQueue() {
 }
 setInterval(() => void flushQueue(), SYNC_INTERVAL_MS);
 window.addEventListener("online", () => void flushQueue());
+function isTrustedLoginPage() {
+  return location.origin === "https://www.dally.info" && location.pathname === "/login";
+}
+function isTrustedPortalPage() {
+  return location.origin === "https://www.dally.info" && location.pathname.startsWith("/portal");
+}
 contextBridge.exposeInMainWorld("daliDesktop", {
   state: () => ipcRenderer.invoke("dali:state"),
   syncNow: () => flushQueue(),
   isOnline: () => navigator.onLine,
+  loginCredentials: {
+    load: () => isTrustedLoginPage()
+      ? ipcRenderer.invoke("dali:login-credentials:load")
+      : Promise.resolve(null),
+    save: (credentials) => isTrustedLoginPage()
+      ? ipcRenderer.invoke("dali:login-credentials:save", credentials)
+      : Promise.resolve({ saved: false, reason: "untrusted-renderer" }),
+    clear: () => isTrustedLoginPage()
+      ? ipcRenderer.invoke("dali:login-credentials:clear")
+      : Promise.resolve(false),
+  },
+  whatsapp: {
+    open: (target, url) => isTrustedPortalPage()
+      ? ipcRenderer.invoke("dali:whatsapp:open", { target, url })
+      : Promise.resolve({ opened: false }),
+  },
   policy: { intervalSeconds: 20, privilegedOperationsRequireOnline: true },
 });

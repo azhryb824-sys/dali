@@ -177,6 +177,15 @@ export async function POST(
     whatsappWebUrl,
     whatsappLaunchUrl,
     shareUrl,
+    shareMessage: message,
+    files: [
+      {
+        url: shareUrl,
+        fileName: document.fileName,
+        contentType: document.contentType,
+        sizeBytes: document.sizeBytes,
+      },
+    ],
     expiresAt,
   });
 }

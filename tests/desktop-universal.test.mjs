@@ -13,9 +13,9 @@ test("new macOS application is independent and does not alter the old applicatio
   ]);
 
   assert.equal(legacyPackage.build.appId, "sa.dally.desktop");
-  assert.equal(legacyPackage.version, "0.2.7");
+  assert.equal(legacyPackage.version, "0.2.8");
   assert.equal(universalPackage.build.appId, "sa.dally.desktop.universal");
-  assert.equal(universalPackage.version, "1.0.1");
+  assert.equal(universalPackage.version, "1.0.2");
   assert.notEqual(universalPackage.build.appId, legacyPackage.build.appId);
   assert.notEqual(universalPackage.build.productName, legacyPackage.build.productName);
   assert.match(main, /APP_DATA_DIRECTORY = "DaliAdminUniversal"/);

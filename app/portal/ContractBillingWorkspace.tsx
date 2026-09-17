@@ -5,7 +5,20 @@ import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createWhatsAppUrl } from "@/lib/whatsapp";
-import { currentDaliWhatsAppRuntime } from "@/lib/whatsapp-runtime";
+import {
+  openDaliWhatsApp,
+  type DaliWhatsAppLinks,
+} from "@/lib/whatsapp-runtime";
+import {
+  downloadDaliShareFiles,
+  prepareDaliShareFiles,
+  shareDaliFilesNatively,
+  sharePreparedDaliFiles,
+  supportsDaliNativeFileShare,
+  supportsDaliWebFileShare,
+  type DaliPreparedShareFiles,
+  type DaliShareFileDescriptor,
+} from "@/lib/file-share-runtime";
 import ContractCancellationDialog from "./ContractCancellationDialog";
 import ContractApprovalStampDialog, {
   type ContractApprovalStamp,
@@ -169,11 +182,16 @@ export default function ContractBillingWorkspace() {
   const [sharingContract, setSharingContract] = useState<Contract | null>(null);
   const [contractShareBusy, setContractShareBusy] = useState(false);
   const [contractShareError, setContractShareError] = useState("");
-  const [contractShareResult, setContractShareResult] = useState<{
-    whatsappLaunchUrl: string;
-    whatsappWebUrl: string;
-    shareUrl: string;
-  } | null>(null);
+  const [contractShareResult, setContractShareResult] = useState<
+    (DaliWhatsAppLinks & {
+      shareUrl: string;
+      shareMessage: string;
+      files: DaliShareFileDescriptor[];
+    }) | null
+  >(null);
+  const [contractPreparedFiles, setContractPreparedFiles] =
+    useState<DaliPreparedShareFiles | null>(null);
+  const [contractFileShareBusy, setContractFileShareBusy] = useState(false);
   const [pendingContractApproval, setPendingContractApproval] = useState<{
     contract: Contract;
     stamps: ContractApprovalStamp[];
@@ -641,15 +659,11 @@ export default function ContractBillingWorkspace() {
   async function shareApprovedContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sharingContract) return;
-    const runtime = currentDaliWhatsAppRuntime();
-    const popup =
-      runtime === "browser"
-        ? window.open("/portal/whatsapp-launch", "_blank")
-        : null;
     const values = Object.fromEntries(new FormData(event.currentTarget));
     setContractShareBusy(true);
     setContractShareError("");
     setContractShareResult(null);
+    setContractPreparedFiles(null);
     setNotice("");
     try {
       const response = await fetch(
@@ -667,43 +681,93 @@ export default function ContractBillingWorkspace() {
         whatsappWebUrl?: string;
         whatsappLaunchUrl?: string;
         shareUrl?: string;
+        shareMessage?: string;
+        files?: DaliShareFileDescriptor[];
       };
-      const launchUrl = result.whatsappLaunchUrl || result.whatsappUrl || "";
-      const preferredOpenUrl =
-        runtime === "mobile-app"
-          ? result.whatsappAppUrl || launchUrl
-          : runtime === "desktop-app"
-            ? result.whatsappUrl || launchUrl
-            : launchUrl;
       if (
         !response.ok ||
-        !preferredOpenUrl ||
+        !result.whatsappUrl ||
+        !result.whatsappAppUrl ||
         !result.whatsappWebUrl ||
-        !result.shareUrl
+        !result.whatsappLaunchUrl ||
+        !result.shareUrl ||
+        !result.shareMessage ||
+        !result.files?.length
       )
         throw new Error(result.error || "تعذر تجهيز مشاركة العقد");
+      const links: DaliWhatsAppLinks = {
+        appUrl: result.whatsappAppUrl,
+        universalUrl: result.whatsappUrl,
+        webUrl: result.whatsappWebUrl,
+        secureLaunchUrl: result.whatsappLaunchUrl,
+      };
       setContractShareResult({
-        whatsappLaunchUrl: preferredOpenUrl,
-        whatsappWebUrl: result.whatsappWebUrl,
+        ...links,
         shareUrl: result.shareUrl,
+        shareMessage: result.shareMessage,
+        files: result.files,
       });
       setNotice(
-        "أُنشئ رابط PDF آمن للعقد المعتمد وفُتحت محادثة واتساب على الرقم المدخل.",
+        "جُهز ملف PDF الفعلي والرابط الآمن. اختر مشاركة الملف مباشرة أو فتح واتساب.",
       );
-      if (runtime === "browser") {
-        if (popup && !popup.closed) popup.location.replace(launchUrl);
-        else window.location.assign(launchUrl);
-      } else {
-        window.location.assign(preferredOpenUrl);
-      }
     } catch (error) {
-      popup?.close();
       const message =
         error instanceof Error ? error.message : "تعذر مشاركة العقد عبر واتساب";
       setContractShareError(message);
       setNotice(message);
     } finally {
       setContractShareBusy(false);
+    }
+  }
+  async function shareApprovedContractFiles() {
+    if (!contractShareResult || !sharingContract) return;
+    const options = {
+      title: `العقد المعتمد ${sharingContract.referenceCode}`,
+      text: contractShareResult.shareMessage,
+    };
+    setContractFileShareBusy(true);
+    setContractShareError("");
+    try {
+      if (supportsDaliNativeFileShare()) {
+        await shareDaliFilesNatively(contractShareResult.files, options);
+        setNotice("فُتحت نافذة مشاركة الملف الفعلي؛ اختر واتساب لإرساله مرفقًا.");
+        return;
+      }
+      if (contractPreparedFiles) {
+        const outcome = await sharePreparedDaliFiles(
+          contractPreparedFiles,
+          options,
+        );
+        if (outcome === "shared") {
+          setNotice("تم تسليم ملف PDF الفعلي إلى نافذة المشاركة.");
+          return;
+        }
+        if (outcome === "cancelled") {
+          setNotice("أُغلقت نافذة مشاركة الملف دون إرسال.");
+          return;
+        }
+      } else if (supportsDaliWebFileShare()) {
+        const prepared = await prepareDaliShareFiles(contractShareResult.files);
+        setContractPreparedFiles(prepared);
+        setNotice(
+          "اكتمل تحميل PDF بأمان. اضغط «مشاركة PDF الفعلي» مرة أخرى واختر واتساب.",
+        );
+        return;
+      }
+      downloadDaliShareFiles(contractShareResult.files);
+      openDaliWhatsApp("app", contractShareResult);
+      setNotice(
+        "بدأ تنزيل PDF الفعلي وفُتح واتساب؛ أرفق الملف الذي نُزّل من نافذة المحادثة.",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "تعذر تجهيز ملف العقد للمشاركة";
+      setContractShareError(message);
+      setNotice(message);
+    } finally {
+      setContractFileShareBusy(false);
     }
   }
   if (!data)
@@ -801,6 +865,7 @@ export default function ContractBillingWorkspace() {
                         onClick={() => {
                           setContractShareError("");
                           setContractShareResult(null);
+                          setContractPreparedFiles(null);
                           setSharingContract(contract);
                         }}
                       >
@@ -1170,6 +1235,7 @@ export default function ContractBillingWorkspace() {
               setSharingContract(null);
               setContractShareError("");
               setContractShareResult(null);
+              setContractPreparedFiles(null);
             }}
           />
           <section
@@ -1189,6 +1255,7 @@ export default function ContractBillingWorkspace() {
                   setSharingContract(null);
                   setContractShareError("");
                   setContractShareResult(null);
+                  setContractPreparedFiles(null);
                 }}
                 aria-label="إغلاق"
               >
@@ -1219,8 +1286,9 @@ export default function ContractBillingWorkspace() {
                 </select>
               </label>
               <p className="span-two">
-                يجب كتابة الرقم عند كل مشاركة. سيُرسل رابط PDF مشفر ومؤقت،
-                ولن يُحفظ رقم المستلم ضمن العقد.
+                يجب كتابة الرقم عند كل مشاركة. يمكنك إرسال ملف PDF نفسه من
+                نافذة المشاركة، ويبقى الرابط المشفر المؤقت خيارًا احتياطيًا.
+                لن يُحفظ رقم المستلم ضمن العقد.
               </p>
               {contractShareError && (
                 <p className="whatsapp-share-feedback error span-two" role="alert">
@@ -1230,30 +1298,49 @@ export default function ContractBillingWorkspace() {
               {contractShareResult && (
                 <div className="whatsapp-share-feedback success span-two" role="status">
                   <p>
-                    جُهز رابط المشاركة. إذا لم يفتح واتساب تلقائيًا، استخدم الزر
-                    التالي.
+                    جُهز PDF الفعلي والرابط الآمن. استخدم المشاركة المباشرة
+                    لإرفاق الملف نفسه، أو افتح تطبيق واتساب/واتساب ويب لإرسال
+                    الرسالة والرابط.
                   </p>
                   <div>
-                    <a
-                      href={contractShareResult.whatsappLaunchUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      disabled={contractFileShareBusy}
+                      onClick={() => void shareApprovedContractFiles()}
+                    >
+                      {contractFileShareBusy
+                        ? "جارٍ تجهيز PDF الفعلي..."
+                        : contractPreparedFiles
+                          ? "مشاركة PDF الفعلي — اختر واتساب"
+                          : supportsDaliNativeFileShare()
+                            ? "مشاركة PDF الفعلي — اختر واتساب"
+                            : supportsDaliWebFileShare()
+                              ? "تحميل PDF للمشاركة المباشرة"
+                              : "تنزيل PDF ثم فتح واتساب"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openDaliWhatsApp("app", contractShareResult)
+                      }
                     >
                       فتح تطبيق واتساب
-                    </a>
-                    <a
-                      href={contractShareResult.whatsappWebUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openDaliWhatsApp("web", contractShareResult)
+                      }
                     >
                       المتابعة إلى واتساب ويب
-                    </a>
+                    </button>
                     <a
                       href={contractShareResult.shareUrl}
                       target="_blank"
                       rel="noreferrer"
+                      download
                     >
-                      معاينة PDF المشترك
+                      تنزيل PDF الفعلي
                     </a>
                   </div>
                 </div>
@@ -1265,16 +1352,17 @@ export default function ContractBillingWorkspace() {
                     setSharingContract(null);
                     setContractShareError("");
                     setContractShareResult(null);
+                    setContractPreparedFiles(null);
                   }}
                 >
                   {contractShareResult ? "إغلاق" : "إلغاء"}
                 </button>
                 <button className="admin-primary" disabled={contractShareBusy}>
                   {contractShareBusy
-                    ? "جارٍ تجهيز الرابط..."
+                    ? "جارٍ تجهيز الملف والرابط..."
                     : contractShareResult
                       ? "إنشاء رابط مشاركة جديد"
-                      : "فتح واتساب ومشاركة PDF"}
+                      : "تجهيز PDF للمشاركة"}
                 </button>
               </div>
             </form>

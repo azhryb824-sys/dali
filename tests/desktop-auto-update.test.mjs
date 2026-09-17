@@ -18,7 +18,7 @@ test("desktop build publishes the updater metadata with the installer", async ()
   const desktopPackage = JSON.parse(await readFile(new URL("desktop/package.json", root), "utf8"));
   const workflow = await readFile(new URL(".github/workflows/desktop-windows.yml", root), "utf8");
 
-  assert.equal(desktopPackage.version, "0.2.7");
+  assert.equal(desktopPackage.version, "0.2.8");
   assert.equal(desktopPackage.build.publish.provider, "github");
   assert.equal(desktopPackage.build.publish.owner, "azhryb824-sys");
   assert.equal(desktopPackage.build.publish.repo, "dali");
@@ -45,9 +45,23 @@ test("desktop hands verified WhatsApp links to the installed Windows application
   ]);
 
   assert.match(main, /shell\.openExternal\(whatsappAppUrl\)/);
+  assert.match(main, /dali:whatsapp:open/);
+  assert.match(main, /verifiedWhatsAppWebUrl/);
   assert.match(main, /will-redirect/);
   assert.match(main, /did-create-window/);
   assert.match(main, /web-contents-created/);
   assert.match(navigation, /whatsapp:\/\/send/);
   assert.match(navigation, /SAUDI_WHATSAPP_PHONE/);
+});
+
+test("desktop credential saving is encrypted and restricted to the login page", async () => {
+  const [main, preload] = await Promise.all([
+    readFile(new URL("desktop/main.mjs", root), "utf8"),
+    readFile(new URL("desktop/preload.mjs", root), "utf8"),
+  ]);
+  assert.match(main, /aes-256-gcm/);
+  assert.match(main, /safeStorage\.isEncryptionAvailable\(\)/);
+  assert.match(main, /trustedRendererPath\(event, "\/login"\)/);
+  assert.match(main, /dali:login-credentials:save/);
+  assert.match(preload, /location\.pathname === "\/login"/);
 });

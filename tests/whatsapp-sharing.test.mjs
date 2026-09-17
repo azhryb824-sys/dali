@@ -36,7 +36,7 @@ test("WhatsApp URL targets the client and encodes the complete message", () => {
   );
   assert.equal(
     whatsapp.createWhatsAppWebUrl("0566110144", message),
-    `https://web.whatsapp.com/send?phone=966566110144&text=${encodeURIComponent(message)}`,
+    `https://web.whatsapp.com/send/?phone=966566110144&text=${encodeURIComponent(message).replaceAll("%20", "+")}&type=phone_number&app_absent=0`,
   );
 });
 

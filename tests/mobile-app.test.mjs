@@ -5,15 +5,16 @@ import { readFile } from "node:fs/promises";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("mobile container targets Android and iOS through the trusted production portal", async () => {
-  const [pkg, config, gradle, strings] = await Promise.all([
+  const [pkg, config, gradle, strings, iosProject] = await Promise.all([
     read("mobile/package.json"),
     read("mobile/capacitor.config.ts"),
     read("mobile/android/app/build.gradle"),
     read("mobile/android/app/src/main/res/values/strings.xml"),
+    read("mobile/ios/App/App.xcodeproj/project.pbxproj"),
   ]);
   assert.match(pkg, /@capacitor\/android/);
   assert.match(pkg, /@capacitor\/ios/);
-  assert.match(pkg, /"version": "1\.0\.1"/);
+  assert.match(pkg, /"version": "1\.0\.2"/);
   assert.match(config, /https:\/\/www\.dally\.info\/portal/);
   assert.match(config, /errorPath: "offline\.html"/);
   assert.match(config, /appId: "sa\.dally\.mobile"/);
@@ -23,8 +24,10 @@ test("mobile container targets Android and iOS through the trusted production po
   assert.match(config, /webContentsDebuggingEnabled: false/);
   assert.match(config, /limitsNavigationsToAppBoundDomains: true/);
   assert.match(gradle, /applicationId "sa\.dally\.mobile"/);
-  assert.match(gradle, /versionCode 2/);
-  assert.match(gradle, /versionName "1\.0\.1"/);
+  assert.match(gradle, /versionCode 3/);
+  assert.match(gradle, /versionName "1\.0\.2"/);
+  assert.match(iosProject, /CURRENT_PROJECT_VERSION = 3/);
+  assert.match(iosProject, /MARKETING_VERSION = 1\.0\.2/);
   assert.match(strings, /<string name="app_name">نظام دالي الإداري<\/string>/);
 });
 

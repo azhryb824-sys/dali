@@ -29,9 +29,9 @@ test("desktop preserves a safe web fallback when the WhatsApp protocol is unavai
   );
   assert.equal(
     webUrl,
-    "https://wa.me/966501234567?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7",
+    "https://web.whatsapp.com/send/?phone=966501234567&type=phone_number&app_absent=0&text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7",
   );
-  assert.equal(toMacWhatsAppWebUrl("whatsapp://send?phone=966501234567&text=test"), "https://wa.me/966501234567?text=test");
+  assert.equal(toMacWhatsAppWebUrl("whatsapp://send?phone=966501234567&text=test"), "https://web.whatsapp.com/send/?phone=966501234567&type=phone_number&app_absent=0&text=test");
 });
 
 test("desktop rejects unverified WhatsApp schemes and lookalike portal origins", () => {

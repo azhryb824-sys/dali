@@ -1,6 +1,36 @@
 // Generated translations for interface text containing runtime values.
 export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = [
   {
+    "source": "{{0}} — يمكن إرساله كمرفق فعلي",
+    "en": "{{0}} — can be sent as an actual attachment",
+    "bn": "{{0}} — আসল সংযুক্তি হিসেবে পাঠানো যাবে"
+  },
+  {
+    "source": "العقد المعتمد {{0}}",
+    "en": "Approved contract {{0}}",
+    "bn": "অনুমোদিত চুক্তি {{0}}"
+  },
+  {
+    "source": "تعذر تجهيز الملف «{{0}}» للمشاركة",
+    "en": "The file ‘{{0}}’ could not be prepared for sharing",
+    "bn": "‘{{0}}’ ফাইলটি শেয়ারের জন্য প্রস্তুত করা যায়নি"
+  },
+  {
+    "source": "تعذر تحميل الملف «{{0}}» للمشاركة",
+    "en": "The file ‘{{0}}’ could not be loaded for sharing",
+    "bn": "‘{{0}}’ ফাইলটি শেয়ারের জন্য লোড করা যায়নি"
+  },
+  {
+    "source": "مشاركة {{0}} ملف فعلي — اختر واتساب",
+    "en": "Share {{0}} actual file(s) — choose WhatsApp",
+    "bn": "{{0}}টি আসল ফাইল শেয়ার করুন — হোয়াটসঅ্যাপ বেছে নিন"
+  },
+  {
+    "source": "ملفات القضية {{0}}",
+    "en": "Case files {{0}}",
+    "bn": "মামলার ফাইল {{0}}"
+  },
+  {
     "source": "— الكفيل {{0}} — {{1}}",
     "en": "— Sponsor {{0}} — {{1}}",
     "bn": "— স্পনসর {{0}} — {{1}}"

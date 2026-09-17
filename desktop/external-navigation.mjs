@@ -51,8 +51,13 @@ export function toWhatsAppAppUrl(value) {
 export function toWhatsAppWebUrl(value) {
   const target = parseWhatsAppTarget(value);
   if (!target) return null;
-  const text = target.message ? `?text=${encodeURIComponent(target.message)}` : "";
-  return `https://wa.me/${target.phone}${text}`;
+  const query = new URLSearchParams({
+    phone: target.phone,
+    type: "phone_number",
+    app_absent: "0",
+  });
+  if (target.message) query.set("text", target.message);
+  return `https://web.whatsapp.com/send/?${query.toString()}`;
 }
 
 export function isTrustedPortalUrl(value, portalOrigin) {

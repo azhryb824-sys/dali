@@ -32,20 +32,62 @@ let desktopDeviceId;
 let mutationQueue = Promise.resolve();
 let rendererRecoveryAttempts = 0;
 
+function trustedRendererPath(event, pathPrefix) {
+  try {
+    const value = event.senderFrame?.url || event.sender?.getURL?.() || "";
+    const url = new URL(value);
+    return url.origin === PORTAL_ORIGIN &&
+      (url.pathname === pathPrefix || url.pathname.startsWith(`${pathPrefix}/`));
+  } catch {
+    return false;
+  }
+}
+
+function validLoginCredentials(value) {
+  const identifier = String(value?.identifier || "");
+  const password = String(value?.password || "");
+  return /^\d{10}$/.test(identifier) &&
+    password.length >= 12 &&
+    password.length <= 256
+    ? { identifier, password }
+    : null;
+}
+
+function verifiedWhatsAppWebUrl(value) {
+  try {
+    const url = new URL(value);
+    const path = url.pathname.replace(/\/+$/, "");
+    const phone = (url.searchParams.get("phone") || "").replace(/\D/g, "");
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "web.whatsapp.com" ||
+      path !== "/send" ||
+      !/^9665\d{8}$/.test(phone)
+    )
+      return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function openOutsideDesktop(value) {
   const whatsappAppUrl = toWhatsAppAppUrl(value);
   if (whatsappAppUrl) {
     try {
       await shell.openExternal(whatsappAppUrl);
-      return;
+      return true;
     } catch (error) {
       console.error("Dali Universal WhatsApp launch failed:", error?.message || error);
       const whatsappWebUrl = toWhatsAppWebUrl(value);
-      if (whatsappWebUrl) await shell.openExternal(whatsappWebUrl);
-      return;
+      if (!whatsappWebUrl) return false;
+      await shell.openExternal(whatsappWebUrl);
+      return true;
     }
   }
-  if (isSafeExternalHttpsUrl(value)) await shell.openExternal(value);
+  if (!isSafeExternalHttpsUrl(value)) return false;
+  await shell.openExternal(value);
+  return true;
 }
 
 function handOffExternalNavigation(value) {
@@ -63,6 +105,7 @@ function emptyStore() {
     cache: {},
     queue: [],
     conflicts: [],
+    loginCredentials: null,
     lastSyncAt: null,
     serverCursor: 0,
   };
@@ -215,6 +258,52 @@ function registerIpc() {
       return true;
     }),
   );
+  ipcMain.handle("dali:login-credentials:load", async (event) => {
+    if (!trustedRendererPath(event, "/login") || !safeStorage.isEncryptionAvailable())
+      return null;
+    const saved = validLoginCredentials((await readStore()).loginCredentials);
+    return saved ? { identifier: saved.identifier, password: saved.password } : null;
+  });
+  ipcMain.handle("dali:login-credentials:save", async (event, value) => {
+    if (!trustedRendererPath(event, "/login"))
+      return { saved: false, reason: "untrusted-renderer" };
+    if (!safeStorage.isEncryptionAvailable())
+      return { saved: false, reason: "secure-storage-unavailable" };
+    const credentials = validLoginCredentials(value);
+    if (!credentials) return { saved: false, reason: "invalid-credentials" };
+    return mutateStore((store) => {
+      store.loginCredentials = {
+        ...credentials,
+        updatedAt: new Date().toISOString(),
+      };
+      return { saved: true };
+    });
+  });
+  ipcMain.handle("dali:login-credentials:clear", async (event) => {
+    if (!trustedRendererPath(event, "/login")) return false;
+    return mutateStore((store) => {
+      store.loginCredentials = null;
+      return true;
+    });
+  });
+  ipcMain.handle("dali:whatsapp:open", async (event, value) => {
+    if (!trustedRendererPath(event, "/portal")) return { opened: false };
+    const target = value?.target === "web" ? "web" : "app";
+    const rawUrl = String(value?.url || "").slice(0, 20_000);
+    try {
+      if (target === "web") {
+        const webUrl = verifiedWhatsAppWebUrl(rawUrl);
+        if (!webUrl) return { opened: false };
+        await shell.openExternal(webUrl);
+        return { opened: true };
+      }
+      if (!toWhatsAppAppUrl(rawUrl)) return { opened: false };
+      return { opened: await openOutsideDesktop(rawUrl) };
+    } catch (error) {
+      console.error("Dali Universal WhatsApp IPC launch failed:", error?.message || error);
+      return { opened: false };
+    }
+  });
 }
 
 function trustedPortalUrl(value, requiredPathPrefix = "/") {

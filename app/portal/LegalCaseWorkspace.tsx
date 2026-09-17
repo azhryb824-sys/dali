@@ -12,7 +12,20 @@ import { createPortal } from "react-dom";
 import { readApiJson } from "@/lib/client-api";
 import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 import LegalContractCorrespondence from "./LegalContractCorrespondence";
-import { currentDaliWhatsAppRuntime } from "@/lib/whatsapp-runtime";
+import {
+  openDaliWhatsApp,
+  type DaliWhatsAppLinks,
+} from "@/lib/whatsapp-runtime";
+import {
+  downloadDaliShareFiles,
+  prepareDaliShareFiles,
+  shareDaliFilesNatively,
+  sharePreparedDaliFiles,
+  supportsDaliNativeFileShare,
+  supportsDaliWebFileShare,
+  type DaliPreparedShareFiles,
+  type DaliShareFileDescriptor,
+} from "@/lib/file-share-runtime";
 
 type Matter = {
   id: number;
@@ -143,6 +156,11 @@ type ContractDocument = {
     | "contract_pdf"
     | "disputed_invoice"
     | "contract_attachment";
+};
+type LegalShareResult = DaliWhatsAppLinks & {
+  shareUrl: string;
+  shareMessage: string;
+  files: DaliShareFileDescriptor[];
 };
 type Bank = {
   id: number;
@@ -321,8 +339,10 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
     [assignmentBusy, setAssignmentBusy] = useState(false),
     [shareBusy, setShareBusy] = useState(false),
     [shareError, setShareError] = useState(""),
-    [shareLaunchUrl, setShareLaunchUrl] = useState(""),
-    [shareWebUrl, setShareWebUrl] = useState(""),
+    [shareLinks, setShareLinks] = useState<LegalShareResult | null>(null),
+    [preparedShareFiles, setPreparedShareFiles] =
+      useState<DaliPreparedShareFiles | null>(null),
+    [fileShareBusy, setFileShareBusy] = useState(false),
     [recordBusy, setRecordBusy] = useState(false),
     [currentTime, setCurrentTime] = useState(0),
     [lawyerUsers, setLawyerUsers] = useState<LawyerUser[]>([]),
@@ -752,16 +772,11 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
     event.preventDefault();
     if (!shareTarget) return;
     const currentShareTarget = shareTarget;
-    const runtime = currentDaliWhatsAppRuntime();
-    const popup =
-      runtime === "browser"
-        ? window.open("/portal/whatsapp-launch", "_blank")
-        : null;
     const values = Object.fromEntries(new FormData(event.currentTarget));
     setShareBusy(true);
     setShareError("");
-    setShareLaunchUrl("");
-    setShareWebUrl("");
+    setShareLinks(null);
+    setPreparedShareFiles(null);
     try {
       const response = await fetch("/api/portal/legal-cases/shares", {
         method: "POST",
@@ -780,38 +795,99 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
         whatsappAppUrl?: string;
         whatsappWebUrl?: string;
         whatsappLaunchUrl?: string;
+        shareUrl?: string;
+        shareMessage?: string;
+        files?: DaliShareFileDescriptor[];
       };
-      const launchUrl = result.whatsappLaunchUrl || result.whatsappUrl || "";
-      const preferredOpenUrl =
-        runtime === "mobile-app"
-          ? result.whatsappAppUrl || launchUrl
-          : runtime === "desktop-app"
-            ? result.whatsappUrl || launchUrl
-            : launchUrl;
-      if (!response.ok || !preferredOpenUrl || !result.whatsappWebUrl)
+      if (
+        !response.ok ||
+        !result.whatsappUrl ||
+        !result.whatsappAppUrl ||
+        !result.whatsappWebUrl ||
+        !result.whatsappLaunchUrl ||
+        !result.shareUrl ||
+        !result.shareMessage ||
+        !result.files?.length
+      )
         throw new Error(result.error || "تعذر تجهيز مشاركة واتساب");
-      setShareLaunchUrl(preferredOpenUrl);
-      setShareWebUrl(result.whatsappWebUrl);
+      const links: DaliWhatsAppLinks = {
+        appUrl: result.whatsappAppUrl,
+        universalUrl: result.whatsappUrl,
+        webUrl: result.whatsappWebUrl,
+        secureLaunchUrl: result.whatsappLaunchUrl,
+      };
+      setShareLinks({
+        ...links,
+        shareUrl: result.shareUrl,
+        shareMessage: result.shareMessage,
+        files: result.files,
+      });
       setNotice(
         currentShareTarget === "all"
-          ? "تم تسجيل وقت مشاركة جميع المرفقات بدقة وفتح محادثة واتساب للمحامي المسجل."
-          : "تم تسجيل تاريخ وساعة المشاركة وفتح محادثة واتساب.",
+          ? "تم تسجيل وقت المشاركة وتجهيز جميع الملفات الفعلية والرابط الآمن للمحامي."
+          : "تم تسجيل تاريخ وساعة المشاركة وتجهيز الملف الفعلي والرابط الآمن.",
       );
-      if (runtime === "browser") {
-        if (popup && !popup.closed) popup.location.replace(launchUrl);
-        else window.location.assign(launchUrl);
-      } else {
-        window.location.assign(preferredOpenUrl);
-      }
       await load();
     } catch (error) {
-      popup?.close();
       const message =
         error instanceof Error ? error.message : "تعذر تجهيز مشاركة واتساب";
       setShareError(message);
       setNotice(message);
     } finally {
       setShareBusy(false);
+    }
+  }
+  async function shareLegalFiles() {
+    if (!shareLinks || !matter) return;
+    const options = {
+      title: `ملفات القضية ${matter.referenceCode}`,
+      text: shareLinks.shareMessage,
+    };
+    setFileShareBusy(true);
+    setShareError("");
+    try {
+      if (supportsDaliNativeFileShare()) {
+        await shareDaliFilesNatively(shareLinks.files, options);
+        setNotice(
+          "فُتحت نافذة مشاركة الملفات الفعلية؛ اختر واتساب لإرسالها للمحامي.",
+        );
+        return;
+      }
+      if (preparedShareFiles) {
+        const outcome = await sharePreparedDaliFiles(
+          preparedShareFiles,
+          options,
+        );
+        if (outcome === "shared") {
+          setNotice("تم تسليم الملفات الفعلية إلى نافذة المشاركة.");
+          return;
+        }
+        if (outcome === "cancelled") {
+          setNotice("أُغلقت نافذة مشاركة الملفات دون إرسال.");
+          return;
+        }
+      } else if (supportsDaliWebFileShare()) {
+        const prepared = await prepareDaliShareFiles(shareLinks.files);
+        setPreparedShareFiles(prepared);
+        setNotice(
+          "اكتمل تحميل الملفات بأمان. اضغط «مشاركة الملفات الفعلية» مرة أخرى واختر واتساب.",
+        );
+        return;
+      }
+      downloadDaliShareFiles(shareLinks.files);
+      openDaliWhatsApp("app", shareLinks);
+      setNotice(
+        "بدأ تنزيل الملفات الفعلية وفُتح واتساب؛ أرفق الملفات المنزلة من محادثة المحامي.",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "تعذر تجهيز الملفات الفعلية للمشاركة";
+      setShareError(message);
+      setNotice(message);
+    } finally {
+      setFileShareBusy(false);
     }
   }
   async function revokeShare(share: ExternalShare) {
@@ -2039,8 +2115,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                         }
                         onClick={() => {
                           setShareError("");
-                          setShareLaunchUrl("");
-                          setShareWebUrl("");
+                          setShareLinks(null);
+                          setPreparedShareFiles(null);
                           setShareTarget("all");
                         }}
                       >
@@ -2130,8 +2206,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                             title={!assignedExternalLawyer ? "يلزم إسناد القضية إلى محامٍ خارجي لديه رقم واتساب أولًا" : `مشاركة ${item.title} مع ${assignedExternalLawyer.fullName}`}
                             onClick={() => {
                               setShareError("");
-                              setShareLaunchUrl("");
-                              setShareWebUrl("");
+                              setShareLinks(null);
+                              setPreparedShareFiles(null);
                               setShareTarget(item);
                             }}
                           >
@@ -3136,8 +3212,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
             onClick={() => {
               setShareTarget(null);
               setShareError("");
-              setShareLaunchUrl("");
-              setShareWebUrl("");
+              setShareLinks(null);
+              setPreparedShareFiles(null);
             }}
           />
           <section
@@ -3160,8 +3236,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 onClick={() => {
                   setShareTarget(null);
                   setShareError("");
-                  setShareLaunchUrl("");
-                  setShareWebUrl("");
+                  setShareLinks(null);
+                  setPreparedShareFiles(null);
                 }}
               >
                 ×
@@ -3176,8 +3252,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 </strong>
                 <span>
                   {shareTarget === "all"
-                    ? "رابط مشفر واحد يعرض الملفات المتاحة وقت المشاركة"
-                    : shareTarget.fileName}
+                    ? "مشاركة الملفات نفسها مباشرة مع رابط مشفر احتياطي"
+                    : `${shareTarget.fileName} — يمكن إرساله كمرفق فعلي`}
                 </span>
               </p>
               <label>
@@ -3208,27 +3284,58 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 </select>
               </label>
               <p className="form-hint span-two">
-                سيُفتح واتساب على الرقم المسجل للمحامي المسند للقضية بعد إنشاء رابط مشفر مؤقت.
-                يسجل النظام وقت المشاركة بالثانية واسم المشارك والمحامي وعمليات
-                الفتح والتنزيل، ويمكن إبطال الرابط من سجل المشاركة.
+                سيُجهز النظام الملفات الفعلية للمشاركة عبر نافذة الجهاز، مع رابط
+                مشفر مؤقت كخيار احتياطي. يسجل النظام وقت المشاركة بالثانية واسم
+                المشارك والمحامي وعمليات الفتح والتنزيل، ويمكن إبطال الرابط من
+                سجل المشاركة.
               </p>
               {shareError && (
                 <p className="whatsapp-share-feedback error span-two" role="alert">
                   {shareError}
                 </p>
               )}
-              {shareLaunchUrl && (
+              {shareLinks && (
                 <div className="whatsapp-share-feedback success span-two" role="status">
                   <p>
-                    سُجلت المشاركة. إذا لم يفتح واتساب تلقائيًا، اضغط الزر
-                    التالي.
+                    سُجلت المشاركة وجُهزت الملفات. اختر المشاركة المباشرة
+                    لإرفاق الملفات نفسها، أو افتح واتساب لإرسال الرسالة والرابط.
                   </p>
                   <div>
-                    <a href={shareLaunchUrl} target="_blank" rel="noreferrer">
+                    <button
+                      type="button"
+                      disabled={fileShareBusy}
+                      onClick={() => void shareLegalFiles()}
+                    >
+                      {fileShareBusy
+                        ? "جارٍ تجهيز الملفات الفعلية..."
+                        : preparedShareFiles
+                          ? `مشاركة ${shareLinks.files.length} ملف فعلي — اختر واتساب`
+                          : supportsDaliNativeFileShare()
+                            ? `مشاركة ${shareLinks.files.length} ملف فعلي — اختر واتساب`
+                            : supportsDaliWebFileShare()
+                              ? "تحميل الملفات للمشاركة المباشرة"
+                              : "تنزيل الملفات ثم فتح واتساب"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openDaliWhatsApp("app", shareLinks)}
+                    >
                       فتح تطبيق واتساب
-                    </a>
-                    <a href={shareWebUrl} target="_blank" rel="noreferrer">
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openDaliWhatsApp("web", shareLinks)}
+                    >
                       المتابعة إلى واتساب ويب
+                    </button>
+                    <a
+                      href={shareLinks.shareUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {shareLinks.files.length > 1
+                        ? "عرض وتنزيل الملفات الفعلية"
+                        : "تنزيل الملف الفعلي"}
                     </a>
                   </div>
                 </div>
@@ -3239,21 +3346,21 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                   onClick={() => {
                     setShareTarget(null);
                     setShareError("");
-                    setShareLaunchUrl("");
-                    setShareWebUrl("");
+                    setShareLinks(null);
+                    setPreparedShareFiles(null);
                   }}
                 >
-                  {shareLaunchUrl ? "إغلاق" : "إلغاء"}
+                  {shareLinks ? "إغلاق" : "إلغاء"}
                 </button>
                 <button
                   className="admin-primary"
                   disabled={shareBusy || !assignedExternalLawyer}
                 >
                   {shareBusy
-                    ? "جارٍ تجهيز الرابط..."
-                    : shareLaunchUrl
+                    ? "جارٍ تجهيز الملفات والرابط..."
+                    : shareLinks
                       ? "إنشاء مشاركة جديدة"
-                      : "فتح واتساب وتسجيل المشاركة"}
+                      : "تجهيز الملفات للمشاركة"}
                 </button>
               </div>
             </form>

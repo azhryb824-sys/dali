@@ -182,7 +182,7 @@ export async function POST(request: Request) {
       Date.now() + expiresInDays * 86400000,
     ).toISOString();
     const bundleId = crypto.randomUUID();
-    const bundle = await db.transaction(async (tx) => {
+    const { bundle, bundleItems } = await db.transaction(async (tx) => {
       const [saved] = await tx
         .insert(legalExternalShareBundles)
         .values({
@@ -197,32 +197,35 @@ export async function POST(request: Request) {
           sharedAt,
         })
         .returning();
-      await tx.insert(legalExternalShareBundleItems).values([
-        ...legalAttachments.map((item) => ({
-          bundleId,
-          attachmentId: item.id,
-          documentId: null,
-          title: item.title,
-          fileName: item.fileName,
-        })),
-        ...activeDocuments.map((item) => {
-          const prefix =
-            item.legalDocumentRole === "approved_contract"
-              ? "العقد المعتمد"
-              : item.legalDocumentRole === "contract_pdf"
-                ? "ملف العقد"
-                : item.legalDocumentRole === "disputed_invoice"
-                  ? "الفاتورة محل الإشكال"
-                  : "مرفق العقد";
-          return {
+      const insertedItems = await tx
+        .insert(legalExternalShareBundleItems)
+        .values([
+          ...legalAttachments.map((item) => ({
             bundleId,
-            attachmentId: null,
-            documentId: item.id,
-            title: `${prefix} — ${item.title}`,
+            attachmentId: item.id,
+            documentId: null,
+            title: item.title,
             fileName: item.fileName,
-          };
-        }),
-      ]);
+          })),
+          ...activeDocuments.map((item) => {
+            const prefix =
+              item.legalDocumentRole === "approved_contract"
+                ? "العقد المعتمد"
+                : item.legalDocumentRole === "contract_pdf"
+                  ? "ملف العقد"
+                  : item.legalDocumentRole === "disputed_invoice"
+                    ? "الفاتورة محل الإشكال"
+                    : "مرفق العقد";
+            return {
+              bundleId,
+              attachmentId: null,
+              documentId: item.id,
+              title: `${prefix} — ${item.title}`,
+              fileName: item.fileName,
+            };
+          }),
+        ])
+        .returning();
       await tx.insert(legalCaseActionLog).values({
         legalRecordId,
         action: "shared",
@@ -236,7 +239,7 @@ export async function POST(request: Request) {
               ? "system_admin"
               : "legal_staff",
       });
-      return saved;
+      return { bundle: saved, bundleItems: insertedItems };
     });
     const shareUrl = externalRequestUrl(
       request,
@@ -263,6 +266,29 @@ export async function POST(request: Request) {
       request,
       `/api/portal/whatsapp-launch?token=${encodeURIComponent(whatsappLaunchToken)}`,
     ).toString();
+    const legalAttachmentById = new Map(
+      legalAttachments.map((item) => [item.id, item]),
+    );
+    const contractDocumentById = new Map(
+      activeDocuments.map((item) => [item.id, item]),
+    );
+    const files = bundleItems.map((item) => {
+      const source = item.attachmentId
+        ? legalAttachmentById.get(item.attachmentId)
+        : item.documentId
+          ? contractDocumentById.get(item.documentId)
+          : null;
+      if (!source) throw new Error("LEGAL_SHARE_BUNDLE_SOURCE_MISSING");
+      return {
+        url: externalRequestUrl(
+          request,
+          `/api/legal-share-bundles/${token}/items/${item.id}`,
+        ).toString(),
+        fileName: item.fileName,
+        contentType: source.contentType,
+        sizeBytes: source.sizeBytes,
+      };
+    });
     await auditPortalAction({
       actorEmail: actor.user.email,
       action: "legal-contract-attachments-whatsapp-shared",
@@ -309,6 +335,9 @@ export async function POST(request: Request) {
       whatsappAppUrl,
       whatsappWebUrl,
       whatsappLaunchUrl,
+      shareUrl,
+      shareMessage: message,
+      files,
       sharedAt,
     });
   }
@@ -420,6 +449,16 @@ export async function POST(request: Request) {
     whatsappAppUrl,
     whatsappWebUrl,
     whatsappLaunchUrl,
+    shareUrl,
+    shareMessage: message,
+    files: [
+      {
+        url: shareUrl,
+        fileName: attachment.fileName,
+        contentType: attachment.contentType,
+        sizeBytes: attachment.sizeBytes,
+      },
+    ],
   });
 }
 

@@ -121,4 +121,176 @@ export const sharingUiTranslations: Record<
     en: "Assign the case to an external lawyer with a WhatsApp number first",
     bn: "প্রথমে হোয়াটসঅ্যাপ নম্বরসহ একজন বহিরাগত আইনজীবীকে মামলাটি অর্পণ করতে হবে",
   },
+  "تم تحميل بيانات الدخول المحفوظة بأمان على هذا الجهاز.": {
+    en: "Securely saved sign-in details were loaded on this device.",
+    bn: "এই ডিভাইসে নিরাপদে সংরক্ষিত লগইন তথ্য লোড হয়েছে।",
+  },
+  "تم تحميل بيانات الدخول من مدير كلمات المرور الآمن.": {
+    en: "Sign-in details were loaded from the secure password manager.",
+    bn: "নিরাপদ পাসওয়ার্ড ম্যানেজার থেকে লগইন তথ্য লোড হয়েছে।",
+  },
+  "جارٍ التحقق وحفظ بيانات الدخول...": {
+    en: "Verifying and securely saving sign-in details...",
+    bn: "লগইন তথ্য যাচাই ও নিরাপদে সংরক্ষণ করা হচ্ছে...",
+  },
+  "حفظ رقم الهوية وكلمة المرور على هذا الجهاز": {
+    en: "Save the ID number and password on this device",
+    bn: "এই ডিভাইসে পরিচয় নম্বর ও পাসওয়ার্ড সংরক্ষণ করুন",
+  },
+  "عند تفعيل الخيار تُحفظ كلمة المرور في مدير كلمات المرور الآمن للجهاز، وتُشفّر داخل تطبيقات دالي لسطح المكتب. لا تُحفظ كلمة المرور في التخزين العادي للمتصفح ولا تُرسل نسخة إضافية إلى خادم دالي.": {
+    en: "When enabled, the password is stored in the device's secure password manager and encrypted inside Dali desktop apps. It is not kept in ordinary browser storage or copied to the Dali server.",
+    bn: "চালু করলে পাসওয়ার্ডটি ডিভাইসের নিরাপদ পাসওয়ার্ড ম্যানেজারে রাখা হয় এবং ডালি ডেস্কটপ অ্যাপে এনক্রিপ্ট করা হয়। এটি সাধারণ ব্রাউজার স্টোরেজে থাকে না বা ডালি সার্ভারে অতিরিক্ত কপি পাঠানো হয় না।",
+  },
+  "اختر واتساب لمشاركة ملفات دالي": {
+    en: "Choose WhatsApp to share Dali files",
+    bn: "ডালি ফাইল শেয়ার করতে হোয়াটসঅ্যাপ বেছে নিন",
+  },
+  "أُغلقت نافذة مشاركة الملف دون إرسال.": {
+    en: "The file sharing window was closed without sending.",
+    bn: "ফাইল না পাঠিয়ে শেয়ার উইন্ডো বন্ধ করা হয়েছে।",
+  },
+  "أُغلقت نافذة مشاركة الملفات دون إرسال.": {
+    en: "The file sharing window was closed without sending any files.",
+    bn: "কোনো ফাইল না পাঠিয়ে শেয়ার উইন্ডো বন্ধ করা হয়েছে।",
+  },
+  "اكتمل تحميل الملفات بأمان. اضغط «مشاركة الملفات الفعلية» مرة أخرى واختر واتساب.": {
+    en: "The files were securely loaded. Select ‘Share actual files’ again and choose WhatsApp.",
+    bn: "ফাইলগুলো নিরাপদে লোড হয়েছে। আবার ‘আসল ফাইল শেয়ার করুন’ চাপুন এবং হোয়াটসঅ্যাপ বেছে নিন।",
+  },
+  "اكتمل تحميل PDF بأمان. اضغط «مشاركة PDF الفعلي» مرة أخرى واختر واتساب.": {
+    en: "The PDF was securely loaded. Select ‘Share the actual PDF’ again and choose WhatsApp.",
+    bn: "PDF নিরাপদে লোড হয়েছে। আবার ‘আসল PDF শেয়ার করুন’ চাপুন এবং হোয়াটসঅ্যাপ বেছে নিন।",
+  },
+  "بدأ تنزيل الملفات الفعلية وفُتح واتساب؛ أرفق الملفات المنزلة من محادثة المحامي.": {
+    en: "The actual files started downloading and WhatsApp opened; attach the downloaded files in the lawyer's chat.",
+    bn: "আসল ফাইলগুলোর ডাউনলোড শুরু হয়েছে এবং হোয়াটসঅ্যাপ খুলেছে; আইনজীবীর চ্যাটে ডাউনলোড করা ফাইলগুলো সংযুক্ত করুন।",
+  },
+  "بدأ تنزيل PDF الفعلي وفُتح واتساب؛ أرفق الملف الذي نُزّل من نافذة المحادثة.": {
+    en: "The actual PDF started downloading and WhatsApp opened; attach the downloaded file in the chat window.",
+    bn: "আসল PDF ডাউনলোড শুরু হয়েছে এবং হোয়াটসঅ্যাপ খুলেছে; চ্যাট উইন্ডোতে ডাউনলোড করা ফাইলটি সংযুক্ত করুন।",
+  },
+  "تجهيز الملفات للمشاركة": {
+    en: "Prepare files for sharing",
+    bn: "শেয়ারের জন্য ফাইল প্রস্তুত করুন",
+  },
+  "تجهيز PDF للمشاركة": {
+    en: "Prepare PDF for sharing",
+    bn: "শেয়ারের জন্য PDF প্রস্তুত করুন",
+  },
+  "تحميل الملفات للمشاركة المباشرة": {
+    en: "Load files for direct sharing",
+    bn: "সরাসরি শেয়ারের জন্য ফাইল লোড করুন",
+  },
+  "تحميل PDF للمشاركة المباشرة": {
+    en: "Load PDF for direct sharing",
+    bn: "সরাসরি শেয়ারের জন্য PDF লোড করুন",
+  },
+  "تعذر التحقق من روابط الملفات الآمنة": {
+    en: "The secure file links could not be verified",
+    bn: "নিরাপদ ফাইল লিংক যাচাই করা যায়নি",
+  },
+  "تعذر تجهيز الملفات الفعلية للمشاركة": {
+    en: "The actual files could not be prepared for sharing",
+    bn: "শেয়ারের জন্য আসল ফাইল প্রস্তুত করা যায়নি",
+  },
+  "تعذر تجهيز ملف العقد للمشاركة": {
+    en: "The contract file could not be prepared for sharing",
+    bn: "শেয়ারের জন্য চুক্তির ফাইল প্রস্তুত করা যায়নি",
+  },
+  "تم تسجيل تاريخ وساعة المشاركة وتجهيز الملف الفعلي والرابط الآمن.": {
+    en: "The sharing date and time were recorded, and the actual file and secure link are ready.",
+    bn: "শেয়ারের তারিখ ও সময় নথিভুক্ত হয়েছে এবং আসল ফাইল ও নিরাপদ লিংক প্রস্তুত।",
+  },
+  "تم تسجيل وقت المشاركة وتجهيز جميع الملفات الفعلية والرابط الآمن للمحامي.": {
+    en: "The sharing time was recorded, and all actual files and the lawyer's secure link are ready.",
+    bn: "শেয়ারের সময় নথিভুক্ত হয়েছে এবং সব আসল ফাইল ও আইনজীবীর নিরাপদ লিংক প্রস্তুত।",
+  },
+  "تم تسليم الملفات الفعلية إلى نافذة المشاركة.": {
+    en: "The actual files were handed to the sharing window.",
+    bn: "আসল ফাইলগুলো শেয়ার উইন্ডোতে পাঠানো হয়েছে।",
+  },
+  "تم تسليم ملف PDF الفعلي إلى نافذة المشاركة.": {
+    en: "The actual PDF was handed to the sharing window.",
+    bn: "আসল PDF শেয়ার উইন্ডোতে পাঠানো হয়েছে।",
+  },
+  "تنزيل الملف الفعلي": {
+    en: "Download the actual file",
+    bn: "আসল ফাইল ডাউনলোড করুন",
+  },
+  "تنزيل الملفات ثم فتح واتساب": {
+    en: "Download files, then open WhatsApp",
+    bn: "ফাইল ডাউনলোড করে হোয়াটসঅ্যাপ খুলুন",
+  },
+  "تنزيل PDF الفعلي": {
+    en: "Download the actual PDF",
+    bn: "আসল PDF ডাউনলোড করুন",
+  },
+  "تنزيل PDF ثم فتح واتساب": {
+    en: "Download PDF, then open WhatsApp",
+    bn: "PDF ডাউনলোড করে হোয়াটসঅ্যাপ খুলুন",
+  },
+  "جارٍ تجهيز الملف والرابط...": {
+    en: "Preparing the file and link...",
+    bn: "ফাইল ও লিংক প্রস্তুত হচ্ছে...",
+  },
+  "جارٍ تجهيز الملفات الفعلية...": {
+    en: "Preparing the actual files...",
+    bn: "আসল ফাইল প্রস্তুত হচ্ছে...",
+  },
+  "جارٍ تجهيز الملفات والرابط...": {
+    en: "Preparing the files and link...",
+    bn: "ফাইল ও লিংক প্রস্তুত হচ্ছে...",
+  },
+  "جارٍ تجهيز PDF الفعلي...": {
+    en: "Preparing the actual PDF...",
+    bn: "আসল PDF প্রস্তুত হচ্ছে...",
+  },
+  "جُهز ملف PDF الفعلي والرابط الآمن. اختر مشاركة الملف مباشرة أو فتح واتساب.": {
+    en: "The actual PDF and secure link are ready. Share the file directly or open WhatsApp.",
+    bn: "আসল PDF ও নিরাপদ লিংক প্রস্তুত। ফাইলটি সরাসরি শেয়ার করুন বা হোয়াটসঅ্যাপ খুলুন।",
+  },
+  "جُهز PDF الفعلي والرابط الآمن. استخدم المشاركة المباشرة لإرفاق الملف نفسه، أو افتح تطبيق واتساب/واتساب ويب لإرسال الرسالة والرابط.": {
+    en: "The actual PDF and secure link are ready. Use direct sharing to attach the file itself, or open the WhatsApp app or WhatsApp Web to send the message and link.",
+    bn: "আসল PDF ও নিরাপদ লিংক প্রস্তুত। ফাইলটি সংযুক্ত করতে সরাসরি শেয়ার ব্যবহার করুন, অথবা বার্তা ও লিংক পাঠাতে হোয়াটসঅ্যাপ অ্যাপ বা হোয়াটসঅ্যাপ ওয়েব খুলুন।",
+  },
+  "حجم الملفات كبير للمشاركة المباشرة من المتصفح؛ استخدم تنزيل الملفات ثم افتح واتساب.": {
+    en: "The files are too large for direct browser sharing; download them and then open WhatsApp.",
+    bn: "সরাসরি ব্রাউজার শেয়ারের জন্য ফাইলগুলো খুব বড়; সেগুলো ডাউনলোড করে হোয়াটসঅ্যাপ খুলুন।",
+  },
+  "سُجلت المشاركة وجُهزت الملفات. اختر المشاركة المباشرة لإرفاق الملفات نفسها، أو افتح واتساب لإرسال الرسالة والرابط.": {
+    en: "The share was recorded and the files are ready. Use direct sharing to attach the files themselves, or open WhatsApp to send the message and link.",
+    bn: "শেয়ার নথিভুক্ত হয়েছে এবং ফাইল প্রস্তুত। ফাইলগুলো সংযুক্ত করতে সরাসরি শেয়ার ব্যবহার করুন, অথবা বার্তা ও লিংক পাঠাতে হোয়াটসঅ্যাপ খুলুন।",
+  },
+  "سيُجهز النظام الملفات الفعلية للمشاركة عبر نافذة الجهاز، مع رابط مشفر مؤقت كخيار احتياطي. يسجل النظام وقت المشاركة بالثانية واسم المشارك والمحامي وعمليات الفتح والتنزيل، ويمكن إبطال الرابط من سجل المشاركة.": {
+    en: "The system prepares the actual files for the device sharing window, with a temporary encrypted link as a fallback. It records the exact sharing time, sender, lawyer, opens, and downloads, and the link can be revoked from the sharing log.",
+    bn: "সিস্টেম ডিভাইসের শেয়ার উইন্ডোর জন্য আসল ফাইল প্রস্তুত করে এবং বিকল্প হিসেবে অস্থায়ী এনক্রিপ্টেড লিংক রাখে। এটি শেয়ারের সঠিক সময়, প্রেরক, আইনজীবী, খোলা ও ডাউনলোড নথিভুক্ত করে এবং শেয়ার লগ থেকে লিংক বাতিল করা যায়।",
+  },
+  "عرض وتنزيل الملفات الفعلية": {
+    en: "View and download the actual files",
+    bn: "আসল ফাইল দেখুন ও ডাউনলোড করুন",
+  },
+  "فُتحت نافذة مشاركة الملف الفعلي؛ اختر واتساب لإرساله مرفقًا.": {
+    en: "The actual-file sharing window opened; choose WhatsApp to send it as an attachment.",
+    bn: "আসল ফাইল শেয়ার উইন্ডো খুলেছে; সংযুক্তি হিসেবে পাঠাতে হোয়াটসঅ্যাপ বেছে নিন।",
+  },
+  "فُتحت نافذة مشاركة الملفات الفعلية؛ اختر واتساب لإرسالها للمحامي.": {
+    en: "The actual-file sharing window opened; choose WhatsApp to send the files to the lawyer.",
+    bn: "আসল ফাইল শেয়ার উইন্ডো খুলেছে; আইনজীবীকে পাঠাতে হোয়াটসঅ্যাপ বেছে নিন।",
+  },
+  "قائمة الملفات غير صالحة للمشاركة": {
+    en: "The file list is not valid for sharing",
+    bn: "ফাইলের তালিকাটি শেয়ারের জন্য বৈধ নয়",
+  },
+  "مشاركة الملفات نفسها مباشرة مع رابط مشفر احتياطي": {
+    en: "Share the files themselves directly, with an encrypted fallback link",
+    bn: "এনক্রিপ্টেড বিকল্প লিংকসহ ফাইলগুলো সরাসরি শেয়ার করুন",
+  },
+  "مشاركة PDF الفعلي — اختر واتساب": {
+    en: "Share the actual PDF — choose WhatsApp",
+    bn: "আসল PDF শেয়ার করুন — হোয়াটসঅ্যাপ বেছে নিন",
+  },
+  "يجب كتابة الرقم عند كل مشاركة. يمكنك إرسال ملف PDF نفسه من نافذة المشاركة، ويبقى الرابط المشفر المؤقت خيارًا احتياطيًا. لن يُحفظ رقم المستلم ضمن العقد.": {
+    en: "Enter the number for every share. You can send the PDF itself from the sharing window, while the temporary encrypted link remains a fallback. The recipient number is not saved with the contract.",
+    bn: "প্রতিবার শেয়ারের সময় নম্বর লিখুন। শেয়ার উইন্ডো থেকে PDF ফাইলটি পাঠানো যাবে এবং অস্থায়ী এনক্রিপ্টেড লিংক বিকল্প হিসেবে থাকবে। প্রাপকের নম্বর চুক্তিতে সংরক্ষিত হবে না।",
+  },
 };

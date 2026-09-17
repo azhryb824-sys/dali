@@ -1,6 +1,6 @@
 {
   "name": "dali-mac-universal",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "تطبيق ماك مستقل لنظام دالي الإداري لمعالجات Intel وApple Silicon",
   "author": "Dally Corporation",
   "private": true,

@@ -28,7 +28,12 @@ export function createWhatsAppWebUrl(
   message: string,
 ) {
   const mobile = normalizeSaudiWhatsAppNumber(value);
-  return mobile
-    ? `https://web.whatsapp.com/send?phone=${mobile}&text=${encodeURIComponent(message)}`
-    : null;
+  if (!mobile) return null;
+  const query = new URLSearchParams({
+    phone: mobile,
+    text: message,
+    type: "phone_number",
+    app_absent: "0",
+  });
+  return `https://web.whatsapp.com/send/?${query.toString()}`;
 }
