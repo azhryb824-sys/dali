@@ -9,6 +9,7 @@ type Contract = {
   id: number;
   referenceCode: string;
   clientName: string;
+  approvedBy: string | null;
 };
 type Payment = {
   id: number;
@@ -20,6 +21,7 @@ type Payment = {
   remainingAmountHalalas: number;
   isOverdue: boolean;
   status: string;
+  cancellationDisposition?: string | null;
   invoiceDocumentId: number | null;
 };
 type Data = { contracts: Contract[]; payments: Payment[] };
@@ -61,16 +63,17 @@ export default function PaymentManagementDashboard() {
   }, []);
   const today = new Date().toISOString().slice(0, 10);
   const metrics = useMemo(() => {
-    const rows = data?.payments || [];
+    const approvedContractIds = new Set((data?.contracts || []).filter(item => item.approvedBy).map(item => item.id));
+    const rows = (data?.payments || []).filter(item => approvedContractIds.has(item.contractId) && item.status !== "cancelled" && !item.cancellationDisposition?.startsWith("review_"));
     const total = rows.reduce(
       (sum, item) => sum + item.invoiceAmountHalalas,
       0,
     );
-    const paid = rows.reduce(
+    const paid = (data?.payments || []).reduce(
       (sum, item) => sum + item.paidAmountHalalas,
       0,
     );
-    const invoiced = rows
+    const invoiced = (data?.payments || [])
       .filter((item) => item.invoiceDocumentId && item.status !== "cancelled")
       .reduce((sum, item) => sum + item.remainingAmountHalalas, 0);
     const overdue = rows
@@ -92,7 +95,7 @@ export default function PaymentManagementDashboard() {
       invoiced,
       overdue,
       due30,
-      collection: total ? Math.round((paid / total) * 100) : 0,
+      collection: total ? Math.round((rows.reduce((sum, item) => sum + item.paidAmountHalalas, 0) / total) * 100) : 0,
     };
   }, [data, today]);
   if (!data)
@@ -126,12 +129,13 @@ export default function PaymentManagementDashboard() {
         </div>
       </header>
       <div className="payment-kpis">
-        <article><span>قيمة الفواتير</span><strong>{money(metrics.total)}</strong><small>{data.payments.length} دفعة</small></article>
+        <article><span>قيمة الدفعات القائمة</span><strong>{money(metrics.total)}</strong><small>{data.payments.length} دفعة</small></article>
         <article className="success"><span>المحصل فعليًا</span><strong>{money(metrics.paid)}</strong><small>يشمل التحصيل الجزئي</small></article>
         <article><span>الرصيد القائم</span><strong>{money(metrics.invoiced)}</strong><small>المتبقي على الفواتير</small></article>
         <article className="warning"><span>متأخر</span><strong>{money(metrics.overdue)}</strong><small>كامل أو جزء متبقٍ</small></article>
         <article><span>خلال 30 يومًا</span><strong>{money(metrics.due30)}</strong><small>توقع نقدي للمتبقي</small></article>
       </div>
+      <details className="payment-table-disclosure"><summary>عرض جدول الدفعات والتصفية — {data.payments.length} دفعة</summary>
       <nav className="payment-filters">
         {[
           ["all", "كل الدفعات"],
@@ -172,6 +176,7 @@ export default function PaymentManagementDashboard() {
           </tbody>
         </table>
       </div>
+      </details>
     </section>
   );
 }

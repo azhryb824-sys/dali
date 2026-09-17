@@ -1,3 +1,4 @@
+import { isLegalContractDocumentShareable } from "@/lib/contract-legal-documents";
 import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
@@ -79,6 +80,8 @@ export async function GET(
         ),
       })
     : null;
+  if (companyDocument && !(await isLegalContractDocumentShareable(db, companyDocument)))
+    return Response.json({ error: "لا يمكن مشاركة العقد قبل اعتماده" }, { status: 403 });
   const file = legalAttachment || companyDocument;
   if (!file)
     return Response.json({ error: "المرفق لم يعد متاحًا" }, { status: 410 });

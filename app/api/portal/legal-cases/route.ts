@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import {
   bankAccounts,
   financialRecords,
-  journalEntries,
   legalCaseActionLog,
   legalCaseActivities,
   legalCaseAttachments,
@@ -14,6 +13,7 @@ import {
   legalJudgmentPaymentRequests,
   legalLawyers,
   legalRecords,
+  legalReferrals,
 } from "@/db/schema";
 import { createDraftJournal, resolvePostingRule } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
@@ -228,7 +228,9 @@ export async function GET() {
       ),
     )
   ).flat();
+  const referrals = caseIds.length ? await db.select().from(legalReferrals).where(inArray(legalReferrals.legalRecordId, caseIds)).orderBy(desc(legalReferrals.id)) : [];
   return jsonNoStore({
+    referrals,
     cases,
     activities,
     attachments,
@@ -479,6 +481,8 @@ export async function POST(request: Request) {
     return jsonNoStore({ case: saved }, { status: 201 });
   }
   if (requestAction === "request-judgment-payment") {
+    const paymentKind = clean(body.paymentKind, 40) || "court_judgment";
+    if (!["court_judgment", "compensation", "court_costs", "lawyer_fees"].includes(paymentKind)) return jsonNoStore({ error: "نوع الالتزام القانوني غير صحيح" }, { status: 400 });
     const legalRecordId = Number(body.legalRecordId),
       amountHalalas = Math.round(Number(body.amount) * 100),
       description = clean(body.description, 1000);
@@ -486,7 +490,7 @@ export async function POST(request: Request) {
       !Number.isInteger(legalRecordId) ||
       legalRecordId < 1 ||
       !Number.isSafeInteger(amountHalalas) ||
-      amountHalalas < 1 ||
+      amountHalalas < 1 || amountHalalas > 2147483647 ||
       description.length < 5
     )
       return jsonNoStore(
@@ -515,6 +519,7 @@ export async function POST(request: Request) {
       .where(
         and(
           eq(legalJudgmentPaymentRequests.legalRecordId, legalRecordId),
+          eq(legalJudgmentPaymentRequests.paymentKind, "court_judgment"),
           inArray(legalJudgmentPaymentRequests.status, [
             "requested",
             "changes_requested",
@@ -523,7 +528,7 @@ export async function POST(request: Request) {
         ),
       );
     if (
-      (matter.judgmentAmountHalalas || 0) > 0 &&
+      paymentKind === "court_judgment" && (matter.judgmentAmountHalalas || 0) > 0 &&
       Number(openRequest?.total || 0) + amountHalalas >
         Number(matter.judgmentAmountHalalas)
     )
@@ -547,10 +552,17 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     const saved = await db.transaction(async (tx) => {
+      await tx.execute(sql`select id from legal_records where id = ${legalRecordId} for update`);
+      const current = await tx.query.legalRecords.findFirst({ where: eq(legalRecords.id, legalRecordId) });
+      if (!current || current.deletedAt || ["closed", "cancelled"].includes(current.status)) throw new Error("القضية غير متاحة لطلب سداد");
+      const requests = await tx.select().from(legalJudgmentPaymentRequests).where(and(eq(legalJudgmentPaymentRequests.legalRecordId, legalRecordId), inArray(legalJudgmentPaymentRequests.status, ["requested", "changes_requested", "paid"])));
+      if (requests.some(item => item.description === description && item.paymentKind === paymentKind && item.status !== "paid")) throw new Error("يوجد طلب قائم لنفس الالتزام");
+      if (paymentKind === "court_judgment" && (current.judgmentAmountHalalas || 0) > 0 && requests.filter(item => item.paymentKind === "court_judgment").reduce((sum, item) => sum + item.amountHalalas, amountHalalas) > current.judgmentAmountHalalas!) throw new Error("إجمالي طلبات السداد يتجاوز قيمة الحكم المسجلة");
       const [row] = await tx
         .insert(legalJudgmentPaymentRequests)
         .values({
           legalRecordId,
+          paymentKind,
           amountHalalas,
           description,
           requestedBy: actor.user.email,
@@ -565,7 +577,8 @@ export async function POST(request: Request) {
         actorRole: actorRole(actor),
       });
       return row;
-    });
+    }).catch(error => jsonNoStore({ error: error instanceof Error ? error.message : "تعذر حفظ طلب السداد" }, { status: 409 }));
+    if (saved instanceof Response) return saved;
     await auditPortalAction({
       actorEmail: actor.user.email,
       action: "legal-judgment-payment-requested",
@@ -1055,6 +1068,9 @@ export async function PATCH(request: Request) {
       after: row,
       reason,
     });
+    await emitPortalNotification({ eventType: `legal-judgment-${status}`, title: "تحديث طلب سداد قانوني", message: reason,
+      severity: "warning", module: "legal", entityType: "legal-record", entityId: payment.legalRecordId,
+      actionView: "legal", targetEmail: payment.requestedBy }).catch(() => undefined);
     return jsonNoStore({ payment: row });
   }
   if (actionRequest === "pay-judgment") {
@@ -1098,117 +1114,46 @@ export async function PATCH(request: Request) {
         { error: "الملف القانوني غير موجود" },
         { status: 404 },
       );
+    if (paymentReference.length < 3) return jsonNoStore({ error: "أدخل مرجع السداد البنكي" }, { status: 400 });
     const now = new Date().toISOString();
-    let journalId = 0,
-      financialId = 0;
-    try {
-      const [financial] = await db
-        .insert(financialRecords)
-        .values({
-          referenceCode: `FIN-LGL-${payment.id}`,
-          category: "legal_judgment",
-          subCategory: "court_judgment",
-          description: `سداد محكوم به — ${matter.referenceCode} — ${payment.description}`,
-          amountHalalas: payment.amountHalalas,
-          subtotalHalalas: payment.amountHalalas,
-          vatHalalas: 0,
-          vatRateBps: 0,
-          dueDate: now.slice(0, 10),
-          contractId: matter.contractId,
-          paymentMethod: "bank_transfer",
-          bankAccountId: bank.id,
-          notes: paymentReference ? `مرجع العملية: ${paymentReference}` : null,
-          status: "paid",
-          postingStatus: "unposted",
-          updatedAt: now,
-        })
-        .returning();
-      financialId = financial.id;
-      const postingRule = await resolvePostingRule("legal_judgment_payment", {
-        debitCode: "5290",
-        creditCode: bank.accountCode,
-      });
-      const journal = await createDraftJournal({
-        entryDate: now.slice(0, 10),
-        description: `سداد محكوم به — ${matter.referenceCode}`,
-        sourceType: "financial-record",
-        sourceId: String(financial.id),
-        actorEmail: actor.user.email,
+    const postingRule = await resolvePostingRule("legal_judgment_payment", { debitCode: "5290", creditCode: bank.accountCode });
+    const result = await db.transaction(async tx => {
+      await tx.execute(sql`select id from legal_judgment_payment_requests where id = ${payment.id} for update`);
+      const current = await tx.query.legalJudgmentPaymentRequests.findFirst({ where: eq(legalJudgmentPaymentRequests.id, payment.id) });
+      if (!current || current.status !== "requested") throw new Error("سبق معالجة طلب السداد");
+      await tx.execute(sql`select id from bank_accounts where id = ${bank.id} for update`);
+      const currentBank = await tx.query.bankAccounts.findFirst({ where: eq(bankAccounts.id, bank.id) });
+      if (!currentBank || currentBank.status !== "active" || currentBank.ledgerAccountId !== bank.ledgerAccountId) throw new Error("تغيرت حالة الحساب البنكي؛ أعد تحميل البيانات");
+      const [person] = await tx.select().from(legalReferrals).where(eq(legalReferrals.legalRecordId, matter.id)).limit(1);
+      const [financial] = await tx.insert(financialRecords).values({
+        referenceCode: `FIN-LGL-${payment.id}`, category: "legal_judgment", subCategory: current.paymentKind,
+        legalRecordId: matter.id, employeeId: person?.employeeId || null, workerId: person?.workerId || null,
+        description: `سداد التزام قانوني — ${matter.referenceCode} — ${payment.description}`,
+        amountHalalas: payment.amountHalalas, paidAmountHalalas: payment.amountHalalas,
+        subtotalHalalas: payment.amountHalalas, vatHalalas: 0, vatRateBps: 0,
+        dueDate: now.slice(0, 10), contractId: matter.contractId, paymentMethod: "bank_transfer",
+        bankAccountId: bank.id, notes: `مرجع العملية: ${paymentReference}`, status: "paid", postingStatus: "draft", updatedAt: now,
+      }).returning();
+      const journal = await createDraftJournal({ entryDate: now.slice(0, 10), description: `سداد التزام قانوني — ${matter.referenceCode}`,
+        sourceType: "financial-record", sourceId: String(financial.id), actorEmail: actor.user.email,
         lines: [
-          {
-            accountId: postingRule.debitAccountId,
-            debitHalalas: payment.amountHalalas,
-            description: payment.description,
-            contractId: matter.contractId,
-          },
-          {
-            accountId: bank.ledgerAccountId,
-            bankAccountId: bank.id,
-            creditHalalas: payment.amountHalalas,
-            description: `سداد من ${bank.bankName}${paymentReference ? ` — ${paymentReference}` : ""}`,
-            contractId: matter.contractId,
-          },
+          { accountId: postingRule.debitAccountId, debitHalalas: payment.amountHalalas, description: payment.description, contractId: matter.contractId, employeeId: person?.employeeId, workerId: person?.workerId },
+          { accountId: bank.ledgerAccountId, bankAccountId: bank.id, creditHalalas: payment.amountHalalas, description: `سداد — ${paymentReference}`, contractId: matter.contractId },
         ],
-      });
-      journalId = journal.entry.id;
-      const result = await db.transaction(async (tx) => {
-        await tx
-          .update(financialRecords)
-          .set({ journalEntryId: journal.entry.id, updatedAt: now })
-          .where(eq(financialRecords.id, financial.id));
-        const [row] = await tx
-          .update(legalJudgmentPaymentRequests)
-          .set({
-            status: "paid",
-            bankAccountId: bank.id,
-            journalEntryId: journal.entry.id,
-            paidBy: actor.user.email,
-            paidAt: now,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(legalJudgmentPaymentRequests.id, payment.id),
-              eq(legalJudgmentPaymentRequests.status, "requested"),
-            ),
-          )
-          .returning();
-        if (!row) throw new Error("تمت معالجة الطلب من مستخدم آخر");
-        await tx.insert(legalCaseActionLog).values({
-          legalRecordId: payment.legalRecordId,
-          activityId: null,
-          action: "completed",
-          fromStatus: "requested",
-          toStatus: "paid",
-          details: `سداد المحكوم به من ${bank.bankName}; القيد ${journal.entry.entryNumber}`,
-          actorEmail: actor.user.email,
-          actorRole: actorRole(actor),
-        });
-        return { payment: row, financial, journal: journal.entry, bank };
-      });
-      await auditPortalAction({
-        actorEmail: actor.user.email,
-        action: "legal-judgment-payment-paid",
-        entityType: "legal-judgment-payment",
-        entityId: payment.id,
-        before: payment,
-        after: result,
-      });
-      return jsonNoStore(result);
-    } catch (error) {
-      if (journalId)
-        await db
-          .delete(journalEntries)
-          .where(eq(journalEntries.id, journalId))
-          .catch(() => undefined);
-      if (financialId)
-        await db
-          .delete(financialRecords)
-          .where(eq(financialRecords.id, financialId))
-          .catch(() => undefined);
-      throw error;
-    }
+      }, tx);
+      const [updatedFinancial] = await tx.update(financialRecords).set({ journalEntryId: journal.entry.id }).where(eq(financialRecords.id, financial.id)).returning();
+      const [row] = await tx.update(legalJudgmentPaymentRequests).set({ status: "paid", bankAccountId: bank.id, journalEntryId: journal.entry.id, paidBy: actor.user.email, paidAt: now, updatedAt: now }).where(and(eq(legalJudgmentPaymentRequests.id, payment.id), eq(legalJudgmentPaymentRequests.status, "requested"))).returning();
+      if (!row) throw new Error("سبق معالجة طلب السداد");
+      await tx.insert(legalCaseActionLog).values({ legalRecordId: matter.id, action: "completed", fromStatus: "requested", toStatus: "paid", details: `مرجع السداد ${paymentReference}؛ قيد مسودة ${journal.entry.entryNumber}`, actorEmail: actor.user.email, actorRole: actorRole(actor) });
+      return { payment: row, financial: updatedFinancial, journal: journal.entry, bank };
+    }).catch(error => jsonNoStore({ error: error instanceof Error ? error.message : "تعذر تسجيل السداد" }, { status: 409 }));
+    if (result instanceof Response) return result;
+    await auditPortalAction({ actorEmail: actor.user.email, action: "legal-judgment-payment-paid", entityType: "legal-judgment-payment", entityId: payment.id, before: payment, after: result });
+    await emitPortalNotification({ eventType: "legal-payment-recorded", title: "سجل سداد التزام قانوني", message: `${matter.referenceCode} — ${(payment.amountHalalas / 100).toFixed(2)} ر.س — القيد بانتظار الاعتماد والترحيل.`, severity: "info", module: "finance", entityType: "financial-record", entityId: result.financial.id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
+    await emitPortalNotification({ eventType: "legal-payment-recorded", title: "سجل سداد التزام القضية", message: `${matter.referenceCode} — ${payment.description}`, severity: "success", module: "legal", entityType: "legal-record", entityId: matter.id, actionView: "legal", targetDepartment: "legal" }).catch(() => undefined);
+    return jsonNoStore(result);
   }
+
   if (actionRequest === "assign-case") {
     if (!isCaseManager(actor))
       return jsonNoStore(

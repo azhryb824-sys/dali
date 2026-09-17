@@ -1083,6 +1083,8 @@ export const financialRecords = pgTable(
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
     dueDate: text("due_date").notNull(),
     workerId: integer("worker_id"),
+    employeeId: integer("employee_id").references(() => employees.id, { onDelete: "restrict" }),
+    legalRecordId: integer("legal_record_id").references(() => legalRecords.id, { onDelete: "restrict" }),
     contractId: integer("contract_id"),
     contractPaymentScheduleId: integer("contract_payment_schedule_id"),
     documentId: integer("document_id"),
@@ -1103,6 +1105,7 @@ export const financialRecords = pgTable(
       .default(sql`CURRENT_TIMESTAMP::text`),
   },
   (table) => [
+    index("financial_records_legal_record_idx").on(table.legalRecordId),
     index("financial_records_status_idx").on(table.status),
     index("financial_records_due_date_idx").on(table.dueDate),
     index("financial_records_category_idx").on(table.category),
@@ -1154,6 +1157,8 @@ export const contractPaymentSchedules = pgTable(
       .default("seasonal_percentage"),
     servicePeriod: text("service_period"),
     status: text("status").notNull().default("scheduled"),
+    cancellationDisposition: text("cancellation_disposition"),
+    cancellationOriginalAmountHalalas: integer("cancellation_original_amount_halalas"),
     referredBy: text("referred_by"),
     referredAt: text("referred_at"),
     invoiceDocumentId: integer("invoice_document_id").references(
@@ -1191,6 +1196,7 @@ export const contractPaymentSchedules = pgTable(
       table.dueDate,
       table.status,
     ),
+    check("contract_payment_schedules_cancellation_disposition_check", sql`${table.cancellationDisposition} in ('preserve','cancel_future','review_accrual','review_invoice')`),
     check(
       "contract_payment_schedules_status_check",
       sql`${table.status} in ('scheduled','due','referred','invoiced','partially_paid','paid','cancelled')`,
@@ -1558,6 +1564,7 @@ export const legalJudgmentPaymentRequests = pgTable(
     legalRecordId: integer("legal_record_id")
       .notNull()
       .references(() => legalRecords.id, { onDelete: "restrict" }),
+    paymentKind: text("payment_kind").notNull().default("court_judgment"),
     amountHalalas: integer("amount_halalas").notNull(),
     description: text("description").notNull(),
     status: text("status").notNull().default("requested"),
@@ -1589,6 +1596,7 @@ export const legalJudgmentPaymentRequests = pgTable(
     uniqueIndex("legal_judgment_payments_journal_unique").on(
       table.journalEntryId,
     ),
+    check("legal_judgment_payment_requests_payment_kind_check", sql`${table.paymentKind} in ('court_judgment','compensation','court_costs','lawyer_fees')`),
     check(
       "legal_judgment_payments_amount_check",
       sql`${table.amountHalalas} > 0`,
@@ -2522,6 +2530,9 @@ export const workforceContracts = pgTable(
     suspendedAt: text("suspended_at"),
     terminatedAt: text("terminated_at"),
     cancellationReason: text("cancellation_reason"),
+    cancellationEffectiveDate: text("cancellation_effective_date"),
+    cancellationSummaryJson: text("cancellation_summary_json"),
+
     clientId: integer("client_id"),
     supplierId: integer("supplier_id"),
     opportunityId: integer("opportunity_id"),
@@ -2578,6 +2589,37 @@ export const workforceContracts = pgTable(
     ),
   ],
 );
+
+export const legalReferrals = pgTable("legal_referrals", {
+  id: serial("id").primaryKey(),
+  legalRecordId: integer("legal_record_id").notNull().references(() => legalRecords.id, { onDelete: "restrict" }),
+  sourceType: text("source_type").notNull(),
+  sourceId: integer("source_id").notNull(),
+  contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
+  paymentScheduleId: integer("payment_schedule_id").references(() => contractPaymentSchedules.id, { onDelete: "restrict" }),
+  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "restrict" }),
+  workerId: integer("worker_id").references(() => workers.id, { onDelete: "restrict" }),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("active"),
+  referredBy: text("referred_by").notNull(),
+  referredAt: text("referred_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  returnedBy: text("returned_by"),
+  returnedAt: text("returned_at"),
+  returnReason: text("return_reason"),
+}, (table) => [
+  uniqueIndex("legal_referrals_open_source_unique").on(table.sourceType, table.sourceId).where(sql`${table.status} <> 'returned'`),
+  index("legal_referrals_record_idx").on(table.legalRecordId, table.referredAt),
+  index("legal_referrals_contract_idx").on(table.contractId, table.status),
+  check("legal_referrals_source_type_check", sql`${table.sourceType} in ('payment','contract','employee','worker')`),
+  check("legal_referrals_source_id_check", sql`${table.sourceId} > 0`),
+  check("legal_referrals_status_check", sql`${table.status} in ('active','returned','closed')`),
+  check("legal_referrals_source_shape_check", sql`
+    (${table.sourceType} = 'payment' and ${table.paymentScheduleId} is not null and ${table.paymentScheduleId} = ${table.sourceId} and ${table.contractId} is not null and ${table.employeeId} is null and ${table.workerId} is null)
+    or (${table.sourceType} = 'contract' and ${table.contractId} is not null and ${table.contractId} = ${table.sourceId} and ${table.paymentScheduleId} is null and ${table.employeeId} is null and ${table.workerId} is null)
+    or (${table.sourceType} = 'employee' and ${table.employeeId} is not null and ${table.employeeId} = ${table.sourceId} and ${table.contractId} is null and ${table.paymentScheduleId} is null and ${table.workerId} is null)
+    or (${table.sourceType} = 'worker' and ${table.workerId} is not null and ${table.workerId} = ${table.sourceId} and ${table.contractId} is null and ${table.paymentScheduleId} is null and ${table.employeeId} is null)`),
+  check("legal_referrals_return_details_check", sql`${table.status} <> 'returned' or (${table.returnedBy} is not null and ${table.returnedAt} is not null and ${table.returnReason} is not null and length(${table.returnReason}) >= 10)`),
+]);
 
 export const legalContractCorrespondence = pgTable(
   "legal_contract_correspondence",

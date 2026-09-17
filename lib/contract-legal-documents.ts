@@ -1,3 +1,4 @@
+import { canShareApprovedContract } from "@/lib/legal-lifecycle-rules";
 import { eq, inArray, like, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
@@ -6,7 +7,7 @@ import {
   workforceContracts,
 } from "@/db/schema";
 
-type Database = ReturnType<typeof getDb>;
+type Database = Pick<ReturnType<typeof getDb>, "select" | "query">;
 type ContractDocumentIdentity = {
   id: number;
   documentId: number;
@@ -160,7 +161,7 @@ export async function loadLegalRecordContractDocuments(
       : [];
 
   return documents
-    .filter((document) => document.status === "active")
+    .filter((document) => document.status === "active" && (document.documentType !== "workforce_contract" && document.id !== contract?.documentId || document.id === contract?.documentId && canShareApprovedContract(contract)))
     .map((document) => {
       let legalDocumentRole: LegalContractDocumentRole =
         "contract_attachment";
@@ -186,4 +187,12 @@ export async function loadLegalRecordContractDocuments(
         left.id - right.id
       );
     });
+}
+
+/** Check live approval at every download, including bundles issued before the guard existed. */
+export async function isLegalContractDocumentShareable(db: Database, document: { id: number; documentType: string | null; metadataJson: string | null }) {
+  const direct = await db.query.workforceContracts.findFirst({ where: eq(workforceContracts.documentId, document.id) });
+  if (direct) return canShareApprovedContract(direct);
+  if (document.documentType === "workforce_contract") return false;
+  return true;
 }

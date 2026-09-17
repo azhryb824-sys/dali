@@ -174,6 +174,7 @@ type Bank = {
   iban: string;
 };
 type JudgmentPayment = {
+  paymentKind: string;
   id: number;
   legalRecordId: number;
   amountHalalas: number;
@@ -194,7 +195,9 @@ type Snapshot = {
   finances?: Array<Record<string, unknown>>;
   workers?: Array<Record<string, unknown>>;
 };
+type Referral = { id: number; legalRecordId: number; sourceType: string; sourceId: number; status: string; reason: string; returnReason: string | null };
 type Data = {
+  referrals: Referral[];
   cases: Matter[];
   activities: Activity[];
   attachments: Attachment[];
@@ -330,7 +333,10 @@ function LegalOverlayPortal({ children }: { children: ReactNode }) {
   return portalRoot ? createPortal(children, portalRoot) : null;
 }
 
-export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRecordId?: number }) {
+export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly = false }: { initialRecordId?: number; paymentsOnly?: boolean }) {
+  const [workspaceTab, setWorkspaceTab] = useState("cases");
+  const [shareCaseFilter, setShareCaseFilter] = useState(0);
+  const [caseQuery, setCaseQuery] = useState("");
   const [data, setData] = useState<Data | null>(null),
     [selected, setSelected] = useState(initialRecordId),
     [notice, setNotice] = useState(""),
@@ -385,7 +391,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
     }
     setData(result);
     setCurrentTime(Date.now());
-    setSelected((value) => result.cases.some((item) => item.id === value) ? value : result.cases[0]?.id || 0);
+    setSelected((value) => result.cases.some((item) => item.id === value) ? value : 0);
   }, []);
   useEffect(() => {
     const timer = window.setTimeout(
@@ -411,16 +417,16 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
   const matterShares = useMemo(
     () =>
       data?.externalShares.filter(
-        (share) => share.legalRecordId === selected,
+        (share) => !shareCaseFilter || share.legalRecordId === shareCaseFilter,
       ) || [],
-    [data, selected],
+    [data, shareCaseFilter],
   );
   const matterShareBundles = useMemo(
     () =>
       (data?.externalShareBundles || []).filter(
-        (share) => share.legalRecordId === selected,
+        (share) => !shareCaseFilter || share.legalRecordId === shareCaseFilter,
       ),
-    [data, selected],
+    [data, shareCaseFilter],
   );
   const activities = useMemo(
     () =>
@@ -571,6 +577,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
         action: "request-judgment-payment",
         legalRecordId: selected,
         amount: fd.get("amount"),
+        paymentKind: fd.get("paymentKind"),
         description: fd.get("description"),
       }),
     });
@@ -1147,12 +1154,12 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
   }
   if (!data)
     return (
-      <section className="panel legal-matter-workspace">
+      <section className={`panel legal-matter-workspace ${paymentsOnly ? "legal-payments-only" : ""}`}>
         <p>{notice || "جارٍ تحميل إدارة القضايا..."}</p>
       </section>
     );
   return (
-    <section className="panel legal-matter-workspace">
+    <section className={`panel legal-matter-workspace ${paymentsOnly ? "legal-payments-only" : ""}`}>
       <header>
         <div>
           <span>إدارة القضايا والمطالبات القانونية</span>
@@ -1210,115 +1217,144 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
           <small>تُرتب حسب سجل المواعيد القانوني</small>
         </article>
       </div>
-      <details className="legal-lawyer-register">
-        <summary>
-          سجل المحامين — {data.lawyers.filter((item) => item.status === "active").length} نشط
-        </summary>
-        <div className="management-table-wrap">
-          <table className="management-table">
-            <thead>
-              <tr>
-                <th>المحامي</th>
-                <th>الرخصة</th>
-                <th>النوع والصلاحية</th>
-                <th>التواصل</th>
-                <th>الحالة</th>
-                {data.canManageCases && <th>إجراء</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {data.lawyers.map((lawyer) => (
-                <tr key={lawyer.id}>
-                  <td>
-                    <strong>{lawyer.fullName}</strong>
-                    <small>{lawyer.notes || "دون ملاحظات"}</small>
-                  </td>
-                  <td>
-                    <strong dir="ltr">{lawyer.licenseNumber || "—"}</strong>
-                    <small>
-                      {lawyer.licenseExpiryDate
-                        ? `تنتهي ${new Date(`${lawyer.licenseExpiryDate}T00:00:00`).toLocaleDateString("ar-SA")}`
-                        : "دون تاريخ انتهاء"}
-                    </small>
-                  </td>
-                  <td>
-                    <strong>
-                      {lawyer.portalUserEmail
-                        ? "محامي لديه مستخدم"
-                        : "محامي خارجي"}
-                    </strong>
-                    <small dir="ltr">{lawyer.portalUserEmail || "دون دخول للنظام"}</small>
-                  </td>
-                  <td>
-                    <strong dir="ltr">{lawyer.mobile || "—"}</strong>
-                    <small dir="ltr">{lawyer.email || "—"}</small>
-                  </td>
-                  <td>{lawyer.status === "active" ? "نشط" : "غير نشط"}</td>
-                  {data.canManageCases && (
-                    <td>
-                      <div className="legal-lawyer-actions">
-                        <button
-                          type="button"
-                          className="admin-secondary"
-                          disabled={lawyerBusy}
-                          onClick={() => {
-                            setEditingLawyer(lawyer);
-                            setLawyerModal(true);
-                          }}
-                        >
-                          تعديل
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-secondary"
-                          disabled={
-                            lawyerBusy ||
-                            !data.lawyers.some(
-                              (item) =>
-                                item.id !== lawyer.id &&
-                                item.status === "active",
-                            )
-                          }
-                          onClick={() => setTransferringLawyer(lawyer)}
-                        >
-                          تحويل القضايا
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-secondary"
-                          disabled={lawyerBusy}
-                          onClick={() => void updateLawyerStatus(lawyer)}
-                        >
-                          {lawyer.status === "active" ? "تعطيل" : "تفعيل"}
-                        </button>
+      <nav className="legal-tabs" aria-label="إدارة الملفات القانونية">{[["cases", "القضايا"], ["lawyers", "المحامون"], ["shares", "سجل المشاركة"]].map(([id, title]) => <button type="button" key={id} aria-pressed={workspaceTab === id} onClick={() => setWorkspaceTab(id)}>{title}</button>)}</nav>
+      <div hidden={workspaceTab !== "shares"}>              <section className="legal-share-history">
+                <h3>سجل مشاركة الملفات مع المحامين الخارجيين</h3>
+                <label>تصنيف حسب القضية أو العقد<select value={shareCaseFilter} onChange={event => setShareCaseFilter(Number(event.target.value))}><option value={0}>جميع القضايا والعقود</option>{data.cases.map(item => <option key={item.id} value={item.id}>{item.referenceCode} — {item.title}</option>)}</select></label>
+                {matterShareBundles.map((share) => {
+                  const lawyer = data.lawyers.find(
+                    (item) => item.id === share.lawyerId,
+                  );
+                  const expired = Date.parse(share.expiresAt) <= currentTime;
+                  const active = !share.revokedAt && !expired;
+                  return (
+                    <article className="legal-share-bundle" key={share.id}>
+                      <div>
+                        <small>{data.cases.find(item => item.id === share.legalRecordId)?.referenceCode} · {data.cases.find(item => item.id === share.legalRecordId)?.title}</small>
+                        <strong>
+                          جميع مرفقات العقد والملف — {share.itemCount} مرفقًا
+                        </strong>
+                        <span>
+                          إلى {lawyer?.fullName || `محامٍ #${share.lawyerId}`}
+                          {lawyer?.mobile ? ` · واتساب ${lawyer.mobile}` : ""}
+                        </span>
+                        <small>
+                          شاركه {share.sharedBy} في {preciseTime(share.sharedAt)}
+                        </small>
+                        <small>
+                          التنزيلات {share.downloadCount}/{share.maxDownloads}
+                          {share.lastAccessedAt
+                            ? ` · آخر فتح ${preciseTime(share.lastAccessedAt)}`
+                            : " · لم يُفتح بعد"}
+                        </small>
+                      </div>
+                      <span
+                        className={`workflow-status ${active ? "active" : "cancelled"}`}
+                      >
+                        {share.revokedAt
+                          ? "مُبطل"
+                          : expired
+                            ? "منتهي"
+                            : `صالح حتى ${preciseTime(share.expiresAt)}`}
+                      </span>
+                      {active && data.canShareExternally && (
                         <button
                           type="button"
                           className="danger"
-                          disabled={lawyerBusy}
-                          onClick={() => void deleteLawyer(lawyer)}
+                          onClick={() => void revokeShareBundle(share)}
                         >
-                          حذف
+                          إبطال الرابط
                         </button>
+                      )}
+                    </article>
+                  );
+                })}
+                {matterShares.map((share) => {
+                  const lawyer = data.lawyers.find(
+                    (item) => item.id === share.lawyerId,
+                  );
+                  const attachment = data.attachments.find(
+                    (item) => item.id === share.attachmentId,
+                  );
+                  const expired = Date.parse(share.expiresAt) <= currentTime;
+                  const active = !share.revokedAt && !expired;
+                  return (
+                    <article key={share.id}>
+                      <div>
+                        <small>{data.cases.find(item => item.id === share.legalRecordId)?.referenceCode} · {data.cases.find(item => item.id === share.legalRecordId)?.title}</small>
+                        <strong>
+                          {attachment?.title || `ملف #${share.attachmentId}`}
+                        </strong>
+                        <span>
+                          إلى {lawyer?.fullName || `محامٍ #${share.lawyerId}`}
+                        </span>
+                        <small>
+                          شاركه {share.sharedBy} في{" "}
+                          {preciseTime(share.sharedAt)}
+                        </small>
+                        <small>
+                          التنزيلات {share.downloadCount}/{share.maxDownloads}
+                          {share.lastAccessedAt
+                            ? ` · آخر فتح ${preciseTime(share.lastAccessedAt)}`
+                            : " · لم يُفتح بعد"}
+                        </small>
                       </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!data.lawyers.length && (
-            <p className="legal-empty">لم يُضف أي محامٍ بعد.</p>
-          )}
+                      <span className={`workflow-status ${active ? "active" : "cancelled"}`}>
+                        {share.revokedAt
+                          ? "مُبطل"
+                          : expired
+                            ? "منتهي"
+                            : `صالح حتى ${preciseTime(share.expiresAt)}`}
+                      </span>
+                      {active && data.canShareExternally && (
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => void revokeShare(share)}
+                        >
+                          إبطال الرابط
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
+                  {!matterShares.length && !matterShareBundles.length && (
+                  <p className="legal-empty">
+                    لم تُسجل مشاركة خارجية لملفات هذه القضية.
+                  </p>
+                )}
+              </section></div>
+      <div hidden={workspaceTab !== "lawyers"}>
+      <details className="legal-lawyer-register" open>
+        <summary>
+          سجل المحامين — {data.lawyers.filter((item) => item.status === "active").length} نشط
+        </summary>
+        <div className="legal-card-grid">
+          {data.lawyers.map(lawyer => <details className="legal-source-card" key={lawyer.id}>
+            <summary><strong>{lawyer.fullName}</strong><span>{lawyer.status === "active" ? "نشط" : "غير نشط"} · {lawyer.portalUserEmail ? "محامي داخلي" : "محامي خارجي"}</span><small>{data.cases.filter(item => item.assignedLawyerId === lawyer.id).length} قضايا</small></summary>
+            <dl><dt>الرخصة</dt><dd>{lawyer.licenseNumber || "غير مسجلة"} · {lawyer.licenseExpiryDate || "دون تاريخ انتهاء"}</dd><dt>التواصل</dt><dd dir="ltr">{lawyer.mobile || "—"} · {lawyer.email || "—"}</dd><dt>حساب الدخول</dt><dd>{lawyer.portalUserEmail || "دون دخول للنظام"}</dd></dl>
+            <p>{lawyer.notes || "دون ملاحظات"}</p>
+            {data.canManageCases && <div className="legal-lawyer-actions">
+              <button disabled={lawyerBusy} onClick={() => { setEditingLawyer(lawyer); setLawyerModal(true); }}>تعديل</button>
+              <button disabled={lawyerBusy || !data.lawyers.some(item => item.id !== lawyer.id && item.status === "active")} onClick={() => setTransferringLawyer(lawyer)}>تحويل القضايا</button>
+              <button disabled={lawyerBusy} onClick={() => void updateLawyerStatus(lawyer)}>{lawyer.status === "active" ? "تعطيل" : "تفعيل"}</button>
+              <button className="danger" disabled={lawyerBusy} onClick={() => void deleteLawyer(lawyer)}>حذف</button>
+            </div>}
+          </details>)}
+          {!data.lawyers.length && <p className="legal-empty">لم يُضف أي محامٍ بعد.</p>}
         </div>
-      </details>
-      <div className="legal-matter-layout">
+      </details></div>
+      <div hidden={workspaceTab !== "cases"}>
+      <label className="legal-case-search">البحث في القضايا<input value={caseQuery} onChange={event => setCaseQuery(event.target.value)} placeholder="المرجع أو عنوان القضية أو الطرف" /></label>
+      <div className="legal-matter-layout legal-expandable-layout">
         <aside>
-          {data.cases.map((item) => (
+          {data.cases.filter(item => (!paymentsOnly || data.judgmentPayments.some(payment => payment.legalRecordId === item.id && ["requested", "changes_requested"].includes(payment.status))) && `${item.referenceCode} ${item.title} ${item.counterparty}`.includes(caseQuery)).map((item) => (
             <button
               type="button"
               key={item.id}
               className={selected === item.id ? "active" : ""}
-              onClick={() => setSelected(item.id)}
+              aria-expanded={selected === item.id}
+              onClick={() => setSelected(value => value === item.id ? 0 : item.id)}
             >
               <strong>{item.referenceCode}</strong>
               <span>{item.counterparty}</span>
@@ -1333,6 +1369,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
         <main>
           {matter ? (
             <>
+              {(data.referrals || []).filter(item => item.legalRecordId === matter.id).map(item => <div key={item.id} className="operations-notice"><strong>{item.sourceType === "employee" ? "مرتبط بملف موظف" : item.sourceType === "worker" ? "مرتبط بملف عامل" : item.sourceType === "payment" ? "إحالة دفعة مستقلة" : "إحالة عقد"}</strong><p>{item.status === "returned" ? item.returnReason : item.reason}</p>{data.canWrite && item.status === "active" && ["employee", "worker"].includes(item.sourceType) && <button onClick={async () => { const reason = await appPrompt("سبب الإرجاع والإجراء المطلوب من القسم:", { title: "إعادة الملف إلى القسم المختص", multiline: true }); if (!reason) return; const response = await fetch("/api/portal/legal-referrals", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: item.id, reason }) }); const result = await readApiJson(response) as { error?: string }; setNotice(response.ok ? "أعيد الملف مع إشعار القسم المختص" : result.error || "تعذر الإرجاع"); if (response.ok) await load(); }}>إعادة إلى القسم المختص</button>}</div>)}
               <div className="legal-matter-head">
                 <div>
                   <div className="legal-case-classification">
@@ -2010,12 +2047,13 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 </div>
               </details>
               <section className="legal-judgment-payments">
-                <h3>طلبات سداد المحكوم به</h3>
+                <h3>الأحكام والتعويضات والتكاليف القانونية</h3>
                 {data.canWrite && (
                   <form
                     className="legal-activity-form"
                     onSubmit={requestJudgmentPayment}
                   >
+                    <label>نوع الالتزام<select name="paymentKind" defaultValue="court_judgment"><option value="court_judgment">محكوم به</option><option value="compensation">تعويض</option><option value="court_costs">تكاليف قضائية</option><option value="lawyer_fees">أتعاب محاماة</option></select></label>
                     <input
                       name="amount"
                       type="number"
@@ -2266,109 +2304,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                   </form>
                 )}
               </section>
-              <section className="legal-share-history">
-                <h3>سجل مشاركة الملفات مع المحامين الخارجيين</h3>
-                {matterShareBundles.map((share) => {
-                  const lawyer = data.lawyers.find(
-                    (item) => item.id === share.lawyerId,
-                  );
-                  const expired = Date.parse(share.expiresAt) <= currentTime;
-                  const active = !share.revokedAt && !expired;
-                  return (
-                    <article className="legal-share-bundle" key={share.id}>
-                      <div>
-                        <strong>
-                          جميع مرفقات العقد والملف — {share.itemCount} مرفقًا
-                        </strong>
-                        <span>
-                          إلى {lawyer?.fullName || `محامٍ #${share.lawyerId}`}
-                          {lawyer?.mobile ? ` · واتساب ${lawyer.mobile}` : ""}
-                        </span>
-                        <small>
-                          شاركه {share.sharedBy} في {preciseTime(share.sharedAt)}
-                        </small>
-                        <small>
-                          التنزيلات {share.downloadCount}/{share.maxDownloads}
-                          {share.lastAccessedAt
-                            ? ` · آخر فتح ${preciseTime(share.lastAccessedAt)}`
-                            : " · لم يُفتح بعد"}
-                        </small>
-                      </div>
-                      <span
-                        className={`workflow-status ${active ? "active" : "cancelled"}`}
-                      >
-                        {share.revokedAt
-                          ? "مُبطل"
-                          : expired
-                            ? "منتهي"
-                            : `صالح حتى ${preciseTime(share.expiresAt)}`}
-                      </span>
-                      {active && data.canShareExternally && (
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() => void revokeShareBundle(share)}
-                        >
-                          إبطال الرابط
-                        </button>
-                      )}
-                    </article>
-                  );
-                })}
-                {matterShares.map((share) => {
-                  const lawyer = data.lawyers.find(
-                    (item) => item.id === share.lawyerId,
-                  );
-                  const attachment = data.attachments.find(
-                    (item) => item.id === share.attachmentId,
-                  );
-                  const expired = Date.parse(share.expiresAt) <= currentTime;
-                  const active = !share.revokedAt && !expired;
-                  return (
-                    <article key={share.id}>
-                      <div>
-                        <strong>
-                          {attachment?.title || `ملف #${share.attachmentId}`}
-                        </strong>
-                        <span>
-                          إلى {lawyer?.fullName || `محامٍ #${share.lawyerId}`}
-                        </span>
-                        <small>
-                          شاركه {share.sharedBy} في{" "}
-                          {preciseTime(share.sharedAt)}
-                        </small>
-                        <small>
-                          التنزيلات {share.downloadCount}/{share.maxDownloads}
-                          {share.lastAccessedAt
-                            ? ` · آخر فتح ${preciseTime(share.lastAccessedAt)}`
-                            : " · لم يُفتح بعد"}
-                        </small>
-                      </div>
-                      <span className={`workflow-status ${active ? "active" : "cancelled"}`}>
-                        {share.revokedAt
-                          ? "مُبطل"
-                          : expired
-                            ? "منتهي"
-                            : `صالح حتى ${preciseTime(share.expiresAt)}`}
-                      </span>
-                      {active && data.canShareExternally && (
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() => void revokeShare(share)}
-                        >
-                          إبطال الرابط
-                        </button>
-                      )}
-                    </article>
-                  );
-                })}
-                  {!matterShares.length && !matterShareBundles.length && (
-                  <p className="legal-empty">
-                    لم تُسجل مشاركة خارجية لملفات هذه القضية.
-                  </p>
-                )}
-              </section>
+
               {data.canWrite && (
                 <form className="legal-activity-form" onSubmit={add}>
                   <select name="activityType" required defaultValue="task">
@@ -2508,6 +2444,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
             <p className="legal-empty">اختر ملفًا قانونيًا.</p>
           )}
         </main>
+      </div>
       </div>
       <LegalOverlayPortal>
       {companyCaseModal && (

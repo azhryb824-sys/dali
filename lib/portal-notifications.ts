@@ -15,6 +15,7 @@ import {
   legalContractCorrespondence,
   legalLawyers,
   legalRecords,
+  legalReferrals,
   legalCaseActivities,
   portalNotificationReads,
   portalNotifications,
@@ -209,6 +210,17 @@ export async function refreshOperationalNotifications(options: { force?: boolean
   const ensure = (input: PortalNotificationInput & { dedupeKey: string }) => {
     pendingChecks.set(input.dedupeKey, input);
   };
+
+  const returnedPeople = await db.select().from(legalReferrals).where(and(eq(legalReferrals.status, "returned"), inArray(legalReferrals.sourceType, ["employee", "worker"])));
+  for (const referral of returnedPeople) {
+    const newer = await db.query.legalReferrals.findFirst({ where: and(eq(legalReferrals.sourceType, referral.sourceType), eq(legalReferrals.sourceId, referral.sourceId)), orderBy: desc(legalReferrals.id) });
+    if (newer?.id !== referral.id) continue;
+    const department = referral.sourceType === "employee" ? "employees" : "workforce";
+    ensure({ dedupeKey: `legal-source-returned:${referral.id}`, eventType: "legal-source-returned", title: "ملف معاد من القانونية ينتظر إجراء القسم", message: referral.returnReason || referral.reason, severity: "warning", module: department, entityType: referral.sourceType, entityId: referral.sourceId, actionView: department, targetDepartment: department, source: "system-check" });
+  }
+  for (const payment of paymentItems.filter(item => item.cancellationDisposition?.startsWith("review_"))) {
+    ensure({ dedupeKey: `cancellation-payment-review:${payment.id}`, eventType: "contract-cancellation-payment-review", title: "دفعة عقد تنتظر تسوية الإلغاء", message: `${payment.title} — تحقق من المستحق النهائي أو أثر الفاتورة والسداد السابق.`, severity: "critical", module: "finance", entityType: "contract-payment", entityId: payment.id, actionView: "contractual-documents", targetDepartment: "finance", source: "system-check" });
+  }
 
   for (const employee of employeeItems) {
     if (employee.archivedAt) continue;

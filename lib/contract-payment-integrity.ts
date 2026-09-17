@@ -13,6 +13,7 @@ export const invoiceEligibleContractStatuses = [
 type ContractApprovalState = {
   status: string;
   approvedBy: string | null;
+  cancellationEffectiveDate?: string | null;
 };
 
 type ApprovalPayment = {
@@ -52,6 +53,16 @@ export function canAutomaticallyInvoiceContract(
     Boolean(contract.approvedBy) &&
     invoiceEligibleContractStatuses.includes(contract.status)
   );
+}
+
+export function canInvoiceContractPayment(contract: ContractApprovalState, payment: {
+  dueDate: string; status: string; cancellationDisposition?: string | null;
+}) {
+  if (payment.status === "cancelled" || payment.cancellationDisposition?.startsWith("review_")) return false;
+  if (canAutomaticallyInvoiceContract(contract)) return true;
+  return Boolean(contract.approvedBy && contract.cancellationEffectiveDate &&
+    ["cancelled", "terminated"].includes(contract.status) &&
+    payment.cancellationDisposition === "preserve" && payment.dueDate <= contract.cancellationEffectiveDate);
 }
 
 function documentWasAutomaticallyIssued(metadataJson: string | null) {

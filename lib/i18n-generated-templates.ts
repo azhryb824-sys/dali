@@ -1079,5 +1079,8 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "مشاركة كل الملفات مع {{0}}",
     "en": "Share all files with {{0}}",
     "bn": "{{0}}-এর সঙ্গে সব ফাইল শেয়ার করুন"
-  }
+  },
+{"source": "{{0}} — تحقق من المستحق النهائي أو أثر الفاتورة والسداد السابق.", "en": "{{0}} — Verify the final amount due or the impact of the existing invoice and payment.", "bn": "{{0}} — চূড়ান্ত প্রাপ্য অথবা পূর্ববর্তী চালান ও পরিশোধের প্রভাব যাচাই করুন।"},
+{"source": "{{0}} العقد {{1}}", "en": "{{0}} contract {{1}}", "bn": "{{0}} চুক্তি {{1}}"},
+{"source": "ألغيت الدفعات المستقبلية غير المعالجة فقط. {{0}} دفعات تتطلب تحديد مستحقات الخدمة أو إشعار دائن أو استرداد معتمد. الرواتب والقيود السابقة محفوظة.", "en": "Only unprocessed future installments were cancelled. {{0}} installments require service assessment, a credit note or an approved refund. Existing payroll and journal entries are preserved.", "bn": "শুধু প্রক্রিয়াবিহীন ভবিষ্যৎ কিস্তি বাতিল হয়েছে। {{0}} কিস্তির সেবার প্রাপ্য নির্ধারণ, ক্রেডিট নোট অথবা অনুমোদিত অর্থ ফেরত প্রয়োজন। পূর্ববর্তী বেতন ও জার্নাল এন্ট্রি সংরক্ষিত আছে।"}
 ];

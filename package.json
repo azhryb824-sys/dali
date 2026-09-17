@@ -62,9 +62,11 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.52.1",
     "@cloudflare/workers-types": "5.20260811.1",
+    "@electric-sql/pglite": "^0.5.8",
     "@vitejs/plugin-react": "6.0.5",
     "@vitejs/plugin-rsc": "0.5.34",
     "drizzle-kit": "0.31.10",
+    "esbuild": "0.28.1",
     "eslint": "9.39.4",
     "eslint-config-next": "16.3.3",
     "react-server-dom-webpack": "19.2.8",

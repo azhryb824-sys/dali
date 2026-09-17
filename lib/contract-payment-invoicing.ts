@@ -1,12 +1,12 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { companyAssets, companyDocuments, contractPaymentSchedules, financialRecords } from "@/db/schema";
+import { companyAssets, companyDocuments, contractPaymentSchedules, financialRecords, workforceContracts } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { makeReference, objectKey } from "@/lib/company-documents";
 import { generateIssuedPdf } from "@/lib/pdf-generator";
 import { contractInvoicePdfCopy } from "@/lib/invoice-pdf-copy";
 import { getRuntimeEnv } from "@/lib/runtime-env";
-import { canAutomaticallyInvoiceContract } from "@/lib/contract-payment-integrity";
+import { canInvoiceContractPayment } from "@/lib/contract-payment-integrity";
 
 export async function issueDueContractInvoice(paymentId:number,actorEmail:string){
   const db=getDb();
@@ -16,7 +16,7 @@ export async function issueDueContractInvoice(paymentId:number,actorEmail:string
   if(!["due","referred"].includes(payment.status))throw new Error("لم يحن موعد الدفعة بعد");
   const contract=await db.query.workforceContracts.findFirst({where:(table,{eq})=>eq(table.id,payment.contractId)});
   if(!contract)throw new Error("العقد غير موجود");
-  if(!canAutomaticallyInvoiceContract(contract))throw new Error("لا يمكن إصدار فاتورة قبل اعتماد العقد أو بعد إغلاقه");
+  if(!canInvoiceContractPayment(contract,payment))throw new Error("لا يمكن إصدار فاتورة قبل اعتماد العقد أو بعد إغلاقه");
   const assets=await db.select().from(companyAssets);
   if(!assets.some(a=>a.slot==="stamp")||!assets.some(a=>a.slot==="signature"))throw new Error("يجب اعتماد الختم والتوقيع قبل إصدار الفاتورة");
   const absenceDeductionHalalas=payment.absenceDeductionHalalas||0;const netSubtotalHalalas=Math.max(0,payment.subtotalHalalas-absenceDeductionHalalas);const netVatHalalas=Math.round(netSubtotalHalalas*payment.vatRateBps/10000);const netAmountHalalas=netSubtotalHalalas+netVatHalalas;
@@ -26,6 +26,11 @@ export async function issueDueContractInvoice(paymentId:number,actorEmail:string
   await getRuntimeEnv().BUCKET.put(storageKey,bytes,{httpMetadata:{contentType:"application/pdf"},customMetadata:{issuedBy:actorEmail,referenceCode,contractPaymentId:String(payment.id),automatic:"true"}});
   try{
     const result=await db.transaction(async tx=>{
+      await tx.execute(sql`select id from workforce_contracts where id = ${contract.id} for update`);
+      await tx.execute(sql`select id from contract_payment_schedules where id = ${payment.id} for update`);
+      const freshContract=await tx.query.workforceContracts.findFirst({where:eq(workforceContracts.id,contract.id)});
+      const freshPayment=await tx.query.contractPaymentSchedules.findFirst({where:eq(contractPaymentSchedules.id,payment.id)});
+      if(!freshContract||!freshPayment||!canInvoiceContractPayment(freshContract,freshPayment)||freshPayment.amountHalalas!==payment.amountHalalas||freshPayment.dueDate!==payment.dueDate)throw new Error("تغيرت الدفعة أو حالة العقد قبل إصدار الفاتورة؛ حدّث البيانات");
       const[document]=await tx.insert(companyDocuments).values({referenceCode,title:documentTitle,category:"finance",documentType,counterparty:contract.clientName,fileName,storageKey,contentType:"application/pdf",sizeBytes:bytes.byteLength,expiryDate:payment.dueDate,source:"generated",metadataJson:JSON.stringify({clientId:contract.clientId,supplierId:contract.supplierId,contractDirection:contract.contractDirection,contractId:contract.id,contractReference:contract.referenceCode,clientCr:contract.clientCr||null,clientVat:contract.clientVat||null,paymentScheduleId:payment.id,installmentNumber:payment.installmentNumber,billingBasis:payment.billingBasis,servicePeriod:payment.servicePeriod,issueDate,titleEn:documentTitleEn,details:invoiceDetails,detailsEn:invoiceDetailsEn,automaticAtDueDate:true,absenceDeductionHalalas,amountHalalas:netAmountHalalas,subtotalHalalas:netSubtotalHalalas,vatHalalas:netVatHalalas,vatRateBps:payment.vatRateBps,netSubtotalHalalas,netVatHalalas,netAmountHalalas,templateVersion:"letterhead-v5-english-invoice-copy"}),createdBy:actorEmail}).returning();
       const[financial]=await tx.insert(financialRecords).values({referenceCode:makeReference("FIN"),category:purchaser?"workforce_supplier_payable":"workforce_invoice",description:`${documentTitle} - ${contract.referenceCode} - ${contract.clientName}`,amountHalalas:netAmountHalalas,subtotalHalalas:netSubtotalHalalas,vatHalalas:netVatHalalas,vatRateBps:payment.vatRateBps,dueDate:payment.dueDate,periodMonth:payment.servicePeriod,contractId:contract.id,contractPaymentScheduleId:payment.id,documentId:document.id,status:"pending",postingStatus:"unposted"}).returning();
       const[updated]=await tx.update(contractPaymentSchedules).set({status:"invoiced",invoiceDocumentId:document.id,financialRecordId:financial.id,invoicedBy:actorEmail,invoicedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}).where(and(eq(contractPaymentSchedules.id,payment.id),inArray(contractPaymentSchedules.status,["due","referred"]),eq(contractPaymentSchedules.absenceDeductionHalalas,absenceDeductionHalalas),isNull(contractPaymentSchedules.invoiceDocumentId),isNull(contractPaymentSchedules.financialRecordId))).returning();

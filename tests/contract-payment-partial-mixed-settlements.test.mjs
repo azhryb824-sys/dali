@@ -103,7 +103,7 @@ test("legal referral snapshot includes the outstanding part and settlement evide
   ]);
   assert.match(route, /remainingAmountHalalas<=0/);
   assert.match(route, /settlements,settlementAllocations/);
-  assert.match(route, /المبلغ المتبقي/);
+  assert.match(route, /remainingAmountHalalas:/);
   assert.match(route, /كامل الدفعة أو جزء منها/);
   assert.match(notifications, /status: "overdue"/);
   assert.match(notifications, /\["pending", "partially_paid"\]/);

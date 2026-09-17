@@ -26,35 +26,10 @@ test("contract cancellation updates both contract lists without reloading the pa
   assert.doesNotMatch(billing, /window\.prompt\(\s*"اكتب سبب الإلغاء/);
 });
 
-test("cancellation voids unposted journals and creates auditable reversals for posted entries", async () => {
-  const [statusRoute, accounting] = await Promise.all([
-    read("app/api/portal/contracts/[id]/status/route.ts"),
-    read("lib/accounting.ts"),
-  ]);
-  assert.match(
-    statusRoute,
-    /status === "cancelled" && reasonCode !== "late_payment"/,
-  );
-  assert.match(
-    statusRoute,
-    /inArray\(journalEntries\.status, \["draft", "approved"\]\)/,
-  );
-  assert.match(statusRoute, /createReversalDraft\(journal\.id/);
-  assert.match(statusRoute, /reversalDraftIds/);
-  assert.match(accounting, /reversalOfId: entryId/);
-  assert.match(accounting, /debitHalalas: line\.creditHalalas/);
-  assert.match(accounting, /creditHalalas: line\.debitHalalas/);
-  assert.match(accounting, /posted\.reversalOfId/);
-  assert.match(accounting, /postingStatus: "reversed"/);
-});
-
-test("late-payment cancellation preserves the receivable and paid schedules remain historical", async () => {
-  const statusRoute = await read(
-    "app/api/portal/contracts/[id]/status/route.ts",
-  );
-  assert.match(statusRoute, /reasonCode !== "late_payment"/);
-  assert.doesNotMatch(
-    statusRoute,
-    /inArray\(contractPaymentSchedules\.status, \[[^\]]*"paid"/,
-  );
+test("cancellation is atomic and never automatically reverses unrelated historical finance", async () => {
+  const [route, service] = await Promise.all([read("app/api/portal/contracts/[id]/status/route.ts"), read("lib/contract-cancellation.ts")]);
+  assert.match(route, /applyContractCancellation\(tx/);
+  assert.doesNotMatch(service, /delete\(financialRecords\)|update\(financialRecords\)|createReversalDraft/);
+  assert.match(service, /cancellationPaymentDecision/);
+  assert.match(service, /cancellationOriginalAmountHalalas/);
 });

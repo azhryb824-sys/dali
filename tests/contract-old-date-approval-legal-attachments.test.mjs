@@ -24,7 +24,7 @@ test("unapproved old-dated contracts cannot be invoiced before approval", async 
   assert.match(payments, /isNotNull\(workforceContracts\.approvedBy\)/);
   assert.match(payments, /inArray\(workforceContracts\.status,invoiceEligibleContractStatuses\)/);
   assert.match(payments, /inArray\(contractPaymentSchedules\.contractId,billableContractIds\)/);
-  assert.match(invoicing, /canAutomaticallyInvoiceContract\(contract\)/);
+  assert.match(invoicing, /canInvoiceContractPayment\(contract,payment\)/);
   assert.match(invoicing, /لا يمكن إصدار فاتورة قبل اعتماد العقد أو بعد إغلاقه/);
   assert.match(notifications, /billableContractIds\.has\(payment\.contractId\)/);
   assert.match(notifications, /issueDueContractInvoice\(payment\.id,AUTOMATED_CONTRACT_BILLING_ACTOR\)/);
@@ -74,7 +74,7 @@ test("every legal referral path collects all documents linked to the contract", 
   const [collector, paymentReferral, cancellationReferral, shares, generation] = await Promise.all([
     read("lib/contract-legal-documents.ts"),
     read("app/api/portal/contract-payments/route.ts"),
-    read("app/api/portal/contracts/[id]/status/route.ts"),
+    read("lib/contract-cancellation.ts"),
     read("app/api/portal/legal-cases/shares/route.ts"),
     read("app/api/portal/documents/generate/route.ts"),
   ]);
@@ -84,7 +84,7 @@ test("every legal referral path collects all documents linked to the contract", 
   assert.match(collector, /metadata\.contractReference === contract\.referenceCode/);
   assert.match(collector, /directIdSet\.has\(document\.id\)/);
   assert.match(paymentReferral, /loadContractLegalDocuments\(db,contract/);
-  assert.match(cancellationReferral, /loadContractLegalDocuments\(db, contract/);
+  assert.match(cancellationReferral, /loadContractLegalDocuments\(tx, contract/);
   assert.match(shares, /loadLegalRecordContractDocuments\(db, matter\)/);
   assert.match(collector, /loadLegalRecordContractDocuments/);
   assert.match(collector, /disputed_invoice/);

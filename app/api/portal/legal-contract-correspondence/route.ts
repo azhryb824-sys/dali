@@ -1,10 +1,11 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   companyDocuments,
   legalCaseActionLog,
   legalContractCorrespondence,
   legalRecords,
+  legalReferrals,
   portalActivity,
   workforceContracts,
 } from "@/db/schema";
@@ -366,7 +367,11 @@ export async function POST(request: Request) {
   if (!contract) return jsonNoStore({ error: "العقد المرتبط غير موجود" }, { status: 404 });
   const now = new Date().toISOString();
   const messageType = action === "return-contract" ? "return_request" : "note";
-  const [message] = await db.transaction(async (tx) => {
+  const transactionResult = await db.transaction(async (tx) => {
+    await tx.execute(sql`select id from legal_records where id = ${legalRecordId} for update`);
+    const currentMatter = await tx.query.legalRecords.findFirst({ where: eq(legalRecords.id, legalRecordId) });
+    if (!currentMatter || ["closed", "cancelled"].includes(currentMatter.status)) throw new Error("الملف القانوني مغلق");
+    if (action === "return-contract" && currentMatter.status === "awaiting_contracts") throw new Error("سبق إرجاع هذا الملف إلى العقود");
     const inserted = await tx.insert(legalContractCorrespondence).values({
       legalRecordId,
       contractId: contract.id,
@@ -381,8 +386,11 @@ export async function POST(request: Request) {
       createdAt: now,
       updatedAt: now,
     }).returning();
-    if (action === "return-contract")
+    if (action === "return-contract") {
       await tx.update(legalRecords).set({ status: "awaiting_contracts", updatedAt: now }).where(eq(legalRecords.id, legalRecordId));
+      await tx.update(legalReferrals).set({ status: "returned", returnedBy: actor.user.email, returnedAt: now, returnReason: messageText })
+        .where(and(eq(legalReferrals.legalRecordId, legalRecordId), eq(legalReferrals.status, "active")));
+    }
     await tx.insert(legalCaseActionLog).values({
       legalRecordId,
       action: action === "return-contract" ? "returned_to_contracts" : "note_sent",
@@ -398,7 +406,9 @@ export async function POST(request: Request) {
       afterJson: JSON.stringify({ legalRecordId, correspondenceId: inserted[0].id, reasonCode, requiredAttachmentName: requiredAttachmentName || null }),
     });
     return inserted;
-  });
+  }).catch(error => jsonNoStore({ error: error instanceof Error ? error.message : "تعذر حفظ المراسلة" }, { status: 409 }));
+  if (transactionResult instanceof Response) return transactionResult;
+  const [message] = transactionResult;
   await auditPortalAction({ actorEmail: actor.user.email, action: action === "return-contract" ? "legal-contract-returned" : "legal-workforce-note-sent", entityType: "workforce-contract", entityId: contract.id, after: { legalRecordId, correspondenceId: message.id, reasonCode, requiredAttachmentName: requiredAttachmentName || null }, reason: messageText });
   await emitPortalNotification({
     eventType: action === "return-contract" ? "legal-contract-returned" : "legal-workforce-note-sent",

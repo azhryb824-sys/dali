@@ -39,7 +39,7 @@ test("contractual records are separated and lifecycle actions preserve accountin
   assert.match(portal,/contractual-documents/);assert.match(portal,/documents\.filter/);assert.match(workspace,/العقود وعروض الأسعار والخطابات/);
   assert.match(letters,/يمكن تعديل مسودة الخطاب فقط/);assert.match(letters,/لا يُحذف إلا الخطاب المسودة/);assert.match(letters,/إلغاء الخطابات متاح للمالك أو مشرف النظام فقط/);
   assert.match(letterPdf,/documentType:"official_letter"/);assert.match(letterPdf,/language.*bilingual/);assert.match(letterLinks,/PDF عربي\/English/);
-  assert.match(contracts,/reasonCode === "late_payment"/);assert.match(contracts,/إلغاء بسبب تأخر سداد الدفعة/);assert.match(contracts,/postingStatus: "not_applicable"/);assert.match(contracts,/contract-cancellation-accounting-review/);
+  assert.match(contracts,/reasonCode === "late_payment"/);assert.match(contracts,/إلغاء بسبب تأخر سداد الدفعة/);assert.match(contracts,/applyContractCancellation\(tx/);assert.match(contracts,/contract-cancellation-accounting-review/);
   assert.match(migration,/official_letters_status_check/);
 });
 

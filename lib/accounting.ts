@@ -1,3 +1,4 @@
+import type { LegalTransaction } from "@/lib/legal-referrals";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
@@ -109,9 +110,9 @@ export async function createDraftJournal(input: {
   actorEmail: string;
   reversalOfId?: number | null;
   lines: JournalLineInput[];
-}) {
+}, transaction?: LegalTransaction) {
   const totals = validateBalancedJournal(input.lines);
-  const db = getDb();
+  const db = transaction || getDb();
   const period = await db.query.fiscalPeriods.findFirst({
     where: and(
       sql`${fiscalPeriods.startDate} <= ${input.entryDate}`,
@@ -180,7 +181,7 @@ export async function createDraftJournal(input: {
     throw error;
   }
 
-  await auditPortalAction({
+  if (!transaction) await auditPortalAction({
     actorEmail: input.actorEmail,
     action: "journal-entry-created",
     entityType: "journal-entry",

@@ -29,6 +29,7 @@ import ContractApprovalStampDialog, {
 } from "./ContractApprovalStampDialog";
 import LegalPaymentReferralDialog from "./LegalPaymentReferralDialog";
 import ContractFullEditDialog from "./ContractFullEditDialog";
+import LegalReferralPanel from "./LegalReferralPanel";
 import LegalContractCorrespondence from "./LegalContractCorrespondence";
 import ContractPaymentSettlementDialog, {
   type SettlementDialogAllocation,
@@ -57,6 +58,7 @@ type Contract = {
   details: string;
   showPaymentSchedule: boolean;
   approvedBy: string | null;
+  cancellationEffectiveDate: string | null;
 };
 type Profession = {
   id?: number;
@@ -81,6 +83,9 @@ type Payment = {
   paidAmountHalalas: number;
   remainingAmountHalalas: number;
   isOverdue: boolean;
+  legalReferralStatus: string | null;
+  legalRecordId: number | null;
+  cancellationDisposition: string | null;
   absenceDeductionHalalas: number;
   subtotalHalalas?: number;
   vatRateBps?: number;
@@ -171,7 +176,7 @@ const contractLabels: Record<string, string> = {
   cancelled: "ملغى",
   superseded: "مستبدل",
 };
-export default function ContractBillingWorkspace() {
+export default function ContractBillingWorkspace({ onlyPendingApproval = false }: { onlyPendingApproval?: boolean }) {
   const [data, setData] = useState<Data | null>(null);
   const [busy, setBusy] = useState(0);
   const [notice, setNotice] = useState("");
@@ -813,8 +818,9 @@ export default function ContractBillingWorkspace() {
           </div>
           <b>{data.contracts.length} عقد</b>
         </header>
+        {!onlyPendingApproval && <LegalReferralPanel sourceType="contract" records={data.contracts.map(item => ({id:item.id,label:`${item.referenceCode} — ${item.clientName}`}))} />}
         <div className="contract-billing-list">
-          {data.contracts.map((contract) => {
+          {data.contracts.filter(contract => !onlyPendingApproval || ["draft", "internal_review", "legal_review"].includes(contract.status)).map((contract) => {
             const payments = data.payments.filter(
               (item) => item.contractId === contract.id,
             );
@@ -1003,9 +1009,11 @@ export default function ContractBillingWorkspace() {
                           <span className={`workflow-status ${payment.status}`}>
                             {labels[payment.status] || payment.status}
                           </span>
+                          {payment.legalReferralStatus && <p className="operations-notice">{payment.legalReferralStatus === "returned" ? "أعيدت الدفعة من القانونية؛ راجع سبب الإرجاع قبل إحالتها مجددًا" : "هذه الدفعة محالة إلى القانونية"}</p>}
+                          {payment.cancellationDisposition?.startsWith("review_") && <div className="cancellation-review-note">{payment.cancellationDisposition === "review_accrual" ? "خدمة جزئية حتى الإلغاء: حدد المستحق النهائي وفق الخدمة الفعلية وشروط العقد." : "فاتورة أو سداد سابق: يلزم تحديد أثر الإلغاء بإشعار دائن أو تسوية واسترداد معتمد في المالية."}{data.canApproveContracts && payment.cancellationDisposition === "review_accrual" && <button disabled={busy === payment.id} onClick={async () => { const amount = await appPrompt("المستحق النهائي قبل الضريبة وقبل خصومات الغياب بالريال (صفر لإلغاء الاستحقاق):", { title: "تسوية خدمة العقد" }); if (amount === null) return; const reason = await appPrompt("أساس التسوية والمستند المؤيد:", { title: "سبب التسوية", multiline: true }); if (!reason) return; setBusy(payment.id); try { const response = await fetch("/api/portal/contract-payments", {method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({action:"review-cancellation",paymentId:payment.id,subtotalHalalas:Math.round(Number(amount)*100),reason})}); const result = await readApiJson(response) as {error?:string}; if(!response.ok)throw new Error(result.error||"تعذرت التسوية"); await load(); setNotice("اعتمد المبلغ النهائي وحفظ أساس التسوية"); } catch(error){setNotice(error instanceof Error?error.message:"تعذرت التسوية")} finally{setBusy(0)} }}>اعتماد المستحق النهائي</button>}</div>}
                           <div className="payment-actions">
                             {data.canInvoice &&
-                              ["scheduled", "due"].includes(payment.status) && (
+                              !contract.cancellationEffectiveDate && ["scheduled", "due"].includes(payment.status) && (
                                 <button
                                   disabled={busy === payment.id}
                                   onClick={() => void reschedule(payment)}
@@ -1013,7 +1021,7 @@ export default function ContractBillingWorkspace() {
                                   تعديل موعد الدفعة
                                 </button>
                               )}
-                            {data.canRefer &&
+                            {data.canRefer && !payment.cancellationDisposition?.startsWith("review_") &&
                               ["scheduled", "due"].includes(payment.status) &&
                               payment.dueDate <=
                                 new Date().toISOString().slice(0, 10) && (
@@ -1138,7 +1146,7 @@ export default function ContractBillingWorkspace() {
                               </details>
                             )}
                             {data.canReferLegal &&
-                              payment.isOverdue && (
+                              payment.isOverdue && payment.status !== "cancelled" && (!payment.legalReferralStatus || payment.legalReferralStatus === "returned") && (
                                 <button
                                   className="legal-referral"
                                   disabled={busy === payment.id}

@@ -29,6 +29,9 @@ import ContractCancellationDialog from "./ContractCancellationDialog";
 import ContractApprovalStampDialog, {
   type ContractApprovalStamp,
 } from "./ContractApprovalStampDialog";
+import ExecutiveActionCenter from "./ExecutiveActionCenter";
+import LegalWorkspaceTabs from "./LegalWorkspaceTabs";
+import LegalReferralPanel from "./LegalReferralPanel";
 import LegalCaseWorkspace from "./LegalCaseWorkspace";
 import PaymentManagementDashboard from "./PaymentManagementDashboard";
 import VideoInterviewDesk from "./VideoInterviewDesk";
@@ -51,7 +54,7 @@ import { corporateDocumentTypeLabels, corporateDocumentTypes, isCorporateDocumen
 type PortalRole = "admin" | "manager" | "employee";
 type PortalDepartment = "employees" | "finance" | "legal" | "workforce" | "construction" | "general";
 type RequestStatus = "new" | "reviewing" | "contacted" | "closed";
-type View = "overview" | "notifications" | "tasks" | "guide" | "employees" | "finance" | "legal" | "government" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "workforce-supervision" | "contractual-documents" | "documents" | "brand" | "website" | "users";
+type View = "executive-center" | "overview" | "notifications" | "tasks" | "guide" | "employees" | "finance" | "legal" | "government" | "workforce" | "operations" | "representatives" | "construction" | "conversations" | "workforce-supervision" | "contractual-documents" | "documents" | "brand" | "website" | "users";
 type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 type WorkforceRequest = {
@@ -1139,7 +1142,7 @@ export default function PortalDashboard({
     if (next === "construction") return canAccessConstruction;
     if (next === "conversations") return canAccessConversations;
     if (next === "website") return canAccessWebsite;
-    if (next === "users") return isRoot;
+    if (next === "users" || next === "executive-center") return isRoot;
     return false;
   }
   function changeView(next: View) {
@@ -2109,6 +2112,7 @@ export default function PortalDashboard({
   }
 
   const viewTitle: Record<View, string> = {
+    "executive-center": "مركز المالك والمشرف",
     overview: "لوحة المتابعة",
     notifications: "مركز الإشعارات",
     tasks: "المهام والتذكيرات",
@@ -2148,6 +2152,7 @@ export default function PortalDashboard({
             <Icon name="home" />
             <span>نظرة عامة</span>
           </button>
+          {isRoot && <button className={view === "executive-center" ? "active" : ""} onClick={() => changeView("executive-center")}><Icon name="check" /><span>مركز المالك والمشرف</span></button>}
           <button className={view === "notifications" ? "active" : ""} onClick={() => changeView("notifications")}>
             <Icon name="bell" />
             <span>مركز الإشعارات</span>
@@ -2346,6 +2351,7 @@ export default function PortalDashboard({
         <GlobalTaskReminder />
 
         <div className="admin-content">
+          {view === "executive-center" && isRoot && <ExecutiveActionCenter />}
           {view === "overview" && (
             <>
               <div className="content-heading">
@@ -2550,6 +2556,7 @@ export default function PortalDashboard({
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث باسم الموظف أو الرقم أو المسمى">
                 <EmployeeTable records={employees} users={initialUsers} query={query} canWrite={canWrite} canArchive={canArchiveEmployees} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} onUpdate={updateEmployeeCompliance} onDelete={deleteEmployee} />
               </ManagementPanel>
+              <LegalReferralPanel sourceType="employee" records={employees.map(item => ({ id: item.id, label: `${item.employeeNumber} — ${item.fullName}` }))} />
               <HrWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} generalOnly />
             </ModuleSection>
           )}
@@ -2580,6 +2587,7 @@ export default function PortalDashboard({
 
           {view === "legal" && canAccess("legal") && (
             <ModuleSection eyebrow="العقود والامتثال" title="الشؤون القانونية" description="متابعة العقود والقضايا والتراخيص والتنبيهات النظامية." actionLabel="إضافة ملف قانوني" canWrite={canWrite && canManageLegalCases} onAdd={() => setModal("legal")}>
+              <LegalWorkspaceTabs register={<>
               <section className="metric-grid compact-metrics">
                 <Metric label="إجمالي الملفات" value={legal.length} note="كل السجلات" />
                 <Metric label="عقود سارية" value={legal.filter((item) => item.category === "contract" && item.status === "active").length} note="عقود فعّالة" />
@@ -2589,8 +2597,9 @@ export default function PortalDashboard({
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالعنوان أو الطرف أو المرجع">
                 <LegalTable records={legal} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("legal", id, status)} />
               </ManagementPanel>
+              </>} compliance={<ComplianceWorkspace canWrite={canWrite} />}>
               <LegalCaseWorkspace key={selectedLegalRecordId || "legal-workspace"} initialRecordId={selectedLegalRecordId || undefined} />
-              <ComplianceWorkspace canWrite={canWrite} />
+              </LegalWorkspaceTabs>
             </ModuleSection>
           )}
 
@@ -2602,6 +2611,7 @@ export default function PortalDashboard({
                 <Metric label="متاحون للعقود" value={workers.filter((item) => item.status === "available").length} note="جاهزون للإسناد" />
                 <Metric label="ملفات تحتاج استكمالاً" value={incompleteWorkerFiles} note={`${workerAlerts} تنبيه إقامة`} />
               </section>
+              <LegalReferralPanel sourceType="worker" records={workers.map(item => ({ id: item.id, label: `${item.fullName} — ${item.iqamaNumber || item.profession}` }))} />
               <WorkforceOperations workers={workers} attachments={workerAttachments} />
               <ContractOperations contracts={contracts} professions={contractProfessions} assignments={contractAssignments} onSelect={setSelectedContractId} />
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالاسم أو رقم الإقامة أو المهنة أو الجهة">
@@ -6788,73 +6798,16 @@ function ContractDrawer({
 function WorkerTable({ records, attachments, query, onSelect }: { records: WorkerRecord[]; attachments: WorkerAttachment[]; query: string; onSelect: (id: number) => void }) {
   const rows = filterRecords(records, query);
   if (!rows.length) return <EmptyRows label="أضف أول ملف عامل متكامل ليظهر هنا." />;
-  return (
-    <div className="management-table-wrap">
-      <table className="management-table workforce-table">
-        <thead>
-          <tr>
-            <th>العامل</th>
-            <th>المهنة</th>
-            <th>الجهة المستفيدة</th>
-            <th>موقع العمل</th>
-            <th>انتهاء الإقامة</th>
-            <th>اكتمال الملف</th>
-            <th>الحالة</th>
-            <th>
-              <span className="sr-only">عرض</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((item) => {
-            const profile = workerRequirementStatus(item, attachments);
-            const photo = profile.files.find((file) => file.documentType === "photo");
-            return (
-              <tr key={item.id}>
-                <td>
-                  <div className="worker-identity">
-                    {photo ? <Image unoptimized src={`/api/portal/workers/attachments/${photo.id}?inline=1`} alt={`صورة ${item.fullName}`} width={56} height={56} /> : <span>{initials(item.fullName)}</span>}
-                    <p>
-                      <strong>{item.fullName}</strong>
-                      <small dir="ltr">{item.iqamaNumber || "رقم الإقامة غير مسجل"}</small>
-                    </p>
-                  </div>
-                </td>
-                <td>
-                  <strong>{item.profession}</strong>
-                  <small>{item.nationality}</small>
-                </td>
-                <td>
-                  <strong>{item.beneficiaryName || "غير مسند"}</strong>
-                  <small>{item.status === "assigned" ? "مستفيد حالي" : "متاح للإسناد"}</small>
-                </td>
-                <td>{item.clientSite}</td>
-                <td className={daysUntil(item.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(item.iqamaExpiry)}</td>
-                <td>
-                  <div className="file-completion">
-                    <span>
-                      <i style={{ width: `${profile.percent}%` }} />
-                    </span>
-                    <small>
-                      {profile.percent}% · {profile.missing.length ? `${profile.missing.length} ناقص` : "مكتمل"}
-                    </small>
-                  </div>
-                </td>
-                <td>
-                  <span className={`status-pill ${statusClass(item.status)}`}>{recordStatus.workforce[item.status] || item.status}</span>
-                </td>
-                <td>
-                  <button className="worker-view" onClick={() => onSelect(item.id)}>
-                    عرض الملف ←
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+  return <div className="legal-card-grid workforce-cards">{rows.map(item => {
+    const profile = workerRequirementStatus(item, attachments);
+    const photo = profile.files.find(file => file.documentType === "photo");
+    return <details className="legal-source-card" key={item.id}>
+      <summary><div className="worker-identity">{photo ? <Image unoptimized src={`/api/portal/workers/attachments/${photo.id}?inline=1`} alt={`صورة ${item.fullName}`} width={56} height={56} /> : <span>{initials(item.fullName)}</span>}<p><strong>{item.fullName}</strong><small>{item.profession} · {item.nationality}</small></p></div><span className={`status-pill ${statusClass(item.status)}`}>{recordStatus.workforce[item.status] || item.status}</span></summary>
+      <dl><dt>رقم الإقامة</dt><dd dir="ltr">{item.iqamaNumber || "غير مسجل"}</dd><dt>الجهة المستفيدة</dt><dd>{item.beneficiaryName || "غير مسند"}</dd><dt>موقع العمل</dt><dd>{item.clientSite}</dd><dt>انتهاء الإقامة</dt><dd className={daysUntil(item.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(item.iqamaExpiry)}</dd></dl>
+      <div className="file-completion"><span><i style={{width:`${profile.percent}%`}} /></span><small>{profile.percent}% · {profile.missing.length ? `${profile.missing.length} ناقص` : "مكتمل"}</small></div>
+      <button className="worker-view" onClick={() => onSelect(item.id)}>عرض الملف ←</button>
+    </details>;
+  })}</div>;
 }
 
 function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSubmit }: { entity: Exclude<RecordEntity, "finance" | "workforce">; users: PortalUser[]; linkedEmployeeEmails: Set<string>; busy: boolean; onClose: () => void; onSubmit: (entity: RecordEntity, form: HTMLFormElement) => Promise<void> }) {

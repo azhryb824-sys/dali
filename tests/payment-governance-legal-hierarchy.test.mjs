@@ -35,7 +35,7 @@ test("legal judgment payment is owner-confirmed and posts only to legal judgment
   assert.match(route,/category:\s*"legal_judgment"/);
   assert.match(route,/sourceType:\s*"financial-record"/);
   assert.match(route,/bank\.ledgerAccountId/);
-  assert.match(ui,/طلبات سداد المحكوم به/);
+  assert.match(ui,/الأحكام والتعويضات والتكاليف القانونية/);
   assert.match(ui,/تم السداد وإنشاء القيد/);
   assert.match(migration,/5290','مصروفات وأحكام قانونية/);
 });
