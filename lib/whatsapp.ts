@@ -1,6 +1,8 @@
 /** Normalize Saudi mobile numbers to the international format required by wa.me. */
 export function normalizeSaudiWhatsAppNumber(value: string | null | undefined) {
-  let digits = String(value || "").replace(/\D/g, "");
+  const western = String(value || "").replace(/[٠-٩۰-۹]/g, digit => String(digit.charCodeAt(0) - (digit >= "۰" ? 0x6f0 : 0x660)));
+  if (/[^+0-9\s().-]/.test(western)) return null;
+  let digits = western.replace(/\D/g, "");
   if (digits.startsWith("00966")) digits = digits.slice(2);
   if (digits.startsWith("9660")) digits = `966${digits.slice(4)}`;
   else if (digits.startsWith("05")) digits = `966${digits.slice(1)}`;

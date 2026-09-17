@@ -14,7 +14,7 @@ if (!manifest.includes('android.hardware.camera" android:required="false"') || !
 if (!manifest.includes('android:dataExtractionRules="@xml/data_extraction_rules"')) throw new Error("Android backup protection is incomplete");
 if (manifest.indexOf("<uses-permission") > manifest.indexOf("<application")) throw new Error("Android permissions must precede the application declaration");
 const gradle = await readFile(new URL("../android/app/build.gradle", import.meta.url), "utf8");
-if (!gradle.includes('applicationId "sa.dally.mobile"') || !gradle.includes("versionCode 3") || !gradle.includes('versionName "1.0.2"')) throw new Error("Android identity or version is incorrect");
+if (!gradle.includes('applicationId "sa.dally.mobile"') || !gradle.includes("versionCode 4") || !gradle.includes('versionName "1.0.3"')) throw new Error("Android identity or version is incorrect");
 const iosProject = await readFile(new URL("../ios/App/App.xcodeproj/project.pbxproj", import.meta.url), "utf8");
-if (!iosProject.includes("PRODUCT_BUNDLE_IDENTIFIER = sa.dally.mobile") || !iosProject.includes("CURRENT_PROJECT_VERSION = 3") || !iosProject.includes("MARKETING_VERSION = 1.0.2")) throw new Error("iOS identity or version is incorrect");
-console.log(JSON.stringify({ status: "ok", root, appId: "sa.dally.mobile", appName: "نظام دالي الإداري", version: "1.0.2", platforms: ["android", "ios"], remotePortal: true }));
+if (!iosProject.includes("PRODUCT_BUNDLE_IDENTIFIER = sa.dally.mobile") || !iosProject.includes("CURRENT_PROJECT_VERSION = 4") || !iosProject.includes("MARKETING_VERSION = 1.0.3")) throw new Error("iOS identity or version is incorrect");
+console.log(JSON.stringify({ status: "ok", root, appId: "sa.dally.mobile", appName: "نظام دالي الإداري", version: "1.0.3", platforms: ["android", "ios"], remotePortal: true }));

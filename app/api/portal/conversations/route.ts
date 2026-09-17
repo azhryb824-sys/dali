@@ -19,7 +19,7 @@ async function requireConversationReadAccess() {
 
 async function requireConversationWriteAccess() {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  return access && canManagePortalConversations(access) ? access : null;
+  return access && (canManagePortalConversations(access) || canAdministerPortalUsers(access)) ? access : null;
 }
 
 async function listConversationData(request: Request) {

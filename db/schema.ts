@@ -49,9 +49,15 @@ export const workforceRequests = pgTable(
     updatedAt: text("updated_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP::text`),
+    approvalStatus: text("approval_status").notNull().default("pending"),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    approvalReason: text("approval_reason"),
     version: integer("version").notNull().default(1),
   },
   (table) => [
+    index("workforce_requests_approval_idx").on(table.requestType, table.approvalStatus),
+    check("workforce_requests_approval_status_check", sql`${table.approvalStatus} in ('pending','approved','rejected')`),
     index("workforce_requests_status_idx").on(table.status),
     index("workforce_requests_request_type_idx").on(table.requestType),
     index("workforce_requests_created_at_idx").on(table.createdAt),
@@ -3210,6 +3216,7 @@ export const quoteVersions = pgTable(
     accommodationParty: text("accommodation_party"),
     transportParty: text("transport_party"),
     vatRateBps: integer("vat_rate_bps").notNull().default(0),
+    commercialTermsJson: text("commercial_terms_json"),
     assumptions: text("assumptions"),
     terms: text("terms"),
     approvalReason: text("approval_reason"),

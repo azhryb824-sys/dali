@@ -55,8 +55,18 @@ export async function listAvailableInterviewStaff(excludeEmail?: string) {
   return eligible.map((row) => ({ ...row, owner: owners.has(row.email) })).sort((a, b) => Number(b.owner) - Number(a.owner));
 }
 
+export async function refreshInterviewPresence(userEmail: string) {
+  const now = new Date().toISOString();
+  await getDb().insert(portalUserPresence).values({ userEmail, availability: "online", lastSeenAt: now, updatedAt: now }).onConflictDoUpdate({
+    target: portalUserPresence.userEmail,
+    set: { lastSeenAt: now, updatedAt: now },
+  });
+}
+
 export async function touchInterviewPresence(userEmail: string, availability: "online" | "busy" | "away" | "offline" = "online", currentInterviewId: string | null = null) {
   const now = new Date().toISOString();
+  const active = await getDb().query.videoInterviews.findFirst({ where: and(eq(videoInterviews.assignedTo, userEmail), eq(videoInterviews.status, "active"), gt(videoInterviews.expiresAt, now)) });
+  if (active) { availability = "busy"; currentInterviewId = active.id; }
   await getDb().insert(portalUserPresence).values({ userEmail, availability, currentInterviewId, lastSeenAt: now, updatedAt: now }).onConflictDoUpdate({
     target: portalUserPresence.userEmail,
     set: { availability, currentInterviewId, lastSeenAt: now, updatedAt: now },
@@ -69,6 +79,7 @@ export async function expireOldVideoInterviews() {
   const db = getDb();
   const open = await db.select().from(videoInterviews).where(inArray(videoInterviews.status, [...liveInterviewStatuses])).orderBy(desc(videoInterviews.requestedAt)).limit(300);
   const expired = open.filter((item) => item.expiresAt <= now);
-  for (const item of expired) await db.update(videoInterviews).set({ status: "expired", endedAt: now, updatedAt: now }).where(eq(videoInterviews.id, item.id));
+  for (const item of expired) await db.update(videoInterviews).set({ status: "expired", endedAt: now, updatedAt: now }).where(and(eq(videoInterviews.id, item.id), eq(videoInterviews.status, item.status)));
+  for (const item of expired) if (item.assignedTo) await touchInterviewPresence(item.assignedTo);
   return expired.length;
 }

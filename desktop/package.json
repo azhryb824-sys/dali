@@ -1,6 +1,6 @@
 {
   "name": "dali-desktop",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "تطبيق نظام دالي الإداري المتكامل",
   "author": "Dally Corporation",
   "private": true,
@@ -38,7 +38,8 @@
       "preload.mjs",
       "offline.html",
       "assets/**/*",
-      "package.json"
+      "package.json",
+      "media-permissions.mjs"
     ],
     "mac": {
       "icon": "assets/dali-icon.png",
@@ -56,7 +57,9 @@
     },
     "win": {
       "icon": "assets/dali-icon.ico",
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "extraResources": [
         {
           "from": "native-share/bin/DaliNativeShare.exe",

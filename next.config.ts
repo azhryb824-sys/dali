@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
           "form-action 'self'",
           "frame-ancestors 'none'",
           "object-src 'none'",
-          "frame-src 'none'",
+          "frame-src https://meet.jit.si",
           "child-src 'none'",
           "manifest-src 'self'",
           "media-src 'self'",
@@ -36,7 +36,7 @@ const nextConfig: NextConfig = {
       { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
       { key: "Origin-Agent-Cluster", value: "?1" },
       { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
-      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+      { key: "Permissions-Policy", value: 'camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), geolocation=(), payment=(), usb=()' },
       { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
     ];
 

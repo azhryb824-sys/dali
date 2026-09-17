@@ -12,7 +12,7 @@ if errorlevel 1 exit /b 12
 
 if not exist "%~dp0bin" mkdir "%~dp0bin"
 
-cl.exe /nologo /std:c++20 /permissive- /EHsc /O2 /MT /DUNICODE /D_UNICODE ^
+cl.exe /nologo /utf-8 /std:c++20 /permissive- /EHsc /O2 /MT /DUNICODE /D_UNICODE ^
   "%~dp0DaliNativeShare.cpp" ^
   /Fo:"%~dp0bin\DaliNativeShare.obj" ^
   /Fe:"%~dp0bin\DaliNativeShare.exe" ^

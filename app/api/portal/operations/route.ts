@@ -1,3 +1,4 @@
+import { commercialTermsFromRequest, readCommercialTerms } from "@/lib/commercial-terms";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
@@ -18,6 +19,7 @@ import {
   workOrders,
   workerPortalUsers,
   workers,
+  workforceRequests,
 } from "@/db/schema";
 import {
   auditPortalAction,
@@ -32,6 +34,8 @@ import {
 import { canAdministerPortalUsers, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import {
+  annualContractSchedule,
+  annualInstallmentPercentages,
   parsePaymentSchedule,
   validateSeasonalSchedule,
 } from "@/lib/payment-schedules";
@@ -221,7 +225,9 @@ export async function GET(request: Request) {
             .offset(offset)
         : Promise.resolve([]),
     ]);
+    const quoteRequests = canSeeContracts ? await getDb().select().from(workforceRequests).where(eq(workforceRequests.requestType, "quotation")).orderBy(desc(workforceRequests.updatedAt)).limit(200) : [];
     return jsonNoStore({
+      quoteRequests,
       clients: clientRows,
       contacts: contactRows,
       opportunities: opportunityRows,
@@ -484,8 +490,11 @@ async function createRecord(
   }
 
   if (action === "create-quote") {
-    let opportunityId = integer(payload.opportunityId, 1);
-    const directClientName = text(payload.clientName, 180);
+    const sourceRequestId = integer(payload.sourceRequestId, 1);
+    const sourceRequest = sourceRequestId ? await db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) }) : null;
+    if (sourceRequestId && (!sourceRequest || sourceRequest.requestType !== "quotation" || sourceRequest.approvalStatus !== "approved" || !sourceRequest.approvedBy)) throw new Error("يجب اعتماد طلب عرض السعر من المالك أو المشرف قبل تحويله");
+    let opportunityId = sourceRequest ? sourceRequest.opportunityId : integer(payload.opportunityId, 1);
+    const directClientName = text(payload.clientName, 180) || sourceRequest?.companyName || sourceRequest?.fullName || "";
     const issueDate = date(payload.issueDate);
     const validUntil = date(payload.validUntil);
     const rawItems = Array.isArray(payload.items) ? payload.items : [];
@@ -509,7 +518,7 @@ async function createRecord(
       payload.seasonType === "ramadan" || payload.seasonType === "hajj"
         ? payload.seasonType
         : "regular";
-    const paymentSchedule = parsePaymentSchedule(payload.paymentSchedule);
+    let paymentSchedule = parsePaymentSchedule(payload.paymentSchedule);
     if (
       (!opportunityId && directClientName.length < 2) ||
       !issueDate ||
@@ -538,6 +547,10 @@ async function createRecord(
           where: eq(salesOpportunities.id, opportunityId),
         })
       : null;
+    if (!opportunity && sourceRequest) {
+      opportunity = await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.sourceRequestId, sourceRequest.id) }) || null;
+      if (opportunity) opportunityId = opportunity.id;
+    }
     if (!opportunity && directClientName) {
       let client = await db.query.clients.findFirst({
         where: eq(clients.legalName, directClientName),
@@ -559,6 +572,7 @@ async function createRecord(
         .values({
           opportunityCode: code("OPP"),
           clientId: client.id,
+          sourceRequestId: sourceRequest?.id || null,
           title: `${activityLabel} - ${directClientName}`,
           stage: "proposal",
           expectedValueHalalas: 0,
@@ -570,6 +584,17 @@ async function createRecord(
       opportunityId = opportunity.id;
     }
     if (!opportunity) throw new Error("الفرصة أو اسم العميل غير موجود");
+    if (opportunity.sourceRequestId) {
+      const linkedRequest = await db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, opportunity.sourceRequestId) });
+      if (!linkedRequest?.approvedBy || linkedRequest.approvalStatus !== "approved") throw new Error("يجب اعتماد طلب عرض السعر من المالك أو المشرف قبل تحويله");
+    }
+    const commercialTerms = readCommercialTerms({ ...(sourceRequest ? commercialTermsFromRequest(sourceRequest) : {}), ...payload, paymentTerms: payload.paymentTerms || payload.terms });
+    if (activityLabel === "توريد العمالة" && seasonType === "regular" && commercialTerms.startDate) {
+      const annual = annualContractSchedule(commercialTerms.startDate);
+      commercialTerms.endDate = annual.endDate;
+      const percentages = annualInstallmentPercentages();
+      if (quantityMode === "fixed") paymentSchedule = annual.dueDates.map((dueDate, index) => ({ title: `الدفعة الشهرية ${index + 1}`, titleEn: `Monthly installment ${index + 1}`, dueDate, percentageBps: percentages[index] }));
+    }
     const normalizedItems = rawItems.slice(0, 50).map((raw, index) => {
       const item =
         raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -650,9 +675,8 @@ async function createRecord(
       subtotalHalalas,
       Math.max(0, Math.round((Number(payload.discount) || 0) * 100)),
     );
-    const vatHalalas = Math.round(
-      ((subtotalHalalas - discountHalalas) * vatRate) / 100,
-    );
+    if (activityLabel === "توريد العمالة" && discountHalalas > 0) throw new Error("عدّل سعر العميل في البنود لتطبيق الخصم مع الحفاظ على مطابقة العقد");
+    const vatHalalas = Math.round(((subtotalHalalas - discountHalalas) * vatRate) / 100);
     const assumptions = [
       `النشاط: ${activityLabel}`,
       `موقع الخدمة: ${workSite}`,
@@ -681,6 +705,7 @@ async function createRecord(
         subtotalHalalas,
         discountHalalas,
         totalHalalas: subtotalHalalas - discountHalalas + vatHalalas,
+        commercialTermsJson: JSON.stringify(commercialTerms),
         assumptions,
         terms: text(payload.terms, 3000) || null,
         createdBy: actor,
@@ -799,6 +824,7 @@ async function createRecord(
         subtotalHalalas: source.subtotalHalalas,
         discountHalalas: source.discountHalalas,
         totalHalalas: source.totalHalalas,
+        commercialTermsJson: source.commercialTermsJson,
         assumptions: source.assumptions,
         terms: source.terms,
         createdBy: actor,
@@ -1647,7 +1673,7 @@ async function transitionRecord(
       where: eq(quoteVersions.id, id),
     });
     if (!item) throw new Error("عرض السعر غير موجود");
-    const canApprove = await hasPortalPermission(access, "contracts", "approve");
+    const canApprove = canAdministerPortalUsers(access) && await hasPortalPermission(access, "contracts", "approve");
     const allowed: Record<string, string[]> = {
       draft: canApprove
         ? ["pending_approval", "approved", "cancelled"]

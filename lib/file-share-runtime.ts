@@ -286,7 +286,10 @@ export async function shareDaliFilesNatively(
     );
   }
 
-  await share({
+  const targetShare = bridge.isPluginAvailable?.("DaliWhatsApp") === true && bridge.nativePromise
+    ? (payload: Record<string, unknown>) => bridge.nativePromise!("DaliWhatsApp", "share", payload)
+    : share;
+  await targetShare({
     title: options.title,
     text: options.text,
     files: fileUrls,

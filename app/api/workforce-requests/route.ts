@@ -1,3 +1,6 @@
+import { parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
+import { readCommercialTerms } from "@/lib/commercial-terms";
+import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { workforceRequests } from "@/db/schema";
@@ -31,7 +34,7 @@ function text(value: unknown, maxLength: number) {
 export async function POST(request: Request) {
   try {
     if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح." }, { status: 403 });
-    const parsed = await readLimitedJson(request, 24_000);
+    const parsed = await readLimitedJson(request, 200_000);
     if (!parsed.ok) return parsed.response;
     const rateLimit = await enforcePublicRateLimit(request, { scope: "workforce-request", limit: 8, windowSeconds: 900, blockSeconds: 1800 });
     if (!rateLimit.allowed) return rateLimitResponse(rateLimit.retryAfterSeconds);
@@ -42,7 +45,7 @@ export async function POST(request: Request) {
     }
 
     const fullName = text(payload.fullName, 100);
-    const mobile = text(payload.mobile, 20);
+    const mobile = normalizeSaudiWhatsAppNumber(text(payload.mobile, 30)) || text(payload.mobile, 30);
     const email = text(payload.email, 160).toLowerCase();
     const requestType = text(payload.requestType, 20) === "quotation" ? "quotation" : "general";
     const companyName = text(payload.companyName, 160);
@@ -74,6 +77,9 @@ export async function POST(request: Request) {
     });
     const rawTerms = payload.quotationTerms && typeof payload.quotationTerms === "object" ? payload.quotationTerms as Record<string, unknown> : {};
     const quotationTerms = {
+      ...readCommercialTerms(rawTerms),
+      seasonType: rawTerms.seasonType === "hajj" || rawTerms.seasonType === "ramadan" ? rawTerms.seasonType : "regular",
+      paymentSchedule: parsePaymentSchedule(rawTerms.paymentSchedule),
       endDate: text(rawTerms.endDate, 10) || null,
       workingHours: text(rawTerms.workingHours, 120) || null,
       weeklyOff: text(rawTerms.weeklyOff, 120) || null,
@@ -82,6 +88,7 @@ export async function POST(request: Request) {
       paymentTerms: text(rawTerms.paymentTerms, 500) || null,
       specialTerms: text(rawTerms.specialTerms, 1000) || null,
     };
+    if (quotationTerms.paymentSchedule.length && !validateSeasonalSchedule(quotationTerms.paymentSchedule)) return jsonNoStore({ error: "أكمل جدول الدفعات المقترح بمواعيد صحيحة ومجموع نسب 100٪" }, { status: 400 });
     const specialization = requestType === "quotation" && activityLabels[activityType] ? activityLabels[activityType] : text(payload.specialization, 80);
     const details = text(payload.details, 2000);
     const idempotencyKey = text(payload.idempotencyKey, 80);

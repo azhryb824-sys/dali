@@ -1,5 +1,9 @@
 "use client";
 
+import { parsePaymentSchedule } from "@/lib/payment-schedules";
+import CommercialDetailsFields from "@/app/components/CommercialDetailsFields";
+import { commercialTermsFromRequest } from "@/lib/commercial-terms";
+import type { workforceRequests } from "@/db/schema";
 import { readApiJson } from "@/lib/client-api";
 import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
@@ -14,7 +18,7 @@ import IntegrationManager from "./IntegrationManager";
 import ContractBillingWorkspace from "./ContractBillingWorkspace";
 import PaymentManagementDashboard from "./PaymentManagementDashboard";
 import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
-import { createWhatsAppUrl } from "@/lib/whatsapp";
+import WhatsAppFileShareDialog from "./WhatsAppFileShareDialog";
 
 type Client = {
   id: number;
@@ -52,6 +56,7 @@ type Representative = {
   status: string;
 };
 type Quote = {
+  commercialTermsJson: string | null;
   id: number;
   quoteCode: string;
   opportunityId: number;
@@ -173,6 +178,7 @@ type DocumentStamp = {
   updatedAt: string;
 };
 type OperationsData = {
+  quoteRequests: Array<typeof workforceRequests.$inferSelect>;
   clients: Client[];
   contacts: Contact[];
   opportunities: Opportunity[];
@@ -241,6 +247,7 @@ export default function OperationsWorkspace({
   allowedTabs?: OperationsTab[];
   embedded?: boolean;
 }) {
+  const [sharingQuote, setSharingQuote] = useState<Quote | null>(null);
   const [data, setData] = useState<OperationsData | null>(null);
   const [tab, setTab] = useState<Tab>(
     allowedTabs?.includes(initialTab)
@@ -381,7 +388,7 @@ export default function OperationsWorkspace({
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ issueDate, validUntil }),
+          body: JSON.stringify({ ...Object.fromEntries(fd.entries()), issueDate, validUntil }),
         },
       );
       const result = (await readApiJson(response)) as { error?: string };
@@ -418,36 +425,7 @@ export default function OperationsWorkspace({
     }
   }
 
-  async function shareQuoteWhatsApp(quote: Quote) {
-    setBusy(`share-quote-${quote.id}`);
-    setNotice("");
-    try {
-      const response = await fetch(
-        `/api/portal/operations/quotes/${quote.id}/share`,
-        { method: "POST" },
-      );
-      const result = (await readApiJson(response)) as {
-        shareUrl?: string;
-        mobile?: string;
-        clientName?: string;
-        error?: string;
-      };
-      if (!response.ok || !result.shareUrl || !result.mobile)
-        throw new Error(result.error || "تعذر تجهيز رابط العرض");
-      const message = `السلام عليكم ${result.clientName || ""}، نرفق لكم عرض السعر ${quote.quoteCode}. رابط PDF الآمن: ${result.shareUrl}`;
-      const whatsappUrl = createWhatsAppUrl(result.mobile, message);
-      if (!whatsappUrl) throw new Error("رقم جوال العميل غير صحيح");
-      const opened = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-      if (!opened) window.location.assign(whatsappUrl);
-      setNotice(
-        "فُتحت محادثة العميل مباشرة في واتساب مع رابط عرض السعر الآمن.",
-      );
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "تعذر مشاركة العرض");
-    } finally {
-      setBusy("");
-    }
-  }
+  function shareQuoteWhatsApp(quote: Quote) { setSharingQuote(quote); }
 
   async function transition(
     action: string,
@@ -557,6 +535,7 @@ export default function OperationsWorkspace({
 
   return (
     <>
+      {sharingQuote && <WhatsAppFileShareDialog key={sharingQuote.id} title={`عرض السعر ${sharingQuote.quoteCode}`} endpoint={`/api/portal/operations/quotes/${sharingQuote.id}/share`} source={{ quoteId: sharingQuote.id }} onClose={() => setSharingQuote(null)} />}
       {!embedded && (
         <div className="content-heading module-heading">
           <div>
@@ -1217,6 +1196,7 @@ export default function OperationsWorkspace({
               </button>
             </div>
             <form className="feature-form" onSubmit={saveQuoteEdit}>
+              <CommercialDetailsFields defaults={editingQuote.commercialTermsJson}/>
               <label>
                 تاريخ الإصدار
                 <input
@@ -1562,12 +1542,20 @@ function ClientAndOpportunityForms({
     </div>
   );
 }
-function QuoteForm({
+function QuoteForm(props: { data: OperationsData; busy: string; onCreate: CreateOperation; embedded?: boolean; initialSourceRequestId?: number }) {
+  const [requestId, setRequestId] = useState(props.initialSourceRequestId);
+  return <QuoteFormFields key={requestId || "direct"} {...props} initialSourceRequestId={requestId} onSelectSource={setRequestId}/>;
+}
+function QuoteFormFields({
   data,
   busy,
   onCreate,
   embedded = false,
+  initialSourceRequestId,
+  onSelectSource,
 }: {
+  onSelectSource: (id: number) => void;
+  initialSourceRequestId?: number;
   data: OperationsData;
   busy: string;
   onCreate: CreateOperation;
@@ -1671,24 +1659,37 @@ function QuoteForm({
       },
     },
   };
-  const [activity, setActivity] = useState<Activity>("workforce");
-  const [quantityMode, setQuantityMode] = useState<"fixed" | "open">("fixed");
+  const [defaultValidity] = useState(() => new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10));
+  const [sourceRequestId] = useState(initialSourceRequestId || 0);
+  const sourceRequest = (data.quoteRequests || []).find(item => item.id === sourceRequestId);
+  const sourceTerms = sourceRequest ? commercialTermsFromRequest(sourceRequest) : undefined;
+  const initialActivity = (sourceRequest?.activityType || "workforce") as Activity;
+  const initialTerms = (() => { try { return JSON.parse(sourceRequest?.quotationTermsJson || "{}") as Record<string, unknown>; } catch { return {}; } })();
+  const [activity, setActivity] = useState<Activity>(initialActivity);
+  const [quantityMode, setQuantityMode] = useState<"fixed" | "open">(sourceRequest?.quantityMode === "open" ? "open" : "fixed");
   const [seasonType, setSeasonType] = useState<"regular" | "ramadan" | "hajj">(
-    "regular",
+    initialTerms.seasonType === "hajj" || initialTerms.seasonType === "ramadan" ? initialTerms.seasonType : "regular",
   );
   const [accommodationParty, setAccommodationParty] = useState<
     "dali" | "counterparty"
-  >("dali");
+  >(initialTerms.accommodationParty === "dali" ? "dali" : sourceRequest ? "counterparty" : "dali");
   const [transportParty, setTransportParty] = useState<"dali" | "counterparty">(
-    "dali",
+    initialTerms.transportParty === "dali" ? "dali" : sourceRequest ? "counterparty" : "dali",
   );
-  const [payments, setPayments] = useState([
-    { key: "payment-1", title: "الدفعة الأولى", titleEn: "First installment", percentage: 50, dueDate: "" },
-    { key: "payment-2", title: "الدفعة الثانية", titleEn: "Second installment", percentage: 50, dueDate: "" },
-  ]);
-  const [items, setItems] = useState<Line[]>([
-    { key: "line-1", ...activities.workforce.seed },
-  ]);
+  const [payments, setPayments] = useState(() => {
+    const rows = parsePaymentSchedule(initialTerms.paymentSchedule);
+    return rows.length ? rows.map((row, index) => ({ key: `request-payment-${index}`, title: row.title, titleEn: row.titleEn || "", percentage: row.percentageBps / 100, dueDate: row.dueDate })) : [
+      { key: "payment-1", title: "الدفعة الأولى", titleEn: "First installment", percentage: 50, dueDate: "" },
+      { key: "payment-2", title: "الدفعة الثانية", titleEn: "Second installment", percentage: 50, dueDate: "" },
+    ];
+  });
+  const [items, setItems] = useState<Line[]>(() => {
+    try {
+      const rows = JSON.parse(sourceRequest?.quotationItemsJson || "[]") as Array<Record<string, unknown>>;
+      if (rows.length) return rows.map((row, index) => ({ ...activities[initialActivity].seed, key: `request-${index}`, profession: String(row.description || ""), quantity: Number(row.quantity) || 0, durationMonths: Number(row.durationMonths) || 12, unit: String(row.unit || ""), notes: String(row.notes || ""), sponsorshipType: row.sponsorshipType === "other" ? "other" : "dali", sponsorName: String(row.sponsorName || ""), ajirContractStatus: row.ajirContractStatus === "with_ajir" ? "with_ajir" : row.ajirContractStatus === "without_ajir" ? "without_ajir" : "not_applicable" }));
+    } catch { /* A malformed legacy request starts with an editable line. */ }
+    return [{ key: "line-1", ...activities.workforce.seed }];
+  });
   const changeActivity = (value: Activity) => {
     setActivity(value);
     setItems([{ key: `line-${value}`, ...activities[value].seed }]);
@@ -1729,7 +1730,7 @@ function QuoteForm({
     unitPrice: item.unitPrice,
     actualSalary: activity === "workforce" ? item.actualSalary : 0,
     sponsorshipType: activity === "workforce" ? item.sponsorshipType : null,
-    sponsorName: null,
+    sponsorName: activity === "workforce" && item.sponsorshipType === "other" ? item.sponsorName : null,
     ajirContractStatus:
       activity === "workforce" ? item.ajirContractStatus : null,
     notes: [
@@ -1764,6 +1765,10 @@ function QuoteForm({
           }),
       )}
     >
+      <input type="hidden" name="sourceRequestId" value={sourceRequestId || ""}/>
+      {sourceRequest && <p className="span-two">الطلب المعتمد: {sourceRequest.trackingCode}</p>}
+      {!sourceRequest && <label className="span-two">طلب عرض سعر معتمد<select value="" onChange={event => onSelectSource(Number(event.target.value))}><option value="">اختر طلبًا لنقل بياناته إلى العرض</option>{(data.quoteRequests || []).map(item => <option key={item.id} value={item.id} disabled={item.approvalStatus !== "approved"}>{item.trackingCode} — {item.companyName || item.fullName}{item.approvalStatus !== "approved" ? " — بانتظار الاعتماد" : ""}</option>)}</select></label>}
+      <CommercialDetailsFields key={sourceRequestId} defaults={sourceTerms} omit={["clientName", "workSite", "paymentTerms"]}/>
       <div className="quote-form-section span-two">
         <strong>1. نوع طلب العميل</strong>
         <p>اختر المسار؛ تتغير الحقول والبنود والتسعير بما يناسب النشاط.</p>
@@ -1836,6 +1841,7 @@ function QuoteForm({
         اسم العميل مباشرة
         <input
           name="clientName"
+          defaultValue={sourceTerms?.clientName || ""}
           maxLength={160}
           placeholder="مطلوب عند عدم اختيار فرصة"
         />
@@ -1849,17 +1855,18 @@ function QuoteForm({
         موقع تقديم الخدمة
         <input
           name="workSite"
+          defaultValue={sourceTerms?.workSite || ""}
           required
           placeholder="المدينة، الموقع أو المشروع"
         />
       </label>
       <label>
         تاريخ الإصدار
-        <input name="issueDate" type="date" required />
+        <input name="issueDate" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
       </label>
       <label>
         العرض صالح حتى
-        <input name="validUntil" type="date" required />
+        <input name="validUntil" type="date" required defaultValue={defaultValidity} />
       </label>
       <div className="quote-form-section span-two">
         <strong>2. بنود {activities[activity].label}</strong>
@@ -2242,6 +2249,7 @@ function QuoteForm({
         شروط الدفع
         <textarea
           name="terms"
+          defaultValue={sourceTerms?.paymentTerms || ""}
           required
           rows={3}
           placeholder="مثال: دفعة مقدمة ثم دفعات مرحلية مرتبطة بالإنجاز"
@@ -2273,9 +2281,11 @@ function QuoteForm({
 }
 
 export function QuotationIssueModal({
+  initialSourceRequestId,
   onClose,
   onCreated,
 }: {
+  initialSourceRequestId?: number;
   onClose: () => void;
   onCreated: (message: string) => void;
 }) {
@@ -2353,7 +2363,7 @@ export function QuotationIssueModal({
         </div>
         {error && <div className="contract-form-error">{error}</div>}
         {data ? (
-          <QuoteForm data={data} busy={busy} onCreate={create} embedded />
+          <QuoteForm key={initialSourceRequestId || "direct"} initialSourceRequestId={initialSourceRequestId} data={data} busy={busy} onCreate={create} embedded />
         ) : (
           <div className="operations-loading">
             <span />

@@ -1,3 +1,4 @@
+import { documentShareApprovalError } from "@/lib/document-share-approval";
 import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyDocuments, documentShareLinks, portalActivity } from "@/db/schema";
@@ -17,6 +18,8 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
 
   const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, share.documentId) });
   if (!document || document.status !== "active") return Response.json({ error: "المستند غير متاح" }, { status: 404 });
+  const approvalError = await documentShareApprovalError(document);
+  if (approvalError) return Response.json({ error: approvalError }, { status: 410 });
   const object = await getRuntimeEnv().BUCKET.get(document.storageKey);
   if (!object) return Response.json({ error: "ملف المستند غير متاح" }, { status: 404 });
 

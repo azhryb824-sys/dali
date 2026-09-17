@@ -1,3 +1,4 @@
+import { readCommercialTerms } from "@/lib/commercial-terms";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { clients, companyAssets, documentStamps, quoteItems, quoteVersions, salesOpportunities } from "@/db/schema";
@@ -39,13 +40,18 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!items.length) return Response.json({ error: "عرض السعر لا يحتوي على بنود" }, { status: 409 });
 
   const details = metadata(quote.assumptions);
+  const commercial = readCommercialTerms(quote.commercialTermsJson);
   const taxableHalalas = Math.max(0, quote.subtotalHalalas - quote.discountHalalas);
-  const vatHalalas = Math.round(taxableHalalas * details.vatRateBps / 10000);
+  const vatHalalas = Math.max(0, quote.totalHalalas - taxableHalalas);
   const totalHalalas = taxableHalalas + vatHalalas;
   const pdfLanguage = new URL(request.url).searchParams.get("language") === "bilingual" ? "bilingual" : "ar";
   const paymentDrafts = parsePaymentSchedule(quote.paymentScheduleJson);
   const paymentSchedule = paymentDrafts.map((payment, index) => {
-    const amountHalalas = index === paymentDrafts.length - 1
+    const monthlySubtotal = Math.round(taxableHalalas / 12);
+    const monthlyAmount = monthlySubtotal + Math.round(monthlySubtotal * quote.vatRateBps / 10000);
+    const amountHalalas = quote.seasonType === "regular" && paymentDrafts.length === 12
+      ? index === 11 ? totalHalalas - monthlyAmount * 11 : monthlyAmount
+      : index === paymentDrafts.length - 1
       ? totalHalalas - paymentDrafts.slice(0, -1).reduce((sum, row) => sum + Math.round(totalHalalas * row.percentageBps / 10000), 0)
       : Math.round(totalHalalas * payment.percentageBps / 10000);
     return { ...payment, amountHalalas };
@@ -55,15 +61,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     pdfLanguage,
     documentType: "quotation",
     referenceCode: `${quote.quoteCode}-V${quote.versionNumber}`,
-    clientName: client?.legalName || opportunity.title,
-    clientCr: client?.commercialRegistration || undefined,
-    clientVat: client?.vatNumber || undefined,
-    clientAddress: client?.address || undefined,
+    clientName: commercial.clientName || client?.legalName || opportunity.title,
+    clientCr: commercial.clientCr || client?.commercialRegistration || undefined,
+    clientVat: commercial.clientVat || client?.vatNumber || undefined,
+    clientAddress: commercial.clientAddress || client?.address || undefined,
     title: opportunity.title,
     issueDate: quote.issueDate,
     expiryDate: quote.validUntil,
-    details: `عرض فني ومالي لتقديم خدمات ${details.activityLabel || "التشغيل والصيانة"} وفق البنود والكميات المبينة أدناه.`,
-    workSite: details.workSite || undefined,
+    details: commercial.details || `عرض فني ومالي لتقديم خدمات ${details.activityLabel || "التشغيل والصيانة"} وفق البنود والكميات المبينة أدناه.`,
+    workSite: commercial.workSite || details.workSite || undefined,
     activityLabel: details.activityLabel || "خدمات التشغيل والصيانة",
     quantityMode: quote.quantityMode as "fixed" | "open",
     subtotalHalalas: quote.subtotalHalalas,
@@ -71,7 +77,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     vatRateBps: quote.vatRateBps || details.vatRateBps,
     vatHalalas,
     amountHalalas: totalHalalas,
-    paymentTerms: quote.terms || undefined,
+    clientRepresentative: commercial.clientRepresentative,
+    clientRepresentativeTitle: commercial.clientRepresentativeTitle,
+    startDate: commercial.startDate,
+    endDate: commercial.endDate,
+    workingHours: commercial.workingHours,
+    weeklyOff: commercial.weeklyOff,
+    specialTerms: commercial.specialTerms,
+    showPaymentSchedule: commercial.showPaymentSchedule,
+    contractClauses: commercial.contractClauses,
+    paymentTerms: commercial.paymentTerms || quote.terms || undefined,
     accommodationParty: quote.accommodationParty === "dali" ? "توفره دالي" : quote.accommodationParty === "counterparty" ? "يوفره الطرف الثاني" : undefined,
     transportParty: quote.transportParty === "dali" ? "توفره دالي" : quote.transportParty === "counterparty" ? "يوفره الطرف الآخر" : undefined,
     paymentSchedule,

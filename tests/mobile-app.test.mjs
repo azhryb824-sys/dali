@@ -14,7 +14,7 @@ test("mobile container targets Android and iOS through the trusted production po
   ]);
   assert.match(pkg, /@capacitor\/android/);
   assert.match(pkg, /@capacitor\/ios/);
-  assert.match(pkg, /"version": "1\.0\.2"/);
+  assert.match(pkg, /"version": "1\.0\.3"/);
   assert.match(config, /https:\/\/www\.dally\.info\/portal/);
   assert.match(config, /errorPath: "offline\.html"/);
   assert.match(config, /appId: "sa\.dally\.mobile"/);
@@ -24,10 +24,10 @@ test("mobile container targets Android and iOS through the trusted production po
   assert.match(config, /webContentsDebuggingEnabled: false/);
   assert.match(config, /limitsNavigationsToAppBoundDomains: true/);
   assert.match(gradle, /applicationId "sa\.dally\.mobile"/);
-  assert.match(gradle, /versionCode 3/);
-  assert.match(gradle, /versionName "1\.0\.2"/);
-  assert.match(iosProject, /CURRENT_PROJECT_VERSION = 3/);
-  assert.match(iosProject, /MARKETING_VERSION = 1\.0\.2/);
+  assert.match(gradle, /versionCode 4/);
+  assert.match(gradle, /versionName "1\.0\.3"/);
+  assert.match(iosProject, /CURRENT_PROJECT_VERSION = 4/);
+  assert.match(iosProject, /MARKETING_VERSION = 1\.0\.3/);
   assert.match(strings, /<string name="app_name">نظام دالي الإداري<\/string>/);
 });
 
@@ -58,7 +58,7 @@ test("server admits signed mobile sessions without weakening desktop or PWA acce
   assert.match(proxy, /nativeBootstrapPath/);
   assert.match(proxy, /pwaAccessFromCookieHeader/);
   assert.match(proxy, /requestHeaders\.set\("x-dali-pathname"/);
-  assert.match(proxy, /camera=\(self\), microphone=\(self\)/);
+  assert.match(proxy, /camera=\(self "https:\/\/meet\.jit\.si"\), microphone=\(self "https:\/\/meet\.jit\.si"\)/);
   assert.match(layout, /<PwaAccessRuntime \/>/);
   assert.match(layout, /src="\/mobile\/runtime\.js"/);
 });

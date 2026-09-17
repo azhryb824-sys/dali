@@ -1,5 +1,6 @@
 "use client";
 
+import VideoDeviceCheck from "./components/VideoDeviceCheck";
 import { readApiJson } from "@/lib/client-api";
 import { appConfirm } from "@/app/components/AppDialogProvider";
 
@@ -207,7 +208,7 @@ export default function LiveChatWidget() {
       {error && <p className="chat-error" role="alert">{error}</p>}
       <footer>محادثة محفوظة وآمنة · لا تشارك بيانات بنكية أو كلمات مرور</footer>
     </section>}
-    {callOpen&&videoInterview?.joinUrl&&<div className="video-call-modal"><button type="button" className="video-call-backdrop" onClick={()=>setCallOpen(false)} aria-label="إغلاق المكالمة"/><section role="dialog" aria-modal="true" aria-label="المكالمة المرئية"><header><div><strong>مكالمة دالي المرئية</strong><span>{videoInterview.referenceCode}</span></div><button type="button" onClick={()=>setCallOpen(false)}>إنهاء وإغلاق</button></header><iframe src={videoInterview.joinUrl} title="مكالمة مرئية مع فريق دالي" allow="camera; microphone; fullscreen; display-capture; autoplay"/></section></div>}
+    {callOpen&&videoInterview?.joinUrl&&<div className="video-call-modal"><button type="button" className="video-call-backdrop" onClick={()=>setCallOpen(false)} aria-label="إغلاق المكالمة"/><section role="dialog" aria-modal="true" aria-label="المكالمة المرئية"><header><div><strong>مكالمة دالي المرئية</strong><span>{videoInterview.referenceCode}</span></div><button type="button" onClick={()=>setCallOpen(false)}>إغلاق نافذة المكالمة</button></header><VideoDeviceCheck joinUrl={videoInterview.joinUrl}/><iframe src={videoInterview.joinUrl} title="مكالمة مرئية مع فريق دالي" allow="camera; microphone; fullscreen; display-capture; autoplay"/></section></div>}
     <button type="button" ref={launcherRef} className="chat-launcher" onClick={() => setOpen((value) => !value)} aria-label={open ? "إغلاق المحادثة" : "فتح المحادثة المباشرة"} aria-expanded={open}>
       <span className="chat-launcher-icon">{open ? "×" : "◌"}</span>
       <span><strong>محادثة مباشرة</strong><small>{businessHours?.isOpen ? "الفريق متاح الآن" : "اترك رسالتك وسنرد في الدوام"}</small></span>

@@ -10,7 +10,7 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "frame-src 'none'",
+  "frame-src https://meet.jit.si",
   "child-src 'none'",
   "manifest-src 'self'",
   "media-src 'self'",
@@ -90,7 +90,7 @@ export async function proxy(request: NextRequest) {
   response.headers.set("cross-origin-resource-policy", "same-origin");
   response.headers.set("origin-agent-cluster", "?1");
   response.headers.set("x-permitted-cross-domain-policies", "none");
-  response.headers.set("permissions-policy", verifiedMobileRequest ? "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()" : "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  response.headers.set("permissions-policy", 'camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), geolocation=(), payment=(), usb=()');
   if (verifiedMobileRequest) {
     response.headers.set("x-dali-client", "mobile");
     response.headers.append("vary", "user-agent");

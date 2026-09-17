@@ -1,5 +1,8 @@
 // Generated translations for interface text containing runtime values.
 export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = [
+{"source": "طلب {{0}}", "en": "Request {{0}}", "bn": "অনুরোধ {{0}}"},
+{"source": "عرض السعر {{0}}", "en": "Quotation {{0}}", "bn": "দরপ্রস্তাব {{0}}"},
+
   {
     "source": "{{0}} — يمكن إرساله كمرفق فعلي",
     "en": "{{0}} — can be sent as an actual attachment",

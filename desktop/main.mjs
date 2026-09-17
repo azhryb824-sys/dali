@@ -1,3 +1,4 @@
+import { installDaliMediaPermissions } from "./media-permissions.mjs";
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, ShareMenu, shell } from "electron";
 import electronUpdater from "electron-updater";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -402,7 +403,7 @@ app.whenReady().then(async () => {
       callback({ requestHeaders: details.requestHeaders });
     },
   );
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  installDaliMediaPermissions(session.defaultSession);
   await openWindow();
   configureAutomaticUpdates();
 });

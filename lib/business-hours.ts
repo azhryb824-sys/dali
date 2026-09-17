@@ -57,7 +57,7 @@ export function normalizeBusinessHoursConfig(value: unknown): BusinessHoursConfi
   const legacyAutoReply = "شكراً لتواصلك مع شركة دالي للتشغيل والصيانة. رسالتك وصلت خارج ساعات الدوام الرسمي، وسيتم الرد عليك خلال ساعات العمل القادمة.";
   return {
     timezone: "Asia/Riyadh",
-    workingDays: workingDays.length ? workingDays : defaultBusinessHours.workingDays,
+    workingDays,
     opensAt: validTime(input.opensAt, defaultBusinessHours.opensAt),
     closesAt: validTime(input.closesAt, defaultBusinessHours.closesAt),
     autoReply: autoReply.length >= 10 && autoReply !== legacyAutoReply ? autoReply : defaultBusinessHours.autoReply,

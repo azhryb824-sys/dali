@@ -4,7 +4,7 @@ import { readApiJson } from "@/lib/client-api";
 import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { createWhatsAppUrl } from "@/lib/whatsapp";
+import WhatsAppFileShareDialog from "./WhatsAppFileShareDialog";
 import {
   openDaliWhatsApp,
   type DaliWhatsAppLinks,
@@ -177,6 +177,7 @@ const contractLabels: Record<string, string> = {
   superseded: "مستبدل",
 };
 export default function ContractBillingWorkspace({ onlyPendingApproval = false }: { onlyPendingApproval?: boolean }) {
+  const [sharingInvoiceId, setSharingInvoiceId] = useState<number | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [busy, setBusy] = useState(0);
   const [notice, setNotice] = useState("");
@@ -586,85 +587,7 @@ export default function ContractBillingWorkspace({ onlyPendingApproval = false }
       setBusy(0);
     }
   }
-  async function share(documentId: number) {
-    const payment = data?.payments.find(
-      (item) => item.invoiceDocumentId === documentId,
-    );
-    const contract = payment
-      ? data?.contracts.find((item) => item.id === payment.contractId)
-      : null;
-    if (
-      payment &&
-      contract &&
-      contract.clientId &&
-      data?.clientMobiles[String(contract.clientId)]
-    )
-      return shareWhatsApp(documentId, contract, payment);
-    try {
-      const response = await fetch("/api/portal/documents/share", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          documentId,
-          expiresInDays: 7,
-          maxDownloads: 20,
-        }),
-      });
-      const result = (await readApiJson(response)) as {
-        shareUrl?: string;
-        error?: string;
-      };
-      if (!response.ok || !result.shareUrl)
-        throw new Error(result.error || "تعذر إنشاء الرابط");
-      await navigator.clipboard.writeText(result.shareUrl);
-      setNotice("لا يوجد جوال للعميل؛ تم نسخ رابط PDF الآمن للمشاركة يدويًا.");
-    } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "تعذر إنشاء رابط المشاركة",
-      );
-    }
-  }
-  async function shareWhatsApp(
-    documentId: number,
-    contract: Contract,
-    payment: Payment,
-  ) {
-    const raw = contract.clientId
-      ? data?.clientMobiles[String(contract.clientId)] || ""
-      : "";
-    try {
-      const response = await fetch("/api/portal/documents/share", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          documentId,
-          expiresInDays: 7,
-          maxDownloads: 20,
-        }),
-      });
-      const result = (await readApiJson(response)) as {
-        shareUrl?: string;
-        error?: string;
-      };
-      if (!response.ok || !result.shareUrl)
-        throw new Error(result.error || "تعذر إنشاء الرابط");
-      const message = `السلام عليكم، نرفق لكم فاتورة ${payment.title} للعقد ${contract.referenceCode}. رابط PDF الآمن: ${result.shareUrl}`;
-      const whatsappUrl = createWhatsAppUrl(raw, message);
-      if (!whatsappUrl)
-        throw new Error("لا يوجد رقم جوال سعودي صحيح لجهة اتصال العميل.");
-      const opened = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-      if (!opened) window.location.assign(whatsappUrl);
-      setNotice(
-        "فُتحت محادثة العميل مباشرة في واتساب مع رسالة الفاتورة ورابط PDF الآمن.",
-      );
-    } catch (error) {
-      setNotice(
-        error instanceof Error
-          ? error.message
-          : "تعذر مشاركة الفاتورة عبر واتساب",
-      );
-    }
-  }
+  function share(documentId: number) { setSharingInvoiceId(documentId); }
   async function shareApprovedContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sharingContract) return;
@@ -802,6 +725,7 @@ export default function ContractBillingWorkspace({ onlyPendingApproval = false }
     );
   return (
     <>
+      {sharingInvoiceId && <WhatsAppFileShareDialog key={sharingInvoiceId} title="مشاركة الفاتورة" endpoint="/api/portal/documents/share" source={{ documentId: sharingInvoiceId }} onClose={() => setSharingInvoiceId(null)} />}
       {notice && (
         <div className="operations-notice" role="status">
           {notice}

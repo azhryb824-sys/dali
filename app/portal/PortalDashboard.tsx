@@ -5,6 +5,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { requirementsForProfession, workforceNationalities, workforceProfessions } from "@/lib/workforce-requirements";
 import { bankNameFromSaudiIban, formatSaudiIban, normalizeSaudiIban, saudiBanks } from "@/lib/saudi-banks";
+import { commercialTextFields, readCommercialTerms } from "@/lib/commercial-terms";
+import WhatsAppFileShareDialog from "./WhatsAppFileShareDialog";
 import OperationsWorkspace, { QuotationIssueModal, type OperationsTab } from "./OperationsWorkspace";
 import DocumentShareManager from "./DocumentShareManager";
 import WebsiteManager from "./WebsiteManager";
@@ -58,6 +60,10 @@ type View = "executive-center" | "overview" | "notifications" | "tasks" | "guide
 type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 type WorkforceRequest = {
+  approvalStatus: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  approvalReason: string | null;
   id: number;
   trackingCode: string;
   fullName: string;
@@ -844,6 +850,8 @@ export default function PortalDashboard({
 }) {
   const router = useRouter();
   const [view, setView] = useState<View>("overview");
+  const [quoteSourceRequestId, setQuoteSourceRequestId] = useState<number | undefined>();
+  const [sharingDocumentId, setSharingDocumentId] = useState<number | null>(null);
   const [requests, setRequests] = useState(initialRequests);
   const [requestReplies, setRequestReplies] = useState(initialRequestReplies);
   const [notifications, setNotifications] = useState(initialNotifications);
@@ -1632,6 +1640,22 @@ export default function PortalDashboard({
     }
   }
 
+  async function decideQuoteRequest(id: number, action: "approve" | "reject") {
+    const item = requests.find(row => row.id === id);
+    if (!item) return;
+    const reason = action === "reject" ? await appPrompt("سبب رفض طلب عرض السعر", { multiline: true }) : "";
+    if (action === "reject" && !reason) return;
+    setBusy(`request-${id}`);
+    try {
+      const response = await fetch("/api/portal/requests", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, version: item.version, action, reason }) });
+      const body = await readApiJson(response) as { request?: WorkforceRequest; error?: string };
+      if (!response.ok || !body.request) throw new Error(body.error || "تعذر حفظ قرار الاعتماد");
+      setRequests(rows => rows.map(row => row.id === id ? body.request! : row));
+      notify(action === "approve" ? "اعتمد الطلب وأصبح قابلًا للتحويل إلى عرض سعر" : "حُفظ رفض طلب عرض السعر");
+      void refreshNotifications();
+    } catch (error) { notify(error instanceof Error ? error.message : "تعذر حفظ قرار الاعتماد"); }
+    finally { setBusy(null); }
+  }
   async function updateRequestStatus(id: number, status: RequestStatus) {
     setBusy(`request-${id}`);
     try {
@@ -2086,6 +2110,8 @@ export default function PortalDashboard({
   }
 
   async function shareDocument(id: number) {
+    const item = documents.find(document => document.id === id);
+    if (item && ["invoice", "quotation", "workforce_contract", "progress_claim"].includes(item.documentType || "")) { setSharingDocumentId(id); return; }
     setBusy(`share-${id}`);
     try {
       const response = await fetch("/api/portal/documents/share", {
@@ -2351,7 +2377,7 @@ export default function PortalDashboard({
         <GlobalTaskReminder />
 
         <div className="admin-content">
-          {view === "executive-center" && isRoot && <ExecutiveActionCenter />}
+          {view === "executive-center" && isRoot && <><div className="panel-head"><h2>مركز المالك والمشرف</h2><button className="admin-secondary" onClick={() => setChatSettingsOpen(true)}>تعديل ساعات العمل والرد الآلي</button></div><ExecutiveActionCenter /></>}
           {view === "overview" && (
             <>
               <div className="content-heading">
@@ -2722,14 +2748,18 @@ export default function PortalDashboard({
       {modal && modal !== "workforce" && modal !== "finance" && <RecordModal entity={modal} users={initialUsers} linkedEmployeeEmails={new Set(employees.map((item) => item.portalUserEmail).filter((email): email is string => Boolean(email)))} busy={busy === `create-${modal}`} onClose={() => setModal(null)} onSubmit={modal === "employees" ? (_entity, form) => createEmployee(form) : createRecord} />}
       {modal === "finance" && <FinanceRecordModal busy={busy === "create-finance"} workers={workers} contracts={contracts} assignments={contractAssignments} onClose={() => setModal(null)} onSubmit={(form) => createRecord("finance", form)} />}
       {modal === "workforce" && <WorkerModal busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker} />}
+      {sharingDocumentId && <WhatsAppFileShareDialog title="مشاركة المستند" endpoint="/api/portal/documents/share" source={{ documentId: sharingDocumentId }} onClose={() => setSharingDocumentId(null)} />}
       {documentModal === "upload" && <UploadDocumentModal busy={busy === "upload-document"} onClose={() => setDocumentModal(null)} onSubmit={uploadDocument} />}
       {documentModal === "issue" && issuePreset === "quotation" && (
         <QuotationIssueModal
+          initialSourceRequestId={quoteSourceRequestId}
           onClose={() => {
             setDocumentModal(null);
             setIssueReturnView(null);
+            setQuoteSourceRequestId(undefined);
           }}
           onCreated={(message) => {
+            setQuoteSourceRequestId(undefined);
             notify(message);
             setOperationsTab("quotes");
             changeView(issueReturnView === "contractual-documents" ? "contractual-documents" : "operations");
@@ -2741,7 +2771,7 @@ export default function PortalDashboard({
       {userModal && <CreateUserModal roles={roleOptions.filter((role) => isSystemOwner || role.roleKey !== "system_owner")} busy={busy === "create-user"} onClose={() => setUserModal(false)} onSubmit={createUser} />}
       {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours} />}
       {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} canWrite={canWriteConversations} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus} />}
-      {selected && <RequestDrawer request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply} />}
+      {selected && <RequestDrawer canApprove={isRoot} onApproval={decideQuoteRequest} onConvert={(id) => { setQuoteSourceRequestId(id); setSelectedId(null); openIssueDocument("quotation"); }} request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply} />}
       {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} canArchive={canArchiveWorkers} canViewFinance={canViewWorkerFinance} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment} />}
       {selectedContract && <ContractDrawer key={selectedContract.id} contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} canManageWorkerAssignments={canManageWorkerAssignments} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={isRoot} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus} onEdit={editContract} onDelete={deleteContract} onRecordAbsence={recordContractAbsence} onVoidAbsence={voidContractAbsence} />}
       {pendingContractApproval && (
@@ -4291,6 +4321,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
     }>
   >([]);
   type ConvertibleQuote = {
+    commercialTermsJson: string | null;
+    sourceRequestId: number | null;
     id: number;
     quoteCode: string;
     quantityMode: "fixed" | "open";
@@ -4374,6 +4406,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
           quotes?: Array<{
             id: number;
             quoteCode: string;
+            commercialTermsJson: string | null;
             opportunityId: number;
             status: string;
             quantityMode: "fixed" | "open";
@@ -4398,6 +4431,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
             id: number;
             clientId: number | null;
             title: string;
+            sourceRequestId: number | null;
           }>;
           clients?: Array<{ id: number; legalName: string }>;
         };
@@ -4409,6 +4443,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
               const client = (data.clients || []).find((item) => item.id === opportunity?.clientId);
               return {
                 id: quote.id,
+                commercialTermsJson: quote.commercialTermsJson,
+                sourceRequestId: opportunity?.sourceRequestId || null,
                 quoteCode: quote.quoteCode,
                 quantityMode: quote.quantityMode || "fixed",
                 seasonType: quote.seasonType || "regular",
@@ -4458,7 +4494,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
   const [selectedSourceRequestId, setSelectedSourceRequestId] = useState("");
   const selectedSourceRequest = requests.find((item) => String(item.id) === selectedSourceRequestId);
   useEffect(() => {
-    if (!selectedSourceRequest) return;
+    if (!selectedSourceRequest || selectedQuoteId) return;
     const form = document.querySelector<HTMLFormElement>(".issue-modal form");
     if (!form) return;
     const set = (name: string, value: string) => {
@@ -4468,7 +4504,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
     set("clientName", selectedSourceRequest.companyName || selectedSourceRequest.fullName);
     set("workSite", selectedSourceRequest.workSite || "");
     set("details", selectedSourceRequest.details || "");
-  }, [selectedSourceRequest]);
+  }, [selectedSourceRequest, selectedQuoteId]);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [professions, setProfessions] = useState<DraftProfession[]>([
     {
@@ -4483,6 +4519,25 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
     },
   ]);
   const [payments, setPayments] = useState<DraftPayment[]>([{ key: "payment-1", title: "الدفعة الأولى", titleEn: "First installment", dueDate: "", percentage: 100 }]);
+  const hydrateCommercialQuote = useCallback((quote: ConvertibleQuote) => {
+    const terms = readCommercialTerms(quote.commercialTermsJson);
+    setContractStartDate(terms.startDate || "");
+    setContractDirection(terms.contractDirection);
+    setShowPaymentSchedule(terms.showPaymentSchedule);
+    setAccommodationParty(quote.accommodationParty);
+    setTransportParty(quote.transportParty);
+    setSelectedSourceRequestId(quote.sourceRequestId ? String(quote.sourceRequestId) : "");
+    if (terms.contractClauses.length) setContractClauses(terms.contractClauses.map((clause, index) => ({ ...clause, key: `quote-clause-${index}` })));
+    window.setTimeout(() => {
+      const form = document.querySelector<HTMLFormElement>(".issue-modal form");
+      if (!form) return;
+      for (const spec of commercialTextFields) {
+        if (spec.name === "startDate") continue;
+        const input = form.elements.namedItem(spec.name);
+        if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) input.value = terms[spec.name] || (spec.name === "clientName" ? quote.clientName : "");
+      }
+    }, 0);
+  }, []);
   // Opening a quote conversion intentionally hydrates the contract wizard state once.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -4490,6 +4545,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
     const quote = convertibleQuotes.find((item) => item.id === initialQuoteId);
     if (!quote) return;
     setSelectedQuoteId(String(quote.id));
+    hydrateCommercialQuote(quote);
     setQuantityMode(quote.quantityMode);
     setSeasonType(quote.seasonType);
     if (quote.paymentScheduleJson) {
@@ -4531,12 +4587,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
           ajirContractStatus: item.ajirContractStatus || "not_applicable",
         })),
       );
-    window.setTimeout(() => {
-      const form = document.querySelector<HTMLFormElement>(".issue-modal form");
-      const field = form?.elements.namedItem("clientName");
-      if (field instanceof HTMLInputElement) field.value = quote.clientName;
-    }, 0);
-  }, [initialQuoteId, convertibleQuotes]);
+
+  }, [initialQuoteId, convertibleQuotes, hydrateCommercialQuote]);
   /* eslint-enable react-hooks/set-state-in-effect */
   const [selectedWorkers, setSelectedWorkers] = useState<Record<string, number[]>>({});
   const isContract = documentType === "workforce_contract";
@@ -4795,6 +4847,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
     setSelectedQuoteId(id);
     const quote = convertibleQuotes.find((item) => String(item.id) === id);
     if (!quote) return;
+    hydrateCommercialQuote(quote);
     setQuantityMode(quote.quantityMode);
     setSeasonType(quote.seasonType);
     if (quote.paymentScheduleJson) {
@@ -4834,12 +4887,6 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
           ajirContractStatus: item.ajirContractStatus || "not_applicable",
         })),
       );
-    window.setTimeout(() => {
-      const form = event.target.form;
-      if (!form) return;
-      const client = form.elements.namedItem("clientName");
-      if (client instanceof HTMLInputElement) client.value = quote.clientName;
-    }, 0);
   }
   const annualSchedule = seasonType === "regular" ? annualContractSchedule(contractStartDate) : null;
   const annualEndDate = annualSchedule?.endDate || "";
@@ -4862,7 +4909,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
       profession: item.profession === "أخرى" ? (item.customProfession || "").trim() : item.profession,
       requiredCount: quantityMode === "open" ? 0 : item.requiredCount,
       unitSalary: item.unitSalary || 0,
-      actualSalary: item.actualSalary || item.unitSalary || 0,
+      actualSalary: item.actualSalary ?? item.unitSalary ?? 0,
       sponsorshipType: item.sponsorshipType,
       sponsorName: item.sponsorshipType === "other" ? item.sponsorName : null,
       ajirContractStatus: item.ajirContractStatus,
@@ -5073,6 +5120,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
               {isContract && contractDirection === "dali_purchaser" ? "اسم مورّد العمالة" : "اسم العميل أو الجهة"}
               <input name="clientName" required maxLength={160} />
             </label>
+            {isContract && <><label>رقم جوال العميل<input name="clientMobile" type="tel" maxLength={30}/></label><label>البريد الإلكتروني<input name="clientEmail" type="email" maxLength={160}/></label></>}
             <label>
               {isContract && contractDirection === "dali_purchaser" ? "السجل التجاري للمورّد" : "السجل التجاري للعميل"}
               <input name="clientCr" required={isContract} maxLength={30} dir="ltr" placeholder={isContract ? "إلزامي للعقد" : "اختياري"} />
@@ -7583,7 +7631,7 @@ function StructuredQuoteRequest({ request }: { request: WorkforceRequest }) {
     </>
   );
 }
-function RequestDrawer({ request, replies, emailConfigured, canWrite, statusBusy, replyBusy, onClose, onStatus, onReply }: { request: WorkforceRequest; replies: WorkforceRequestReply[]; emailConfigured: boolean; canWrite: boolean; statusBusy: boolean; replyBusy: boolean; onClose: () => void; onStatus: (id: number, status: RequestStatus) => void; onReply: (id: number, form: HTMLFormElement) => Promise<void> }) {
+function RequestDrawer({ canApprove, onApproval, onConvert, request, replies, emailConfigured, canWrite, statusBusy, replyBusy, onClose, onStatus, onReply }: { canApprove: boolean; onApproval: (id: number, action: "approve" | "reject") => void; onConvert: (id: number) => void; request: WorkforceRequest; replies: WorkforceRequestReply[]; emailConfigured: boolean; canWrite: boolean; statusBusy: boolean; replyBusy: boolean; onClose: () => void; onStatus: (id: number, status: RequestStatus) => void; onReply: (id: number, form: HTMLFormElement) => Promise<void> }) {
   function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void onReply(request.id, event.currentTarget);
@@ -7607,6 +7655,7 @@ function RequestDrawer({ request, replies, emailConfigured, canWrite, statusBusy
             <Icon name="close" />
           </button>
         </div>
+        {request.requestType === "quotation" && <div className="drawer-section"><h3>اعتماد طلب عرض السعر</h3><p>{request.approvalStatus === "approved" ? "معتمد وقابل للتحويل إلى عرض سعر" : request.approvalStatus === "rejected" ? "مرفوض" : "بانتظار اعتماد المالك أو مشرف النظام"}</p>{request.approvalReason && <p>{request.approvalReason}</p>}{canApprove && request.approvalStatus !== "approved" && <div className="record-actions"><button disabled={statusBusy} onClick={() => onApproval(request.id, "approve")}>اعتماد طلب عرض السعر</button><button disabled={statusBusy} onClick={() => onApproval(request.id, "reject")}>رفض الطلب مع السبب</button></div>}{canWrite && request.approvalStatus === "approved" && <button className="admin-primary" onClick={() => onConvert(request.id)}>تحويل الطلب إلى عرض سعر</button>}</div>}
         <div className="drawer-status">
           <span>حالة الطلب</span>
           {canWrite ? (
@@ -7681,6 +7730,7 @@ function RequestDrawer({ request, replies, emailConfigured, canWrite, statusBusy
           <p className="request-details">{request.details}</p>
         </div>
         <StructuredQuoteRequest request={request} />
+        {request.requestType === "quotation" && <div className="drawer-section"><h3>بنود التعاقد المقترحة</h3>{readCommercialTerms(request.quotationTermsJson).contractClauses.filter(clause => clause.included).map((clause, index) => <div key={index}><strong>{clause.title}</strong><p>{clause.body}</p></div>)}</div>}
         {canWrite && (
           <div className="drawer-section reply-composer">
             <div className="reply-section-title">

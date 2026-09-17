@@ -1,3 +1,5 @@
+import { readCommercialTerms } from "@/lib/commercial-terms";
+import { annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { quoteItems, quoteVersions, workflowApprovals } from "@/db/schema";
@@ -21,10 +23,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const issueDate = clean(payload.issueDate, 10) || quote.issueDate;
   const validUntil = clean(payload.validUntil, 10) || quote.validUntil;
   if (validUntil < issueDate) return jsonNoStore({ error: "صلاحية العرض تسبق تاريخ الإصدار" }, { status: 400 });
+  const commercialTerms = readCommercialTerms({ ...readCommercialTerms(quote.commercialTermsJson), ...payload });
+  let paymentScheduleJson = quote.paymentScheduleJson;
+  if (quote.seasonType === "regular" && quote.assumptions?.includes("النشاط: توريد العمالة") && commercialTerms.startDate) {
+    const annual = annualContractSchedule(commercialTerms.startDate);
+    if (!annual.endDate) return jsonNoStore({ error: "تاريخ بداية العقد السنوي غير صحيح" }, { status: 400 });
+    commercialTerms.endDate = annual.endDate;
+    const percentages = annualInstallmentPercentages();
+    if (quote.quantityMode === "fixed") paymentScheduleJson = JSON.stringify(annual.dueDates.map((dueDate, index) => ({ title: `الدفعة الشهرية ${index + 1}`, titleEn: `Monthly installment ${index + 1}`, dueDate, percentageBps: percentages[index] })));
+  }
   const now = new Date().toISOString();
   const [updated] = await db.update(quoteVersions).set({
     issueDate, validUntil,
-    terms: payload.terms === undefined ? quote.terms : clean(payload.terms, 3000) || null,
+    commercialTermsJson: JSON.stringify(commercialTerms),
+    paymentScheduleJson,
+    documentId: null,
+    terms: payload.paymentTerms === undefined && payload.terms === undefined ? quote.terms : clean(payload.paymentTerms ?? payload.terms, 3000) || null,
     assumptions: payload.assumptions === undefined ? quote.assumptions : clean(payload.assumptions, 5000) || null,
     status: "draft", approvalReason: null, approvedBy: null, approvedAt: null,
     updatedAt: now, recordVersion: quote.recordVersion + 1,

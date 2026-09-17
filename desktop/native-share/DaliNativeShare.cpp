@@ -61,6 +61,7 @@ std::wstring Utf8ToWide(std::string const& input) {
 }
 
 std::string DecodeBase64(std::string const& encoded) {
+  if (encoded.empty()) return {};
   DWORD byteCount = 0;
   if (!CryptStringToBinaryA(
           encoded.c_str(), static_cast<DWORD>(encoded.size()),
@@ -86,7 +87,7 @@ std::vector<std::string> ReadManifestLines(std::filesystem::path const& path) {
   std::string line;
   while (std::getline(stream, line)) {
     if (!line.empty() && line.back() == '\r') line.pop_back();
-    if (!line.empty()) lines.push_back(DecodeBase64(line));
+    lines.push_back(DecodeBase64(line));
   }
   if (lines.size() < 4 || lines.size() > 203) throw_hresult(E_INVALIDARG);
   return lines;
@@ -153,10 +154,11 @@ HWND CreateOwnerWindow(HINSTANCE instance) {
   const int x = workArea.left + ((workArea.right - workArea.left) - width) / 2;
   const int y = workArea.top + ((workArea.bottom - workArea.top) - height) / 2;
   HWND window = CreateWindowExW(
-      WS_EX_TOOLWINDOW | WS_EX_LAYERED, kWindowClass, L"Dali File Share",
-      WS_POPUP, x, y, width, height, nullptr, nullptr, instance, nullptr);
+      WS_EX_APPWINDOW, kWindowClass, L"دالي — مشاركة الملفات عبر واتساب",
+      WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, x, y, width, height, nullptr, nullptr, instance, nullptr);
   if (!window) throw_hresult(HRESULT_FROM_WIN32(GetLastError()));
-  SetLayeredWindowAttributes(window, 0, 1, LWA_ALPHA);
+  CreateWindowExW(0, L"STATIC", L"اختر واتساب من نافذة المشاركة ثم حدد المستلم وأكد الإرسال.\nالملفات مرفقة بطلب المشاركة.", WS_CHILD | WS_VISIBLE | SS_CENTER,
+      30, 50, width - 60, 100, window, nullptr, instance, nullptr);
   ShowWindow(window, SW_SHOW);
   UpdateWindow(window);
   BringWindowToTop(window);

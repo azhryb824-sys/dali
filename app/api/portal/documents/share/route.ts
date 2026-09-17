@@ -1,3 +1,7 @@
+import { documentShareApprovalError } from "@/lib/document-share-approval";
+import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
+import { whatsappSharePayload } from "@/lib/whatsapp-share-payload";
+import { externalRequestUrl } from "@/lib/request-origin";
 import { desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyDocuments, documentShareLinks } from "@/db/schema";
@@ -27,13 +31,17 @@ export async function POST(request: Request) {
   if (!access || !canAccessPortalDocuments(access) || !canSharePortalDocuments(access)) return Response.json({ error: "غير مصرح بمشاركة المستندات" }, { status: 403 });
 
   try {
-    const payload = await request.json() as { documentId?: unknown; expiresInDays?: unknown; maxDownloads?: unknown };
+    const payload = await request.json() as { documentId?: unknown; expiresInDays?: unknown; maxDownloads?: unknown; whatsappNumber?: unknown };
     const documentId = Number(payload.documentId);
     if (!Number.isInteger(documentId) || documentId < 1) return Response.json({ error: "المستند غير صحيح" }, { status: 400 });
 
     const db = getDb();
     const document = await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, documentId) });
     if (!document || document.status !== "active") return Response.json({ error: "المستند غير موجود" }, { status: 404 });
+    const approvalError = await documentShareApprovalError(document);
+    if (approvalError) return Response.json({ error: approvalError }, { status: 409 });
+    const mobile = typeof payload.whatsappNumber === "string" ? normalizeSaudiWhatsAppNumber(payload.whatsappNumber) : null;
+    if (payload.whatsappNumber !== undefined && !mobile) return Response.json({ error: "اكتب رقم واتساب سعودي صحيحًا" }, { status: 400 });
 
     const token = `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
     const tokenHash = await hashShareToken(token);
@@ -45,7 +53,9 @@ export async function POST(request: Request) {
     await auditPortalAction({ actorEmail: access.user.email, action: "document-share-created", entityType: "document-share-link", entityId: shareId, after: { documentId, expiresAt, maxDownloads } });
     await emitPortalNotification({ eventType: "document-share-created", title: "أُنشئ رابط مشاركة لمستند", message: `${document.referenceCode} — ${document.title} — الرابط صالح لمدة ${expiresInDays} أيام وبحد ${maxDownloads} تنزيلاً.`, severity: "warning", module: "documents", entityType: "company-document", entityId: document.id, actionView: "documents" }).catch(() => undefined);
 
-    return Response.json({ shareId, shareUrl: `${new URL(request.url).origin}/api/shared-documents/${token}`, expiresAt, maxDownloads });
+    const shareUrl = externalRequestUrl(request, `/api/shared-documents/${token}`).toString();
+    const message = `السلام عليكم، نرفق لكم ${document.title} — ${document.referenceCode}.\n${shareUrl}`;
+    return Response.json({ shareId, shareUrl, expiresAt, maxDownloads, ...(mobile ? whatsappSharePayload(request, access.user.email, mobile, message, [{ url: shareUrl, fileName: document.fileName, contentType: document.contentType, sizeBytes: document.sizeBytes }]) : {}) });
   } catch {
     return Response.json({ error: "تعذّر إنشاء رابط المشاركة" }, { status: 500 });
   }

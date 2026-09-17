@@ -1,3 +1,4 @@
+import { installDaliMediaPermissions } from "./media-permissions.mjs";
 import {
   app,
   BrowserWindow,
@@ -502,23 +503,7 @@ async function bootstrap() {
       callback({ requestHeaders: details.requestHeaders });
     },
   );
-  const mediaAllowed = (requestingUrl) => {
-    try {
-      return new URL(requestingUrl).origin === PORTAL_ORIGIN;
-    } catch {
-      return false;
-    }
-  };
-  session.defaultSession.setPermissionCheckHandler(
-    (_webContents, permission, requestingOrigin) =>
-      permission === "media" && mediaAllowed(requestingOrigin),
-  );
-  session.defaultSession.setPermissionRequestHandler(
-    (webContents, permission, callback, details) => {
-      const requestingUrl = details.requestingUrl || webContents.getURL();
-      callback(permission === "media" && mediaAllowed(requestingUrl));
-    },
-  );
+  installDaliMediaPermissions(session.defaultSession);
 
   openWindow();
 }

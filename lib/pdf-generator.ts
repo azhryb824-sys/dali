@@ -59,6 +59,7 @@ export type IssuedDocumentInput = {
     ajirContractStatus?: "not_applicable" | "with_ajir" | "without_ajir" | null;
     assignedWorkers?: Array<{ fullName: string; iqamaNumber: string | null }>;
   }>;
+  showPaymentSchedule?: boolean;
   paymentSchedule?: Array<{ title: string; titleEn?: string | null; dueDate: string; percentageBps: number; amountHalalas: number }>;
   startDate?: string;
   endDate?: string;
@@ -168,7 +169,7 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
     input.professions.forEach((item, index) => row(`Requirement ${index + 1}`, `${englishText(item.profession)} | Required: ${input.quantityMode === "open" ? "Open" : item.requiredCount}`));
   }
   if (input.amountHalalas) { row("Subtotal", `${((input.subtotalHalalas || input.amountHalalas) / 100).toFixed(2)} SAR`); if (input.vatHalalas) row("VAT", `${(input.vatHalalas / 100).toFixed(2)} SAR`); row("Total", `${(input.amountHalalas / 100).toFixed(2)} SAR`); }
-  if (input.paymentSchedule?.length) { heading("Payment Schedule"); input.paymentSchedule.forEach((payment, index) => row(`Installment ${index + 1}`, `${payment.titleEn || englishText(payment.title)} | Due: ${payment.dueDate} | ${(payment.percentageBps / 100).toFixed(2)}% | ${(payment.amountHalalas / 100).toFixed(2)} SAR`)); }
+  if (input.showPaymentSchedule !== false && input.paymentSchedule?.length) { heading("Payment Schedule"); input.paymentSchedule.forEach((payment, index) => row(`Installment ${index + 1}`, `${payment.titleEn || englishText(payment.title)} | Due: ${payment.dueDate} | ${(payment.percentageBps / 100).toFixed(2)}% | ${(payment.amountHalalas / 100).toFixed(2)} SAR`)); }
   if (input.documentType === "workforce_contract") {
     row("Scope", input.detailsEn || englishText(input.details));
     if (input.paymentTerms) row("Payment terms", englishText(input.paymentTerms));
@@ -574,6 +575,13 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     pairedBlock("نطاق العرض", publicManpowerText(input.details), "Scope", englishText(publicManpowerText(input.details)));
     if (input.accommodationParty) pairedBlock("السكن", input.accommodationParty, "Accommodation", englishText(input.accommodationParty));
     if (input.transportParty) pairedBlock("النقل", input.transportParty, "Transportation", englishText(input.transportParty));
+    if (input.startDate) pairedBlock("تاريخ البداية", dateLabel(input.startDate), "Start date", input.startDate);
+    if (input.endDate) pairedBlock("تاريخ النهاية", dateLabel(input.endDate), "End date", input.endDate);
+    if (input.workingHours) pairedBlock("ساعات العمل", input.workingHours, "Working hours", englishText(input.workingHours));
+    if (input.weeklyOff) pairedBlock("الراحة الأسبوعية", input.weeklyOff, "Weekly rest", englishText(input.weeklyOff));
+    if (input.specialTerms) pairedBlock("الشروط الخاصة", input.specialTerms, "Special terms", englishText(input.specialTerms));
+    if (input.showPaymentSchedule !== false && input.paymentSchedule?.length) input.paymentSchedule.forEach(payment => pairedBlock(payment.title, `${payment.dueDate} · ${moneyLabel(payment.amountHalalas)}`, payment.titleEn || englishText(payment.title), `${payment.dueDate} · ${moneyEnglish(payment.amountHalalas)}`));
+    for (const clause of input.contractClauses || []) if (clause.included) pairedBlock(clause.title, clause.body, clause.titleEn || englishText(clause.title), clause.bodyEn || englishText(clause.body));
     if (input.expiryDate) pairedBlock("صلاحية العرض", dateLabel(input.expiryDate), "Quotation validity", input.expiryDate);
     if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
     if (input.assumptions) pairedBlock("الافتراضات والاستثناءات", publicManpowerText(input.assumptions), "Assumptions and exclusions", englishText(publicManpowerText(input.assumptions)));
@@ -607,7 +615,7 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
       pairedBlock("القيمة التعاقدية", moneyLabel(input.amountHalalas), "Contract value", moneyEnglish(input.amountHalalas), true);
       pairedBlock("القيمة كتابة", halalasToArabicWords(input.amountHalalas), "Amount in words", moneyEnglish(input.amountHalalas));
     }
-    if (input.paymentSchedule?.length) {
+    if (input.showPaymentSchedule !== false && input.paymentSchedule?.length) {
       input.paymentSchedule.forEach((payment, index) =>
         pairedBlock(
           `الدفعة ${index + 1}`,
@@ -1129,7 +1137,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       composer.field("القيمة التعاقدية", moneyLabel(input.amountHalalas));
       if (input.amountHalalas) composer.field("القيمة التعاقدية كتابة", halalasToArabicWords(input.amountHalalas));
     }
-    if (input.paymentSchedule?.length) {
+    if (input.showPaymentSchedule !== false && input.paymentSchedule?.length) {
       composer.heading("جدول الدفعات");
       input.paymentSchedule.forEach((payment, index) => composer.pair(`الدفعة ${index + 1}`, payment.title, "الاستحقاق والقيمة", `${dateLabel(payment.dueDate)} · ${(payment.percentageBps / 100).toFixed(2)}% · ${moneyLabel(payment.amountHalalas)}`));
     }
@@ -1190,6 +1198,18 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       composer.field("الإجمالي النهائي", moneyLabel(input.amountHalalas));
       composer.field("الإجمالي كتابة", halalasToArabicWords(input.amountHalalas || 0));
     }
+    if (input.startDate) composer.field("تاريخ بداية الخدمة", dateLabel(input.startDate));
+    if (input.endDate) composer.field("تاريخ نهاية الخدمة", dateLabel(input.endDate));
+    if (input.workingHours) composer.field("ساعات العمل", input.workingHours);
+    if (input.weeklyOff) composer.field("الراحة الأسبوعية", input.weeklyOff);
+    if (input.accommodationParty) composer.field("السكن", input.accommodationParty);
+    if (input.transportParty) composer.field("النقل", input.transportParty);
+    if (input.specialTerms) composer.paragraph("الشروط الخاصة", input.specialTerms);
+    if (input.showPaymentSchedule !== false && input.paymentSchedule?.length) {
+      composer.heading("جدول الدفعات");
+      input.paymentSchedule.forEach(payment => composer.pair(payment.title, dateLabel(payment.dueDate), "النسبة والقيمة", `${(payment.percentageBps / 100).toFixed(2)}% · ${moneyLabel(payment.amountHalalas)}`));
+    }
+    for (const clause of input.contractClauses || []) if (clause.included) composer.paragraph(clause.title, clause.body);
     if (input.expiryDate) composer.field("صلاحية العرض", dateLabel(input.expiryDate));
     if (input.paymentTerms) composer.paragraph("شروط الدفع", input.paymentTerms);
     if (input.assumptions) composer.paragraph("الافتراضات والاستثناءات", publicManpowerText(input.assumptions));

@@ -27,6 +27,7 @@ import {
   workerAttachments,
   workers,
   workforceContracts,
+  workforceRequests,
   workOrders,
 } from "@/db/schema";
 import { getBusinessHoursState } from "@/lib/business-hours";
@@ -125,13 +126,13 @@ export async function emitPortalNotification(input: PortalNotificationInput) {
 }
 
 function notificationVisibleTo(
-  access: Pick<PortalAccess, "role" | "department" | "user">,
+  access: Pick<PortalAccess, "role" | "department" | "user"> & Partial<Pick<PortalAccess, "functionalRoles">>,
   notification: typeof portalNotifications.$inferSelect,
 ) {
   const email = normalizeEmail(access.user.email);
   if (notification.targetEmail && normalizeEmail(notification.targetEmail) !== email) return false;
   if (notification.targetEmail && normalizeEmail(notification.targetEmail) === email) return true;
-  if (access.role === "admin") return true;
+  if (access.role === "admin" || access.functionalRoles?.some(role => role === "system_owner" || role === "system_admin")) return true;
   if (notification.targetRole && notification.targetRole !== access.role) return false;
   if (access.role === "manager") return true;
   if (notification.targetDepartment) return notification.targetDepartment === access.department;
@@ -139,7 +140,7 @@ function notificationVisibleTo(
   return notification.module === "documents" && (access.department === "legal" || access.department === "finance");
 }
 
-export async function listPortalNotifications(access: Pick<PortalAccess, "role" | "department" | "user">) {
+export async function listPortalNotifications(access: Pick<PortalAccess, "role" | "department" | "user"> & Partial<Pick<PortalAccess, "functionalRoles">>) {
   const db = getDb();
   const [notifications, reads] = await Promise.all([
     db.select().from(portalNotifications).where(eq(portalNotifications.status, "active")).orderBy(desc(portalNotifications.updatedAt)).limit(300),
@@ -211,6 +212,8 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     pendingChecks.set(input.dedupeKey, input);
   };
 
+  const quoteRequestApprovals = await db.select().from(workforceRequests).where(and(eq(workforceRequests.requestType, "quotation"), eq(workforceRequests.approvalStatus, "pending"))).limit(1000);
+  for (const item of quoteRequestApprovals) ensure({ dedupeKey: `quote-request-approval:${item.id}`, eventType: "quote-request-awaiting-approval", title: "طلب عرض سعر ينتظر الاعتماد", message: `${item.trackingCode} — ${item.companyName || item.fullName}`, severity: "warning", module: "workforce", entityType: "workforce-request", entityId: item.id, actionView: "workforce", targetRole: "admin", source: "system-check" });
   const returnedPeople = await db.select().from(legalReferrals).where(and(eq(legalReferrals.status, "returned"), inArray(legalReferrals.sourceType, ["employee", "worker"])));
   for (const referral of returnedPeople) {
     const newer = await db.query.legalReferrals.findFirst({ where: and(eq(legalReferrals.sourceType, referral.sourceType), eq(legalReferrals.sourceId, referral.sourceId)), orderBy: desc(legalReferrals.id) });

@@ -1,12 +1,16 @@
+import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
+import { whatsappSharePayload } from "@/lib/whatsapp-share-payload";
+import { resolveShareRecipient } from "@/lib/share-recipient";
+import { externalRequestUrl } from "@/lib/request-origin";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { clientContacts, companyDocuments, documentShareLinks, quoteVersions, salesOpportunities } from "@/db/schema";
+import { companyDocuments, documentShareLinks, quoteVersions, salesOpportunities } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { hashShareToken, objectKey } from "@/lib/company-documents";
 import { canSharePortalDocuments, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
-import { rejectCrossSiteRequest } from "@/lib/security";
+import { readLimitedJson, rejectCrossSiteRequest } from "@/lib/security";
 import { GET as renderPdf } from "../pdf/route";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -24,11 +28,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
   const opportunity = await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, quote.opportunityId) });
   if (!opportunity?.clientId) return Response.json({ error: "العرض غير مرتبط بعميل" }, { status: 409 });
-  const contact = await db.query.clientContacts.findFirst({
-    where: eq(clientContacts.clientId, opportunity.clientId),
-    orderBy: (table, { desc }) => [desc(table.isPrimary)],
-  });
-  if (!contact?.mobile) return Response.json({ error: "رقم جوال العميل غير مسجل" }, { status: 409 });
+  const parsed = await readLimitedJson(request, 2000);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.value as Record<string, unknown>;
+  const recipient = await resolveShareRecipient({ quoteId: id });
+  const mobile = normalizeSaudiWhatsAppNumber(typeof body.whatsappNumber === "string" ? body.whatsappNumber : recipient.mobile);
+  if (!mobile) return Response.json({ error: "اكتب رقم واتساب سعودي صحيحًا" }, { status: 400 });
 
   let document = quote.documentId ? await db.query.companyDocuments.findFirst({ where: eq(companyDocuments.id, quote.documentId) }) : null;
   if (!document) {
@@ -46,7 +51,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       title: `عرض سعر ${quote.quoteCode}`,
       category: "contract",
       documentType: "quotation",
-      counterparty: contact.fullName,
+      counterparty: recipient.clientName,
       fileName,
       storageKey,
       contentType: "application/pdf",
@@ -64,8 +69,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
   const shareId = crypto.randomUUID();
   await db.insert(documentShareLinks).values({ id: shareId, documentId: document.id, tokenHash, expiresAt, maxDownloads: 20, createdBy: access.user.email });
-  const shareUrl = `${new URL(request.url).origin}/api/shared-documents/${token}`;
+  const shareUrl = externalRequestUrl(request, `/api/shared-documents/${token}`).toString();
   await auditPortalAction({ actorEmail: access.user.email, action: "quotation-whatsapp-share-created", entityType: "quote-version", entityId: id, after: { documentId: document.id, expiresAt, mobile: "[محجوب]" } });
   await emitPortalNotification({ eventType: "quotation-whatsapp-share-created", title: "جُهز عرض سعر للمشاركة عبر واتساب", message: `${quote.quoteCode} — الرابط صالح 7 أيام.`, severity: "info", module: "documents", entityType: "quote-version", entityId: id, actionView: "contractual-documents" }).catch(() => undefined);
-  return Response.json({ shareUrl, mobile: contact.mobile, clientName: contact.fullName, expiresAt });
+  const message = `السلام عليكم، نرفق لكم عرض السعر المعتمد ${quote.quoteCode}.\n${shareUrl}`;
+  return Response.json({ shareUrl, clientName: recipient.clientName, expiresAt, ...whatsappSharePayload(request, access.user.email, mobile, message, [{ url: shareUrl, fileName: document.fileName, contentType: document.contentType, sizeBytes: document.sizeBytes }]) });
 }
