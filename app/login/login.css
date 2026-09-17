@@ -153,6 +153,27 @@
   font-weight: 600;
 }
 
+.login-credentials-form .remember-login-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.login-credentials-form .remember-login-option input {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  accent-color: var(--login-red);
+}
+
+.login-credentials-form .remember-login-hint {
+  margin: -7px 28px 0 0;
+  color: var(--login-muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
 .login-credentials-form input,
 .access-request-form input {
   width: 100%;

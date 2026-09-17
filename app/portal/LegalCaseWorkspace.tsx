@@ -129,6 +129,20 @@ type Attachment = {
   approvalStatus: string;
   sha256: string | null;
 };
+type ContractDocument = {
+  id: number;
+  legalRecordId: number;
+  referenceCode: string;
+  title: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  legalDocumentRole:
+    | "approved_contract"
+    | "contract_pdf"
+    | "disputed_invoice"
+    | "contract_attachment";
+};
 type Bank = {
   id: number;
   accountCode: string;
@@ -161,6 +175,7 @@ type Data = {
   cases: Matter[];
   activities: Activity[];
   attachments: Attachment[];
+  contractDocuments: ContractDocument[];
   actionLog: ActionLog[];
   judgmentPayments: JudgmentPayment[];
   banks: Bank[];
@@ -358,16 +373,13 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
   const assignedLawyer = data?.lawyers.find(
     (lawyer) => lawyer.id === matter?.assignedLawyerId,
   );
-  const externalLawyers = useMemo(
-    () =>
-      data?.lawyers.filter(
-        (lawyer) =>
-          lawyer.status === "active" &&
-          !lawyer.portalUserEmail &&
-          Boolean(lawyer.mobile),
-      ) || [],
-    [data],
-  );
+  const assignedExternalLawyer =
+    assignedLawyer &&
+    assignedLawyer.status === "active" &&
+    !assignedLawyer.portalUserEmail &&
+    Boolean(assignedLawyer.mobile)
+      ? assignedLawyer
+      : null;
   const matterShares = useMemo(
     () =>
       data?.externalShares.filter(
@@ -413,6 +425,13 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
   const attachments = useMemo(
     () =>
       data?.attachments.filter((item) => item.legalRecordId === selected) || [],
+    [data, selected],
+  );
+  const contractDocuments = useMemo(
+    () =>
+      data?.contractDocuments.filter(
+        (item) => item.legalRecordId === selected,
+      ) || [],
     [data, selected],
   );
   const actionLog = useMemo(
@@ -1981,16 +2000,15 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                         type="button"
                         className="whatsapp-share-button"
                         disabled={
-                          externalLawyers.length === 0 ||
-                          ((snapshot?.documents?.length ||
-                            (matter?.contractId ? 1 : 0)) + attachments.length === 0)
+                          !assignedExternalLawyer ||
+                          contractDocuments.length + attachments.length === 0
                         }
                         title={
-                          externalLawyers.length === 0
-                            ? "أضف محاميًا خارجيًا نشطًا ورقم واتساب إلى سجل المحامين"
-                            : ((snapshot?.documents?.length || (matter?.contractId ? 1 : 0)) + attachments.length === 0)
+                          !assignedExternalLawyer
+                            ? "أسند القضية إلى محامٍ خارجي نشط لديه رقم واتساب"
+                            : contractDocuments.length + attachments.length === 0
                               ? "لا توجد ملفات قابلة للمشاركة في هذا الملف"
-                              : "مشاركة كل ملفات العقد والملف القانوني"
+                              : `مشاركة كل الملفات مع ${assignedExternalLawyer.fullName}`
                         }
                         onClick={() => setShareTarget("all")}
                       >
@@ -1998,11 +2016,39 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                       </button>
                     )}
                 </div>
-                {data.canShareExternally && externalLawyers.length === 0 && (
+                {data.canShareExternally && !assignedExternalLawyer && (
                   <p className="legal-share-requirement" role="status">
-                    زر المشاركة جاهز؛ أضف محاميًا خارجيًا نشطًا مع رقم واتساب في سجل المحامين لتفعيله.
+                    أسند القضية إلى محامٍ خارجي نشط وأضف رقم واتساب إلى بياناته لتفعيل المشاركة المباشرة معه فقط.
                   </p>
                 )}
+                {contractDocuments.map((item) => {
+                  const roleLabel =
+                    item.legalDocumentRole === "approved_contract"
+                      ? "العقد المعتمد"
+                      : item.legalDocumentRole === "contract_pdf"
+                        ? "ملف العقد"
+                        : item.legalDocumentRole === "disputed_invoice"
+                          ? "الفاتورة محل الإشكال"
+                          : "مرفق العقد";
+                  return (
+                    <article className="legal-case-file-row" key={`contract-document-${item.id}`}>
+                      <a
+                        href={`/api/portal/documents/${item.id}?inline=1`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <strong>{item.title}</strong>
+                        <small>
+                          {roleLabel} · {item.fileName} · {" "}
+                          {(item.sizeBytes / 1024 / 1024).toFixed(2)} م.ب
+                        </small>
+                      </a>
+                      <span className={`legal-document-role ${item.legalDocumentRole}`}>
+                        {roleLabel}
+                      </span>
+                    </article>
+                  );
+                })}
                 {attachments.map((item) => (
                   <article className="legal-case-file-row" key={item.id}>
                     <a
@@ -2048,8 +2094,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                           <button
                             type="button"
                             className="whatsapp-share-button"
-                            disabled={externalLawyers.length === 0}
-                            title={externalLawyers.length === 0 ? "يلزم تسجيل محامٍ خارجي ورقم واتساب أولًا" : `مشاركة ${item.title} عبر واتساب`}
+                            disabled={!assignedExternalLawyer}
+                            title={!assignedExternalLawyer ? "يلزم إسناد القضية إلى محامٍ خارجي لديه رقم واتساب أولًا" : `مشاركة ${item.title} مع ${assignedExternalLawyer.fullName}`}
                             onClick={() => setShareTarget(item)}
                           >
                             مشاركة عبر واتساب
@@ -2058,8 +2104,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                     </div>
                   </article>
                 ))}
-                {!attachments.length && (
-                  <p className="legal-empty">لا توجد مرفقات قانونية إضافية.</p>
+                {!contractDocuments.length && !attachments.length && (
+                  <p className="legal-empty">لا توجد مرفقات عقد أو مرفقات قانونية إضافية.</p>
                 )}
                 {data.canWrite && (
                   <form onSubmit={upload}>
@@ -3075,7 +3121,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
               <p className="legal-share-file span-two">
                 <strong>
                   {shareTarget === "all"
-                    ? `جميع مرفقات العقد والملف (${(snapshot?.documents?.length || (matter?.contractId ? 1 : 0)) + attachments.length})`
+                    ? `العقد والفاتورة محل الإشكال والمرفقات (${contractDocuments.length + attachments.length})`
                     : shareTarget.title}
                 </strong>
                 <span>
@@ -3085,27 +3131,22 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 </span>
               </p>
               <label>
-                المحامي الخارجي
-                <select
-                  name="lawyerId"
-                  required
-                  defaultValue={
-                    assignedLawyer &&
-                    !assignedLawyer.portalUserEmail &&
-                    assignedLawyer.mobile
-                      ? assignedLawyer.id
-                      : ""
+                المحامي الخارجي المسندة إليه القضية
+                <input
+                  value={
+                    assignedExternalLawyer
+                      ? `${assignedExternalLawyer.fullName} — ${assignedExternalLawyer.mobile}`
+                      : "لا يوجد محامٍ خارجي صالح للمشاركة"
                   }
-                >
-                  <option value="" disabled>
-                    اختر حساب واتساب
-                  </option>
-                  {externalLawyers.map((lawyer) => (
-                    <option key={lawyer.id} value={lawyer.id}>
-                      {lawyer.fullName} — {lawyer.mobile}
-                    </option>
-                  ))}
-                </select>
+                  readOnly
+                />
+                {assignedExternalLawyer && (
+                  <input
+                    type="hidden"
+                    name="lawyerId"
+                    value={assignedExternalLawyer.id}
+                  />
+                )}
               </label>
               <label>
                 صلاحية الرابط
@@ -3117,7 +3158,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 </select>
               </label>
               <p className="form-hint span-two">
-                سيُفتح واتساب على الرقم المسجل للمحامي بعد إنشاء رابط مشفر مؤقت.
+                سيُفتح واتساب على الرقم المسجل للمحامي المسند للقضية بعد إنشاء رابط مشفر مؤقت.
                 يسجل النظام وقت المشاركة بالثانية واسم المشارك والمحامي وعمليات
                 الفتح والتنزيل، ويمكن إبطال الرابط من سجل المشاركة.
               </p>
@@ -3125,7 +3166,10 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 <button type="button" onClick={() => setShareTarget(null)}>
                   إلغاء
                 </button>
-                <button className="admin-primary" disabled={shareBusy}>
+                <button
+                  className="admin-primary"
+                  disabled={shareBusy || !assignedExternalLawyer}
+                >
                   {shareBusy ? "جارٍ تجهيز الرابط..." : "فتح واتساب وتسجيل المشاركة"}
                 </button>
               </div>

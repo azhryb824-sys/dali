@@ -5,7 +5,7 @@ import { auditPortalAction } from "@/lib/audit";
 import { cleanText, makeReference, objectKey } from "@/lib/company-documents";
 import { generateIssuedPdf } from "@/lib/pdf-generator";
 import { contractInvoicePdfCopy } from "@/lib/invoice-pdf-copy";
-import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
+import { canSharePortalDocuments, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { issueDueContractInvoice } from "@/lib/contract-payment-invoicing";
 import { loadContractLegalDocuments } from "@/lib/contract-legal-documents";
@@ -16,6 +16,7 @@ import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelatio
 
 const positiveId=(value:unknown)=>{const id=Number(value);return Number.isInteger(id)&&id>0?id:0};
 const owner=(access:NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>)=>access.role==="admin"||access.functionalRoles.includes("system_owner")||access.functionalRoles.includes("system_admin");
+const approvedContractSharer=(access:NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>)=>owner(access)||access.functionalRoles.includes("administrative_assistant");
 const settlementAllocations=(body:Record<string,unknown>,remainingAmountHalalas:number):ContractPaymentAllocationInput[]=>{
   if(Array.isArray(body.allocations))return body.allocations.slice(0,10).flatMap(item=>{
     if(!item||typeof item!=="object")return[];
@@ -40,14 +41,14 @@ export async function GET(){
     const due=await db.select().from(contractPaymentSchedules).where(and(inArray(contractPaymentSchedules.contractId,billableContractIds),eq(contractPaymentSchedules.status,"due"),lte(contractPaymentSchedules.dueDate,today)));
     for(const payment of due)await issueDueContractInvoice(payment.id,AUTOMATED_CONTRACT_BILLING_ACTOR).catch(async error=>{await emitPortalNotification({eventType:"contract-payment-auto-invoice-failed",title:"تعذر إنشاء فاتورة دفعة مستحقة",message:`الدفعة ${payment.id} — ${error instanceof Error?error.message:"خطأ غير معروف"}`,severity:"critical",module:"finance",entityType:"contract-payment",entityId:payment.id,actionView:"operations",targetDepartment:"finance",dedupeKey:`auto-invoice-failed:${payment.id}:${payment.dueDate}`}).catch(()=>undefined)});
   }
-  const [canReadFinance,canRecordPayment]=await Promise.all([hasPortalPermission(access,"finance","read"),hasPortalPermission(access,"finance","pay")]);
+  const [canReadFinance,canRecordPayment,canReadContracts]=await Promise.all([hasPortalPermission(access,"finance","read"),hasPortalPermission(access,"finance","pay"),hasPortalPermission(access,"contracts","read")]);
   const [contracts,paymentRows,professions,contacts,banks,paymentAccounts,financeRows]=await Promise.all([db.select().from(workforceContracts).orderBy(asc(workforceContracts.startDate)),db.select().from(contractPaymentSchedules).orderBy(asc(contractPaymentSchedules.dueDate),asc(contractPaymentSchedules.installmentNumber)),db.select().from(contractProfessions),db.select().from(clientContacts),canRecordPayment?db.select().from(bankAccounts).where(eq(bankAccounts.status,"active")).orderBy(asc(bankAccounts.bankName)):Promise.resolve([]),canRecordPayment?db.select().from(chartOfAccounts).where(and(eq(chartOfAccounts.status,"active"),eq(chartOfAccounts.accountType,"asset"),eq(chartOfAccounts.isPosting,true))).orderBy(asc(chartOfAccounts.code)):Promise.resolve([]),db.select().from(financialRecords).where(isNotNull(financialRecords.contractPaymentScheduleId))]);
   const financialById=new Map(financeRows.map(item=>[item.id,item]));
   const payments=paymentRows.map(payment=>{const financial=payment.financialRecordId?financialById.get(payment.financialRecordId):null;const invoiceAmountHalalas=financial?.amountHalalas??payment.amountHalalas;const paidAmountHalalas=Math.min(invoiceAmountHalalas,Math.max(0,payment.paidAmountHalalas));const remainingAmountHalalas=Math.max(0,invoiceAmountHalalas-paidAmountHalalas);return{...payment,invoiceAmountHalalas,paidAmountHalalas,remainingAmountHalalas,isOverdue:remainingAmountHalalas>0&&payment.dueDate<today}});
   const settlementRows=canReadFinance||canRecordPayment||owner(access)?await db.select().from(contractPaymentSettlements).orderBy(asc(contractPaymentSettlements.createdAt),asc(contractPaymentSettlements.id)):[];
   const allocationRows=settlementRows.length?await db.select().from(contractPaymentSettlementAllocations).where(inArray(contractPaymentSettlementAllocations.settlementId,settlementRows.map(item=>item.id))).orderBy(asc(contractPaymentSettlementAllocations.id)):[];
   const clientMobiles=Object.fromEntries(contacts.filter(item=>item.mobile).sort((a,b)=>Number(b.isPrimary)-Number(a.isPrimary)).map(item=>[item.clientId,item.mobile]));
-  return jsonNoStore({contracts,payments,professions,clientMobiles,banks,paymentAccounts,settlements:settlementRows,settlementAllocations:allocationRows,canManageContracts:owner(access)||await hasPortalPermission(access,"contracts","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment,canReferLegal:owner(access)});
+  return jsonNoStore({contracts,payments,professions,clientMobiles,banks,paymentAccounts,settlements:settlementRows,settlementAllocations:allocationRows,canManageContracts:owner(access)||await hasPortalPermission(access,"contracts","write"),canApproveContracts:owner(access),canRefer:owner(access),canInvoice:await hasPortalPermission(access,"finance","write"),canRecordPayment,canReferLegal:owner(access),canShareApprovedContracts:approvedContractSharer(access)&&canReadContracts&&canSharePortalDocuments(access)});
 }
 
 export async function POST(request:Request){

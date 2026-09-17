@@ -40,10 +40,10 @@ test("legal and contracts use an audited two-way correspondence workflow", async
 test("legal WhatsApp controls remain visible and explain missing prerequisites", async () => {
   const ui = await read("app/portal/LegalCaseWorkspace.tsx");
   assert.match(ui, /data\.canShareExternally && \(/);
-  assert.match(ui, /externalLawyers\.length === 0/);
-  assert.match(ui, /زر المشاركة جاهز/);
+  assert.match(ui, /!assignedExternalLawyer/);
+  assert.match(ui, /أسند القضية إلى محامٍ خارجي/);
   assert.match(ui, /مشاركة جميع المرفقات عبر واتساب/);
-  assert.doesNotMatch(ui, /data\.canShareExternally &&\s*externalLawyers\.length > 0/);
+  assert.doesNotMatch(ui, /externalLawyers\.map/);
 });
 
 test("owners and system administrators can update real functional roles without widening scoped or custom access", async () => {

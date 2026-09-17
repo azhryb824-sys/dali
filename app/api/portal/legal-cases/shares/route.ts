@@ -1,7 +1,6 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
-  companyDocuments,
   legalCaseActionLog,
   legalCaseAttachments,
   legalExternalShareBundleItems,
@@ -9,7 +8,6 @@ import {
   legalExternalShares,
   legalLawyers,
   legalRecords,
-  workforceContracts,
 } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { hashShareToken } from "@/lib/company-documents";
@@ -17,7 +15,7 @@ import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { externalRequestUrl } from "@/lib/request-origin";
 import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
-import { loadContractLegalDocuments } from "@/lib/contract-legal-documents";
+import { loadLegalRecordContractDocuments } from "@/lib/contract-legal-documents";
 import {
   jsonNoStore,
   readLimitedJson,
@@ -80,7 +78,7 @@ export async function POST(request: Request) {
   const body = parsed.value as Record<string, unknown>;
   const legalRecordId = Number(body.legalRecordId);
   const attachmentId = Number(body.attachmentId);
-  const lawyerId = Number(body.lawyerId);
+  const requestedLawyerId = Number(body.lawyerId || 0);
   const shareAll = body.shareAll === true || body.shareAll === "true";
   const expiresInDays = Math.min(
     14,
@@ -89,17 +87,17 @@ export async function POST(request: Request) {
   if (
     !Number.isInteger(legalRecordId) ||
     legalRecordId < 1 ||
-    !Number.isInteger(lawyerId) ||
-    lawyerId < 1 ||
+    (requestedLawyerId !== 0 &&
+      (!Number.isInteger(requestedLawyerId) || requestedLawyerId < 1)) ||
     (!shareAll && (!Number.isInteger(attachmentId) || attachmentId < 1))
   )
     return jsonNoStore(
-      { error: "اختر الملف والمحامي الخارجي" },
+      { error: "اختر الملف القانوني" },
       { status: 400 },
     );
 
   const db = getDb();
-  const [matter, attachment, lawyer] = await Promise.all([
+  const [matter, attachment] = await Promise.all([
     db.query.legalRecords.findFirst({
       where: and(
         eq(legalRecords.id, legalRecordId),
@@ -115,24 +113,38 @@ export async function POST(request: Request) {
             isNull(legalCaseAttachments.deletedAt),
           ),
         }),
-    db.query.legalLawyers.findFirst({
-      where: and(
-        eq(legalLawyers.id, lawyerId),
-        eq(legalLawyers.status, "active"),
-        isNull(legalLawyers.portalUserEmail),
-      ),
-    }),
   ]);
   if (!matter || (!shareAll && !attachment))
     return jsonNoStore(
       { error: "القضية أو الملف غير موجود" },
       { status: 404 },
     );
-  if (!lawyer)
+  if (!matter.assignedLawyerId)
     return jsonNoStore(
-      { error: "اختر محاميًا خارجيًا نشطًا" },
+      { error: "يجب إسناد القضية إلى محامٍ خارجي قبل مشاركة ملفاتها" },
       { status: 409 },
     );
+  if (
+    requestedLawyerId &&
+    requestedLawyerId !== matter.assignedLawyerId
+  )
+    return jsonNoStore(
+      { error: "لا يمكن مشاركة الملف إلا مع المحامي الخارجي المسندة إليه القضية" },
+      { status: 409 },
+    );
+  const lawyer = await db.query.legalLawyers.findFirst({
+    where: and(
+      eq(legalLawyers.id, matter.assignedLawyerId),
+      eq(legalLawyers.status, "active"),
+      isNull(legalLawyers.portalUserEmail),
+    ),
+  });
+  if (!lawyer)
+    return jsonNoStore(
+      { error: "المحامي المسند للقضية ليس محاميًا خارجيًا نشطًا" },
+      { status: 409 },
+    );
+  const lawyerId = lawyer.id;
   const phone = normalizeSaudiWhatsAppNumber(lawyer.mobile);
   if (!phone)
     return jsonNoStore(
@@ -150,37 +162,7 @@ export async function POST(request: Request) {
           isNull(legalCaseAttachments.deletedAt),
         ),
       );
-    const snapshotDocumentIds = new Set<number>();
-    if (matter.fileSnapshotJson) {
-      try {
-        const snapshot = JSON.parse(matter.fileSnapshotJson) as {
-          documents?: Array<{ id?: unknown }>;
-        };
-        for (const document of snapshot.documents || []) {
-          const documentId = Number(document.id);
-          if (Number.isInteger(documentId) && documentId > 0)
-            snapshotDocumentIds.add(documentId);
-        }
-      } catch {
-        // Older manually entered files may not contain a valid contract snapshot.
-      }
-    }
-    const contract = matter.contractId
-      ? await db.query.workforceContracts.findFirst({
-          where: eq(workforceContracts.id, matter.contractId),
-        })
-      : null;
-    const referredDocuments = contract
-      ? await loadContractLegalDocuments(db, contract, [...snapshotDocumentIds])
-      : snapshotDocumentIds.size
-        ? await db
-            .select()
-            .from(companyDocuments)
-            .where(inArray(companyDocuments.id, [...snapshotDocumentIds]))
-        : [];
-    const activeDocuments = referredDocuments.filter(
-      (document) => document.status === "active",
-    );
+    const activeDocuments = await loadLegalRecordContractDocuments(db, matter);
     const itemCount = legalAttachments.length + activeDocuments.length;
     if (!itemCount)
       return jsonNoStore(
@@ -217,13 +199,23 @@ export async function POST(request: Request) {
           title: item.title,
           fileName: item.fileName,
         })),
-        ...activeDocuments.map((item) => ({
-          bundleId,
-          attachmentId: null,
-          documentId: item.id,
-          title: item.title,
-          fileName: item.fileName,
-        })),
+        ...activeDocuments.map((item) => {
+          const prefix =
+            item.legalDocumentRole === "approved_contract"
+              ? "العقد المعتمد"
+              : item.legalDocumentRole === "contract_pdf"
+                ? "ملف العقد"
+                : item.legalDocumentRole === "disputed_invoice"
+                  ? "الفاتورة محل الإشكال"
+                  : "مرفق العقد";
+          return {
+            bundleId,
+            attachmentId: null,
+            documentId: item.id,
+            title: `${prefix} — ${item.title}`,
+            fileName: item.fileName,
+          };
+        }),
       ]);
       await tx.insert(legalCaseActionLog).values({
         legalRecordId,

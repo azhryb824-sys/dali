@@ -38,6 +38,7 @@ type Contract = {
   transportParty: string | null;
   details: string;
   showPaymentSchedule: boolean;
+  approvedBy: string | null;
 };
 type Profession = {
   id?: number;
@@ -121,6 +122,7 @@ type Data = {
   canInvoice: boolean;
   canRecordPayment: boolean;
   canReferLegal: boolean;
+  canShareApprovedContracts: boolean;
 };
 const money = (value: number) =>
   new Intl.NumberFormat("ar-SA", {
@@ -163,6 +165,8 @@ export default function ContractBillingWorkspace() {
     null,
   );
   const [settlingPayment, setSettlingPayment] = useState<Payment | null>(null);
+  const [sharingContract, setSharingContract] = useState<Contract | null>(null);
+  const [contractShareBusy, setContractShareBusy] = useState(false);
   const [pendingContractApproval, setPendingContractApproval] = useState<{
     contract: Contract;
     stamps: ContractApprovalStamp[];
@@ -627,6 +631,44 @@ export default function ContractBillingWorkspace() {
       );
     }
   }
+  async function shareApprovedContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sharingContract) return;
+    const popup = window.open("about:blank", "_blank");
+    if (popup) popup.opener = null;
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    setContractShareBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch(
+        `/api/portal/contracts/${sharingContract.id}/share`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(values),
+        },
+      );
+      const result = (await readApiJson(response)) as {
+        error?: string;
+        whatsappUrl?: string;
+      };
+      if (!response.ok || !result.whatsappUrl)
+        throw new Error(result.error || "تعذر تجهيز مشاركة العقد");
+      setSharingContract(null);
+      setNotice(
+        "أُنشئ رابط PDF آمن للعقد المعتمد وفُتحت محادثة واتساب على الرقم المدخل.",
+      );
+      if (popup) popup.location.href = result.whatsappUrl;
+      else window.location.assign(result.whatsappUrl);
+    } catch (error) {
+      popup?.close();
+      setNotice(
+        error instanceof Error ? error.message : "تعذر مشاركة العقد عبر واتساب",
+      );
+    } finally {
+      setContractShareBusy(false);
+    }
+  }
   if (!data)
     return (
       <section className="panel">
@@ -715,6 +757,15 @@ export default function ContractBillingWorkspace() {
                     >
                       PDF عربي/English
                     </a>
+                    {data.canShareApprovedContracts && contract.approvedBy && (
+                      <button
+                        type="button"
+                        className="contract-card-action whatsapp-contract-share"
+                        onClick={() => setSharingContract(contract)}
+                      >
+                        مشاركة العقد عبر واتساب
+                      </button>
+                    )}
                     <span className={`workflow-status ${contract.status}`}>
                       {contractLabels[contract.status] || contract.status}
                     </span>
@@ -1063,6 +1114,73 @@ export default function ContractBillingWorkspace() {
                   disabled={busy === editingPayment.id}
                 >
                   حفظ الموعد
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {sharingContract && (
+        <div className="modal-layer">
+          <button
+            className="drawer-backdrop"
+            aria-label="إغلاق نموذج مشاركة العقد"
+            onClick={() => setSharingContract(null)}
+          />
+          <section
+            className="record-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="مشاركة العقد المعتمد عبر واتساب"
+          >
+            <div className="drawer-head">
+              <div>
+                <span>{sharingContract.referenceCode}</span>
+                <h2>مشاركة العقد المعتمد عبر واتساب</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSharingContract(null)}
+                aria-label="إغلاق"
+              >
+                ×
+              </button>
+            </div>
+            <form className="feature-form" onSubmit={shareApprovedContract}>
+              <label>
+                رقم واتساب المستلم
+                <input
+                  name="whatsappNumber"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="off"
+                  placeholder="05xxxxxxxx"
+                  pattern="[+0-9 -]{9,20}"
+                  required
+                  autoFocus
+                />
+              </label>
+              <label>
+                صلاحية الرابط
+                <select name="expiresInDays" defaultValue="7">
+                  <option value="1">يوم واحد</option>
+                  <option value="3">3 أيام</option>
+                  <option value="7">7 أيام</option>
+                  <option value="14">14 يومًا</option>
+                </select>
+              </label>
+              <p className="span-two">
+                يجب كتابة الرقم عند كل مشاركة. سيُرسل رابط PDF مشفر ومؤقت،
+                ولن يُحفظ رقم المستلم ضمن العقد.
+              </p>
+              <div className="modal-actions span-two">
+                <button type="button" onClick={() => setSharingContract(null)}>
+                  إلغاء
+                </button>
+                <button className="admin-primary" disabled={contractShareBusy}>
+                  {contractShareBusy
+                    ? "جارٍ تجهيز الرابط..."
+                    : "فتح واتساب ومشاركة PDF"}
                 </button>
               </div>
             </form>

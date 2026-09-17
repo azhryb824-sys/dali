@@ -5,6 +5,7 @@ import { generatedUiTemplates } from "@/lib/i18n-generated-templates";
 import { employeeFinanceUiTranslations } from "@/lib/i18n-employee-finance-catalog";
 import { publicUiTranslations } from "@/lib/i18n-public-catalog";
 import { reviewedUiTranslations } from "@/lib/i18n-reviewed-overrides";
+import { sharingUiTranslations } from "@/lib/i18n-sharing-catalog";
 
 export const supportedLocales = ["ar", "en", "bn"] as const;
 export type AppLocale = typeof supportedLocales[number];
@@ -108,6 +109,7 @@ for (const [source, generated] of Object.entries(generatedUiTranslations)) {
 }
 Object.assign(uiTranslations, contractPaymentUiTranslations);
 Object.assign(uiTranslations, employeeFinanceUiTranslations);
+Object.assign(uiTranslations, sharingUiTranslations);
 Object.assign(uiTranslations, reviewedUiTranslations);
 const dynamicUiTranslations:Array<{pattern:RegExp;en:(match:RegExpMatchArray)=>string;ur:(match:RegExpMatchArray)=>string;bn?:(match:RegExpMatchArray)=>string}>=[
   {pattern:/^مساحة عمل مهيأة لصلاحيات:\s*(.+)\.$/,en:m=>`Workspace configured for role: ${translateUi(m[1],"en")}.`,ur:m=>`کردار کے مطابق ورک اسپیس: ${m[1]}۔`,bn:m=>`ভূমিকা অনুযায়ী কর্মক্ষেত্র: ${translateUi(m[1],"bn")}।`},

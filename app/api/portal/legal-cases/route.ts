@@ -18,6 +18,7 @@ import {
 import { createDraftJournal, resolvePostingRule } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
 import { makeReference } from "@/lib/company-documents";
+import { loadLegalRecordContractDocuments } from "@/lib/contract-legal-documents";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import {
@@ -209,10 +210,29 @@ export async function GET() {
         )
         .orderBy(desc(legalExternalShareBundles.sharedAt)),
     ]);
+  const contractDocuments = (
+    await Promise.all(
+      cases.map(async (matter) =>
+        (await loadLegalRecordContractDocuments(db, matter)).map(
+          (document) => ({
+            id: document.id,
+            legalRecordId: matter.id,
+            referenceCode: document.referenceCode,
+            title: document.title,
+            fileName: document.fileName,
+            contentType: document.contentType,
+            sizeBytes: document.sizeBytes,
+            legalDocumentRole: document.legalDocumentRole,
+          }),
+        ),
+      ),
+    )
+  ).flat();
   return jsonNoStore({
     cases,
     activities,
     attachments,
+    contractDocuments,
     actionLog,
     judgmentPayments,
     banks,

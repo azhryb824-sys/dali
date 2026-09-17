@@ -25,6 +25,10 @@ test("every maintained bank selector uses the complete shared bank list", async 
   assert.ok(bankModule.saudiBanks.includes("أخرى"));
   assert.equal(bankModule.isSaudiBank("مصرف الراجحي"), true);
   assert.equal(bankModule.isSaudiBank("أخرى"), true);
+  assert.equal(
+    bankModule.bankNameFromSaudiIban("SA03 8000 0000 6080 1016 7519"),
+    "مصرف الراجحي",
+  );
 
   for (const ui of [accounting, hr, employeeProfile, portal]) {
     assert.match(ui, /saudiBanks\.map\(\(bank\) =>/);

@@ -1034,5 +1034,20 @@ export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = 
     "source": "متبقٍ {{0}}",
     "en": "{{0}} remaining",
     "bn": "{{0}} অবশিষ্ট"
+  },
+  {
+    "source": "العقد والفاتورة محل الإشكال والمرفقات ({{0}})",
+    "en": "Contract, disputed invoice, and attachments ({{0}})",
+    "bn": "চুক্তি, বিরোধপূর্ণ চালান ও সংযুক্তি ({{0}})"
+  },
+  {
+    "source": "مشاركة {{0}} مع {{1}}",
+    "en": "Share {{0}} with {{1}}",
+    "bn": "{{1}}-এর সঙ্গে {{0}} শেয়ার করুন"
+  },
+  {
+    "source": "مشاركة كل الملفات مع {{0}}",
+    "en": "Share all files with {{0}}",
+    "bn": "{{0}}-এর সঙ্গে সব ফাইল শেয়ার করুন"
   }
 ];

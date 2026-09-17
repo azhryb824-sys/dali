@@ -4,6 +4,7 @@ import Image from "next/image";
 import { getChatGPTUser } from "@/app/chatgpt-auth";
 import { hasVerifiedDesktopEntry, isLegacyDesktopRequest } from "@/lib/desktop-entry";
 import { pwaAccessFromCookieHeader } from "@/lib/pwa-access";
+import LoginCredentialsForm from "./LoginCredentialsForm";
 
 export const dynamic = "force-dynamic";
 
@@ -56,12 +57,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </p>
         )}
         {query.reset && <p role="status" className="operations-notice">تم تحديث كلمة المرور. يمكنك تسجيل الدخول الآن.</p>}
-        <form className="login-credentials-form" method="post" action="/api/auth/login">
-          <input type="hidden" name="returnTo" value={returnTo} />
-          <label><span>رقم الهوية / الإقامة</span><input name="identifier" inputMode="numeric" pattern="[0-9٠-٩۰-۹]{10}" minLength={10} maxLength={10} autoComplete="username" dir="ltr" required /></label>
-          <label><span>كلمة المرور</span><input name="password" type="password" autoComplete="current-password" minLength={12} required /></label>
-          <button type="submit">دخول آمن</button>
-        </form>
+        <LoginCredentialsForm returnTo={returnTo} />
         <a className="gate-signout" href="/forgot-password">نسيت كلمة المرور؟</a>
       </section>
     </main>

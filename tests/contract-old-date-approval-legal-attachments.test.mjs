@@ -85,7 +85,9 @@ test("every legal referral path collects all documents linked to the contract", 
   assert.match(collector, /directIdSet\.has\(document\.id\)/);
   assert.match(paymentReferral, /loadContractLegalDocuments\(db,contract/);
   assert.match(cancellationReferral, /loadContractLegalDocuments\(db, contract/);
-  assert.match(shares, /loadContractLegalDocuments\(db, contract, \[\.\.\.snapshotDocumentIds\]\)/);
+  assert.match(shares, /loadLegalRecordContractDocuments\(db, matter\)/);
+  assert.match(collector, /loadLegalRecordContractDocuments/);
+  assert.match(collector, /disputed_invoice/);
   for (const requiredFile of ["commercialRegistrationFile", "vatCertificateFile", "nationalAddressFile"]) {
     assert.match(generation, new RegExp(requiredFile));
   }

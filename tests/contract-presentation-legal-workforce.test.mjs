@@ -47,6 +47,9 @@ test("legal referrals expose the full snapshot and accept secure attachments",()
   assert.match(ui,/snapshot\.payments/);
   assert.match(ui,/snapshot\.finances/);
   assert.match(ui,/snapshot\.workers/);
+  assert.match(api,/contractDocuments/);
+  assert.match(ui,/legalDocumentRole/);
+  assert.match(ui,/الفاتورة محل الإشكال/);
 });
 
 test("workforce supervision presents coverage shortage and available capacity coherently",()=>{
