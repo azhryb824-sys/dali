@@ -13,6 +13,18 @@ export type DaliPreparedShareFiles = {
 type DaliCapacitorBridge = {
   isNativePlatform?: () => boolean;
   isPluginAvailable?: (name: string) => boolean;
+  Plugins?: {
+    Filesystem?: {
+      downloadFile?: (
+        options: Record<string, unknown>,
+      ) => Promise<Record<string, unknown>>;
+    };
+    Share?: {
+      share?: (
+        options: Record<string, unknown>,
+      ) => Promise<Record<string, unknown>>;
+    };
+  };
   nativePromise?: (
     pluginName: string,
     methodName: string,
@@ -22,6 +34,23 @@ type DaliCapacitorBridge = {
 
 type DaliMobileWindow = Window & {
   Capacitor?: DaliCapacitorBridge;
+};
+
+type DaliDesktopFileShareBridge = {
+  share: (
+    files: DaliShareFileDescriptor[],
+    options: { title: string; text: string },
+  ) => Promise<{
+    opened: boolean;
+    method?: "macos-share-menu" | "windows-share-ui";
+    reason?: string;
+  }>;
+};
+
+type DaliDesktopWindow = Window & {
+  daliDesktop?: {
+    fileShare?: DaliDesktopFileShareBridge;
+  };
 };
 
 const allowedDownloadPath =
@@ -80,11 +109,37 @@ function capacitorBridge() {
   const bridge = (window as DaliMobileWindow).Capacitor;
   if (
     !bridge ||
-    bridge.isNativePlatform?.() !== true ||
-    typeof bridge.nativePromise !== "function"
+    bridge.isNativePlatform?.() !== true
   )
     return null;
   return bridge;
+}
+
+function capacitorPluginMethod(
+  bridge: DaliCapacitorBridge,
+  pluginName: "Filesystem" | "Share",
+  methodName: "downloadFile" | "share",
+) {
+  const publicPlugin = bridge.Plugins?.[pluginName] as
+    | Record<string, unknown>
+    | undefined;
+  const publicMethod = publicPlugin?.[methodName];
+  if (typeof publicMethod === "function") {
+    return (options: Record<string, unknown>) =>
+      (publicMethod as (
+        value: Record<string, unknown>,
+      ) => Promise<Record<string, unknown>>).call(publicPlugin, options);
+  }
+  if (typeof bridge.nativePromise === "function") {
+    return (options: Record<string, unknown>) =>
+      bridge.nativePromise!(pluginName, methodName, options);
+  }
+  return null;
+}
+
+function desktopFileShareBridge() {
+  if (typeof window === "undefined") return null;
+  return (window as DaliDesktopWindow).daliDesktop?.fileShare || null;
 }
 
 export function supportsDaliNativeFileShare() {
@@ -92,8 +147,14 @@ export function supportsDaliNativeFileShare() {
   return Boolean(
     bridge &&
       bridge.isPluginAvailable?.("Filesystem") !== false &&
-      bridge.isPluginAvailable?.("Share") !== false,
+      bridge.isPluginAvailable?.("Share") !== false &&
+      capacitorPluginMethod(bridge, "Filesystem", "downloadFile") &&
+      capacitorPluginMethod(bridge, "Share", "share"),
   );
+}
+
+export function supportsDaliDesktopFileShare() {
+  return Boolean(desktopFileShareBridge());
 }
 
 export function supportsDaliWebFileShare() {
@@ -179,14 +240,21 @@ export async function shareDaliFilesNatively(
   options: { title: string; text: string },
 ) {
   const bridge = capacitorBridge();
-  if (!bridge?.nativePromise) return false;
+  if (!bridge) return false;
+  const downloadFile = capacitorPluginMethod(
+    bridge,
+    "Filesystem",
+    "downloadFile",
+  );
+  const share = capacitorPluginMethod(bridge, "Share", "share");
+  if (!downloadFile || !share) return false;
   const trusted = trustedDescriptors(descriptors);
   const session = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const fileUrls: string[] = [];
 
   for (const [index, descriptor] of trusted.entries()) {
     const path = `dali-share/${session}/${index + 1}-${safeFileName(descriptor.fileName, index)}`;
-    const result = await bridge.nativePromise("Filesystem", "downloadFile", {
+    const result = await downloadFile({
       url: descriptor.url,
       path,
       directory: "CACHE",
@@ -202,13 +270,31 @@ export async function shareDaliFilesNatively(
     );
   }
 
-  await bridge.nativePromise("Share", "share", {
+  await share({
     title: options.title,
     text: options.text,
     files: fileUrls,
     dialogTitle: "اختر واتساب لمشاركة ملفات دالي",
   });
   return true;
+}
+
+export async function shareDaliFilesOnDesktop(
+  descriptors: DaliShareFileDescriptor[],
+  options: { title: string; text: string },
+) {
+  const bridge = desktopFileShareBridge();
+  if (!bridge) return { opened: false, reason: "desktop-bridge-unavailable" };
+  const trusted = trustedDescriptors(descriptors);
+  return bridge.share(
+    trusted.map((descriptor) => ({
+      url: descriptor.url,
+      fileName: descriptor.fileName,
+      contentType: descriptor.contentType,
+      sizeBytes: descriptor.sizeBytes,
+    })),
+    options,
+  );
 }
 
 export function downloadDaliShareFiles(

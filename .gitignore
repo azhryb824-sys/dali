@@ -5,6 +5,7 @@
 /mobile/node_modules
 /desktop-universal/node_modules
 /desktop-universal/dist
+/desktop/native-share/bin
 /.pnp
 .pnp.*
 .yarn/*

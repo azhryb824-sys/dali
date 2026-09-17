@@ -19,8 +19,10 @@ import {
 import {
   downloadDaliShareFiles,
   prepareDaliShareFiles,
+  shareDaliFilesOnDesktop,
   shareDaliFilesNatively,
   sharePreparedDaliFiles,
+  supportsDaliDesktopFileShare,
   supportsDaliNativeFileShare,
   supportsDaliWebFileShare,
   type DaliPreparedShareFiles,
@@ -853,6 +855,18 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
         );
         return;
       }
+      if (supportsDaliDesktopFileShare()) {
+        const result = await shareDaliFilesOnDesktop(
+          shareLinks.files,
+          options,
+        );
+        if (!result.opened)
+          throw new Error("تعذر فتح نافذة مشاركة الملفات في نظام التشغيل");
+        setNotice(
+          "فُتحت نافذة مشاركة النظام ومعها الملفات الفعلية؛ اختر واتساب لإرسالها كمرفقات للمحامي.",
+        );
+        return;
+      }
       if (preparedShareFiles) {
         const outcome = await sharePreparedDaliFiles(
           preparedShareFiles,
@@ -875,9 +889,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
         return;
       }
       downloadDaliShareFiles(shareLinks.files);
-      openDaliWhatsApp("app", shareLinks);
       setNotice(
-        "بدأ تنزيل الملفات الفعلية وفُتح واتساب؛ أرفق الملفات المنزلة من محادثة المحامي.",
+        "هذا المتصفح لا يدعم إرفاق الملفات مباشرة. تم تنزيل الملفات الفعلية؛ أرفقها يدويًا، أو استخدم رابط واتساب الاحتياطي بصورة مستقلة.",
       );
     } catch (error) {
       const message =
@@ -3284,8 +3297,9 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 </select>
               </label>
               <p className="form-hint span-two">
-                سيُجهز النظام الملفات الفعلية للمشاركة عبر نافذة الجهاز، مع رابط
-                مشفر مؤقت كخيار احتياطي. يسجل النظام وقت المشاركة بالثانية واسم
+                سيُجهز النظام الملفات الفعلية للمشاركة عبر نافذة الجهاز. أما
+                فتح واتساب مباشرة فهو لإرسال الرابط المشفر الاحتياطي فقط. يسجل
+                النظام وقت المشاركة بالثانية واسم
                 المشارك والمحامي وعمليات الفتح والتنزيل، ويمكن إبطال الرابط من
                 سجل المشاركة.
               </p>
@@ -3297,8 +3311,9 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
               {shareLinks && (
                 <div className="whatsapp-share-feedback success span-two" role="status">
                   <p>
-                    سُجلت المشاركة وجُهزت الملفات. اختر المشاركة المباشرة
-                    لإرفاق الملفات نفسها، أو افتح واتساب لإرسال الرسالة والرابط.
+                    سُجلت المشاركة وجُهزت الملفات. استخدم الزر الأول لإرفاق
+                    الملفات نفسها، ولا تستخدم أزرار واتساب الاحتياطية إلا عند
+                    تعذر مشاركة الملفات من الجهاز.
                   </p>
                   <div>
                     <button
@@ -3312,21 +3327,23 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                           ? `مشاركة ${shareLinks.files.length} ملف فعلي — اختر واتساب`
                           : supportsDaliNativeFileShare()
                             ? `مشاركة ${shareLinks.files.length} ملف فعلي — اختر واتساب`
+                            : supportsDaliDesktopFileShare()
+                              ? `مشاركة ${shareLinks.files.length} ملف فعلي — اختر واتساب`
                             : supportsDaliWebFileShare()
                               ? "تحميل الملفات للمشاركة المباشرة"
-                              : "تنزيل الملفات ثم فتح واتساب"}
+                              : "تنزيل الملفات لإرفاقها يدويًا"}
                     </button>
                     <button
                       type="button"
                       onClick={() => openDaliWhatsApp("app", shareLinks)}
                     >
-                      فتح تطبيق واتساب
+                      فتح واتساب — رابط احتياطي
                     </button>
                     <button
                       type="button"
                       onClick={() => openDaliWhatsApp("web", shareLinks)}
                     >
-                      المتابعة إلى واتساب ويب
+                      واتساب ويب — رابط احتياطي
                     </button>
                     <a
                       href={shareLinks.shareUrl}

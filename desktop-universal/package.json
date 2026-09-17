@@ -1,6 +1,6 @@
 {
   "name": "dali-mac-universal",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "تطبيق ماك مستقل لنظام دالي الإداري لمعالجات Intel وApple Silicon",
   "author": "Dally Corporation",
   "private": true,
@@ -29,6 +29,7 @@
     "files": [
       "main.mjs",
       "external-navigation.mjs",
+      "native-file-share.mjs",
       "preload.mjs",
       "offline.html",
       "assets/**/*",

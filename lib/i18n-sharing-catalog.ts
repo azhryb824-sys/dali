@@ -217,17 +217,17 @@ export const sharingUiTranslations: Record<
     en: "Download the actual file",
     bn: "আসল ফাইল ডাউনলোড করুন",
   },
-  "تنزيل الملفات ثم فتح واتساب": {
-    en: "Download files, then open WhatsApp",
-    bn: "ফাইল ডাউনলোড করে হোয়াটসঅ্যাপ খুলুন",
+  "تنزيل الملفات لإرفاقها يدويًا": {
+    en: "Download files to attach manually",
+    bn: "ম্যানুয়ালি সংযুক্ত করতে ফাইল ডাউনলোড করুন",
   },
   "تنزيل PDF الفعلي": {
     en: "Download the actual PDF",
     bn: "আসল PDF ডাউনলোড করুন",
   },
-  "تنزيل PDF ثم فتح واتساب": {
-    en: "Download PDF, then open WhatsApp",
-    bn: "PDF ডাউনলোড করে হোয়াটসঅ্যাপ খুলুন",
+  "تنزيل PDF لإرفاقه يدويًا": {
+    en: "Download PDF to attach manually",
+    bn: "ম্যানুয়ালি সংযুক্ত করতে PDF ডাউনলোড করুন",
   },
   "جارٍ تجهيز الملف والرابط...": {
     en: "Preparing the file and link...",
@@ -292,5 +292,53 @@ export const sharingUiTranslations: Record<
   "يجب كتابة الرقم عند كل مشاركة. يمكنك إرسال ملف PDF نفسه من نافذة المشاركة، ويبقى الرابط المشفر المؤقت خيارًا احتياطيًا. لن يُحفظ رقم المستلم ضمن العقد.": {
     en: "Enter the number for every share. You can send the PDF itself from the sharing window, while the temporary encrypted link remains a fallback. The recipient number is not saved with the contract.",
     bn: "প্রতিবার শেয়ারের সময় নম্বর লিখুন। শেয়ার উইন্ডো থেকে PDF ফাইলটি পাঠানো যাবে এবং অস্থায়ী এনক্রিপ্টেড লিংক বিকল্প হিসেবে থাকবে। প্রাপকের নম্বর চুক্তিতে সংরক্ষিত হবে না।",
+  },
+  "تعذر فتح نافذة مشاركة الملف في نظام التشغيل": {
+    en: "The operating system file-sharing window could not be opened",
+    bn: "অপারেটিং সিস্টেমের ফাইল শেয়ার উইন্ডো খোলা যায়নি",
+  },
+  "تعذر فتح نافذة مشاركة الملفات في نظام التشغيل": {
+    en: "The operating system file-sharing window could not be opened",
+    bn: "অপারেটিং সিস্টেমের ফাইল শেয়ার উইন্ডো খোলা যায়নি",
+  },
+  "فُتحت نافذة مشاركة النظام ومعها ملف PDF الفعلي؛ اختر واتساب لإرساله كمرفق.": {
+    en: "The system sharing window opened with the actual PDF; choose WhatsApp to send it as an attachment.",
+    bn: "সিস্টেম শেয়ার উইন্ডোতে আসল PDF খোলা হয়েছে; সংযুক্তি হিসেবে পাঠাতে হোয়াটসঅ্যাপ বেছে নিন।",
+  },
+  "فُتحت نافذة مشاركة النظام ومعها الملفات الفعلية؛ اختر واتساب لإرسالها كمرفقات للمحامي.": {
+    en: "The system sharing window opened with the actual files; choose WhatsApp to send them to the lawyer as attachments.",
+    bn: "সিস্টেম শেয়ার উইন্ডোতে আসল ফাইলগুলো খোলা হয়েছে; আইনজীবীকে সংযুক্তি হিসেবে পাঠাতে হোয়াটসঅ্যাপ বেছে নিন।",
+  },
+  "هذا المتصفح لا يدعم إرفاق الملفات مباشرة. تم تنزيل PDF الفعلي؛ أرفقه يدويًا، أو استخدم رابط واتساب الاحتياطي بصورة مستقلة.": {
+    en: "This browser cannot attach files directly. The actual PDF was downloaded; attach it manually, or use the fallback WhatsApp link separately.",
+    bn: "এই ব্রাউজার সরাসরি ফাইল সংযুক্ত করতে পারে না। আসল PDF ডাউনলোড হয়েছে; হাতে সংযুক্ত করুন অথবা আলাদাভাবে বিকল্প হোয়াটসঅ্যাপ লিংক ব্যবহার করুন।",
+  },
+  "هذا المتصفح لا يدعم إرفاق الملفات مباشرة. تم تنزيل الملفات الفعلية؛ أرفقها يدويًا، أو استخدم رابط واتساب الاحتياطي بصورة مستقلة.": {
+    en: "This browser cannot attach files directly. The actual files were downloaded; attach them manually, or use the fallback WhatsApp link separately.",
+    bn: "এই ব্রাউজার সরাসরি ফাইল সংযুক্ত করতে পারে না। আসল ফাইলগুলো ডাউনলোড হয়েছে; হাতে সংযুক্ত করুন অথবা আলাদাভাবে বিকল্প হোয়াটসঅ্যাপ লিংক ব্যবহার করুন।",
+  },
+  "يجب كتابة الرقم عند كل مشاركة. زر مشاركة الملف يرسل PDF نفسه عبر نافذة مشاركة الجهاز. أما أزرار فتح واتساب فهي للرابط المشفر الاحتياطي فقط. لن يُحفظ رقم المستلم ضمن العقد.": {
+    en: "Enter the number for every share. The file-sharing button sends the PDF itself through the device sharing window. The WhatsApp-opening buttons are only for the encrypted fallback link. The recipient number is not saved with the contract.",
+    bn: "প্রতিবার শেয়ারের সময় নম্বর লিখুন। ফাইল শেয়ার বোতামটি ডিভাইসের শেয়ার উইন্ডো দিয়ে PDF ফাইলটিই পাঠায়। হোয়াটসঅ্যাপ খোলার বোতামগুলো শুধু এনক্রিপ্টেড বিকল্প লিংকের জন্য। প্রাপকের নম্বর চুক্তিতে সংরক্ষিত হয় না।",
+  },
+  "جُهز PDF الفعلي والرابط الآمن. استخدم الزر الأول لإرفاق الملف نفسه، ولا تستخدم أزرار واتساب الاحتياطية إلا إذا تعذرت مشاركة الملف من الجهاز.": {
+    en: "The actual PDF and secure link are ready. Use the first button to attach the file itself, and use the fallback WhatsApp buttons only if device file sharing is unavailable.",
+    bn: "আসল PDF ও নিরাপদ লিংক প্রস্তুত। ফাইলটি সংযুক্ত করতে প্রথম বোতাম ব্যবহার করুন; ডিভাইস থেকে ফাইল শেয়ার সম্ভব না হলেই শুধু বিকল্প হোয়াটসঅ্যাপ বোতাম ব্যবহার করুন।",
+  },
+  "فتح واتساب — رابط احتياطي": {
+    en: "Open WhatsApp — fallback link",
+    bn: "হোয়াটসঅ্যাপ খুলুন — বিকল্প লিংক",
+  },
+  "واتساب ويب — رابط احتياطي": {
+    en: "WhatsApp Web — fallback link",
+    bn: "হোয়াটসঅ্যাপ ওয়েব — বিকল্প লিংক",
+  },
+  "سيُجهز النظام الملفات الفعلية للمشاركة عبر نافذة الجهاز. أما فتح واتساب مباشرة فهو لإرسال الرابط المشفر الاحتياطي فقط. يسجل النظام وقت المشاركة بالثانية واسم المشارك والمحامي وعمليات الفتح والتنزيل، ويمكن إبطال الرابط من سجل المشاركة.": {
+    en: "The system prepares the actual files for the device sharing window. Opening WhatsApp directly sends only the encrypted fallback link. The system records the precise sharing time, sender, lawyer, opens, and downloads, and the link can be revoked from the sharing log.",
+    bn: "সিস্টেম ডিভাইসের শেয়ার উইন্ডোর জন্য আসল ফাইল প্রস্তুত করে। সরাসরি হোয়াটসঅ্যাপ খুললে শুধু এনক্রিপ্টেড বিকল্প লিংক পাঠানো হয়। সিস্টেম শেয়ারের সঠিক সময়, প্রেরক, আইনজীবী, খোলা ও ডাউনলোড নথিভুক্ত করে এবং শেয়ার লগ থেকে লিংক বাতিল করা যায়।",
+  },
+  "سُجلت المشاركة وجُهزت الملفات. استخدم الزر الأول لإرفاق الملفات نفسها، ولا تستخدم أزرار واتساب الاحتياطية إلا عند تعذر مشاركة الملفات من الجهاز.": {
+    en: "The share was recorded and the files are ready. Use the first button to attach the files themselves, and use the fallback WhatsApp buttons only if device file sharing is unavailable.",
+    bn: "শেয়ার নথিভুক্ত হয়েছে এবং ফাইল প্রস্তুত। ফাইলগুলো সংযুক্ত করতে প্রথম বোতাম ব্যবহার করুন; ডিভাইস থেকে ফাইল শেয়ার সম্ভব না হলেই শুধু বিকল্প হোয়াটসঅ্যাপ বোতাম ব্যবহার করুন।",
   },
 };

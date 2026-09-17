@@ -61,13 +61,16 @@ test("approved contracts require an entered WhatsApp number and role permissions
   assert.match(ui, /يجب كتابة الرقم عند كل مشاركة/);
   assert.match(ui, /مشاركة العقد عبر واتساب/);
   assert.match(ui, /shareApprovedContractFiles/);
+  assert.match(ui, /shareDaliFilesOnDesktop/);
   assert.match(ui, /مشاركة PDF الفعلي/);
-  assert.match(ui, /فتح تطبيق واتساب/);
-  assert.match(ui, /المتابعة إلى واتساب ويب/);
+  assert.match(ui, /فتح واتساب — رابط احتياطي/);
+  assert.match(ui, /واتساب ويب — رابط احتياطي/);
   assert.match(runtime, /window\.location\.assign\(appUrl\)/);
   assert.match(runtime, /daliDesktop\?\.whatsapp/);
   assert.match(files, /navigator\.share/);
-  assert.match(files, /Share", "share"/);
+  assert.match(files, /bridge\.Plugins/);
+  assert.match(files, /shareDaliFilesOnDesktop/);
+  assert.match(files, /daliDesktop\?\.fileShare/);
   assert.match(files, /downloadDaliShareFiles/);
 });
 
@@ -100,10 +103,11 @@ test("legal files expose current contract documents and share only with the assi
   assert.match(ui, /المحامي الخارجي المسندة إليه القضية/);
   assert.match(ui, /item\.legalDocumentRole === "disputed_invoice"/);
   assert.match(ui, /shareLegalFiles/);
+  assert.match(ui, /shareDaliFilesOnDesktop/);
   assert.match(ui, /مشاركة الملفات الفعلية/);
-  assert.match(ui, /فتح تطبيق واتساب/);
-  assert.match(ui, /المتابعة إلى واتساب ويب/);
-  assert.match(files, /Filesystem", "downloadFile"/);
+  assert.match(ui, /فتح واتساب — رابط احتياطي/);
+  assert.match(ui, /واتساب ويب — رابط احتياطي/);
+  assert.match(files, /"Filesystem",\s*"downloadFile"/);
   assert.match(files, /files: fileUrls/);
   assert.doesNotMatch(ui, /externalLawyers\.map/);
 });

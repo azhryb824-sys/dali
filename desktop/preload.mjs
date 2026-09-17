@@ -151,5 +151,10 @@ contextBridge.exposeInMainWorld("daliDesktop", {
       ? ipcRenderer.invoke("dali:whatsapp:open", { target, url })
       : Promise.resolve({ opened: false }),
   },
+  fileShare: {
+    share: (files, options) => isTrustedPortalPage()
+      ? ipcRenderer.invoke("dali:files:share", { files, options })
+      : Promise.resolve({ opened: false, reason: "untrusted-renderer" }),
+  },
   policy: { intervalSeconds: 20, privilegedOperationsRequireOnline: true },
 });

@@ -13,9 +13,9 @@ test("new macOS application is independent and does not alter the old applicatio
   ]);
 
   assert.equal(legacyPackage.build.appId, "sa.dally.desktop");
-  assert.equal(legacyPackage.version, "0.2.8");
+  assert.equal(legacyPackage.version, "0.2.9");
   assert.equal(universalPackage.build.appId, "sa.dally.desktop.universal");
-  assert.equal(universalPackage.version, "1.0.2");
+  assert.equal(universalPackage.version, "1.0.3");
   assert.notEqual(universalPackage.build.appId, legacyPackage.build.appId);
   assert.notEqual(universalPackage.build.productName, legacyPackage.build.productName);
   assert.match(main, /APP_DATA_DIRECTORY = "DaliAdminUniversal"/);
@@ -44,7 +44,11 @@ test("new macOS package is one Universal build for Intel and Apple Silicon", asy
   assert.match(main, /permission === "media"/);
   assert.match(main, /requestPortalEntryUrl/);
   assert.match(main, /shell\.openExternal\(whatsappAppUrl\)/);
+  assert.match(main, /new ShareMenu/);
+  assert.match(main, /dali:files:share/);
+  assert.match(main, /prepareDesktopFileShare/);
   assert.match(main, /will-redirect/);
   assert.match(desktopPackage.build.files.join("\n"), /external-navigation\.mjs/);
+  assert.match(desktopPackage.build.files.join("\n"), /native-file-share\.mjs/);
   assert.match(workflow, /steps\.universal-version\.outputs\.version/);
 });

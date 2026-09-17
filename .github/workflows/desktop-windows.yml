@@ -25,6 +25,16 @@ jobs:
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci
+      - name: Build native Windows file-share bridge
+        working-directory: desktop
+        shell: cmd
+        run: native-share\build.cmd
+      - name: Verify native Windows file-share bridge
+        shell: pwsh
+        run: |
+          $helper = Get-Item "desktop/native-share/bin/DaliNativeShare.exe"
+          if ($helper.Length -lt 25000) { throw "Native share helper is unexpectedly small" }
+          Get-FileHash $helper.FullName -Algorithm SHA256
       - name: Read desktop version
         id: desktop-version
         shell: pwsh

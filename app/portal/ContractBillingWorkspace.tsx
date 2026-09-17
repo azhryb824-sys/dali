@@ -12,8 +12,10 @@ import {
 import {
   downloadDaliShareFiles,
   prepareDaliShareFiles,
+  shareDaliFilesOnDesktop,
   shareDaliFilesNatively,
   sharePreparedDaliFiles,
+  supportsDaliDesktopFileShare,
   supportsDaliNativeFileShare,
   supportsDaliWebFileShare,
   type DaliPreparedShareFiles,
@@ -733,6 +735,18 @@ export default function ContractBillingWorkspace() {
         setNotice("فُتحت نافذة مشاركة الملف الفعلي؛ اختر واتساب لإرساله مرفقًا.");
         return;
       }
+      if (supportsDaliDesktopFileShare()) {
+        const result = await shareDaliFilesOnDesktop(
+          contractShareResult.files,
+          options,
+        );
+        if (!result.opened)
+          throw new Error("تعذر فتح نافذة مشاركة الملف في نظام التشغيل");
+        setNotice(
+          "فُتحت نافذة مشاركة النظام ومعها ملف PDF الفعلي؛ اختر واتساب لإرساله كمرفق.",
+        );
+        return;
+      }
       if (contractPreparedFiles) {
         const outcome = await sharePreparedDaliFiles(
           contractPreparedFiles,
@@ -755,9 +769,8 @@ export default function ContractBillingWorkspace() {
         return;
       }
       downloadDaliShareFiles(contractShareResult.files);
-      openDaliWhatsApp("app", contractShareResult);
       setNotice(
-        "بدأ تنزيل PDF الفعلي وفُتح واتساب؛ أرفق الملف الذي نُزّل من نافذة المحادثة.",
+        "هذا المتصفح لا يدعم إرفاق الملفات مباشرة. تم تنزيل PDF الفعلي؛ أرفقه يدويًا، أو استخدم رابط واتساب الاحتياطي بصورة مستقلة.",
       );
     } catch (error) {
       const message =
@@ -1286,9 +1299,9 @@ export default function ContractBillingWorkspace() {
                 </select>
               </label>
               <p className="span-two">
-                يجب كتابة الرقم عند كل مشاركة. يمكنك إرسال ملف PDF نفسه من
-                نافذة المشاركة، ويبقى الرابط المشفر المؤقت خيارًا احتياطيًا.
-                لن يُحفظ رقم المستلم ضمن العقد.
+                يجب كتابة الرقم عند كل مشاركة. زر مشاركة الملف يرسل PDF نفسه
+                عبر نافذة مشاركة الجهاز. أما أزرار فتح واتساب فهي للرابط
+                المشفر الاحتياطي فقط. لن يُحفظ رقم المستلم ضمن العقد.
               </p>
               {contractShareError && (
                 <p className="whatsapp-share-feedback error span-two" role="alert">
@@ -1298,9 +1311,9 @@ export default function ContractBillingWorkspace() {
               {contractShareResult && (
                 <div className="whatsapp-share-feedback success span-two" role="status">
                   <p>
-                    جُهز PDF الفعلي والرابط الآمن. استخدم المشاركة المباشرة
-                    لإرفاق الملف نفسه، أو افتح تطبيق واتساب/واتساب ويب لإرسال
-                    الرسالة والرابط.
+                    جُهز PDF الفعلي والرابط الآمن. استخدم الزر الأول لإرفاق
+                    الملف نفسه، ولا تستخدم أزرار واتساب الاحتياطية إلا إذا
+                    تعذرت مشاركة الملف من الجهاز.
                   </p>
                   <div>
                     <button
@@ -1312,11 +1325,13 @@ export default function ContractBillingWorkspace() {
                         ? "جارٍ تجهيز PDF الفعلي..."
                         : contractPreparedFiles
                           ? "مشاركة PDF الفعلي — اختر واتساب"
-                          : supportsDaliNativeFileShare()
+                        : supportsDaliNativeFileShare()
                             ? "مشاركة PDF الفعلي — اختر واتساب"
+                            : supportsDaliDesktopFileShare()
+                              ? "مشاركة PDF الفعلي — اختر واتساب"
                             : supportsDaliWebFileShare()
                               ? "تحميل PDF للمشاركة المباشرة"
-                              : "تنزيل PDF ثم فتح واتساب"}
+                              : "تنزيل PDF لإرفاقه يدويًا"}
                     </button>
                     <button
                       type="button"
@@ -1324,7 +1339,7 @@ export default function ContractBillingWorkspace() {
                         openDaliWhatsApp("app", contractShareResult)
                       }
                     >
-                      فتح تطبيق واتساب
+                      فتح واتساب — رابط احتياطي
                     </button>
                     <button
                       type="button"
@@ -1332,7 +1347,7 @@ export default function ContractBillingWorkspace() {
                         openDaliWhatsApp("web", contractShareResult)
                       }
                     >
-                      المتابعة إلى واتساب ويب
+                      واتساب ويب — رابط احتياطي
                     </button>
                     <a
                       href={contractShareResult.shareUrl}

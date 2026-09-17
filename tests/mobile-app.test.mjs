@@ -93,6 +93,15 @@ test("mobile and desktop share server-side idempotent synchronization with platf
   assert.match(sync, /onlineOnly\(method,requestPath,body\)/);
 });
 
+test("mobile file sharing uses the public Capacitor plugins and sends actual file URIs", async () => {
+  const runtime = await read("lib/file-share-runtime.ts");
+  assert.match(runtime, /bridge\.Plugins\?\.\[pluginName\]/);
+  assert.match(runtime, /"Filesystem",\s*"downloadFile"/);
+  assert.match(runtime, /"Share",\s*"share"/);
+  assert.match(runtime, /files: fileUrls/);
+  assert.match(runtime, /dialogTitle: "اختر واتساب لمشاركة ملفات دالي"/);
+});
+
 test("native projects disable cleartext and declare privacy-scoped device permissions", async () => {
   const [manifest, network, dataRules, plist, runtime, nextConfig] = await Promise.all([
     read("mobile/android/app/src/main/AndroidManifest.xml"),

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
@@ -18,7 +20,7 @@ test("desktop build publishes the updater metadata with the installer", async ()
   const desktopPackage = JSON.parse(await readFile(new URL("desktop/package.json", root), "utf8"));
   const workflow = await readFile(new URL(".github/workflows/desktop-windows.yml", root), "utf8");
 
-  assert.equal(desktopPackage.version, "0.2.8");
+  assert.equal(desktopPackage.version, "0.2.9");
   assert.equal(desktopPackage.build.publish.provider, "github");
   assert.equal(desktopPackage.build.publish.owner, "azhryb824-sys");
   assert.equal(desktopPackage.build.publish.repo, "dali");
@@ -64,4 +66,59 @@ test("desktop credential saving is encrypted and restricted to the login page", 
   assert.match(main, /trustedRendererPath\(event, "\/login"\)/);
   assert.match(main, /dali:login-credentials:save/);
   assert.match(preload, /location\.pathname === "\/login"/);
+});
+
+test("Windows desktop shares actual downloaded files through the native share UI", async () => {
+  const [main, preload, bridge, helper, workflow, desktopPackage] = await Promise.all([
+    readFile(new URL("desktop/main.mjs", root), "utf8"),
+    readFile(new URL("desktop/preload.mjs", root), "utf8"),
+    readFile(new URL("desktop/native-file-share.mjs", root), "utf8"),
+    readFile(new URL("desktop/native-share/DaliNativeShare.cpp", root), "utf8"),
+    readFile(new URL(".github/workflows/desktop-windows.yml", root), "utf8"),
+    readFile(new URL("desktop/package.json", root), "utf8").then(JSON.parse),
+  ]);
+
+  assert.match(main, /dali:files:share/);
+  assert.match(main, /prepareDesktopFileShare/);
+  assert.match(main, /openWindowsFileShare/);
+  assert.match(preload, /fileShare:/);
+  assert.match(preload, /dali:files:share/);
+  assert.match(bridge, /ALLOWED_DOWNLOAD_PATH/);
+  assert.match(bridge, /response\.arrayBuffer\(\)/);
+  assert.match(bridge, /DaliNativeShare\.exe/);
+  assert.match(helper, /SetStorageItems/);
+  assert.match(helper, /ShowShareUIForWindow/);
+  assert.match(helper, /TargetApplicationChosen/);
+  assert.match(workflow, /Build native Windows file-share bridge/);
+  assert.match(workflow, /native-share\\build\.cmd/);
+  assert.match(JSON.stringify(desktopPackage.build.win.extraResources), /DaliNativeShare\.exe/);
+});
+
+test("desktop file bridge downloads verified bytes instead of handing WhatsApp only a link", async () => {
+  const { prepareDesktopFileShare } = await import("../desktop/native-file-share.mjs");
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "dali-file-share-test-"));
+  const originalFetch = globalThis.fetch;
+  const bytes = Buffer.from("%PDF-test", "utf8");
+  globalThis.fetch = async () => new Response(bytes, {
+    status: 200,
+    headers: { "content-type": "application/pdf" },
+  });
+  try {
+    const result = await prepareDesktopFileShare(
+      { getPath: () => temporaryRoot },
+      [{
+        url: `https://www.dally.info/api/shared-documents/${"a".repeat(64)}`,
+        fileName: "العقد.pdf",
+        contentType: "application/pdf",
+        sizeBytes: bytes.length,
+      }],
+      { title: "العقد المعتمد", text: "مرفق العقد الفعلي" },
+    );
+    assert.equal(result.filePaths.length, 1);
+    assert.deepEqual(await readFile(result.filePaths[0]), bytes);
+    assert.ok((await readFile(result.manifestPath, "utf8")).includes("\r\n"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });

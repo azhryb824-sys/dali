@@ -98,7 +98,7 @@ test("all referred contract files can be shared in one audited WhatsApp bundle",
   assert.doesNotMatch(referral, /companyDocuments\.counterparty,contract\.clientName/);
   assert.match(lawyerRoute, /legalExternalShareBundles/);
   assert.match(ui, /مشاركة جميع المرفقات عبر واتساب/);
-  assert.match(ui, /يسجل النظام وقت المشاركة بالثانية/);
+  assert.match(ui, /يسجل\s+النظام وقت المشاركة بالثانية/);
 });
 
 test("contract approval repairs untouched legacy annual schedules and never reports a committed approval as failed", async () => {

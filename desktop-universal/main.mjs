@@ -5,6 +5,7 @@ import {
   ipcMain,
   safeStorage,
   session,
+  ShareMenu,
   shell,
 } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -16,6 +17,11 @@ import {
   toWhatsAppAppUrl,
   toWhatsAppWebUrl,
 } from "./external-navigation.mjs";
+import {
+  openWindowsFileShare,
+  prepareDesktopFileShare,
+  scheduleDesktopShareCleanup,
+} from "./native-file-share.mjs";
 
 const PORTAL_ORIGIN = "https://www.dally.info";
 const PORTAL_URL_OVERRIDE = process.env.DALI_DESKTOP_URL?.trim() || "";
@@ -31,6 +37,7 @@ let key;
 let desktopDeviceId;
 let mutationQueue = Promise.resolve();
 let rendererRecoveryAttempts = 0;
+const activeShareMenus = new Set();
 
 function trustedRendererPath(event, pathPrefix) {
   try {
@@ -202,6 +209,45 @@ function mutateStore(handler) {
   return operation;
 }
 
+async function shareDesktopFileAttachments(event, value) {
+  if (!trustedRendererPath(event, "/portal"))
+    return { opened: false, reason: "untrusted-renderer" };
+  if (!["win32", "darwin"].includes(process.platform))
+    return { opened: false, reason: "unsupported-platform" };
+
+  let prepared;
+  try {
+    prepared = await prepareDesktopFileShare(
+      app,
+      value?.files,
+      value?.options,
+    );
+    const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+    if (process.platform === "darwin") {
+      const shareMenu = new ShareMenu({
+        texts: prepared.text ? [prepared.text] : [],
+        filePaths: prepared.filePaths,
+      });
+      activeShareMenus.add(shareMenu);
+      shareMenu.popup({
+        browserWindow: owner || undefined,
+        callback: () => activeShareMenus.delete(shareMenu),
+      });
+      scheduleDesktopShareCleanup(prepared.directory);
+      return { opened: true, method: "macos-share-menu" };
+    }
+
+    await openWindowsFileShare(app, prepared.manifestPath);
+    scheduleDesktopShareCleanup(prepared.directory);
+    return { opened: true, method: "windows-share-ui" };
+  } catch (error) {
+    if (prepared?.directory)
+      scheduleDesktopShareCleanup(prepared.directory, 0);
+    console.error("Dali Universal file share failed:", error?.message || error);
+    return { opened: false, reason: "native-file-share-failed" };
+  }
+}
+
 function registerIpc() {
   ipcMain.handle("dali:state", async () => {
     const store = await readStore();
@@ -286,6 +332,7 @@ function registerIpc() {
       return true;
     });
   });
+  ipcMain.handle("dali:files:share", shareDesktopFileAttachments);
   ipcMain.handle("dali:whatsapp:open", async (event, value) => {
     if (!trustedRendererPath(event, "/portal")) return { opened: false };
     const target = value?.target === "web" ? "web" : "app";
