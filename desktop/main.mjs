@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from "electron";
 import electronUpdater from "electron-updater";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -171,10 +171,13 @@ async function openWindow() {
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://www.dally.info/")) return { action: "allow" };
+    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (!url.startsWith("https://www.dally.info/")) event.preventDefault();
+    if (url.startsWith("https://www.dally.info/")) return;
+    event.preventDefault();
+    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
   });
   mainWindow.once("ready-to-show", () => mainWindow.show());
   try {

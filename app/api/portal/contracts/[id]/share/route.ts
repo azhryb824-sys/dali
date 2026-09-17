@@ -21,6 +21,7 @@ import {
   requestCorrelationId,
 } from "@/lib/security";
 import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
+import { createWhatsAppLaunchToken } from "@/lib/whatsapp-launch";
 
 type Access = NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>;
 
@@ -128,6 +129,15 @@ export async function POST(
     shareUrl,
   ].join("\n");
   const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  const whatsappLaunchToken = createWhatsAppLaunchToken(
+    access.user.email,
+    phone,
+    message,
+  );
+  const whatsappLaunchUrl = externalRequestUrl(
+    request,
+    `/api/portal/whatsapp-launch?token=${encodeURIComponent(whatsappLaunchToken)}`,
+  ).toString();
   await auditPortalAction({
     actorEmail: access.user.email,
     action: "approved-contract-whatsapp-share-created",
@@ -152,5 +162,10 @@ export async function POST(
     entityId: contract.id,
     actionView: "operations",
   }).catch(() => undefined);
-  return jsonNoStore({ whatsappUrl, shareUrl, expiresAt });
+  return jsonNoStore({
+    whatsappUrl,
+    whatsappLaunchUrl,
+    shareUrl,
+    expiresAt,
+  });
 }

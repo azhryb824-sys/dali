@@ -319,6 +319,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
     [lawyerBusy, setLawyerBusy] = useState(false),
     [assignmentBusy, setAssignmentBusy] = useState(false),
     [shareBusy, setShareBusy] = useState(false),
+    [shareError, setShareError] = useState(""),
+    [shareLaunchUrl, setShareLaunchUrl] = useState(""),
     [recordBusy, setRecordBusy] = useState(false),
     [currentTime, setCurrentTime] = useState(0),
     [lawyerUsers, setLawyerUsers] = useState<LawyerUser[]>([]),
@@ -747,10 +749,12 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
   async function shareOnWhatsApp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!shareTarget) return;
-    const popup = window.open("about:blank", "_blank");
-    if (popup) popup.opener = null;
+    const currentShareTarget = shareTarget;
+    const popup = window.open("/portal/whatsapp-launch", "_blank");
     const values = Object.fromEntries(new FormData(event.currentTarget));
     setShareBusy(true);
+    setShareError("");
+    setShareLaunchUrl("");
     try {
       const response = await fetch("/api/portal/legal-cases/shares", {
         method: "POST",
@@ -766,23 +770,25 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
       const result = (await readApiJson(response)) as {
         error?: string;
         whatsappUrl?: string;
+        whatsappLaunchUrl?: string;
       };
-      if (!response.ok || !result.whatsappUrl)
+      const launchUrl = result.whatsappLaunchUrl || result.whatsappUrl || "";
+      if (!response.ok || !launchUrl)
         throw new Error(result.error || "تعذر تجهيز مشاركة واتساب");
-      setShareTarget(null);
+      setShareLaunchUrl(launchUrl);
       setNotice(
-        shareTarget === "all"
+        currentShareTarget === "all"
           ? "تم تسجيل وقت مشاركة جميع المرفقات بدقة وفتح محادثة واتساب للمحامي المسجل."
           : "تم تسجيل تاريخ وساعة المشاركة وفتح محادثة واتساب.",
       );
-      if (popup) popup.location.href = result.whatsappUrl;
-      else window.location.href = result.whatsappUrl;
+      if (popup && !popup.closed) popup.location.replace(launchUrl);
       await load();
     } catch (error) {
       popup?.close();
-      setNotice(
-        error instanceof Error ? error.message : "تعذر تجهيز مشاركة واتساب",
-      );
+      const message =
+        error instanceof Error ? error.message : "تعذر تجهيز مشاركة واتساب";
+      setShareError(message);
+      setNotice(message);
     } finally {
       setShareBusy(false);
     }
@@ -2010,7 +2016,11 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                               ? "لا توجد ملفات قابلة للمشاركة في هذا الملف"
                               : `مشاركة كل الملفات مع ${assignedExternalLawyer.fullName}`
                         }
-                        onClick={() => setShareTarget("all")}
+                        onClick={() => {
+                          setShareError("");
+                          setShareLaunchUrl("");
+                          setShareTarget("all");
+                        }}
                       >
                         مشاركة جميع المرفقات عبر واتساب
                       </button>
@@ -2096,7 +2106,11 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                             className="whatsapp-share-button"
                             disabled={!assignedExternalLawyer}
                             title={!assignedExternalLawyer ? "يلزم إسناد القضية إلى محامٍ خارجي لديه رقم واتساب أولًا" : `مشاركة ${item.title} مع ${assignedExternalLawyer.fullName}`}
-                            onClick={() => setShareTarget(item)}
+                            onClick={() => {
+                              setShareError("");
+                              setShareLaunchUrl("");
+                              setShareTarget(item);
+                            }}
                           >
                             مشاركة عبر واتساب
                           </button>
@@ -3096,7 +3110,11 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
           <button
             className="drawer-backdrop"
             aria-label="إغلاق نموذج مشاركة واتساب"
-            onClick={() => setShareTarget(null)}
+            onClick={() => {
+              setShareTarget(null);
+              setShareError("");
+              setShareLaunchUrl("");
+            }}
           />
           <section
             className="record-modal legal-share-modal"
@@ -3113,7 +3131,14 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                     : "مشاركة ملف مع محامٍ خارجي"}
                 </h2>
               </div>
-              <button type="button" onClick={() => setShareTarget(null)}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShareTarget(null);
+                  setShareError("");
+                  setShareLaunchUrl("");
+                }}
+              >
                 ×
               </button>
             </div>
@@ -3162,15 +3187,44 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                 يسجل النظام وقت المشاركة بالثانية واسم المشارك والمحامي وعمليات
                 الفتح والتنزيل، ويمكن إبطال الرابط من سجل المشاركة.
               </p>
+              {shareError && (
+                <p className="whatsapp-share-feedback error span-two" role="alert">
+                  {shareError}
+                </p>
+              )}
+              {shareLaunchUrl && (
+                <div className="whatsapp-share-feedback success span-two" role="status">
+                  <p>
+                    سُجلت المشاركة. إذا لم يفتح واتساب تلقائيًا، اضغط الزر
+                    التالي.
+                  </p>
+                  <div>
+                    <a href={shareLaunchUrl} target="_blank" rel="noreferrer">
+                      فتح واتساب الآن
+                    </a>
+                  </div>
+                </div>
+              )}
               <div className="modal-actions span-two">
-                <button type="button" onClick={() => setShareTarget(null)}>
-                  إلغاء
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareTarget(null);
+                    setShareError("");
+                    setShareLaunchUrl("");
+                  }}
+                >
+                  {shareLaunchUrl ? "إغلاق" : "إلغاء"}
                 </button>
                 <button
                   className="admin-primary"
                   disabled={shareBusy || !assignedExternalLawyer}
                 >
-                  {shareBusy ? "جارٍ تجهيز الرابط..." : "فتح واتساب وتسجيل المشاركة"}
+                  {shareBusy
+                    ? "جارٍ تجهيز الرابط..."
+                    : shareLaunchUrl
+                      ? "إنشاء مشاركة جديدة"
+                      : "فتح واتساب وتسجيل المشاركة"}
                 </button>
               </div>
             </form>

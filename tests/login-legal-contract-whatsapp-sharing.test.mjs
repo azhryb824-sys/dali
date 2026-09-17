@@ -38,10 +38,14 @@ test("approved contracts require an entered WhatsApp number and role permissions
   assert.match(route, /documentShareLinks/);
   assert.match(route, /normalizeSaudiWhatsAppNumber/);
   assert.match(route, /approved-contract-whatsapp-share-created/);
+  assert.match(route, /createWhatsAppLaunchToken/);
+  assert.match(route, /whatsappLaunchUrl/);
   assert.match(api, /canShareApprovedContracts/);
   assert.match(ui, /name="whatsappNumber"/);
   assert.match(ui, /يجب كتابة الرقم عند كل مشاركة/);
   assert.match(ui, /مشاركة العقد عبر واتساب/);
+  assert.match(ui, /window\.open\("\/portal\/whatsapp-launch", "_blank"\)/);
+  assert.match(ui, /فتح واتساب الآن/);
 });
 
 test("legal files expose current contract documents and share only with the assigned external lawyer", async () => {
@@ -61,8 +65,33 @@ test("legal files expose current contract documents and share only with the assi
   assert.match(shares, /requestedLawyerId !== matter\.assignedLawyerId/);
   assert.match(shares, /loadLegalRecordContractDocuments\(db, matter\)/);
   assert.match(shares, /الفاتورة محل الإشكال/);
+  assert.match(shares, /createWhatsAppLaunchToken/);
+  assert.match(shares, /whatsappLaunchUrl/);
   assert.match(ui, /assignedExternalLawyer/);
   assert.match(ui, /المحامي الخارجي المسندة إليه القضية/);
   assert.match(ui, /item\.legalDocumentRole === "disputed_invoice"/);
+  assert.match(ui, /window\.open\("\/portal\/whatsapp-launch", "_blank"\)/);
+  assert.match(ui, /فتح واتساب الآن/);
   assert.doesNotMatch(ui, /externalLawyers\.map/);
+});
+
+test("WhatsApp launching is encrypted, short-lived, user-bound, and works from the installed desktop app", async () => {
+  const [token, launchRoute, pendingPage, desktop] = await Promise.all([
+    read("lib/whatsapp-launch.ts"),
+    read("app/api/portal/whatsapp-launch/route.ts"),
+    read("app/portal/whatsapp-launch/page.tsx"),
+    read("desktop/main.mjs"),
+  ]);
+
+  assert.match(token, /aes-256-gcm/);
+  assert.match(token, /actorEmail/);
+  assert.match(token, /WHATSAPP_LAUNCH_SECONDS = 10 \* 60/);
+  assert.match(token, /payload\.actorEmail !== cleanActorEmail\(actorEmail\)/);
+  assert.match(launchRoute, /requirePortalApiRole/);
+  assert.match(launchRoute, /readWhatsAppLaunchToken\(token, access\.user\.email\)/);
+  assert.match(launchRoute, /createWhatsAppUrl/);
+  assert.match(launchRoute, /status: 302/);
+  assert.match(launchRoute, /no-store/);
+  assert.match(pendingPage, /جارٍ تجهيز واتساب/);
+  assert.match(desktop, /shell\.openExternal\(url\)/);
 });

@@ -2,6 +2,38 @@ export const sharingUiTranslations: Record<
   string,
   { en: string; bn: string }
 > = {
+  "اترك هذه النافذة مفتوحة لحظات حتى يكتمل إنشاء رابط المشاركة الآمن.": {
+    en: "Leave this window open briefly while the secure sharing link is prepared.",
+    bn: "নিরাপদ শেয়ার লিংক প্রস্তুত হওয়া পর্যন্ত এই উইন্ডোটি কিছুক্ষণ খোলা রাখুন।",
+  },
+  "إنشاء رابط مشاركة جديد": {
+    en: "Create a new sharing link",
+    bn: "নতুন শেয়ার লিংক তৈরি করুন",
+  },
+  "إنشاء مشاركة جديدة": {
+    en: "Create a new share",
+    bn: "নতুন শেয়ার তৈরি করুন",
+  },
+  "جارٍ تجهيز واتساب...": {
+    en: "Preparing WhatsApp...",
+    bn: "হোয়াটসঅ্যাপ প্রস্তুত হচ্ছে...",
+  },
+  "جُهز رابط المشاركة. إذا لم يفتح واتساب تلقائيًا، استخدم الزر التالي.": {
+    en: "The sharing link is ready. If WhatsApp did not open automatically, use the button below.",
+    bn: "শেয়ার লিংক প্রস্তুত। হোয়াটসঅ্যাপ স্বয়ংক্রিয়ভাবে না খুললে নিচের বোতামটি ব্যবহার করুন।",
+  },
+  "سُجلت المشاركة. إذا لم يفتح واتساب تلقائيًا، اضغط الزر التالي.": {
+    en: "The share was recorded. If WhatsApp did not open automatically, select the button below.",
+    bn: "শেয়ারটি নথিভুক্ত হয়েছে। হোয়াটসঅ্যাপ স্বয়ংক্রিয়ভাবে না খুললে নিচের বোতামটি চাপুন।",
+  },
+  "فتح واتساب الآن": {
+    en: "Open WhatsApp now",
+    bn: "এখন হোয়াটসঅ্যাপ খুলুন",
+  },
+  "معاينة PDF المشترك": {
+    en: "Preview shared PDF",
+    bn: "শেয়ার করা PDF দেখুন",
+  },
   "حفظ معلومات الدخول على هذا الجهاز": {
     en: "Remember sign-in information on this device",
     bn: "এই ডিভাইসে সাইন-ইন তথ্য সংরক্ষণ করুন",

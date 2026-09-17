@@ -15,6 +15,7 @@ import { emitPortalNotification } from "@/lib/portal-notifications";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { externalRequestUrl } from "@/lib/request-origin";
 import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
+import { createWhatsAppLaunchToken } from "@/lib/whatsapp-launch";
 import { loadLegalRecordContractDocuments } from "@/lib/contract-legal-documents";
 import {
   jsonNoStore,
@@ -244,6 +245,15 @@ export async function POST(request: Request) {
       shareUrl,
     ].join("\n");
     const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    const whatsappLaunchToken = createWhatsAppLaunchToken(
+      actor.user.email,
+      phone,
+      message,
+    );
+    const whatsappLaunchUrl = externalRequestUrl(
+      request,
+      `/api/portal/whatsapp-launch?token=${encodeURIComponent(whatsappLaunchToken)}`,
+    ).toString();
     await auditPortalAction({
       actorEmail: actor.user.email,
       action: "legal-contract-attachments-whatsapp-shared",
@@ -287,6 +297,7 @@ export async function POST(request: Request) {
         sharedAt: bundle.sharedAt,
       },
       whatsappUrl,
+      whatsappLaunchUrl,
       sharedAt,
     });
   }
@@ -326,6 +337,15 @@ export async function POST(request: Request) {
     shareUrl,
   ].join("\n");
   const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  const whatsappLaunchToken = createWhatsAppLaunchToken(
+    actor.user.email,
+    phone,
+    message,
+  );
+  const whatsappLaunchUrl = externalRequestUrl(
+    request,
+    `/api/portal/whatsapp-launch?token=${encodeURIComponent(whatsappLaunchToken)}`,
+  ).toString();
 
   await db.insert(legalCaseActionLog).values({
     legalRecordId,
@@ -382,6 +402,7 @@ export async function POST(request: Request) {
       sharedAt: share.sharedAt,
     },
     whatsappUrl,
+    whatsappLaunchUrl,
   });
 }
 
