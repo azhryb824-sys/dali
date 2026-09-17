@@ -63,7 +63,7 @@ test("worker sponsorship, work contracts, salary accounting and safe deletion st
   const[workersRoute,financeRoute,portal,schema,migration]=await Promise.all([source("app/api/portal/workers/route.ts"),source("app/api/portal/records/route.ts"),source("app/portal/PortalDashboard.tsx"),source("db/schema.ts"),source("drizzle-pg/0022_worker_sponsorship_salary_and_archiving.sql")]);
   assert.match(workersRoute,/isCompanySponsored/);assert.doesNotMatch(workersRoute,/form\.get\("workContract"\)/);assert.doesNotMatch(workersRoute,/عقد العمل إلزامي للعامل/);
   assert.match(workersRoute,/export async function DELETE/);assert.match(workersRoute,/activeAssignment/);assert.match(workersRoute,/preservedFinancialRecords/);assert.doesNotMatch(workersRoute,/db\.delete\(workerAttachments\)/);
-  assert.match(financeRoute,/لا يمكن ربط حركة العامل بعقد غير مسند إليه فعليًا/);assert.match(financeRoute,/monthlySalaryHalalas/);assert.match(financeRoute,/يجب ربط راتب العامل بالعقد المستفيد/);
+  assert.match(financeRoute,/لا يمكن ربط حركة العامل بعقد غير مسند إليه فعليًا/);assert.match(financeRoute,/calculateWorkerSalary/);assert.match(financeRoute,/يجب ربط راتب العامل بالعقد المستفيد/);
   assert.match(portal,/جهة الكفالة/);assert.match(portal,/على كفالة شركة دالي/);assert.match(portal,/على كفالة جهة أخرى/);assert.doesNotMatch(portal,/workContract:/);assert.match(portal,/حذف العامل من النظام/);
   assert.match(schema,/archivedAt/);assert.match(migration,/financial_records_worker_salary_period_unique/);
 });
@@ -85,7 +85,7 @@ test("sponsorship and Ajir status remain operationally consistent but private in
 });
 
 test("public quotation requests use the same structured requirements as quotations and contracts",async()=>{
-  const[form,home,api,crm,portal,schema,migration]=await Promise.all([source("app/components/QuoteRequestForm.tsx"),source("app/page.tsx"),source("app/api/workforce-requests/route.ts"),source("lib/crm.ts"),source("app/portal/PortalDashboard.tsx"),source("db/schema.ts"),source("drizzle-pg/0033_public_quotation_request_alignment.sql")]);
+  const[form,home,api,crm,portal,schema,migration]=await Promise.all([source("app/components/QuoteRequestForm.tsx"),source("app/page.tsx"),source("lib/workforce-request-input.ts"),source("lib/crm.ts"),source("app/portal/PortalDashboard.tsx"),source("db/schema.ts"),source("drizzle-pg/0033_public_quotation_request_alignment.sql")]);
   for(const activity of ["workforce","construction","maintenance","seasonal"])assert.match(form,new RegExp(activity));
   for(const field of ["activityType","quantityMode","quotationItems","quotationTerms","clientCr","clientVat","clientAddress","representativeTitle"]){assert.match(form,new RegExp(field));assert.match(api,new RegExp(field));}
   for(const field of ["quotationItemsJson","quotationTermsJson"]){assert.match(api,new RegExp(field));assert.match(crm,new RegExp(field));assert.match(portal,new RegExp(field));assert.match(schema,new RegExp(field));}
@@ -153,8 +153,8 @@ test("due installments auto invoice once, support secure WhatsApp sharing, and f
 test("sales and purchasing representatives follow owner-controlled request workflows",async()=>{
   const[schema,migration,api,workspace,operations,share,contractRoute]=await Promise.all([source("db/schema.ts"),source("drizzle-pg/0026_representative_workflows.sql"),source("app/api/portal/representative-requests/route.ts"),source("app/portal/SalesRepresentativesWorkspace.tsx"),source("app/portal/OperationsWorkspace.tsx"),source("app/api/portal/operations/quotes/[id]/share/route.ts"),source("app/api/portal/documents/generate/route.ts")]);
   assert.match(schema,/representativeType/);assert.match(schema,/representativeRequests/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);
-  assert.match(api,/قرار الطلب متاح للمالك أو مشرف النظام فقط/);assert.match(api,/changes_requested/);assert.match(api,/status:"draft"/);assert.match(api,/requestType!=="sales"/);
-  for(const label of ["اعتماد","طلب تعديل","رفض نهائي","إنشاء عرض سعر"])assert.match(workspace,new RegExp(label));
+  assert.match(api,/قرار الطلب متاح للمالك أو مشرف النظام فقط/);assert.match(api,/changes_requested/);assert.match(api,/submitQuoteRequest/);assert.match(api,/decideQuoteRequest/);
+  for(const label of ["اعتماد","طلب تعديل","رفض نهائي","طلب عرض سعر بواسطة مندوب"])assert.match(workspace,new RegExp(label));
   assert.match(operations,/اعتماد عرض السعر/);assert.match(operations,/مشاركة واتساب/);assert.match(operations,/تحويل إلى عقد/);
   assert.match(share,/documentShareLinks/);assert.match(share,/shareUrl/);assert.match(contractRoute,/\["approved", "sent", "accepted"\]/);
 });

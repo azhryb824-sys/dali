@@ -178,6 +178,7 @@ type DocumentStamp = {
   updatedAt: string;
 };
 type OperationsData = {
+  conversionRequests?: Array<{id:number;quoteVersionId:number;requestedBy:string;status:string}>;
   quoteRequests: Array<typeof workforceRequests.$inferSelect>;
   clients: Client[];
   contacts: Contact[];
@@ -242,7 +243,7 @@ export default function OperationsWorkspace({
   isOwner: boolean;
   initialTab?: OperationsTab;
   initialQuery?: string;
-  onCreateContract: (quoteId?: number) => void;
+  onCreateContract: (quoteId?: number, mode?: "as_is" | "modified") => void;
   onCreateQuotation?: () => void;
   allowedTabs?: OperationsTab[];
   embedded?: boolean;
@@ -716,6 +717,8 @@ export default function OperationsWorkspace({
             ) : null
           }
         >
+          <section className="panel"><h3>طلبات عرض السعر المعتمدة</h3>{(data.quoteRequests||[]).filter(r=>r.approvalStatus==="approved").map(r=><p key={r.id}>{r.trackingCode} — {r.companyName||r.fullName}</p>)}<p>اختر الطلب المعتمد داخل نموذج إنشاء عرض السعر لنقل بياناته كاملة.</p></section>
+          {(data.conversionRequests||[]).length>0&&<section className="panel"><h3>طلبات التحويل إلى عقد</h3>{(data.conversionRequests||[]).map(item=><article className="record-actions" key={item.id}><span>{data.quotes.find(q=>q.id===item.quoteVersionId)?.quoteCode||`عرض #${item.quoteVersionId}`} — {item.requestedBy}</span>{canWrite&&<><button onClick={()=>onCreateContract(item.quoteVersionId,"as_is")}>تحويل العرض كما هو</button><button onClick={()=>onCreateContract(item.quoteVersionId,"modified")}>تحويل بعد تعديل</button></>}</article>)}</section>}
           <div className="operations-list quote-record-list">
             {data.quotes.filter(includes).map((quote) => (
               <article className="quote-record" key={quote.id}>
@@ -920,7 +923,7 @@ export default function OperationsWorkspace({
                   </button>
                   <button
                     className="admin-primary"
-                    onClick={() => onCreateContract(quote.id)}
+                    onClick={() => onCreateContract(quote.id,"as_is")}
                   >
                     تحويل إلى عقد
                   </button>

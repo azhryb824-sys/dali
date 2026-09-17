@@ -1,3 +1,4 @@
+import { emitPortalNotification } from "@/lib/portal-notifications";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { documentStamps, portalActivity } from "@/db/schema";
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     await getRuntimeEnv().BUCKET.put(storageKey, validation.bytes, { httpMetadata: { contentType: file.type }, customMetadata: { uploadedBy: access.user.email, stampName: name } });
     const [stamp] = await getDb().insert(documentStamps).values({ name, storageKey, fileName, contentType: file.type, sizeBytes: file.size, createdBy: access.user.email }).returning();
     await getDb().insert(portalActivity).values({ actorEmail: access.user.email, action: "document-stamp-created", entityType: "document-stamp", entityId: String(stamp.id) });
+    await emitPortalNotification({eventType:"document-stamp-created",title:"أضيف ختم جديد",message:stamp.name,severity:"info",module:"documents",entityType:"document-stamp",entityId:stamp.id,actionView:"documents",targetRole:"admin"}).catch(()=>undefined);
     return Response.json({ stamp }, { status: 201 });
   } catch {
     if (storageKey) await getRuntimeEnv().BUCKET.delete(storageKey).catch(() => undefined);
@@ -56,5 +58,7 @@ export async function DELETE(request: Request) {
   const id = Number(new URL(request.url).searchParams.get("id"));
   if (!Number.isInteger(id) || id < 1) return Response.json({ error: "رقم الختم غير صحيح" }, { status: 400 });
   await getDb().update(documentStamps).set({ active: false, updatedAt: new Date().toISOString() }).where(eq(documentStamps.id, id));
+  await getDb().insert(portalActivity).values({actorEmail:access.user.email,action:"document-stamp-deactivated",entityType:"document-stamp",entityId:String(id)});
+  await emitPortalNotification({eventType:"document-stamp-deactivated",title:"عُطّل ختم للاستخدام الجديد",message:`ختم #${id}`,severity:"info",module:"documents",entityType:"document-stamp",entityId:id,actionView:"documents",targetRole:"admin"}).catch(()=>undefined);
   return Response.json({ ok: true });
 }

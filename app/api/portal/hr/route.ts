@@ -1,3 +1,5 @@
+import { isValidIsoDate } from "@/lib/workforce-finance-integrity";
+import { emitPortalNotification } from "@/lib/portal-notifications";
 import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
@@ -728,6 +730,8 @@ export async function POST(request: Request) {
       const amountHalalas = Math.round(Number(payload.amount || 0) * 100);
       const allowed = new Set([
         "bonus",
+        "leave_compensation",
+        "retroactive",
         "advance",
         "deduction",
         "allowance",
@@ -778,6 +782,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "generate-payroll") {
+      const response=await db.transaction(async db=>{
       const periodMonth = clean(payload.periodMonth, 7);
       const paymentDate = clean(payload.paymentDate, 10);
       const bankAccountId = positiveId(payload.bankAccountId);
@@ -791,7 +796,12 @@ export async function POST(request: Request) {
         Math.min(10000, Number(payload.gosiEmployerBps) || 0),
       );
       const range = monthRange(periodMonth);
-      if (!range || !/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) || !bankAccountId)
+      if(!["monthly","bonus","leave_compensation","retroactive"].includes(payrollType))return jsonNoStore({error:"نوع المسير غير صحيح"},{status:400});
+      await db.execute(sql`select pg_advisory_xact_lock(hashtext(${`payroll:${periodMonth}`}))`);
+      const existingRuns=await db.select().from(payrollRuns).where(eq(payrollRuns.periodMonth,periodMonth));
+      if(existingRuns.some(r=>r.payrollType===payrollType))return jsonNoStore({error:"تم إنشاء مسير لهذه الفترة والنوع مسبقًا"},{status:409});
+
+      if (!range || !isValidIsoDate(paymentDate) || !bankAccountId)
         return jsonNoStore(
           { error: "الفترة أو تاريخ الصرف أو الحساب البنكي غير صحيح" },
           { status: 400 },
@@ -856,16 +866,24 @@ export async function POST(request: Request) {
             ),
           ),
       ]);
+      const consumedMovementIds=new Set<number>();
+      for(const prior of existingRuns){
+        let snapshot:{consumedMovementIds?:number[]}={};try{snapshot=JSON.parse(prior.snapshotJson||"{}")}catch{}
+        if(snapshot.consumedMovementIds)for(const id of snapshot.consumedMovementIds)consumedMovementIds.add(id);
+        else for(const item of movements)if(["bonus","deduction","advance"].includes(item.movementType))consumedMovementIds.add(item.id);
+      }
+      const movementTypes=payrollType==="monthly"?["bonus","deduction","advance"]:[payrollType];
+      const includedMovements=movements.filter(m=>staff.some(e=>e.id===m.employeeId)&&movementTypes.includes(m.movementType)&&!consumedMovementIds.has(m.id));
       const payrollHolidayDates = new Set(
         payrollHolidays.map((item) => item.date),
       );
       const monthDays = Number(range.end.slice(-2));
       const values = staff.map((employee) => {
-        const employeeRows = movements.filter(
+        const employeeRows = includedMovements.filter(
           (item) => item.employeeId === employee.id,
         );
         const bonus = employeeRows
-          .filter((item) => item.movementType === "bonus")
+          .filter((item) => item.movementType === (payrollType==="monthly"?"bonus":payrollType))
           .reduce((sum, item) => sum + item.amountHalalas, 0);
         const requestedDeductions = employeeRows
           .filter((item) =>
@@ -886,17 +904,17 @@ export async function POST(request: Request) {
               86400000,
           ) + 1,
         );
-        const baseSalaryHalalas = Math.round(
+        const baseSalaryHalalas = payrollType==="monthly" ? Math.round(
           (employee.baseSalaryHalalas * proratedDays) / monthDays,
-        );
-        const allowances = Math.round(
+        ) : 0;
+        const allowances = payrollType==="monthly" ? Math.round(
           ((employee.housingAllowanceHalalas +
             employee.transportAllowanceHalalas +
             employee.otherAllowanceHalalas) *
             proratedDays) /
             monthDays,
-        );
-        const unpaidDays = unpaidLeaves
+        ) : 0;
+        const unpaidDays = payrollType==="monthly" ? unpaidLeaves
           .filter((item) => item.employeeId === employee.id)
           .reduce((sum, item) => {
             const overlapStart =
@@ -911,7 +929,7 @@ export async function POST(request: Request) {
                     overlapEnd,
                     payrollHolidayDates,
                   );
-          }, 0);
+          }, 0) : 0;
         const unpaidLeaveDeductionHalalas = Math.min(
           baseSalaryHalalas + allowances,
           Math.round(
@@ -928,10 +946,10 @@ export async function POST(request: Request) {
           Math.round(
             (employee.housingAllowanceHalalas * proratedDays) / monthDays,
           );
-        const gosiEmployeeHalalas = employee.gosiNumber
+        const gosiEmployeeHalalas = payrollType==="monthly" && employee.gosiNumber
           ? Math.round((gosiBase * gosiEmployeeBps) / 10000)
           : 0;
-        const gosiEmployerHalalas = employee.gosiNumber
+        const gosiEmployerHalalas = payrollType==="monthly" && employee.gosiNumber
           ? Math.round((gosiBase * gosiEmployerBps) / 10000)
           : 0;
         const gross = baseSalaryHalalas + allowances + bonus;
@@ -957,7 +975,7 @@ export async function POST(request: Request) {
           unpaidLeaveDeductionHalalas,
           proratedDays,
         };
-      });
+      }).filter(item=>payrollType==="monthly"||item.bonusHalalas>0);
       const totalGrossHalalas = values.reduce(
         (sum, item) =>
           sum +
@@ -987,6 +1005,7 @@ export async function POST(request: Request) {
         gosiEmployeeBps,
         gosiEmployerBps,
         generatedAt: now,
+        consumedMovementIds:includedMovements.map(m=>m.id),
       });
       const [run] = await db
         .insert(payrollRuns)
@@ -1020,6 +1039,9 @@ export async function POST(request: Request) {
         after: run,
       });
       return jsonNoStore({ run }, { status: 201 });
+      });
+      if(response.status===201){const {run}=await response.clone().json() as {run:typeof payrollRuns.$inferSelect};await emitPortalNotification({eventType:"payroll-generated",title:"مسير موظفين جاهز للمراجعة",message:run.runNumber,severity:"info",module:"employees",entityType:"payroll-run",entityId:run.id,actionView:"employees",targetDepartment:"employees"}).catch(()=>undefined)}
+      return response;
     }
 
     return jsonNoStore({ error: "العملية غير مدعومة" }, { status: 400 });

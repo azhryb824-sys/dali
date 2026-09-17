@@ -1,3 +1,4 @@
+import { ownRepresentativeQuote } from "@/lib/quote-request-workflow";
 import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
 import { whatsappSharePayload } from "@/lib/whatsapp-share-payload";
 import { resolveShareRecipient } from "@/lib/share-recipient";
@@ -15,12 +16,12 @@ import { GET as renderPdf } from "../pdf/route";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   if (rejectCrossSiteRequest(request)) return Response.json({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
+  const id = Number((await context.params).id);
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "contracts", "write")) || !canSharePortalDocuments(access)) {
+  if (!access || !((await hasPortalPermission(access, "contracts", "write") && canSharePortalDocuments(access)) || await ownRepresentativeQuote(access,id))) {
     return Response.json({ error: "مشاركة عرض السعر تتطلب صلاحيتي العقود ومشاركة المستندات" }, { status: 403 });
   }
 
-  const id = Number((await context.params).id);
   const db = getDb();
   const quote = await db.query.quoteVersions.findFirst({ where: eq(quoteVersions.id, id) });
   if (!quote?.approvedBy || !["approved", "sent", "accepted"].includes(quote.status)) {

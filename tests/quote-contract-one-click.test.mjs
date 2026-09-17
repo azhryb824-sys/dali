@@ -9,7 +9,7 @@ test("approved workforce quotation converts to a fully prefilled contract", () =
   const operations = read("app/portal/OperationsWorkspace.tsx");
   const portal = read("app/portal/PortalDashboard.tsx");
   assert.match(operations, /تحويل إلى عقد/);
-  assert.match(operations, /onCreateContract\(quote\.id\)/);
+  assert.match(operations, /onCreateContract\(quote\.id,\s*"as_is"\)/);
   assert.match(operations, /actualSalaryHalalas/);
   assert.match(operations, /الراتب الفعلي للعامل شهريًا \(اختياري\)/);
   assert.doesNotMatch(operations, />\s*اسم الكفيل\s*</);

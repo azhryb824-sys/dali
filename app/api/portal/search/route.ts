@@ -1,3 +1,4 @@
+import { workerIncidents } from "@/db/schema";
 import { and, desc, eq, isNull, like, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { clients, companyDocuments, constructionOpportunities, constructionProjects, constructionRecords, contractPaymentSchedules, employees, financialRecords, governmentPaymentRequests, governmentSites, legalContractCorrespondence, legalLawyers, legalRecords, officialLetters, portalTasks, quoteVersions, salesOpportunities, timesheets, visitorConversations, videoInterviews, workers, workforceContracts, workforceRequests, workOrders, capacityPlans, dataSubjectRequests, portalUsers } from "@/db/schema";
@@ -105,7 +106,9 @@ export async function GET(request: Request) {
     }
     const normalizedQuery = query.toLowerCase();
     const matchesTerm = (terms: string[]) => terms.some((term) => term.includes(normalizedQuery) || normalizedQuery.includes(term));
+    const incidentRows=canSearchWorkforce?await db.select().from(workerIncidents).where(or(like(workerIncidents.referenceCode,pattern),like(workerIncidents.reason,pattern),like(workerIncidents.decisionReason,pattern))).orderBy(desc(workerIncidents.updatedAt)).limit(6):[];
     const results: Result[] = [
+      ...incidentRows.map(item=>({key:`worker-incident-${item.id}`,kind:"worker-incident",id:item.id,view:"workforce-supervision",title:item.referenceCode,meta:`حالة عمالية · ${item.warning?"إنذار":"مراجعة"} · ${item.reason}`,searchValue:item.referenceCode})),
       ...((access.role === "admin" || access.functionalRoles.some(role => ["system_owner", "system_admin"].includes(role))) && matchesTerm(["المالك", "المشرف", "اعتماد", "تسويات", "executive"]) ? [{ key: "executive-center", kind: "executive-center", id: 0, view: "executive-center", title: "مركز المالك والمشرف", meta: "اعتماد العقود والفواتير وطلبات السداد", searchValue: "مركز المالك والمشرف" }] : []),
       ...(matchesTerm(["دليل", "استخدام", "مساعدة", "النظام", "guide", "help", "system", "নির্দেশিকা", "সহায়তা", "সিস্টেম", "ব্যবহার"]) ? [{ key: "system-guide", kind: "guide", id: 0, view: "guide", title: "دليل استخدام النظام", meta: "تعليمات العمل والصلاحيات باللغات الثلاث", searchValue: "دليل استخدام النظام" }] : []),
       ...(canSearchBrand && matchesTerm(["هوية", "الهوية", "شعار", "الشعار", "ألوان", "الخطوط", "brand", "ব্র্যান্ড"]) ? [{ key: "brand-identity", kind: "brand-identity", id: 0, view: "brand", title: "الهوية البصرية", meta: "الشعار والألوان والخطوط وجميع ملفات PDF", searchValue: "الهوية البصرية" }] : []),

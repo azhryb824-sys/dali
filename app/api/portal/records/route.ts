@@ -1,17 +1,19 @@
+import { calculateWorkerSalary, allocateWorkerDeductions, cancelWorkerSalaryDeductions } from "@/lib/worker-payroll";
+import { WorkflowError } from "@/lib/quote-request-workflow";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { bankAccounts, contractPaymentSchedules, contractProfessions, contractWorkerAssignments, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
+import { bankAccounts, contractPaymentSchedules, contractWorkerAssignments, employees, financialRecords, legalRecords, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction, recordStatusChange } from "@/lib/audit";
 import { emitPortalNotification, type NotificationModule, type NotificationSeverity } from "@/lib/portal-notifications";
 import { canAccessPortalDepartment, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { rejectCrossSiteRequest } from "@/lib/security";
-import { isValidIsoDate, workerMonthlySalaryHalalas } from "@/lib/workforce-finance-integrity";
+import { isValidIsoDate } from "@/lib/workforce-finance-integrity";
 
 type RecordEntity = "employees" | "finance" | "legal" | "workforce";
 
 const entityStatuses: Record<RecordEntity, Set<string>> = {
   employees: new Set(["active", "leave", "suspended", "ended"]),
-  finance: new Set(["pending", "approved", "partially_paid", "paid", "overdue"]),
+  finance: new Set(["pending", "approved", "partially_paid", "paid", "overdue", "cancelled"]),
   legal: new Set(["active", "reviewing", "in_progress", "renewal", "closed", "cancelled"]),
   workforce: new Set(["available", "leave", "suspended"]),
 };
@@ -123,9 +125,10 @@ export async function POST(request: Request) {
       const paymentMethod = cleanText(data.paymentMethod, 30);
       const bankAccountId = Number(data.bankAccountId || 0) || null;
       const notes = cleanText(data.notes, 1000) || null;
-      if (!financeCategories.has(category) || description.length < 3 || !Number.isFinite(amount) || amount <= 0 || amount > 1000000000 || !dueDate || !isValidIsoDate(dueDate) || !paymentMethods.has(paymentMethod)) {
+      if (!financeCategories.has(category) || description.length < 3 || !Number.isFinite(amount) || (amount < 0 || (amount === 0 && category !== "worker_salary")) || amount > 1000000000 || !dueDate || !isValidIsoDate(dueDate) || !paymentMethods.has(paymentMethod)) {
         return Response.json({ error: "بيانات السجل المالي غير مكتملة أو غير صحيحة" }, { status: 400 });
       }
+      if (["worker_deduction","worker_violation"].includes(category)) return Response.json({error:"سجّل الحالة العمالية واعتمادها من إدارة العمالة لضمان احتساب الخصم مرة واحدة من الراتب"},{status:409});
       if (category === "workforce_invoice") {
         return Response.json({ error: "تُصدر فاتورة العمالة من دفعة العقد حتى تُطبّق قيود الغياب والضريبة ويظل المستند والقيد المالي متزامنين" }, { status: 409 });
       }
@@ -153,12 +156,12 @@ export async function POST(request: Request) {
         const [selectedWorker] = workerId
           ? await tx.select().from(workers).where(eq(workers.id, workerId)).limit(1)
           : [null];
-        if (workerId && (!selectedWorker || selectedWorker.archivedAt)) throw new Error("WORKER_NOT_FOUND_OR_ARCHIVED");
+        if (workerId && (!selectedWorker || (selectedWorker.archivedAt && category !== "worker_salary"))) throw new Error("WORKER_NOT_FOUND_OR_ARCHIVED");
         if (contractId && !contract) throw new Error("CONTRACT_NOT_FOUND");
 
         let linkedPaymentScheduleId: number | null = null;
         let linkedAssignment: typeof contractWorkerAssignments.$inferSelect | null = null;
-        if (workerId && contractId && workerFinanceCategories.has(category)) {
+        if (workerId && contractId && workerFinanceCategories.has(category) && category !== "worker_salary") {
           [linkedAssignment] = await tx.select().from(contractWorkerAssignments).where(and(
             eq(contractWorkerAssignments.workerId, workerId),
             eq(contractWorkerAssignments.contractId, contractId),
@@ -167,24 +170,23 @@ export async function POST(request: Request) {
           if (!linkedAssignment || selectedWorker?.status !== "assigned") throw new Error("WORKER_CONTRACT_MISMATCH");
           if (dueDate < linkedAssignment.assignedAt.slice(0, 10) || (contract && dueDate > contract.endDate)) throw new Error("WORKER_FINANCE_OUTSIDE_ASSIGNMENT");
         }
+        let salary: Awaited<ReturnType<typeof calculateWorkerSalary>> | null = null;
         if (category === "worker_salary") {
-          if (!contractId) throw new Error("SALARY_CONTRACT_REQUIRED");
-          if (!linkedAssignment) throw new Error("WORKER_CONTRACT_MISMATCH");
-          const [profession] = await tx.select().from(contractProfessions).where(eq(contractProfessions.id, linkedAssignment.contractProfessionId)).limit(1);
-          const actualSalaryHalalas = workerMonthlySalaryHalalas(selectedWorker?.monthlySalaryHalalas || 0, profession?.actualSalaryHalalas || 0);
-          if (!actualSalaryHalalas || Math.round(amount * 100) !== actualSalaryHalalas) throw new Error("SALARY_AMOUNT_MISMATCH");
-          const payments = await tx.select().from(contractPaymentSchedules).where(and(
-            eq(contractPaymentSchedules.contractId, contractId),
-            eq(contractPaymentSchedules.servicePeriod, periodMonth!),
-          ));
-          if (payments.length !== 1 || payments[0].status !== "paid") throw new Error("SALARY_PAYMENT_NOT_PAID");
-          linkedPaymentScheduleId = payments[0].id;
+          if (!contractId || !workerId) throw new Error("SALARY_CONTRACT_REQUIRED");
+          if(await tx.query.financialRecords.findFirst({where:and(eq(financialRecords.category,"worker_salary"),eq(financialRecords.workerId,workerId),eq(financialRecords.contractId,contractId),eq(financialRecords.periodMonth,periodMonth!),sql`${financialRecords.status}<>'cancelled'`)}))throw new WorkflowError("سُجل راتب العامل لهذا العقد والشهر مسبقًا",409);
+          salary = await calculateWorkerSalary(tx,workerId,contractId,periodMonth!);
+          if (Math.round(amount*100)!==salary.amountHalalas) throw new WorkflowError("تغير صافي الراتب؛ أعد المعاينة قبل الحفظ",409);
+          const payments=await tx.select().from(contractPaymentSchedules).where(and(eq(contractPaymentSchedules.contractId,contractId),eq(contractPaymentSchedules.servicePeriod,periodMonth!)));
+          if(payments.length!==1||payments[0].status!=="paid")throw new Error("SALARY_PAYMENT_NOT_PAID");
+          linkedPaymentScheduleId=payments[0].id;
         }
         const [created] = await tx.insert(financialRecords).values({
           referenceCode: code("FIN"),
           category,
           description,
-          amountHalalas: Math.round(amount * 100),
+          amountHalalas: salary?.amountHalalas ?? Math.round(amount * 100),
+          grossAmountHalalas: salary?.grossAmountHalalas,
+          deductionAmountHalalas: salary?.deductionAmountHalalas || 0,
           dueDate,
           workerId,
           contractId,
@@ -197,6 +199,7 @@ export async function POST(request: Request) {
           updatedAt: now,
         }).returning();
         if (!created) throw new Error("FINANCIAL_RECORD_NOT_CREATED");
+        if(salary) await allocateWorkerDeductions(tx,created.id,salary.allocations);
         return created;
       });
       await recordActivity(access.user.email, "financial-record-created", "financial-record", saved.id, undefined, saved);
@@ -226,8 +229,9 @@ export async function POST(request: Request) {
 
     return Response.json({ error: "استخدم نموذج ملف العامل المتكامل لإدخال رقم الإقامة والصورة والشهادات المطلوبة" }, { status: 400 });
   } catch (error) {
+    if(error instanceof WorkflowError)return Response.json({error:error.message},{status:error.status});
     const message = error instanceof Error ? error.message : "";
-    if (message.toLowerCase().includes("unique")) {
+    if (message.toLowerCase().includes("unique") || (error as {cause?:{code?:string}})?.cause?.code === "23505") {
       return Response.json({ error: "الرقم المدخل مستخدم في سجل آخر" }, { status: 409 });
     }
     if (message === "WORKER_NOT_FOUND_OR_ARCHIVED") return Response.json({ error: "العامل المحدد غير موجود أو مؤرشف" }, { status: 404 });
@@ -288,7 +292,26 @@ export async function PATCH(request: Request) {
     if (payload.entity === "employees") {
       [updated] = await db.update(employees).set({ status, updatedAt }).where(eq(employees.id, id)).returning();
     } else if (payload.entity === "finance") {
-      [updated] = await db.update(financialRecords).set({ status, updatedAt }).where(eq(financialRecords.id, id)).returning();
+      const financial=existing as typeof financialRecords.$inferSelect;
+      if(financial.category==="worker_salary") {
+        updated=await db.transaction(async tx=>{
+          await tx.execute(sql`select id from workers where id=${financial.workerId} for update`);
+          const [current]=await tx.select().from(financialRecords).where(eq(financialRecords.id,id)).for("update");
+          const allowed:Record<string,string[]>={pending:["approved","cancelled"],approved:["paid","cancelled"],paid:[],cancelled:[]};
+          if(!current||!allowed[current.status]?.includes(status))throw new WorkflowError("انتقال حالة الراتب غير مسموح أو سبق تنفيذه",409);
+          if(status==="cancelled")await cancelWorkerSalaryDeductions(tx,current);
+          if(["approved","paid"].includes(status)){
+            const recalculated=await calculateWorkerSalary(tx,current.workerId!,current.contractId!,current.periodMonth!);
+            if(recalculated.grossAmountHalalas!==current.grossAmountHalalas || (current.amountHalalas>0&&current.postingStatus!=="posted"&&recalculated.deductionAmountHalalas>0))throw new WorkflowError("تغيرت بيانات الراتب أو ورد خصم جديد؛ ألغِ الراتب غير المرحل وأعد إنشاؤه",409);
+          }
+          if(status==="paid"&&current.amountHalalas>0&&current.postingStatus!=="posted")throw new WorkflowError("أنشئ القيد المالي واعتمده ورحّله قبل تسجيل دفع الراتب",409);
+          const [saved]=await tx.update(financialRecords).set({status,paidAmountHalalas:status==="paid"?current.amountHalalas:current.paidAmountHalalas,updatedAt}).where(eq(financialRecords.id,id)).returning();return saved;
+        });
+      }else {
+        if(financial.status==="paid"||financial.postingStatus==="posted"||financial.status==="cancelled")return Response.json({error:"الحركة مدفوعة أو مرحلة أو ملغاة؛ لا يمكن تغيير حالتها مباشرة"},{status:409});
+        if(status==="paid"&&financial.status!=="approved")return Response.json({error:"اعتمد الحركة قبل تسجيل السداد"},{status:409});
+        [updated] = await db.update(financialRecords).set({ status, paidAmountHalalas:status==="paid"?financial.amountHalalas:financial.paidAmountHalalas, updatedAt }).where(and(eq(financialRecords.id,id),eq(financialRecords.status,financial.status))).returning();
+      }
     } else if (payload.entity === "legal") {
       [updated] = await db.update(legalRecords).set({ status, updatedAt }).where(and(eq(legalRecords.id, id), isNull(legalRecords.deletedAt), eq(legalRecords.status, (existing as typeof legalRecords.$inferSelect).status))).returning();
     } else {
@@ -298,7 +321,8 @@ export async function PATCH(request: Request) {
 
     await recordActivity(access.user.email, `${payload.entity}-status-updated`, payload.entity, id, existing, updated);
     return Response.json({ record: updated });
-  } catch {
+  } catch (error) {
+    if(error instanceof WorkflowError)return Response.json({error:error.message},{status:error.status});
     return Response.json({ error: "تعذّر تحديث السجل" }, { status: 500 });
   }
 }

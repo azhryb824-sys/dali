@@ -36,5 +36,12 @@ export function absenceRangesOverlap(
 }
 
 export function workerMonthlySalaryHalalas(workerSalaryHalalas: number, professionFallbackHalalas: number) {
-  return workerSalaryHalalas > 0 ? workerSalaryHalalas : Math.max(0, professionFallbackHalalas);
+  return professionFallbackHalalas > 0 ? professionFallbackHalalas : Math.max(0, workerSalaryHalalas);
+}
+
+export function chargeableAbsenceDates(start: string, end: string) {
+  if (!isValidIsoDate(start) || !isValidIsoDate(end) || end < start) return [];
+  const dates: string[] = [];
+  for (let day = new Date(`${start}T12:00:00Z`); day <= new Date(`${end}T12:00:00Z`); day = new Date(day.getTime()+86400000)) if(day.getUTCDay()!==5) dates.push(day.toISOString().slice(0,10));
+  return dates;
 }

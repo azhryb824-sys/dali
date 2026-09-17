@@ -1,3 +1,4 @@
+import { workerIncidents } from "@/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { contractProfessions, contractWorkerAssignments, portalActivity, workers, workforceContracts } from "@/db/schema";
@@ -47,10 +48,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         tx.select().from(contractProfessions).where(eq(contractProfessions.id, contractProfessionId)).limit(1),
         tx.select().from(workers).where(eq(workers.id, workerId)).limit(1),
       ]);
-      if (!contract || contract.status !== "active") throw new Error("CONTRACT_NOT_ACTIVE");
+      if (!contract || contract.status !== "active" || now.slice(0,10)<contract.startDate || now.slice(0,10)>contract.endDate) throw new Error("CONTRACT_NOT_ACTIVE");
       if (!profession || profession.contractId !== contract.id) throw new Error("PROFESSION_CONTRACT_MISMATCH");
       if (!worker || worker.archivedAt || worker.profession !== profession.profession) throw new Error("WORKER_PROFESSION_MISMATCH");
       if (worker.status !== "available") throw new Error("WORKER_NOT_AVAILABLE");
+      if(await tx.query.workerIncidents.findFirst({where:and(eq(workerIncidents.workerId,workerId),eq(workerIncidents.contractId,contractId),eq(workerIncidents.status,"rejected"),eq(workerIncidents.releaseWorker,true))}))throw new Error("WORKER_PERMANENTLY_EXCLUDED");
 
       const sponsorshipMismatch = profession.sponsorshipType && (
         worker.sponsorshipType !== profession.sponsorshipType
@@ -109,6 +111,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return Response.json({ assignment: result.assignment, worker: result.worker }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+    if(message==="WORKER_PERMANENTLY_EXCLUDED")return Response.json({error:"العامل مستبعد نهائيًا من هذا العقد بقرار معتمد"},{status:409});
     if (message === "CONTRACT_NOT_ACTIVE") return Response.json({ error: "العقد غير موجود أو غير نشط" }, { status: 409 });
     if (message === "PROFESSION_CONTRACT_MISMATCH") return Response.json({ error: "المهنة ليست ضمن هذا العقد" }, { status: 400 });
     if (message === "WORKER_PROFESSION_MISMATCH") return Response.json({ error: "العامل غير موجود أو مهنته لا تطابق المهنة المطلوبة" }, { status: 400 });
@@ -198,6 +201,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     return Response.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+    if(message==="WORKER_PERMANENTLY_EXCLUDED")return Response.json({error:"العامل مستبعد نهائيًا من هذا العقد بقرار معتمد"},{status:409});
     if (message === "ASSIGNMENT_NOT_ACTIVE") return Response.json({ error: "الإسناد غير موجود أو منتهٍ" }, { status: 404 });
     if (message === "ASSIGNMENT_CHANGED") return Response.json({ error: "تغير الإسناد قبل تنفيذ العملية" }, { status: 409 });
     console.error("contract-worker-release-failed", error);

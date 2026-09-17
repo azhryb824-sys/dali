@@ -1,5 +1,8 @@
 "use client";
 
+import WorkerIncidentsPanel from "./WorkerIncidentsPanel";
+import ConversationQuoteRequests from "./ConversationQuoteRequests";
+import DocumentStampsManager from "./DocumentStampsManager";
 import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -425,6 +428,7 @@ const recordStatus: Record<RecordEntity, Record<string, string>> = {
     partially_paid: "مدفوع جزئيًا",
     paid: "مدفوع",
     overdue: "متأخر",
+    cancelled: "ملغى",
   },
   legal: {
     active: "ساري",
@@ -892,6 +896,9 @@ export default function PortalDashboard({
   const [operationsQuery, setOperationsQuery] = useState("");
   const [issuePreset, setIssuePreset] = useState("workforce_contract");
   const [issueReturnView, setIssueReturnView] = useState<View | null>(null);
+  const [contractualTab,setContractualTab]=useState<"contracts"|"quotes"|"letters">("contracts");
+  const [selectedIncidentId,setSelectedIncidentId]=useState<number|null>(null);
+  const [issueConversionMode,setIssueConversionMode]=useState<"as_is"|"modified">("as_is");
   const [issueQuoteId, setIssueQuoteId] = useState<number | null>(null);
   const [pendingContractApproval, setPendingContractApproval] = useState<{
     contractId: number;
@@ -1385,13 +1392,15 @@ export default function PortalDashboard({
     setOperationsQuery("");
     const actionView = item.actionView as View | null;
     if (actionView && canOpenView(actionView)) changeView(actionView);
-    if (item.entityType === "workforce-request" && item.entityId) setSelectedId(Number(item.entityId));
+    if (item.entityType === "workforce-request" && item.entityId && actionView === "workforce") setSelectedId(Number(item.entityId));
     if (item.entityType === "worker" && item.entityId) setSelectedWorkerId(Number(item.entityId));
     if (item.entityType === "workforce-contract" && item.entityId) setSelectedContractId(Number(item.entityId));
     if (item.entityType === "legal-record" && item.entityId) setSelectedLegalRecordId(Number(item.entityId));
     if (item.entityType === "visitor-conversation" && item.entityId) void openConversation(item.entityId);
     if (item.entityType === "data-subject-request") setOperationsTab("privacy");
-    if (item.entityType === "quote-version") setOperationsTab("quotes");
+    if (item.entityType === "quote-version") {setOperationsTab("quotes");setContractualTab("quotes");}
+    if (item.entityType === "worker-incident" && item.entityId) setSelectedIncidentId(Number(item.entityId));
+    if (item.entityType === "workforce-request" && actionView === "contractual-documents") setContractualTab("quotes");
     if (item.entityType === "work-order") setOperationsTab("orders");
     if (item.entityType === "timesheet") setOperationsTab("timesheets");
     if (item.entityType?.startsWith("integration-")) setOperationsTab("integrations");
@@ -1640,11 +1649,11 @@ export default function PortalDashboard({
     }
   }
 
-  async function decideQuoteRequest(id: number, action: "approve" | "reject") {
+  async function decideQuoteRequest(id: number, action: "approve" | "reject" | "request-changes") {
     const item = requests.find(row => row.id === id);
     if (!item) return;
-    const reason = action === "reject" ? await appPrompt("سبب رفض طلب عرض السعر", { multiline: true }) : "";
-    if (action === "reject" && !reason) return;
+    const reason = action === "request-changes" ? await appPrompt("التعديلات المطلوبة على طلب عرض السعر", { multiline: true, minLength:5 }) : "";
+    if (action === "request-changes" && !reason) return;
     setBusy(`request-${id}`);
     try {
       const response = await fetch("/api/portal/requests", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, version: item.version, action, reason }) });
@@ -1826,10 +1835,11 @@ export default function PortalDashboard({
     }
   }
 
-  function openIssueDocument(type: string, quoteId?: number) {
+  function openIssueDocument(type: string, quoteId?: number, mode: "as_is"|"modified" = "as_is") {
     setIssueReturnView(type === "quotation" ? view : null);
     setIssuePreset(type);
     setIssueQuoteId(quoteId || null);
+    setIssueConversionMode(mode);
     setDocumentModal("issue");
   }
 
@@ -2318,6 +2328,7 @@ export default function PortalDashboard({
               changeView(result.view);
               if (result.kind === "request") setSelectedId(result.id);
               if (result.kind === "worker") setSelectedWorkerId(result.id);
+              if (result.kind === "worker-incident") setSelectedIncidentId(result.id);
               if (result.kind === "contract") setSelectedContractId(result.id);
               if (result.kind === "contract-correspondence") setSelectedContractId(result.id);
               if (result.kind === "legal" || result.kind === "legal-correspondence") setSelectedLegalRecordId(result.id);
@@ -2331,6 +2342,7 @@ export default function PortalDashboard({
                 "capacity-plan": "capacity",
                 "privacy-request": "privacy",
               };
+              if (result.kind === "quote") setContractualTab("quotes");
               if (operationsKinds[result.kind]) {
                 setOperationsTab(operationsKinds[result.kind]);
                 setOperationsQuery(result.searchValue);
@@ -2377,7 +2389,7 @@ export default function PortalDashboard({
         <GlobalTaskReminder />
 
         <div className="admin-content">
-          {view === "executive-center" && isRoot && <><div className="panel-head"><h2>مركز المالك والمشرف</h2><button className="admin-secondary" onClick={() => setChatSettingsOpen(true)}>تعديل ساعات العمل والرد الآلي</button></div><ExecutiveActionCenter /></>}
+          {view === "executive-center" && isRoot && <><div className="panel-head"><h2>مركز المالك والمشرف</h2><button className="admin-secondary" onClick={() => setChatSettingsOpen(true)}>تعديل ساعات العمل والرد الآلي</button></div><ExecutiveActionCenter /><WorkerIncidentsPanel/></>}
           {view === "overview" && (
             <>
               <div className="content-heading">
@@ -2669,15 +2681,15 @@ export default function PortalDashboard({
             </ModuleSection>
           )}
 
-          {view === "operations" && canAccessOperations && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} allowedTabs={allowedOperationsTabs} canWrite={canWrite} isAdmin={isRoot} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} />}
+          {view === "operations" && canAccessOperations && <OperationsWorkspace key={`${operationsTab}:${operationsQuery}`} initialTab={operationsTab} initialQuery={operationsQuery} allowedTabs={allowedOperationsTabs} canWrite={canWrite} isAdmin={isRoot} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId,mode) => openIssueDocument("workforce_contract", quoteId,mode)} />}
           {view === "representatives" && canAccessRepresentatives && <SalesRepresentativesWorkspace canWrite={canWriteRepresentatives} />}
           {view === "construction" && canAccessConstruction && <ConstructionWorkspace />}
 
-          {view === "workforce-supervision" && canAccessContracts && canAccess("workforce") && <WorkforceSupervisionWorkspace contracts={contracts} professions={contractProfessions} assignments={contractAssignments} workers={workers} canManage={canManageWorkerAssignments} busy={busy} onOpenContract={setSelectedContractId} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onWorkerStatus={updateWorkerOperationalStatus} />}
+          {view === "workforce-supervision" && canAccessContracts && canAccess("workforce") && <WorkforceSupervisionWorkspace selectedIncidentId={selectedIncidentId} contracts={contracts} professions={contractProfessions} assignments={contractAssignments} workers={workers} canManage={canManageWorkerAssignments} busy={busy} onOpenContract={setSelectedContractId} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onWorkerStatus={updateWorkerOperationalStatus} />}
 
           {view === "contractual-documents" && canAccessContracts && (
             <>
-              <ContractualDocumentsWorkspace documents={documents} contracts={contracts} canManage={hasPermission("contracts.write")} canWrite={canWrite} canApprove={isRoot} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId) => openIssueDocument("workforce_contract", quoteId)} onCreateQuotation={() => openIssueDocument("quotation")} />
+              <ContractualDocumentsWorkspace key={contractualTab} initialTab={contractualTab} documents={documents} contracts={contracts} canManage={hasPermission("contracts.write")} canWrite={canWrite} canApprove={isRoot} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId,mode) => openIssueDocument("workforce_contract", quoteId,mode)} onCreateQuotation={() => openIssueDocument("quotation")} />
               <LetterPdfLibrary />
             </>
           )}
@@ -2767,7 +2779,7 @@ export default function PortalDashboard({
           }}
         />
       )}
-      {documentModal === "issue" && issuePreset !== "quotation" && <IssueDocumentModal initialType={issuePreset} initialQuoteId={issueQuoteId} canIssueContracts={canIssueContracts} canIssueFinance={canIssueFinanceDocuments} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} requests={requests} onClose={() => setDocumentModal(null)} onSubmit={issueDocument} />}
+      {documentModal === "issue" && issuePreset !== "quotation" && <IssueDocumentModal initialType={issuePreset} initialQuoteId={issueQuoteId} conversionMode={issueConversionMode} canIssueContracts={canIssueContracts} canIssueFinance={canIssueFinanceDocuments} busy={busy === "issue-document"} assetsReady={assets.some((item) => item.slot === "stamp") && assets.some((item) => item.slot === "signature")} workers={workers} contracts={contracts} requests={requests} onClose={() => setDocumentModal(null)} onSubmit={issueDocument} />}
       {userModal && <CreateUserModal roles={roleOptions.filter((role) => isSystemOwner || role.roleKey !== "system_owner")} busy={busy === "create-user"} onClose={() => setUserModal(false)} onSubmit={createUser} />}
       {chatSettingsOpen && <ChatSettingsModal businessHours={businessHours} automation={chatAutomation} busy={busy === "chat-settings"} onClose={() => setChatSettingsOpen(false)} onSubmit={saveBusinessHours} />}
       {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} canWrite={canWriteConversations} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus} />}
@@ -3528,6 +3540,7 @@ function ConversationDrawer({ conversation, messages, businessHours, canWrite, b
             <Icon name="close" />
           </button>
         </div>
+        {canWrite&&<ConversationQuoteRequests conversationId={conversation.id} fullName={conversation.visitorName} mobile={conversation.visitorMobile} email={conversation.visitorEmail||""}/>}
         <div className="portal-chat-contact">
           <div>
             <span>{initials(conversation.visitorName)}</span>
@@ -4021,6 +4034,7 @@ function CompanyAssetsPanel({ assets, canManage, busy, onUpload }: { assets: Com
           );
         })}
       </div>
+      {canManage && <DocumentStampsManager/>}
       <div className="asset-security">
         <strong>حماية الأصول الرسمية</strong>
         <p>الصيغ المقبولة PNG وJPG حتى 5 ميجابايت. المعاينة متاحة للمستخدمين المخولين داخل النظام فقط ولا تدخل روابط المشاركة.</p>
@@ -4099,6 +4113,9 @@ function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClo
 }
 
 function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, onSubmit }: { busy: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; assignments: ContractAssignment[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  const [salaryMonth,setSalaryMonth]=useState("");
+  const [salaryPreview,setSalaryPreview]=useState<{grossAmountHalalas:number;deductionAmountHalalas:number;amountHalalas:number;carryForwardHalalas:number;coveredDays:number;daysInMonth:number}|null>(null);
+  const [salaryError,setSalaryError]=useState("");
   const [category, setCategory] = useState("worker_salary");
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
@@ -4137,8 +4154,14 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
       active = false;
     };
   }, []);
+  useEffect(()=>{
+    if(category!=="worker_salary"||!selectedWorkerId||!selectedContractId||!salaryMonth)return;
+    let active=true;
+    void fetch(`/api/portal/worker-payroll-preview?workerId=${selectedWorkerId}&contractId=${selectedContractId}&month=${salaryMonth}`,{cache:"no-store"}).then(async r=>{const d=await readApiJson<{grossAmountHalalas:number;deductionAmountHalalas:number;amountHalalas:number;carryForwardHalalas:number;coveredDays:number;daysInMonth:number;error?:string}>(r);if(!r.ok)throw new Error(d.error);if(active){setSalaryPreview(d);setAmount((d.amountHalalas/100).toFixed(2));setSalaryError("")}}).catch(e=>{if(active){setSalaryError(e.message);setSalaryPreview(null);setAmount("")}});
+    return()=>{active=false};
+  },[category,selectedWorkerId,selectedContractId,salaryMonth]);
   const workerRelated = ["worker_salary", "worker_advance", "worker_deduction", "worker_violation", "worker_expense"].includes(category);
-  const activeAssignments = useMemo(() => assignments.filter((assignment) => assignment.status === "active"), [assignments]);
+  const activeAssignments = useMemo(() => assignments.filter((assignment) => ["active","released"].includes(assignment.status)), [assignments]);
   const salaryWorkerIds = useMemo(() => new Set(activeAssignments.map((assignment) => assignment.workerId)), [activeAssignments]);
   const eligibleWorkers = category === "worker_salary"
     ? workers.filter((worker) => salaryWorkerIds.has(worker.id))
@@ -4156,10 +4179,9 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
   }
   function selectFinanceWorker(nextWorkerId: string) {
     setSelectedWorkerId(nextWorkerId);
-    const worker = workers.find((item) => String(item.id) === nextWorkerId);
     const workerAssignments = activeAssignments.filter((assignment) => String(assignment.workerId) === nextWorkerId);
     setSelectedContractId(workerAssignments.length === 1 ? String(workerAssignments[0].contractId) : "");
-    if (category === "worker_salary") setAmount(worker ? (worker.monthlySalaryHalalas / 100).toFixed(2) : "");
+    if (category === "worker_salary") {setAmount("");setSalaryPreview(null);setSalaryError("");}
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4184,8 +4206,8 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
             <select name="category" value={category} onChange={(event) => changeFinanceCategory(event.target.value)}>
               <option value="worker_salary">راتب عامل</option>
               <option value="worker_advance">سلفة عامل</option>
-              <option value="worker_deduction">خصم عامل</option>
-              <option value="worker_violation">مخالفة عامل</option>
+
+
               <option value="worker_expense">مصروف خاص بالعمالة</option>
               <option value="receipt_voucher">سند قبض</option>
               <option value="payment_voucher">سند صرف</option>
@@ -4194,7 +4216,7 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
           </label>
           <label>
             المبلغ بالريال
-            <input name="amount" required type="number" min="0.01" max="1000000000" step="0.01" dir="ltr" value={amount} onChange={(event) => setAmount(event.target.value)} readOnly={category === "worker_salary" && Boolean(selectedWorker)} />
+            <input name="amount" required type="number" min={category==="worker_salary"?"0":"0.01"} max="1000000000" step="0.01" dir="ltr" value={amount} onChange={(event) => setAmount(event.target.value)} readOnly={category === "worker_salary" && Boolean(selectedWorker)} />
           </label>
           {workerRelated && (
             <label className="span-two">
@@ -4209,12 +4231,13 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
                   </option>
                 ))}
               </select>
-              {category === "worker_salary" && selectedWorker && <small>الراتب الشهري المعتمد في ملف العامل: {new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(selectedWorker.monthlySalaryHalalas / 100)}</small>}
+              {category==="worker_salary"&&salaryPreview&&<small>إجمالي الاستحقاق من العقد: {(salaryPreview.grossAmountHalalas/100).toFixed(2)} — الخصومات: {(salaryPreview.deductionAmountHalalas/100).toFixed(2)} — الصافي: {(salaryPreview.amountHalalas/100).toFixed(2)} ريال. مدة الإسناد: {salaryPreview.coveredDays}/{salaryPreview.daysInMonth} يوم. رصيد الخصومات للشهر التالي: {(salaryPreview.carryForwardHalalas/100).toFixed(2)} ريال.</small>}{salaryError&&<small role="alert">{salaryError}</small>}
+
             </label>
           )}
           <label>
             العقد المرتبط
-            <select name="contractId" value={selectedContractId} required={category === "worker_salary"} onChange={(event) => setSelectedContractId(event.target.value)}>
+            <select name="contractId" value={selectedContractId} required={category === "worker_salary"} onChange={(event) => {setSelectedContractId(event.target.value);setSalaryPreview(null);if(category==="worker_salary")setAmount("")}}>
               <option value="">{category === "worker_salary" ? "اختر العامل المسند أولًا" : "دون عقد محدد"}</option>
               {eligibleContracts.map((contract) => (
                 <option value={contract.id} key={contract.id}>
@@ -4227,7 +4250,7 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
           {category === "worker_salary" && (
             <label>
               شهر الراتب
-              <input name="periodMonth" required type="month" />
+              <input name="periodMonth" required type="month" value={salaryMonth} onChange={e=>{setSalaryMonth(e.target.value);setAmount("");setSalaryPreview(null)}} />
             </label>
           )}
           {category === "worker_expense" && (
@@ -4297,7 +4320,7 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
   );
 }
 
-function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, canIssueFinance, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { initialType: string; initialQuoteId: number | null; canIssueContracts: boolean; canIssueFinance: boolean; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIssueContracts, canIssueFinance, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { initialType: string; initialQuoteId: number | null; conversionMode: "as_is"|"modified"; canIssueContracts: boolean; canIssueFinance: boolean; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [representatives, setRepresentatives] = useState<
     Array<{
       id: number;
@@ -5005,7 +5028,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, canIssueContracts, ca
           <input type="hidden" name="professions" value={serializedProfessions} />
           <input type="hidden" name="paymentSchedule" value={serializedPayments} />
           <input type="hidden" name="quantityMode" value={quantityMode} />
-          <input type="hidden" name="quoteVersionId" value={selectedQuoteId} />
+          <input type="hidden" name="quoteVersionId" value={selectedQuoteId} /><input type="hidden" name="conversionMode" value={conversionMode}/>{selectedQuoteId&&<p className="span-two">{conversionMode==="modified"?"البيانات منقولة من العرض؛ عدّل المطلوب ثم أرسل العقد للاعتماد.":"تحويل العرض كما هو؛ تبقى بياناته المعتمدة مطابقة في العقد."}</p>}
           {isContract && (
             <>
               <input type="hidden" name="showPaymentSchedule" value={showPaymentSchedule ? "true" : "false"} />
@@ -7411,6 +7434,7 @@ function WorkerDrawer({ worker, attachments, contracts, contractAssignments, can
             </div>
           </dl>
         </div>
+        <WorkerIncidentsPanel workerId={worker.id}/>
         <div className="drawer-section">
           <h3>الصورة والمستندات</h3>
           <div className="worker-file-list">
@@ -7631,7 +7655,7 @@ function StructuredQuoteRequest({ request }: { request: WorkforceRequest }) {
     </>
   );
 }
-function RequestDrawer({ canApprove, onApproval, onConvert, request, replies, emailConfigured, canWrite, statusBusy, replyBusy, onClose, onStatus, onReply }: { canApprove: boolean; onApproval: (id: number, action: "approve" | "reject") => void; onConvert: (id: number) => void; request: WorkforceRequest; replies: WorkforceRequestReply[]; emailConfigured: boolean; canWrite: boolean; statusBusy: boolean; replyBusy: boolean; onClose: () => void; onStatus: (id: number, status: RequestStatus) => void; onReply: (id: number, form: HTMLFormElement) => Promise<void> }) {
+function RequestDrawer({ canApprove, onApproval, onConvert, request, replies, emailConfigured, canWrite, statusBusy, replyBusy, onClose, onStatus, onReply }: { canApprove: boolean; onApproval: (id: number, action: "approve" | "reject" | "request-changes") => void; onConvert: (id: number) => void; request: WorkforceRequest; replies: WorkforceRequestReply[]; emailConfigured: boolean; canWrite: boolean; statusBusy: boolean; replyBusy: boolean; onClose: () => void; onStatus: (id: number, status: RequestStatus) => void; onReply: (id: number, form: HTMLFormElement) => Promise<void> }) {
   function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void onReply(request.id, event.currentTarget);
@@ -7655,7 +7679,7 @@ function RequestDrawer({ canApprove, onApproval, onConvert, request, replies, em
             <Icon name="close" />
           </button>
         </div>
-        {request.requestType === "quotation" && <div className="drawer-section"><h3>اعتماد طلب عرض السعر</h3><p>{request.approvalStatus === "approved" ? "معتمد وقابل للتحويل إلى عرض سعر" : request.approvalStatus === "rejected" ? "مرفوض" : "بانتظار اعتماد المالك أو مشرف النظام"}</p>{request.approvalReason && <p>{request.approvalReason}</p>}{canApprove && request.approvalStatus !== "approved" && <div className="record-actions"><button disabled={statusBusy} onClick={() => onApproval(request.id, "approve")}>اعتماد طلب عرض السعر</button><button disabled={statusBusy} onClick={() => onApproval(request.id, "reject")}>رفض الطلب مع السبب</button></div>}{canWrite && request.approvalStatus === "approved" && <button className="admin-primary" onClick={() => onConvert(request.id)}>تحويل الطلب إلى عرض سعر</button>}</div>}
+        {request.requestType === "quotation" && <div className="drawer-section"><h3>اعتماد طلب عرض السعر</h3><p>{request.approvalStatus === "approved" ? "معتمد وقابل للتحويل إلى عرض سعر" : request.approvalStatus === "rejected" ? "مرفوض" : "بانتظار اعتماد المالك أو مشرف النظام"}</p>{request.approvalReason && <p>{request.approvalReason}</p>}{canApprove && request.approvalStatus === "pending" && <div className="record-actions"><button disabled={statusBusy} onClick={() => onApproval(request.id, "approve")}>اعتماد طلب عرض السعر</button><button disabled={statusBusy} onClick={() => onApproval(request.id, "reject")}>رفض بدون تعديلات</button><button disabled={statusBusy} onClick={() => onApproval(request.id, "request-changes")}>إعادة للتعديل</button></div>}{canWrite && request.approvalStatus === "approved" && <button className="admin-primary" onClick={() => onConvert(request.id)}>تحويل الطلب إلى عرض سعر</button>}</div>}
         <div className="drawer-status">
           <span>حالة الطلب</span>
           {canWrite ? (

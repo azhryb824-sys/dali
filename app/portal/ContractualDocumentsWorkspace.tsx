@@ -40,6 +40,7 @@ type Quote = {
   updatedAt: string;
 };
 export default function ContractualDocumentsWorkspace({
+  initialTab="contracts",
   documents,
   contracts,
   canManage,
@@ -50,6 +51,7 @@ export default function ContractualDocumentsWorkspace({
   onCreateContract,
   onCreateQuotation,
 }: {
+  initialTab?: "contracts"|"quotes"|"letters";
   documents: Document[];
   contracts: Contract[];
   canManage: boolean;
@@ -57,12 +59,12 @@ export default function ContractualDocumentsWorkspace({
   canApprove: boolean;
   isAdmin: boolean;
   isOwner: boolean;
-  onCreateContract: (quoteId?: number) => void;
+  onCreateContract: (quoteId?: number, mode?: "as_is" | "modified") => void;
   onCreateQuotation: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<
       "contracts" | "quotes" | "letters"
-    >("contracts"),
+    >(initialTab),
     [letters, setLetters] = useState<Letter[]>([]),
     [quotes, setQuotes] = useState<Quote[]>([]),
     [notice, setNotice] = useState(""),

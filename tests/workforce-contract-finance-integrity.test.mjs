@@ -20,7 +20,7 @@ test("an inverted absence range produces no chargeable days", () => assert.equal
 test("overlapping single-day absence ranges are detected", () => assert.equal(absenceRangesOverlap("2026-09-03", null, "2026-09-03", null), true));
 test("touching inclusive absence ranges overlap", () => assert.equal(absenceRangesOverlap("2026-09-01", "2026-09-03", "2026-09-03", "2026-09-05"), true));
 test("separate absence ranges do not overlap", () => assert.equal(absenceRangesOverlap("2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"), false));
-test("worker profile salary overrides profession fallback", () => assert.equal(workerMonthlySalaryHalalas(225000, 200000), 225000));
+test("contract salary overrides the worker profile", () => assert.equal(workerMonthlySalaryHalalas(225000, 200000), 200000));
 test("profession salary is only a fallback", () => assert.equal(workerMonthlySalaryHalalas(0, 200000), 200000));
 
 test("assignment API requires contract and workforce write permissions", () => {
@@ -155,7 +155,7 @@ test("worker status changes verify the actual active assignment", () => {
 test("worker finance links can only target the worker active contract", () => {
   const route = read("app/api/portal/records/route.ts");
   assert.match(route, /لا يمكن ربط حركة العامل بعقد غير مسند إليه فعليًا/);
-  assert.match(route, /workerMonthlySalaryHalalas/);
+  assert.match(route, /calculateWorkerSalary/);
   assert.match(route, /workforce_contracts where id = \$\{contractId\} for update/);
   assert.match(route, /WORKER_FINANCE_OUTSIDE_ASSIGNMENT/);
 });
@@ -166,7 +166,7 @@ test("financial approval and payment remain separately authorized", () => {
   assert.match(route, /hasPortalPermission\(access, "finance", "pay"\)/);
 });
 
-test("dashboard only offers salary workers and contracts with active assignments", () => {
+test("dashboard limits salary choices to workers with current or historical assignments", () => {
   const dashboard = read("app/portal/PortalDashboard.tsx");
   assert.match(dashboard, /salaryWorkerIds/);
   assert.match(dashboard, /assignedContractIds/);

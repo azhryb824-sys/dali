@@ -140,6 +140,8 @@ const labels: Record<string, string> = {
   paid: "مدفوع",
   cancelled: "ملغى",
   bonus: "مكافأة",
+  leave_compensation: "بدل إجازة",
+  retroactive: "فروقات رجعية",
   advance: "سلفة",
   deduction: "خصم",
   allowance: "بدل",
@@ -519,6 +521,8 @@ export default function HrWorkspace({
                 </option>
                 {[
                   "bonus",
+                  "leave_compensation",
+                  "retroactive",
                   "advance",
                   "deduction",
                   "allowance",

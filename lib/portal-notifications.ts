@@ -1,3 +1,4 @@
+import { workerIncidents, quoteConversionRequests } from "@/db/schema";
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
@@ -38,7 +39,7 @@ import { issueDueContractInvoice } from "@/lib/contract-payment-invoicing";
 import { AUTOMATED_CONTRACT_BILLING_ACTOR, canAutomaticallyInvoiceContract } from "@/lib/contract-payment-integrity";
 
 export type NotificationSeverity = "info" | "success" | "warning" | "critical";
-export type NotificationModule = "overview" | "notifications" | "employees" | "finance" | "legal" | "government" | "tasks" | "workforce" | "construction" | "conversations" | "documents" | "contractual-documents" | "users" | "sales" | "operations" | "representatives" | "privacy" | "capacity" | "website";
+export type NotificationModule = "overview" | "notifications" | "employees" | "finance" | "legal" | "government" | "tasks" | "workforce" | "construction" | "conversations" | "documents" | "contractual-documents" | "users" | "sales" | "operations" | "representatives" | "privacy" | "capacity" | "website" | "workforce-supervision";
 
 export type PortalNotificationInput = {
   eventType: string;
@@ -214,6 +215,9 @@ export async function refreshOperationalNotifications(options: { force?: boolean
 
   const quoteRequestApprovals = await db.select().from(workforceRequests).where(and(eq(workforceRequests.requestType, "quotation"), eq(workforceRequests.approvalStatus, "pending"))).limit(1000);
   for (const item of quoteRequestApprovals) ensure({ dedupeKey: `quote-request-approval:${item.id}`, eventType: "quote-request-awaiting-approval", title: "طلب عرض سعر ينتظر الاعتماد", message: `${item.trackingCode} — ${item.companyName || item.fullName}`, severity: "warning", module: "workforce", entityType: "workforce-request", entityId: item.id, actionView: "workforce", targetRole: "admin", source: "system-check" });
+  const [pendingIncidents,pendingConversions]=await Promise.all([db.select().from(workerIncidents).where(eq(workerIncidents.status,"pending")).limit(1000),db.select().from(quoteConversionRequests).where(eq(quoteConversionRequests.status,"pending")).limit(1000)]);
+  for(const item of pendingIncidents)ensure({dedupeKey:`worker-incident-review:${item.id}`,eventType:"worker-incident-awaiting-review",title:"حالة عمالية تنتظر القرار",message:`${item.referenceCode} — ${item.reason}`,severity:"warning",module:"workforce",entityType:"worker-incident",entityId:item.id,actionView:"workforce-supervision",targetRole:"admin",source:"system-check"});
+  for(const item of pendingConversions)ensure({dedupeKey:`quote-conversion-review:${item.id}`,eventType:"quote-conversion-awaiting-review",title:"عرض سعر ينتظر التحويل إلى عقد",message:`عرض #${item.quoteVersionId}`,severity:"warning",module:"sales",entityType:"quote-version",entityId:item.quoteVersionId,actionView:"contractual-documents",targetRole:"admin",source:"system-check"});
   const returnedPeople = await db.select().from(legalReferrals).where(and(eq(legalReferrals.status, "returned"), inArray(legalReferrals.sourceType, ["employee", "worker"])));
   for (const referral of returnedPeople) {
     const newer = await db.query.legalReferrals.findFirst({ where: and(eq(legalReferrals.sourceType, referral.sourceType), eq(legalReferrals.sourceId, referral.sourceId)), orderBy: desc(legalReferrals.id) });

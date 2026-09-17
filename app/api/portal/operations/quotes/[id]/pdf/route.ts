@@ -1,3 +1,4 @@
+import { ownRepresentativeQuote } from "@/lib/quote-request-workflow";
 import { readCommercialTerms } from "@/lib/commercial-terms";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
@@ -19,9 +20,9 @@ function metadata(value: string | null) {
 }
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "contracts", "read"))) return Response.json({ error: "غير مصرح بتنزيل عرض السعر" }, { status: 403 });
   const id = Number((await context.params).id);
+  const access = await requirePortalApiRole(["admin", "manager", "employee"]);
+  if (!access || !((await hasPortalPermission(access, "contracts", "read")) || await ownRepresentativeQuote(access,id))) return Response.json({ error: "غير مصرح بتنزيل عرض السعر" }, { status: 403 });
   if (!Number.isInteger(id) || id < 1) return Response.json({ error: "عرض السعر غير صحيح" }, { status: 400 });
 
   const db = getDb();

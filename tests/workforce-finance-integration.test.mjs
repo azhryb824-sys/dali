@@ -10,10 +10,10 @@ test("contract profession separates client price from actual worker salary",()=>
   assert.match(ui,/الراتب الفعلي للعامل شهريًا/);
 });
 
-test("worker salary requires active assignment and a paid contract installment",()=>{
+test("worker salary requires an assignment for the period and a paid contract installment",()=>{
   const route=read("app/api/portal/records/route.ts");
   assert.match(route,/لا يمكن ربط حركة العامل بعقد غير مسند إليه فعليًا/);
-  assert.match(route,/payments\[0\]\.status !== "paid"/);
+  assert.match(route,/payments\[0\]\.status\s*!==\s*"paid"/);
   assert.match(route,/contractPaymentScheduleId: linkedPaymentScheduleId/);
   assert.match(route,/worker_violation/);
 });

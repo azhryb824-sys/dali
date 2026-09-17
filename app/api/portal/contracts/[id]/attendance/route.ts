@@ -1,3 +1,5 @@
+import { workerPayrollDeductions } from "@/db/schema";
+import { chargeableAbsenceDates } from "@/lib/workforce-finance-integrity";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { contractPaymentSchedules, contractProfessions, contractWorkerAbsences, contractWorkerAssignments, workers, workforceContracts } from "@/db/schema";
@@ -212,6 +214,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         updatedAt: now,
       }).returning();
 
+      if(workerId) await tx.insert(workerPayrollDeductions).values(chargeableAbsenceDates(absence.absenceDate,absence.absenceEndDate||absence.absenceDate).map(deductionDate=>({workerId,contractId:contract.id,absenceId:absence.id,deductionDate,amountHalalas:dailyRateHalalas})));
       const [updatedPayment] = await tx.update(contractPaymentSchedules).set({
         absenceDeductionHalalas: sql`${contractPaymentSchedules.absenceDeductionHalalas} + ${clientDeductionHalalas}`,
         updatedAt: now,
@@ -249,6 +252,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return jsonNoStore({ absence: result.absence, payment: result.payment }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+    if(message==="DEDUCTION_ALREADY_SETTLED")return jsonNoStore({error:"الخصم مرتبط براتب؛ ألغِ الراتب غير المرحل أولًا أو استخدم تسوية مالية عكسية"},{status:409});
     if (message === "CONTRACT_NOT_ACTIVE") return jsonNoStore({ error: "لا يمكن تسجيل الغياب إلا على عقد نشط" }, { status: 409 });
     if (message === "PROFESSION_CONTRACT_MISMATCH") return jsonNoStore({ error: "المهنة ليست ضمن هذا العقد" }, { status: 400 });
     if (message === "ABSENCE_OUTSIDE_CONTRACT") return jsonNoStore({ error: "فترة الغياب خارج مدة العقد" }, { status: 400 });
@@ -284,6 +288,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   try {
     const now = new Date().toISOString();
     const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select id from workforce_contracts where id=${contractId} for update`);
+      if(initialAbsence.workerId)await tx.execute(sql`select id from workers where id=${initialAbsence.workerId} for update`);
       await tx.execute(sql`select id from contract_payment_schedules where id = ${initialAbsence.paymentScheduleId} for update`);
       await tx.execute(sql`select id from contract_worker_absences where id = ${absenceId} for update`);
       const [[absence], [payment]] = await Promise.all([
@@ -306,6 +312,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       )).returning();
       if (!updatedPayment) throw new Error("PAYMENT_CHANGED");
 
+      const deductions=await tx.select().from(workerPayrollDeductions).where(eq(workerPayrollDeductions.absenceId,absenceId)).for("update");
+      if(deductions.some(d=>d.settledHalalas>0))throw new Error("DEDUCTION_ALREADY_SETTLED");
+      await tx.update(workerPayrollDeductions).set({voidedAt:now}).where(eq(workerPayrollDeductions.absenceId,absenceId));
       const [voided] = await tx.update(contractWorkerAbsences).set({
         status: "void",
         voidedBy: access.user.email,
@@ -342,6 +351,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return jsonNoStore(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
+    if(message==="DEDUCTION_ALREADY_SETTLED")return jsonNoStore({error:"الخصم مرتبط براتب؛ ألغِ الراتب غير المرحل أولًا أو استخدم تسوية مالية عكسية"},{status:409});
     if (message === "ABSENCE_CHANGED") return jsonNoStore({ error: "تغير قيد الغياب قبل تنفيذ الإلغاء" }, { status: 409 });
     if (message === "PAYMENT_ALREADY_PROCESSED") return jsonNoStore({ error: "لا يمكن إلغاء الخصم بعد إصدار الفاتورة أو معالجة الدفعة" }, { status: 409 });
     if (message === "PAYMENT_CHANGED") return jsonNoStore({ error: "تغيرت قيمة الدفعة قبل تنفيذ الإلغاء" }, { status: 409 });

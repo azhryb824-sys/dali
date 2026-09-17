@@ -1,5 +1,6 @@
 "use client";
 
+import WorkerIncidentsPanel from "./WorkerIncidentsPanel";
 import { useMemo, useState } from "react";
 
 type Contract = {
@@ -73,6 +74,7 @@ function sponsorshipMatches(worker: Worker, profession: Profession) {
 }
 
 export default function WorkforceSupervisionWorkspace({
+  selectedIncidentId,
   contracts,
   professions,
   assignments,
@@ -84,6 +86,7 @@ export default function WorkforceSupervisionWorkspace({
   onRelease,
   onWorkerStatus,
 }: {
+  selectedIncidentId?:number|null;
   contracts: Contract[];
   professions: Profession[];
   assignments: Assignment[];
@@ -176,7 +179,7 @@ export default function WorkforceSupervisionWorkspace({
   ).length;
 
   return (
-    <section className="workforce-supervision-workspace">
+    <section className="workforce-supervision-workspace"><WorkerIncidentsPanel selectedIncidentId={selectedIncidentId}/>
       <header className="feature-heading">
         <div>
           <span>التشغيل الميداني المرتبط بالعقود</span>

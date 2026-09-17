@@ -38,6 +38,8 @@ export const workforceRequests = pgTable(
     status: text("status").notNull().default("new"),
     source: text("source").notNull().default("public-website"),
     assignedTo: text("assigned_to"),
+    originEmail: text("origin_email"),
+    originConversationId: text("origin_conversation_id"),
     clientId: integer("client_id"),
     opportunityId: integer("opportunity_id"),
     idempotencyKey: text("idempotency_key").unique(),
@@ -57,7 +59,7 @@ export const workforceRequests = pgTable(
   },
   (table) => [
     index("workforce_requests_approval_idx").on(table.requestType, table.approvalStatus),
-    check("workforce_requests_approval_status_check", sql`${table.approvalStatus} in ('pending','approved','rejected')`),
+    check("workforce_requests_approval_status_check", sql`${table.approvalStatus} in ('pending','approved','rejected','changes_requested')`),
     index("workforce_requests_status_idx").on(table.status),
     index("workforce_requests_request_type_idx").on(table.requestType),
     index("workforce_requests_created_at_idx").on(table.createdAt),
@@ -885,7 +887,7 @@ export const employeeMovements = pgTable(
     ),
     check(
       "employee_movements_type_check",
-      sql`${table.movementType} in ('salary_adjustment','allowance','bonus','advance','deduction','leave','return_from_leave','suspension','termination','note')`,
+      sql`${table.movementType} in ('salary_adjustment','allowance','bonus','leave_compensation','retroactive','advance','deduction','leave','return_from_leave','suspension','termination','note')`,
     ),
     check(
       "employee_movements_status_check",
@@ -1083,6 +1085,8 @@ export const financialRecords = pgTable(
     category: text("category").notNull(),
     description: text("description").notNull(),
     amountHalalas: integer("amount_halalas").notNull(),
+    grossAmountHalalas: integer("gross_amount_halalas"),
+    deductionAmountHalalas: integer("deduction_amount_halalas").notNull().default(0),
     paidAmountHalalas: integer("paid_amount_halalas").notNull().default(0),
     subtotalHalalas: integer("subtotal_halalas"),
     vatHalalas: integer("vat_halalas").notNull().default(0),
@@ -1125,7 +1129,7 @@ export const financialRecords = pgTable(
     index("financial_records_period_month_idx").on(table.periodMonth),
     index("financial_records_posting_status_idx").on(table.postingStatus),
     uniqueIndex("financial_records_worker_salary_period_unique")
-      .on(table.workerId, table.periodMonth)
+      .on(table.workerId, table.contractId, table.periodMonth)
       .where(sql`${table.category} = 'worker_salary' and ${table.status} <> 'cancelled'`),
     check(
       "financial_records_posting_status_check",
@@ -2957,6 +2961,7 @@ export const representativeRequests = pgTable(
   {
     id: serial("id").primaryKey(),
     requestCode: text("request_code").notNull().unique(),
+    workforceRequestId: integer("workforce_request_id").unique().references(() => workforceRequests.id, { onDelete: "restrict" }),
     representativeId: integer("representative_id")
       .notNull()
       .references(() => salesRepresentatives.id, { onDelete: "restrict" }),
@@ -4824,3 +4829,55 @@ export const constructionCostEntries = pgTable(
     ),
   ],
 );
+
+export const quoteConversionRequests = pgTable("quote_conversion_requests", {
+  id: serial("id").primaryKey(),
+  quoteVersionId: integer("quote_version_id").notNull().unique().references(() => quoteVersions.id, { onDelete: "restrict" }),
+  requestedBy: text("requested_by").notNull(),
+  status: text("status").notNull().default("pending"),
+  contractId: integer("contract_id").references(() => workforceContracts.id, { onDelete: "restrict" }),
+  conversionMode: text("conversion_mode"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, table => [check("quote_conversion_status_check", sql`${table.status} in ('pending','converted','rejected')`)]);
+
+export const workerIncidents = pgTable("worker_incidents", {
+  id: serial("id").primaryKey(), referenceCode: text("reference_code").notNull().unique(),
+  workerId: integer("worker_id").notNull().references(() => workers.id, {onDelete:"restrict"}),
+  contractId: integer("contract_id").notNull().references(() => workforceContracts.id, {onDelete:"restrict"}),
+  assignmentId: integer("assignment_id").notNull().references(() => contractWorkerAssignments.id, {onDelete:"restrict"}),
+  incidentType: text("incident_type").notNull(), reasonCode: text("reason_code").notNull(), reason: text("reason").notNull(),
+  startDate: text("start_date").notNull(), endDate: text("end_date").notNull(),
+  fileName: text("file_name"), storageKey: text("storage_key"), contentType: text("content_type"), sizeBytes: integer("size_bytes"),
+  status: text("status").notNull().default("pending"), decisionReason: text("decision_reason"),
+  warning: boolean("warning").notNull().default(false), deduct: boolean("deduct").notNull().default(false),
+  releaseWorker: boolean("release_worker").notNull().default(false), archiveWorker: boolean("archive_worker").notNull().default(false),
+  chargeableDays: integer("chargeable_days").notNull().default(0), monthlySalaryHalalas: integer("monthly_salary_halalas").notNull().default(0), deductionHalalas: integer("deduction_halalas").notNull().default(0),
+  createdBy: text("created_by").notNull(), decidedBy: text("decided_by"), decidedAt: text("decided_at"),
+  version: integer("version").notNull().default(1),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`), updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+}, t=>[
+  index("worker_incidents_status_idx").on(t.status,t.createdAt),index("worker_incidents_worker_idx").on(t.workerId,t.startDate),
+  check("worker_incidents_status_check",sql`${t.status} in ('pending','accepted','rejected')`),
+  check("worker_incidents_type_check",sql`${t.incidentType} in ('absence','abandonment','work_injury','sick_leave','other')`),
+  check("worker_incidents_medical_file_check",sql`${t.incidentType} not in ('work_injury','sick_leave') or ${t.storageKey} is not null`),
+  check("worker_incidents_dates_check",sql`${t.endDate} >= ${t.startDate}`),
+]);
+export const workerPayrollDeductions = pgTable("worker_payroll_deductions", {
+  id:serial("id").primaryKey(),workerId:integer("worker_id").notNull().references(()=>workers.id,{onDelete:"restrict"}),
+  contractId:integer("contract_id").notNull().references(()=>workforceContracts.id,{onDelete:"restrict"}),
+  incidentId:integer("incident_id").references(()=>workerIncidents.id,{onDelete:"restrict"}),
+  absenceId:integer("absence_id").references(()=>contractWorkerAbsences.id,{onDelete:"restrict"}),
+  deductionDate:text("deduction_date").notNull(),amountHalalas:integer("amount_halalas").notNull(),
+  settledHalalas:integer("settled_halalas").notNull().default(0),voidedAt:text("voided_at"),
+  createdAt:text("created_at").notNull().default(sql`CURRENT_TIMESTAMP::text`),
+},t=>[uniqueIndex("worker_payroll_deduction_day_unique").on(t.workerId,t.deductionDate).where(sql`${t.voidedAt} is null`),
+  check("worker_payroll_deduction_amount_check",sql`${t.amountHalalas}>0 and ${t.settledHalalas}>=0 and ${t.settledHalalas}<=${t.amountHalalas}`),
+  check("worker_payroll_deduction_source_check",sql`(${t.incidentId} is not null)::int + (${t.absenceId} is not null)::int = 1`),
+  check("worker_payroll_deduction_friday_check",sql`extract(isodow from ${t.deductionDate}::date) <> 5`),
+]);
+export const workerSalaryAllocations = pgTable("worker_salary_allocations",{
+  id:serial("id").primaryKey(),financialRecordId:integer("financial_record_id").notNull().references(()=>financialRecords.id,{onDelete:"restrict"}),
+  deductionId:integer("deduction_id").notNull().references(()=>workerPayrollDeductions.id,{onDelete:"restrict"}),
+  amountHalalas:integer("amount_halalas").notNull(),reversedAt:text("reversed_at"),
+},t=>[uniqueIndex("worker_salary_allocation_unique").on(t.financialRecordId,t.deductionId).where(sql`${t.reversedAt} is null`),check("worker_salary_allocation_amount_check",sql`${t.amountHalalas}>0`)]);

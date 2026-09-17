@@ -37,6 +37,12 @@ export async function GET() {
   );
   const visibleRepresentatives = owner ? representatives : ownRepresentatives;
   const ownRepresentativeIds = ownRepresentatives.map((item) => item.id);
+  const visibleRequests = owner ? requestRows : requestRows.filter(item => ownRepresentativeIds.includes(item.representativeId));
+  const enrichedRequests = await Promise.all(visibleRequests.map(async item => ({...item,
+    sourceRequest: item.workforceRequestId ? await db.query.workforceRequests.findFirst({where:(t,{eq})=>eq(t.id,item.workforceRequestId!)}) : null,
+    quote: item.quoteVersionId ? await db.query.quoteVersions.findFirst({where:(t,{eq})=>eq(t.id,item.quoteVersionId!)}) : null,
+    conversion: item.quoteVersionId ? await db.query.quoteConversionRequests.findFirst({where:(t,{eq})=>eq(t.quoteVersionId,item.quoteVersionId!)}) : null,
+  })));
   return jsonNoStore({
     representatives: visibleRepresentatives.map((item) => ({
       ...item,
@@ -44,7 +50,7 @@ export async function GET() {
       contractCount: contractRows.filter((row) => row.salesRepresentativeId === item.id).length,
       contractValueHalalas: contractRows.filter((row) => row.salesRepresentativeId === item.id && !["cancelled", "terminated"].includes(row.status)).reduce((sum, row) => sum + row.amountHalalas, 0),
     })),
-    requests: owner ? requestRows : requestRows.filter((item) => ownRepresentativeIds.includes(item.representativeId)),
+    requests: enrichedRequests,
     isOwner: owner,
   });
 }

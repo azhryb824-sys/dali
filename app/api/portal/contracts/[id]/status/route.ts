@@ -58,6 +58,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     if (["signed", "terminated", "cancelled", "superseded"].includes(status) && !canApprove) return jsonNoStore({ error: "هذه المرحلة تتطلب صلاحية المالك أو مشرف النظام" }, { status: 403 });
     if (status === "active" && !contract.approvedBy) return jsonNoStore({ error: "لا يمكن تفعيل العقد قبل اعتماده من المالك أو مشرف النظام" }, { status: 409 });
+    if(status==="active" && (new Date().toISOString().slice(0,10)<contract.startDate || new Date().toISOString().slice(0,10)>contract.endDate))return jsonNoStore({error:"لا يمكن تفعيل العقد خارج فترة سريانه"},{status:409});
     const plannedAssignments = status === "active"
       ? await db.select().from(contractWorkerAssignments).where(and(eq(contractWorkerAssignments.contractId, id), eq(contractWorkerAssignments.status, "planned")))
       : [];

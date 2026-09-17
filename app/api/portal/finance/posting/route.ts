@@ -1,4 +1,6 @@
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { emitPortalNotification } from "@/lib/portal-notifications";
+import { calculateWorkerSalary } from "@/lib/worker-payroll";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { bankAccounts, chartOfAccounts, financialRecords, journalEntries, workforceContracts } from "@/db/schema";
 import { createDraftJournal, type JournalLineInput } from "@/lib/accounting";
@@ -26,14 +28,22 @@ export async function POST(request:Request){
   if(!access||!(await hasPortalPermission(access,"finance","write")))return jsonNoStore({error:"غير مصرح"},{status:403});
   try{
     const payload=await request.json() as Record<string,unknown>;const recordId=positiveId(payload.recordId);const db=getDb();
-    const record=await db.query.financialRecords.findFirst({where:and(eq(financialRecords.id,recordId),isNull(financialRecords.journalEntryId))});
+    const initial=await db.query.financialRecords.findFirst({where:eq(financialRecords.id,recordId)});
+    const response=await db.transaction(async db=>{
+    if(initial?.workerId)await db.execute(sql`select id from workers where id=${initial.workerId} for update`);
+    const [record]=await db.select().from(financialRecords).where(and(eq(financialRecords.id,recordId),isNull(financialRecords.journalEntryId))).for("update");
     if(!record)return jsonNoStore({error:"السجل غير موجود أو سبق إنشاء قيده"},{status:409});
+    if(record.category==="worker_salary"&&(record.status!=="approved"||record.amountHalalas<=0))return jsonNoStore({error:"اعتمد راتبًا بصافي موجب قبل إنشاء قيده"},{status:409});
+    if(record.category==="worker_salary"){
+      const expected=await calculateWorkerSalary(db,record.workerId!,record.contractId!,record.periodMonth!);
+      if(expected.grossAmountHalalas!==record.grossAmountHalalas||expected.deductionAmountHalalas>0)return jsonNoStore({error:"تغيرت تسوية الراتب؛ ألغِ السجل غير المرحل وأعد إنشاؤه"},{status:409});
+    }
     const accounts=await db.select().from(chartOfAccounts).where(and(eq(chartOfAccounts.isPosting,true),eq(chartOfAccounts.status,"active")));
     const account=(code:string)=>accounts.find(item=>item.code===code);let debitCode="";let creditCode="";let description=record.description;
-    const isRevenue=["workforce_invoice","invoice","progress_claim"].includes(record.category);const isExpense=["payment_voucher","worker_expense","expense","government_fee","workforce_supplier_payable"].includes(record.category);
+    const isRevenue=["workforce_invoice","invoice","progress_claim"].includes(record.category);const isExpense=["payment_voucher","worker_expense","worker_salary","expense","government_fee","workforce_supplier_payable"].includes(record.category);
     if(isRevenue){debitCode="1300";creditCode=record.contractId?"4000":"4100";description=`إثبات إيراد — ${record.description}`;}
     else if(record.category==="receipt_voucher"){debitCode=record.paymentMethod==="cash"?"1100":"1200";creditCode="1300";description=`تحصيل من عميل — ${record.description}`;}
-    else if(isExpense){debitCode=record.category==="worker_expense"?"5100":"5200";creditCode=record.paymentMethod==="cash"?"1100":["bank_transfer","cheque","payroll_file"].includes(record.paymentMethod||"")?"1200":"2100";description=`إثبات مصروف — ${record.description}`;}
+    else if(isExpense){debitCode=["worker_expense","worker_salary"].includes(record.category)?"5100":"5200";creditCode=record.paymentMethod==="cash"?"1100":["bank_transfer","cheque","payroll_file"].includes(record.paymentMethod||"")?"1200":"2100";description=`إثبات مصروف — ${record.description}`;}
     else return jsonNoStore({error:"هذه الحركة تُرحّل من وحدتها المتخصصة ولا تقبل قيدًا يدويًا هنا"},{status:409});
     let bankAccountId:number|null=null;let bankLedgerAccountId:number|null=null;
     if(debitCode==="1200"||creditCode==="1200"){if(!record.bankAccountId)return jsonNoStore({error:"اختر الحساب البنكي قبل إنشاء القيد"},{status:409});const bank=await db.query.bankAccounts.findFirst({where:and(eq(bankAccounts.id,record.bankAccountId),eq(bankAccounts.status,"active"))});if(!bank)return jsonNoStore({error:"الحساب البنكي غير صالح"},{status:409});bankAccountId=bank.id;bankLedgerAccountId=bank.ledgerAccountId;}
@@ -41,10 +51,14 @@ export async function POST(request:Request){
     if(!debit||!credit||(record.vatHalalas>0&&isRevenue&&!taxPayable)||(record.vatHalalas>0&&isExpense&&!taxRecoverable))return jsonNoStore({error:"يجب تهيئة دليل الحسابات والضريبة قبل إنشاء القيد"},{status:409});
     const subtotal=record.subtotalHalalas||record.amountHalalas-record.vatHalalas;const lines:JournalLineInput[]=isRevenue?[{accountId:debit.id,debitHalalas:record.amountHalalas,description},{accountId:credit.id,creditHalalas:subtotal,description:`إيراد قبل الضريبة — ${record.description}`}]:isExpense?[{accountId:debit.id,debitHalalas:subtotal,description:`مصروف قبل الضريبة — ${record.description}`},{accountId:credit.id,creditHalalas:record.amountHalalas,description}]:[{accountId:debit.id,debitHalalas:record.amountHalalas,description},{accountId:credit.id,creditHalalas:record.amountHalalas,description}];
     if(record.vatHalalas>0&&isRevenue&&taxPayable)lines.push({accountId:taxPayable.id,creditHalalas:record.vatHalalas,description:`ضريبة مخرجات — ${record.description}`});if(record.vatHalalas>0&&isExpense&&taxRecoverable)lines.push({accountId:taxRecoverable.id,debitHalalas:record.vatHalalas,description:`ضريبة مدخلات — ${record.description}`});if(bankAccountId){for(const line of lines){if(line.accountId===bankLedgerAccountId)line.bankAccountId=bankAccountId;}}
-    const journal=await createDraftJournal({entryDate:record.dueDate,description,sourceType:"financial-record",sourceId:String(record.id),actorEmail:access.user.email,lines});
+    const journal=await createDraftJournal({entryDate:record.dueDate,description,sourceType:"financial-record",sourceId:String(record.id),actorEmail:access.user.email,lines},db);
     const [updated]=await db.update(financialRecords).set({journalEntryId:journal.entry.id,postingStatus:"draft",updatedAt:new Date().toISOString()}).where(and(eq(financialRecords.id,record.id),isNull(financialRecords.journalEntryId))).returning();
     if(!updated){await db.delete(journalEntries).where(eq(journalEntries.id,journal.entry.id));return jsonNoStore({error:"أنشأ مستخدم آخر قيدًا لهذا السجل"},{status:409});}
     await auditPortalAction({actorEmail:access.user.email,action:"financial-journal-created",entityType:"financial-record",entityId:record.id,before:record,after:updated});return jsonNoStore({record:updated,journal:journal.entry},{status:201});
+    });
+    if(response.status===201)await emitPortalNotification({eventType:"financial-journal-created",title:"قيد مالي جاهز للاعتماد",message:initial?.referenceCode||String(recordId),severity:"info",module:"finance",entityType:"financial-record",entityId:recordId,actionView:"finance",targetDepartment:"finance"}).catch(()=>undefined);
+    return response;
+
   }catch(error){return jsonNoStore({error:error instanceof Error?error.message:"تعذّر إنشاء القيد"},{status:400});}
 }
 

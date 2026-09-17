@@ -1,3 +1,4 @@
+import { quoteConversionRequests } from "@/db/schema";
 import { commercialTextFields, readCommercialTerms } from "@/lib/commercial-terms";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
@@ -170,8 +171,9 @@ export async function POST(request: Request) {
     const vatRate = vatEnabled ? Number(payload.vatRate || 15) : 0;
     const linkedContractId = parsePositiveId(payload.linkedContractId);
     let sourceRequestId = parsePositiveId(payload.sourceRequestId);
-    const salesRepresentativeId = parsePositiveId(payload.salesRepresentativeId);
+    let salesRepresentativeId = parsePositiveId(payload.salesRepresentativeId);
     const representativeRequestId = parsePositiveId(payload.representativeRequestId);
+    const conversionMode = payload.conversionMode === "modified" ? "modified" : "as_is";
     const quoteVersionId = parsePositiveId(payload.quoteVersionId);
     const quantityMode = payload.quantityMode === "open" ? "open" : "fixed";
     const contractDirection: WorkforceContractDirection = payload.contractDirection === "dali_purchaser" ? "dali_purchaser" : "dali_supplier";
@@ -284,7 +286,7 @@ export async function POST(request: Request) {
     if (linkedContractId && !linkedContract) return Response.json({ error: "العقد المرتبط غير موجود" }, { status: 404 });
     if (documentType === "invoice" && linkedContract) return Response.json({ error: "تُصدر فاتورة العقد من جدول دفعات العقد حتى يدخل خصم الغياب في المبلغ والضريبة تلقائيًا" }, { status: 409 });
     if (sourceRequest?.requestType === "quotation" && (!sourceRequest.approvedBy || sourceRequest.approvalStatus !== "approved" || !sourceQuote)) return Response.json({ error: "يتطلب طلب عرض السعر اعتماده ثم تحويله إلى عرض سعر معتمد قبل إنشاء العقد" }, { status: 409 });
-    if (sourceQuote?.commercialTermsJson) {
+    if (conversionMode === "as_is" && sourceQuote?.commercialTermsJson) {
       const approvedTerms = readCommercialTerms(sourceQuote.commercialTermsJson);
       const submittedTerms = readCommercialTerms(payload);
       for (const spec of commercialTextFields) {
@@ -295,15 +297,16 @@ export async function POST(request: Request) {
       if (approvedTerms.contractClauses.length && JSON.stringify(approvedTerms.contractClauses) !== JSON.stringify(submittedTerms.contractClauses)) return Response.json({ error: "بنود العقد لا تطابق العرض المعتمد؛ أنشئ إصدارًا مطابقًا واعتمده أولًا" }, { status: 409 });
       if (approvedTerms.contractDirection !== contractDirection) return Response.json({ error: "اتجاه العقد لا يطابق العرض المعتمد" }, { status: 409 });
     }
-    if (sourceQuote && sourceQuote.quantityMode !== quantityMode) return Response.json({ error: "نوع العدد في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
-    if (sourceQuote && ((sourceQuote.accommodationParty && (sourceQuote.accommodationParty === "dali" ? "توفره دالي" : "يوفره الطرف الثاني") !== accommodationParty) || (sourceQuote.transportParty && (sourceQuote.transportParty === "dali" ? "توفره دالي" : "يوفره الطرف الآخر") !== transportParty))) return Response.json({ error: "مسؤولية السكن والنقل يجب أن تطابق العرض المعتمد" }, { status: 409 });
-    if (sourceQuote && sourceQuote.seasonType !== seasonType) return Response.json({ error: "نوع الموسم والفوترة في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
-    if (sourceQuote && seasonType !== "regular" && quantityMode === "fixed") {
+    if (conversionMode === "as_is" && sourceQuote && sourceQuote.quantityMode !== quantityMode) return Response.json({ error: "نوع العدد في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && ((sourceQuote.accommodationParty && (sourceQuote.accommodationParty === "dali" ? "توفره دالي" : "يوفره الطرف الثاني") !== accommodationParty) || (sourceQuote.transportParty && (sourceQuote.transportParty === "dali" ? "توفره دالي" : "يوفره الطرف الآخر") !== transportParty))) return Response.json({ error: "مسؤولية السكن والنقل يجب أن تطابق العرض المعتمد" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && sourceQuote.seasonType !== seasonType) return Response.json({ error: "نوع الموسم والفوترة في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && seasonType !== "regular" && quantityMode === "fixed") {
       const sourceSchedule = parsePaymentSchedule(sourceQuote.paymentScheduleJson);
       if (!validateSeasonalSchedule(sourceSchedule)) return Response.json({ error: "عرض السعر الموسمي المرتبط لا يحتوي جدول دفعات معتمدًا" }, { status: 409 });
       paymentSchedule = parsePayments(sourceSchedule.map((row) => ({ title: row.title, titleEn: row.titleEn, dueDate: row.dueDate, percentage: row.percentageBps / 100 })), contractAmountHalalas, vatEnabled ? Math.round(vatRate * 100) : 0);
     }
     const sourceOpportunity = sourceQuote ? await db.query.salesOpportunities.findFirst({ where: eq(salesOpportunities.id, sourceQuote.opportunityId) }) : null;
+    if(!salesRepresentativeId && sourceOpportunity?.salesRepresentativeId) salesRepresentativeId=sourceOpportunity.salesRepresentativeId;
     if (sourceOpportunity?.sourceRequestId) {
       sourceRequestId = sourceOpportunity.sourceRequestId;
       const approvedRequest = await db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) });
@@ -311,18 +314,18 @@ export async function POST(request: Request) {
     }
     const sourceQuoteItems = sourceQuote ? await db.select().from(quoteItems).where(eq(quoteItems.quoteVersionId, sourceQuote.id)) : [];
     if (sourceQuote && (!sourceOpportunity || !sourceQuoteItems.length)) return Response.json({ error: "بيانات عرض السعر المرتبط غير مكتملة" }, { status: 409 });
-    if (sourceQuote && (sourceQuote.quantityMode === "open" ? professionInputs.some(item => item.requiredCount !== 0) : sourceQuoteItems.some(item => !professionInputs.some(profession => profession.profession === item.profession && profession.requiredCount === item.quantity && profession.sponsorshipType === item.sponsorshipType && profession.sponsorName === item.sponsorName && profession.ajirContractStatus === item.ajirContractStatus)))) return Response.json({ error: "مهن وأعداد وتوزيعات الكفالة في العقد لا تطابق عرض السعر المقبول" }, { status: 409 });
-    if (sourceQuote && professionInputs.length !== sourceQuoteItems.length) return Response.json({ error: "عدد توزيعات المهن والكفلاء في العقد لا يطابق عرض السعر المقبول" }, { status: 409 });
-    if (sourceQuote && sourceQuoteItems.some((quoteItem) => !professionInputs.some((profession) =>
+    if (conversionMode === "as_is" && sourceQuote && (sourceQuote.quantityMode === "open" ? professionInputs.some(item => item.requiredCount !== 0) : sourceQuoteItems.some(item => !professionInputs.some(profession => profession.profession === item.profession && profession.requiredCount === item.quantity && profession.sponsorshipType === item.sponsorshipType && profession.sponsorName === item.sponsorName && profession.ajirContractStatus === item.ajirContractStatus)))) return Response.json({ error: "مهن وأعداد وتوزيعات الكفالة في العقد لا تطابق عرض السعر المقبول" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && professionInputs.length !== sourceQuoteItems.length) return Response.json({ error: "عدد توزيعات المهن والكفلاء في العقد لا يطابق عرض السعر المقبول" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && sourceQuoteItems.some((quoteItem) => !professionInputs.some((profession) =>
       profession.profession === quoteItem.profession
       && profession.sponsorshipType === quoteItem.sponsorshipType
       && profession.sponsorName === quoteItem.sponsorName
       && profession.ajirContractStatus === quoteItem.ajirContractStatus
     ))) return Response.json({ error: "بيانات الكفالة وأجير في العقد يجب أن تطابق عرض السعر المقبول" }, { status: 409 });
-    if (sourceQuote && sourceQuoteItems.some(item => !professionInputs.some(profession => profession.profession === item.profession && profession.sponsorshipType === item.sponsorshipType && profession.sponsorName === item.sponsorName && profession.ajirContractStatus === item.ajirContractStatus && profession.unitSalaryHalalas === item.unitPriceHalalas && profession.actualSalaryHalalas === item.actualSalaryHalalas))) return Response.json({ error: "أسعار البنود والرواتب يجب أن تطابق العرض المعتمد" }, { status: 409 });
-    if (sourceQuote && sourceQuote.seasonType === "regular" && sourceQuoteItems.some((item) => item.durationMonths !== 12)) return Response.json({ error: "عرض السعر السنوي مرتبط بمدة غير 12 شهرًا؛ أنشئ إصدارًا مصححًا قبل تحويله إلى عقد" }, { status: 409 });
-    if (sourceQuote && quantityMode === "fixed" && contractAmountHalalas !== sourceQuote.subtotalHalalas) return Response.json({ error: "قيمة العقد يجب أن تطابق قيمة عرض السعر قبل الضريبة" }, { status: 409 });
-    if (sourceQuote && Math.round(vatRate * 100) !== sourceQuote.vatRateBps) return Response.json({ error: "نسبة ضريبة العقد يجب أن تطابق عرض السعر" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && sourceQuoteItems.some(item => !professionInputs.some(profession => profession.profession === item.profession && profession.sponsorshipType === item.sponsorshipType && profession.sponsorName === item.sponsorName && profession.ajirContractStatus === item.ajirContractStatus && profession.unitSalaryHalalas === item.unitPriceHalalas && profession.actualSalaryHalalas === item.actualSalaryHalalas))) return Response.json({ error: "أسعار البنود والرواتب يجب أن تطابق العرض المعتمد" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && sourceQuote.seasonType === "regular" && sourceQuoteItems.some((item) => item.durationMonths !== 12)) return Response.json({ error: "عرض السعر السنوي مرتبط بمدة غير 12 شهرًا؛ أنشئ إصدارًا مصححًا قبل تحويله إلى عقد" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && quantityMode === "fixed" && contractAmountHalalas !== sourceQuote.subtotalHalalas) return Response.json({ error: "قيمة العقد يجب أن تطابق قيمة عرض السعر قبل الضريبة" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && Math.round(vatRate * 100) !== sourceQuote.vatRateBps) return Response.json({ error: "نسبة ضريبة العقد يجب أن تطابق عرض السعر" }, { status: 409 });
     const assets = await db.select().from(companyAssets);
     if (!assets.some((asset) => asset.slot === "stamp") || !assets.some((asset) => asset.slot === "signature")) {
       return Response.json({ error: "ارفع الختم والتوقيع المعتمدين أولاً" }, { status: 409 });
@@ -471,7 +474,7 @@ export async function POST(request: Request) {
         sizeBytes: pdfBytes.byteLength,
         expiryDate: documentType === "workforce_contract" ? endDate : expiryDate,
         source: "generated",
-        metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, sourceRequestId, representativeRequestId, salesRepresentativeId, quoteVersionId, quantityMode, contractDirection, contractClauses: clauseInputs, allWorkersWithAjir, clientMobile: cleanText(payload.clientMobile, 30), clientEmail: cleanText(payload.clientEmail, 160), clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, titleEn, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, detailsEn: detailsEn || null, workSite, startDate, endDate, paymentTerms, paymentSchedule, showPaymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: documentType === "invoice" ? "letterhead-v5-english-invoice-copy" : "letterhead-v5-contract-controls" }),
+        metadataJson: JSON.stringify({ conversionMode, sourceQuoteSnapshot: sourceQuote ? {quoteCode:sourceQuote.quoteCode,versionNumber:sourceQuote.versionNumber,commercialTermsJson:sourceQuote.commercialTermsJson,items:sourceQuoteItems} : null, clientId: client?.id || null, supplierId: supplier?.id || null, sourceRequestId, representativeRequestId, salesRepresentativeId, quoteVersionId, quantityMode, contractDirection, contractClauses: clauseInputs, allWorkersWithAjir, clientMobile: cleanText(payload.clientMobile, 30), clientEmail: cleanText(payload.clientEmail, 160), clientCr, clientVat, clientAddress, clientRepresentative, clientRepresentativeTitle, issueDate, titleEn, amountHalalas, subtotalHalalas, vatHalalas, vatRateBps, details, detailsEn: detailsEn || null, workSite, startDate, endDate, paymentTerms, paymentSchedule, showPaymentSchedule, workingHours, weeklyOff, accommodationParty, transportParty, specialTerms, professions: professionInputs, capacity, linkedContractId, templateVersion: documentType === "invoice" ? "letterhead-v5-english-invoice-copy" : "letterhead-v5-contract-controls" }),
         createdBy: access.user.email,
       }).returning();
 
@@ -516,6 +519,7 @@ export async function POST(request: Request) {
         for (const uploaded of uploadedClientFiles) {
           await tx.insert(companyDocuments).values({ referenceCode: makeReference("CLD"), title: `${uploaded.label} - ${clientName}`, category: "certificate", documentType: uploaded.kind, counterparty: clientName, fileName: uploaded.fileName, storageKey: uploaded.storageKey, contentType: uploaded.contentType, sizeBytes: uploaded.sizeBytes, source: "uploaded", validationStatus: "signature-validated", validationDetails: uploaded.validationDetails, metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, clientName, contractId: contract.id, contractReference: contract.referenceCode, documentKind: uploaded.kind }), createdBy: access.user.email });
         }
+        if (quoteVersionId) await tx.update(quoteConversionRequests).set({status:"converted",contractId:contract.id,conversionMode,updatedAt:new Date().toISOString()}).where(eq(quoteConversionRequests.quoteVersionId,quoteVersionId));
         professionRecords = await tx.insert(contractProfessions).values(professionInputs.map((item) => ({ contractId: contract!.id, profession: item.profession, requiredCount: item.requiredCount, unitSalaryHalalas: item.unitSalaryHalalas, actualSalaryHalalas: item.actualSalaryHalalas, sponsorshipType: item.sponsorshipType, sponsorName: item.sponsorName, ajirContractStatus: item.ajirContractStatus }))).returning();
         for (const professionRecord of professionRecords) {
           const input = professionInputs.find((item) => item.profession === professionRecord.profession)!;

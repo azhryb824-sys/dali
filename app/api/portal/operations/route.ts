@@ -1,3 +1,4 @@
+import { representativeRequests, quoteConversionRequests } from "@/db/schema";
 import { commercialTermsFromRequest, readCommercialTerms } from "@/lib/commercial-terms";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
@@ -228,6 +229,7 @@ export async function GET(request: Request) {
     const quoteRequests = canSeeContracts ? await getDb().select().from(workforceRequests).where(eq(workforceRequests.requestType, "quotation")).orderBy(desc(workforceRequests.updatedAt)).limit(200) : [];
     return jsonNoStore({
       quoteRequests,
+      conversionRequests: canSeeContracts ? await getDb().select().from(quoteConversionRequests).where(eq(quoteConversionRequests.status, "pending")) : [],
       clients: clientRows,
       contacts: contactRows,
       opportunities: opportunityRows,
@@ -685,13 +687,20 @@ async function createRecord(
     ]
       .filter(Boolean)
       .join("\n");
-    const [quote] = await db
+    const quote = await db.transaction(async tx => {
+      if (sourceRequest) {
+        const [locked] = await tx.select().from(workforceRequests).where(eq(workforceRequests.id,sourceRequest.id)).for("update");
+        if (!locked?.approvedBy || locked.approvalStatus!=="approved") throw new Error("طلب عرض السعر غير معتمد");
+        const linkedRep = await tx.query.representativeRequests.findFirst({where:eq(representativeRequests.workforceRequestId,sourceRequest.id)});
+        if (linkedRep?.quoteVersionId) throw new Error("أُنشئ عرض لهذا الطلب؛ استخدم إصدار العرض المرتبط");
+      }
+    const [quote] = await tx
       .insert(quoteVersions)
       .values({
         quoteCode: code("QUO"),
         opportunityId: opportunity.id,
         versionNumber: 1,
-        status: "draft",
+        status: sourceRequest?.originEmail ? "pending_approval" : "draft",
         issueDate,
         validUntil,
         quantityMode,
@@ -711,17 +720,15 @@ async function createRecord(
         createdBy: actor,
       })
       .returning();
-    try {
-      await db.insert(quoteItems).values(
-        normalizedItems.map((item) => ({
-          ...item,
-          quoteVersionId: quote.id,
-        })),
-      );
-    } catch (error) {
-      await db.delete(quoteVersions).where(eq(quoteVersions.id, quote.id));
-      throw error;
+    await tx.insert(quoteItems).values(normalizedItems.map(item => ({...item, quoteVersionId:quote.id})));
+    if (sourceRequest) {
+      const [repRequest] = await tx.update(representativeRequests).set({status:"converted",quoteVersionId:quote.id,updatedAt:new Date().toISOString()}).where(eq(representativeRequests.workforceRequestId,sourceRequest.id)).returning();
+      await tx.update(workforceRequests).set({opportunityId:opportunity!.id,clientId:opportunity!.clientId}).where(eq(workforceRequests.id,sourceRequest.id));
+      if (repRequest) await tx.update(salesOpportunities).set({salesRepresentativeId:repRequest.representativeId}).where(eq(salesOpportunities.id,opportunity!.id));
     }
+    if(quote.status==="pending_approval")await tx.insert(workflowApprovals).values({entityType:"quote-version",entityId:String(quote.id),step:"commercial-approval",status:"pending",requestedBy:actor,assignedRole:"admin"});
+    return quote;
+    });
     await db
       .update(salesOpportunities)
       .set({
@@ -748,7 +755,7 @@ async function createRecord(
     await recordStatusChange({
       entityType: "quote-version",
       entityId: quote.id,
-      toStatus: "draft",
+      toStatus: quote.status,
       actorEmail: actor,
       correlationId,
     });
@@ -760,7 +767,7 @@ async function createRecord(
     });
     await emitPortalNotification({
       eventType: "quote-created",
-      title: "أُنشئ عرض سعر",
+      title: quote.status==="pending_approval"?"عرض سعر ينتظر اعتماد المالك أو المشرف":"أُنشئ عرض سعر",
       message:
         quantityMode === "open"
           ? `${quote.quoteCode} — عرض بعدد مفتوح.`
@@ -769,8 +776,9 @@ async function createRecord(
       module: "sales",
       entityType: "quote-version",
       entityId: quote.id,
-      actionView: "operations",
-      targetDepartment: "workforce",
+      actionView: "contractual-documents",
+      targetDepartment: quote.status==="pending_approval"?undefined:"workforce",
+      targetRole: quote.status==="pending_approval"?"admin":undefined,
     }).catch(() => undefined);
     return { quote, items: normalizedItems };
   }
@@ -864,6 +872,8 @@ async function createRecord(
       await db.delete(quoteVersions).where(eq(quoteVersions.id, quote.id));
       throw error;
     }
+    await db.update(representativeRequests).set({quoteVersionId:quote.id,updatedAt:new Date().toISOString()}).where(eq(representativeRequests.quoteVersionId,source.id));
+    await db.update(quoteConversionRequests).set({status:"rejected",updatedAt:new Date().toISOString()}).where(and(eq(quoteConversionRequests.quoteVersionId,source.id),eq(quoteConversionRequests.status,"pending")));
     await recordStatusChange({
       entityType: "quote-version",
       entityId: source.id,
@@ -1738,6 +1748,11 @@ async function transitionRecord(
       .returning();
     if (!updated)
       throw new Error("تعارض في إصدار العرض؛ حدّث الصفحة وحاول مجددًا");
+    if (nextStatus === "approved") {
+      const origin = await db.query.salesOpportunities.findFirst({where:eq(salesOpportunities.id,item.opportunityId)});
+      const source = origin?.sourceRequestId ? await db.query.workforceRequests.findFirst({where:eq(workforceRequests.id,origin.sourceRequestId)}) : null;
+      if (source?.originEmail) await emitPortalNotification({eventType:"representative-quote-approved",title:"عرض السعر جاهز للمشاركة",message:`${updated.quoteCode} — يمكنك مشاركة PDF وطلب التحويل إلى عقد.`,severity:"success",module:"sales",entityType:"quote-version",entityId:id,actionView:source.source==="representative"?"representatives":"conversations",targetEmail:source.originEmail}).catch(()=>undefined);
+    }
     if (nextStatus === "pending_approval")
       await db.insert(workflowApprovals).values({
         entityType: "quote-version",
