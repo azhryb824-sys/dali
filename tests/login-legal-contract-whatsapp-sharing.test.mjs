@@ -71,6 +71,8 @@ test("approved contracts require an entered WhatsApp number and role permissions
   assert.match(files, /bridge\.Plugins/);
   assert.match(files, /shareDaliFilesOnDesktop/);
   assert.match(files, /daliDesktop\?\.fileShare/);
+  assert.match(files, /requiresDaliDesktopFileShareUpdate/);
+  assert.match(files, /windows-share-ui-timeout/);
   assert.match(files, /downloadDaliShareFiles/);
 });
 

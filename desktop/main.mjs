@@ -228,14 +228,21 @@ async function shareDesktopFileAttachments(event, value) {
       return { opened: true, method: "macos-share-menu" };
     }
 
-    await openWindowsFileShare(app, prepared.manifestPath);
+    await openWindowsFileShare(
+      app,
+      prepared.manifestPath,
+      prepared.statusPath,
+    );
     scheduleDesktopShareCleanup(prepared.directory);
     return { opened: true, method: "windows-share-ui" };
   } catch (error) {
     if (prepared?.directory)
       scheduleDesktopShareCleanup(prepared.directory, 0);
-    console.error("Dali desktop file share failed:", error?.message || error);
-    return { opened: false, reason: "native-file-share-failed" };
+    const reason = String(error?.message || "native-file-share-failed")
+      .trim()
+      .slice(0, 160) || "native-file-share-failed";
+    console.error("Dali desktop file share failed:", reason);
+    return { opened: false, reason };
   }
 }
 function registerIpc() {

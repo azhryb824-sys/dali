@@ -20,7 +20,7 @@ test("desktop build publishes the updater metadata with the installer", async ()
   const desktopPackage = JSON.parse(await readFile(new URL("desktop/package.json", root), "utf8"));
   const workflow = await readFile(new URL(".github/workflows/desktop-windows.yml", root), "utf8");
 
-  assert.equal(desktopPackage.version, "0.2.9");
+  assert.equal(desktopPackage.version, "0.2.10");
   assert.equal(desktopPackage.build.publish.provider, "github");
   assert.equal(desktopPackage.build.publish.owner, "azhryb824-sys");
   assert.equal(desktopPackage.build.publish.repo, "dali");
@@ -82,14 +82,19 @@ test("Windows desktop shares actual downloaded files through the native share UI
   assert.match(main, /dali:files:share/);
   assert.match(main, /prepareDesktopFileShare/);
   assert.match(main, /openWindowsFileShare/);
+  assert.match(main, /prepared\.statusPath/);
   assert.match(preload, /fileShare:/);
   assert.match(preload, /dali:files:share/);
   assert.match(bridge, /ALLOWED_DOWNLOAD_PATH/);
   assert.match(bridge, /response\.arrayBuffer\(\)/);
   assert.match(bridge, /DaliNativeShare\.exe/);
+  assert.match(bridge, /status === "ready"/);
+  assert.match(bridge, /windows-share-ui-timeout/);
   assert.match(helper, /SetStorageItems/);
   assert.match(helper, /ShowShareUIForWindow/);
   assert.match(helper, /TargetApplicationChosen/);
+  assert.match(helper, /SetForegroundWindow/);
+  assert.match(helper, /WriteStatus\("ready"\)/);
   assert.match(buildScript, /user32\.lib/);
   assert.match(workflow, /Build native Windows file-share bridge/);
   assert.match(workflow, /native-share\\build\.cmd/);
@@ -118,7 +123,12 @@ test("desktop file bridge downloads verified bytes instead of handing WhatsApp o
     );
     assert.equal(result.filePaths.length, 1);
     assert.deepEqual(await readFile(result.filePaths[0]), bytes);
-    assert.ok((await readFile(result.manifestPath, "utf8")).includes("\r\n"));
+    const manifest = await readFile(result.manifestPath, "utf8");
+    const manifestValues = manifest
+      .split("\r\n")
+      .map((value) => Buffer.from(value, "base64").toString("utf8"));
+    assert.equal(manifestValues[2], result.statusPath);
+    assert.equal(manifestValues[3], result.filePaths[0]);
   } finally {
     globalThis.fetch = originalFetch;
     await rm(temporaryRoot, { recursive: true, force: true });

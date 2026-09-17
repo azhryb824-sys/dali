@@ -11,7 +11,9 @@ import {
 } from "@/lib/whatsapp-runtime";
 import {
   downloadDaliShareFiles,
+  daliDesktopFileShareError,
   prepareDaliShareFiles,
+  requiresDaliDesktopFileShareUpdate,
   shareDaliFilesOnDesktop,
   shareDaliFilesNatively,
   sharePreparedDaliFiles,
@@ -741,12 +743,16 @@ export default function ContractBillingWorkspace() {
           options,
         );
         if (!result.opened)
-          throw new Error("تعذر فتح نافذة مشاركة الملف في نظام التشغيل");
+          throw new Error(daliDesktopFileShareError(result.reason));
         setNotice(
           "فُتحت نافذة مشاركة النظام ومعها ملف PDF الفعلي؛ اختر واتساب لإرساله كمرفق.",
         );
         return;
       }
+      if (requiresDaliDesktopFileShareUpdate())
+        throw new Error(
+          "نسخة تطبيق Windows الحالية لا تدعم مشاركة الملفات. أغلق التطبيق بالكامل وافتحه لتثبيت التحديث الجديد.",
+        );
       if (contractPreparedFiles) {
         const outcome = await sharePreparedDaliFiles(
           contractPreparedFiles,
@@ -1329,6 +1335,8 @@ export default function ContractBillingWorkspace() {
                             ? "مشاركة PDF الفعلي — اختر واتساب"
                             : supportsDaliDesktopFileShare()
                               ? "مشاركة PDF الفعلي — اختر واتساب"
+                            : requiresDaliDesktopFileShareUpdate()
+                              ? "أعد تشغيل تطبيق Windows لإكمال التحديث"
                             : supportsDaliWebFileShare()
                               ? "تحميل PDF للمشاركة المباشرة"
                               : "تنزيل PDF لإرفاقه يدويًا"}

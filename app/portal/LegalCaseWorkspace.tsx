@@ -18,7 +18,9 @@ import {
 } from "@/lib/whatsapp-runtime";
 import {
   downloadDaliShareFiles,
+  daliDesktopFileShareError,
   prepareDaliShareFiles,
+  requiresDaliDesktopFileShareUpdate,
   shareDaliFilesOnDesktop,
   shareDaliFilesNatively,
   sharePreparedDaliFiles,
@@ -861,12 +863,16 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
           options,
         );
         if (!result.opened)
-          throw new Error("تعذر فتح نافذة مشاركة الملفات في نظام التشغيل");
+          throw new Error(daliDesktopFileShareError(result.reason));
         setNotice(
           "فُتحت نافذة مشاركة النظام ومعها الملفات الفعلية؛ اختر واتساب لإرسالها كمرفقات للمحامي.",
         );
         return;
       }
+      if (requiresDaliDesktopFileShareUpdate())
+        throw new Error(
+          "نسخة تطبيق Windows الحالية لا تدعم مشاركة الملفات. أغلق التطبيق بالكامل وافتحه لتثبيت التحديث الجديد.",
+        );
       if (preparedShareFiles) {
         const outcome = await sharePreparedDaliFiles(
           preparedShareFiles,
@@ -3329,6 +3335,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0 }: { initialRec
                             ? `مشاركة ${shareLinks.files.length} ملف فعلي — اختر واتساب`
                             : supportsDaliDesktopFileShare()
                               ? `مشاركة ${shareLinks.files.length} ملف فعلي — اختر واتساب`
+                            : requiresDaliDesktopFileShareUpdate()
+                              ? "أعد تشغيل تطبيق Windows لإكمال التحديث"
                             : supportsDaliWebFileShare()
                               ? "تحميل الملفات للمشاركة المباشرة"
                               : "تنزيل الملفات لإرفاقها يدويًا"}

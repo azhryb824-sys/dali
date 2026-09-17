@@ -213,6 +213,30 @@ export const sharingUiTranslations: Record<
     en: "The actual PDF was handed to the sharing window.",
     bn: "আসল PDF শেয়ার উইন্ডোতে পাঠানো হয়েছে।",
   },
+  "أعد تشغيل تطبيق Windows لإكمال التحديث": {
+    en: "Restart the Windows app to finish updating",
+    bn: "আপডেট সম্পন্ন করতে Windows অ্যাপটি পুনরায় চালু করুন",
+  },
+  "لم تستجب نافذة مشاركة Windows. أغلق تطبيق دالي بالكامل ثم افتحه وحاول مرة أخرى.": {
+    en: "The Windows sharing window did not respond. Fully close and reopen the Dali app, then try again.",
+    bn: "Windows শেয়ারিং উইন্ডো সাড়া দেয়নি। ডালি অ্যাপটি সম্পূর্ণ বন্ধ করে আবার খুলুন, তারপর আবার চেষ্টা করুন।",
+  },
+  "مكوّن مشاركة الملفات غير موجود. أغلق تطبيق دالي وافتحه لإكمال التحديث.": {
+    en: "The file-sharing component is missing. Close and reopen the Dali app to complete the update.",
+    bn: "ফাইল শেয়ারিং কম্পোনেন্টটি নেই। আপডেট সম্পন্ন করতে ডালি অ্যাপটি বন্ধ করে আবার খুলুন।",
+  },
+  "تعذر على Windows فتح نافذة مشاركة الملفات. أعد تشغيل تطبيق دالي ثم حاول مرة أخرى.": {
+    en: "Windows could not open the file-sharing window. Restart the Dali app and try again.",
+    bn: "Windows ফাইল শেয়ারিং উইন্ডো খুলতে পারেনি। ডালি অ্যাপটি পুনরায় চালু করে আবার চেষ্টা করুন।",
+  },
+  "تعذر فتح نافذة مشاركة الملفات في Windows.": {
+    en: "The Windows file-sharing window could not be opened.",
+    bn: "Windows ফাইল শেয়ারিং উইন্ডো খোলা যায়নি।",
+  },
+  "نسخة تطبيق Windows الحالية لا تدعم مشاركة الملفات. أغلق التطبيق بالكامل وافتحه لتثبيت التحديث الجديد.": {
+    en: "This version of the Windows app does not support file sharing. Fully close and reopen the app to install the new update.",
+    bn: "Windows অ্যাপের এই সংস্করণটি ফাইল শেয়ারিং সমর্থন করে না। নতুন আপডেট ইনস্টল করতে অ্যাপটি সম্পূর্ণ বন্ধ করে আবার খুলুন।",
+  },
   "تنزيل الملف الفعلي": {
     en: "Download the actual file",
     bn: "আসল ফাইল ডাউনলোড করুন",

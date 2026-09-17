@@ -33,6 +33,17 @@ DataTransferManager g_manager{nullptr};
 IVector<IStorageItem> g_storageItems{nullptr};
 std::wstring g_title;
 std::wstring g_text;
+std::filesystem::path g_statusPath;
+bool g_shareReady = false;
+
+void WriteStatus(std::string const& value) noexcept {
+  if (g_statusPath.empty()) return;
+  try {
+    std::ofstream stream(g_statusPath, std::ios::binary | std::ios::trunc);
+    if (stream) stream << value;
+  } catch (...) {
+  }
+}
 
 std::wstring Utf8ToWide(std::string const& input) {
   if (input.empty()) return {};
@@ -77,7 +88,7 @@ std::vector<std::string> ReadManifestLines(std::filesystem::path const& path) {
     if (!line.empty() && line.back() == '\r') line.pop_back();
     if (!line.empty()) lines.push_back(DecodeBase64(line));
   }
-  if (lines.size() < 3 || lines.size() > 202) throw_hresult(E_INVALIDARG);
+  if (lines.size() < 4 || lines.size() > 203) throw_hresult(E_INVALIDARG);
   return lines;
 }
 
@@ -117,6 +128,7 @@ LRESULT CALLBACK OwnerWindowProc(HWND window, UINT message, WPARAM wparam,
         DestroyWindow(window);
       return 0;
     case WM_DESTROY:
+      if (!g_shareReady) WriteStatus("error:windows-share-window-closed");
       PostQuitMessage(0);
       return 0;
     default:
@@ -145,7 +157,11 @@ HWND CreateOwnerWindow(HINSTANCE instance) {
       WS_POPUP, x, y, width, height, nullptr, nullptr, instance, nullptr);
   if (!window) throw_hresult(HRESULT_FROM_WIN32(GetLastError()));
   SetLayeredWindowAttributes(window, 0, 1, LWA_ALPHA);
-  ShowWindow(window, SW_SHOWNOACTIVATE);
+  ShowWindow(window, SW_SHOW);
+  UpdateWindow(window);
+  BringWindowToTop(window);
+  SetForegroundWindow(window);
+  SetActiveWindow(window);
   return window;
 }
 
@@ -162,6 +178,8 @@ void ConfigureShare(HWND owner) {
     if (!g_text.empty()) data.SetText(g_text);
     data.SetStorageItems(g_storageItems.GetView(), true);
     data.RequestedOperation(DataPackageOperation::Copy);
+    g_shareReady = true;
+    WriteStatus("ready");
   });
   g_manager.TargetApplicationChosen(
       [](DataTransferManager const&, TargetApplicationChosenEventArgs const&) {
@@ -188,14 +206,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     g_text = Utf8ToWide(lines[1]);
     if (g_title.empty()) return 3;
 
+    const auto manifestDirectory =
+        std::filesystem::weakly_canonical(manifestPath).parent_path();
+    g_statusPath = std::filesystem::absolute(Utf8ToWide(lines[2]));
+    if (g_statusPath.parent_path() != manifestDirectory) return 4;
+    WriteStatus("starting");
+
     g_storageItems = single_threaded_vector<IStorageItem>();
-    for (size_t index = 2; index < lines.size(); ++index) {
+    for (size_t index = 3; index < lines.size(); ++index) {
       auto path = std::filesystem::absolute(Utf8ToWide(lines[index]));
-      if (!std::filesystem::is_regular_file(path)) return 4;
+      if (!std::filesystem::is_regular_file(path)) return 5;
       g_storageItems.Append(
           WaitFor(StorageFile::GetFileFromPathAsync(hstring{path.c_str()})));
     }
-    if (g_storageItems.Size() == 0) return 5;
+    if (g_storageItems.Size() == 0) return 6;
 
     g_ownerWindow = CreateOwnerWindow(instance);
     SetTimer(g_ownerWindow, kInitialTimeout, kInitialTimeoutMs, nullptr);
@@ -207,9 +231,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       DispatchMessageW(&message);
     }
     return 0;
-  } catch (hresult_error const&) {
-    return 6;
+  } catch (hresult_error const& error) {
+    WriteStatus(
+        "error:windows-share-hresult-" +
+        std::to_string(static_cast<unsigned long>(error.code().value)));
+    return 7;
   } catch (...) {
+    WriteStatus("error:windows-share-unexpected-error");
     return 1;
   }
 }

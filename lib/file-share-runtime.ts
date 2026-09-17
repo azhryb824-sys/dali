@@ -157,6 +157,22 @@ export function supportsDaliDesktopFileShare() {
   return Boolean(desktopFileShareBridge());
 }
 
+export function requiresDaliDesktopFileShareUpdate() {
+  if (typeof window === "undefined") return false;
+  const desktopWindow = window as DaliDesktopWindow;
+  return Boolean(desktopWindow.daliDesktop) && !desktopWindow.daliDesktop?.fileShare;
+}
+
+export function daliDesktopFileShareError(reason?: string) {
+  if (reason === "windows-share-ui-timeout")
+    return "لم تستجب نافذة مشاركة Windows. أغلق تطبيق دالي بالكامل ثم افتحه وحاول مرة أخرى.";
+  if (reason === "windows-share-helper-missing")
+    return "مكوّن مشاركة الملفات غير موجود. أغلق تطبيق دالي وافتحه لإكمال التحديث.";
+  if (reason?.startsWith("windows-share-hresult-"))
+    return "تعذر على Windows فتح نافذة مشاركة الملفات. أعد تشغيل تطبيق دالي ثم حاول مرة أخرى.";
+  return "تعذر فتح نافذة مشاركة الملفات في Windows.";
+}
+
 export function supportsDaliWebFileShare() {
   if (typeof navigator === "undefined" || typeof File === "undefined")
     return false;

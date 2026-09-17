@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const PORTAL_ORIGIN = "https://www.dally.info";
@@ -100,12 +100,22 @@ export async function prepareDesktopFileShare(app, rawFiles, rawOptions) {
 
     const encode = (value) => Buffer.from(value, "utf8").toString("base64");
     const manifestPath = join(directory, "share.dali");
+    const statusPath = join(directory, "share-status.dali");
     await writeFile(
       manifestPath,
-      [options.title, options.text, ...filePaths].map(encode).join("\r\n"),
+      [options.title, options.text, statusPath, ...filePaths]
+        .map(encode)
+        .join("\r\n"),
       { encoding: "utf8", mode: 0o600, flag: "wx" },
     );
-    return { ...options, directory, filePaths, manifestPath, totalBytes };
+    return {
+      ...options,
+      directory,
+      filePaths,
+      manifestPath,
+      statusPath,
+      totalBytes,
+    };
   } catch (error) {
     await rm(directory, { force: true, recursive: true }).catch(() => undefined);
     throw error;
@@ -125,7 +135,11 @@ function windowsHelperPath(app) {
     : join(app.getAppPath(), "native-share", "bin", "DaliNativeShare.exe");
 }
 
-export async function openWindowsFileShare(app, manifestPath) {
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function openWindowsFileShare(app, manifestPath, statusPath) {
   const helperPath = windowsHelperPath(app);
   if (!existsSync(helperPath)) throw new Error("windows-share-helper-missing");
   const child = spawn(helperPath, [manifestPath], {
@@ -133,16 +147,28 @@ export async function openWindowsFileShare(app, manifestPath) {
     windowsHide: true,
     stdio: "ignore",
   });
-  const outcome = await Promise.race([
-    new Promise((resolve, reject) => {
-      child.once("spawn", () => resolve({ spawned: true }));
+  try {
+    await new Promise((resolve, reject) => {
+      child.once("spawn", resolve);
       child.once("error", reject);
-      child.once("exit", (code) => {
-        if (code && code !== 0) reject(new Error(`windows-share-helper-${code}`));
-      });
-    }),
-    new Promise((resolve) => setTimeout(() => resolve({ spawned: true }), 1_500)),
-  ]);
-  child.unref();
-  return outcome;
+    });
+
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      const status = await readFile(statusPath, "utf8").catch(() => "");
+      if (status === "ready") {
+        child.unref();
+        return { opened: true, status };
+      }
+      if (status.startsWith("error:"))
+        throw new Error(status.slice("error:".length) || "windows-share-helper-failed");
+      if (child.exitCode !== null)
+        throw new Error(`windows-share-helper-${child.exitCode}`);
+      await wait(100);
+    }
+    throw new Error("windows-share-ui-timeout");
+  } catch (error) {
+    if (child.exitCode === null) child.kill();
+    throw error;
+  }
 }
