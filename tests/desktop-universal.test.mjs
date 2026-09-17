@@ -13,7 +13,7 @@ test("new macOS application is independent and does not alter the old applicatio
   ]);
 
   assert.equal(legacyPackage.build.appId, "sa.dally.desktop");
-  assert.equal(legacyPackage.version, "0.2.6");
+  assert.equal(legacyPackage.version, "0.2.7");
   assert.equal(universalPackage.build.appId, "sa.dally.desktop.universal");
   assert.equal(universalPackage.version, "1.0.0");
   assert.notEqual(universalPackage.build.appId, legacyPackage.build.appId);

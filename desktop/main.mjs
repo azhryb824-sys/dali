@@ -4,6 +4,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import crypto from "node:crypto";
+import {
+  isSafeExternalHttpsUrl,
+  isTrustedPortalUrl,
+  toWhatsAppAppUrl,
+  toWhatsAppWebUrl,
+} from "./external-navigation.mjs";
 
 const PORTAL_ORIGIN = "https://www.dally.info";
 const PORTAL_URL_OVERRIDE = process.env.DALI_DESKTOP_URL?.trim() || "";
@@ -17,6 +23,60 @@ let keyPath;
 let key;
 let updateCheckTimer;
 let desktopDeviceId;
+const guardedWebContents = new WeakSet();
+
+async function openOutsideDesktop(value) {
+  const whatsappAppUrl = toWhatsAppAppUrl(value);
+  if (whatsappAppUrl) {
+    try {
+      await shell.openExternal(whatsappAppUrl);
+      return true;
+    } catch (error) {
+      console.error("Dali WhatsApp app launch failed:", error?.message || error);
+      const whatsappWebUrl = toWhatsAppWebUrl(value);
+      if (!whatsappWebUrl) return false;
+      await shell.openExternal(whatsappWebUrl);
+      return true;
+    }
+  }
+
+  if (!isSafeExternalHttpsUrl(value)) return false;
+  await shell.openExternal(value);
+  return true;
+}
+
+function handOffExternalNavigation(contents, value) {
+  void openOutsideDesktop(value)
+    .then(opened => {
+      const owner = BrowserWindow.fromWebContents(contents);
+      if (opened && owner && owner !== mainWindow && !owner.isDestroyed()) owner.close();
+    })
+    .catch(error => {
+      console.error("Dali external link failed:", error?.message || error);
+    });
+}
+
+function configureDesktopNavigation(contents) {
+  if (guardedWebContents.has(contents)) return;
+  guardedWebContents.add(contents);
+
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isTrustedPortalUrl(url, PORTAL_ORIGIN)) return { action: "allow" };
+    handOffExternalNavigation(contents, url);
+    return { action: "deny" };
+  });
+
+  const handleNavigation = (event, url) => {
+    if (isTrustedPortalUrl(url, PORTAL_ORIGIN)) return;
+    event.preventDefault();
+    handOffExternalNavigation(contents, url);
+  };
+  contents.on("will-navigate", handleNavigation);
+  contents.on("will-redirect", handleNavigation);
+  contents.on("did-create-window", childWindow => {
+    configureDesktopNavigation(childWindow.webContents);
+  });
+}
 
 function configureAutomaticUpdates() {
   if (!app.isPackaged) return;
@@ -169,16 +229,6 @@ async function openWindow() {
       spellcheck: true,
     },
   });
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://www.dally.info/")) return { action: "allow" };
-    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
-    return { action: "deny" };
-  });
-  mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (url.startsWith("https://www.dally.info/")) return;
-    event.preventDefault();
-    if (/^https:\/\//i.test(url)) void shell.openExternal(url);
-  });
   mainWindow.once("ready-to-show", () => mainWindow.show());
   try {
     await mainWindow.loadURL(await requestPortalEntryUrl());
@@ -190,6 +240,9 @@ async function openWindow() {
     else await mainWindow.loadFile(join(import.meta.dirname, "offline.html"));
   }
 }
+app.on("web-contents-created", (_event, contents) => {
+  configureDesktopNavigation(contents);
+});
 app.whenReady().then(async () => {
   storePath = join(app.getPath("userData"), "offline-store.enc");
   await loadKey();

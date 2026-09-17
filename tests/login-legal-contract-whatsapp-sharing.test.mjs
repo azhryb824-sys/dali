@@ -76,11 +76,12 @@ test("legal files expose current contract documents and share only with the assi
 });
 
 test("WhatsApp launching is encrypted, short-lived, user-bound, and works from the installed desktop app", async () => {
-  const [token, launchRoute, pendingPage, desktop] = await Promise.all([
+  const [token, launchRoute, pendingPage, desktop, desktopNavigation] = await Promise.all([
     read("lib/whatsapp-launch.ts"),
     read("app/api/portal/whatsapp-launch/route.ts"),
     read("app/portal/whatsapp-launch/page.tsx"),
     read("desktop/main.mjs"),
+    read("desktop/external-navigation.mjs"),
   ]);
 
   assert.match(token, /aes-256-gcm/);
@@ -93,5 +94,7 @@ test("WhatsApp launching is encrypted, short-lived, user-bound, and works from t
   assert.match(launchRoute, /status: 302/);
   assert.match(launchRoute, /no-store/);
   assert.match(pendingPage, /جارٍ تجهيز واتساب/);
-  assert.match(desktop, /shell\.openExternal\(url\)/);
+  assert.match(desktop, /shell\.openExternal\(whatsappAppUrl\)/);
+  assert.match(desktop, /will-redirect/);
+  assert.match(desktopNavigation, /whatsapp:\/\/send/);
 });

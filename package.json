@@ -32,7 +32,7 @@
     "db:audit:contract-signatures": "node scripts/audit-contract-signatures.mjs",
     "db:audit:enterprise-controls": "node scripts/audit-enterprise-critical-controls.mjs",
     "desktop:install": "npm install --prefix desktop",
-    "desktop:check": "node --check desktop/main.mjs && node --check desktop/preload.mjs",
+    "desktop:check": "node --check desktop/main.mjs && node --check desktop/external-navigation.mjs && node --check desktop/preload.mjs",
     "desktop:build:windows": "npm run build:windows --prefix desktop",
     "mobile:install": "npm install --prefix mobile",
     "mobile:check": "node --test tests/mobile-app.test.mjs && npm run check --prefix mobile",

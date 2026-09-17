@@ -18,7 +18,7 @@ test("desktop build publishes the updater metadata with the installer", async ()
   const desktopPackage = JSON.parse(await readFile(new URL("desktop/package.json", root), "utf8"));
   const workflow = await readFile(new URL(".github/workflows/desktop-windows.yml", root), "utf8");
 
-  assert.equal(desktopPackage.version, "0.2.6");
+  assert.equal(desktopPackage.version, "0.2.7");
   assert.equal(desktopPackage.build.publish.provider, "github");
   assert.equal(desktopPackage.build.publish.owner, "azhryb824-sys");
   assert.equal(desktopPackage.build.publish.repo, "dali");
@@ -36,4 +36,18 @@ test("desktop build publishes the updater metadata with the installer", async ()
   assert.doesNotMatch(workflow, /tags: \["v\*"\]/);
   assert.match(workflow, /desktop\/dist\/latest\.yml/);
   assert.match(workflow, /desktop\/dist\/\*\.blockmap/);
+});
+
+test("desktop hands verified WhatsApp links to the installed Windows application", async () => {
+  const [main, navigation] = await Promise.all([
+    readFile(new URL("desktop/main.mjs", root), "utf8"),
+    readFile(new URL("desktop/external-navigation.mjs", root), "utf8"),
+  ]);
+
+  assert.match(main, /shell\.openExternal\(whatsappAppUrl\)/);
+  assert.match(main, /will-redirect/);
+  assert.match(main, /did-create-window/);
+  assert.match(main, /web-contents-created/);
+  assert.match(navigation, /whatsapp:\/\/send/);
+  assert.match(navigation, /SAUDI_WHATSAPP_PHONE/);
 });

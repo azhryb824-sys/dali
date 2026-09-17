@@ -1,6 +1,6 @@
 {
   "name": "dali-desktop",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "تطبيق نظام دالي الإداري المتكامل",
   "author": "Dally Corporation",
   "private": true,
@@ -33,6 +33,7 @@
     },
     "files": [
       "main.mjs",
+      "external-navigation.mjs",
       "preload.mjs",
       "offline.html",
       "assets/**/*",
