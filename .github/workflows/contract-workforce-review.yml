@@ -8,15 +8,21 @@ permissions:
 jobs:
   source-snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Package tracked source only
-        run: git archive --format=tar.gz -o /tmp/dali-review-source.tar.gz HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Package verification dependencies
+        run: |
+          tar --exclude='node_modules/@next' --exclude='node_modules/@img' --exclude='node_modules/@cloudflare' --exclude='node_modules/wrangler' --exclude='node_modules/.cache' -czf /tmp/dali-test-dependencies.tar.gz node_modules
       - uses: actions/upload-artifact@v4
         with:
-          name: dali-review-source
-          path: /tmp/dali-review-source.tar.gz
+          name: dali-test-dependencies
+          path: /tmp/dali-test-dependencies.tar.gz
           retention-days: 1
