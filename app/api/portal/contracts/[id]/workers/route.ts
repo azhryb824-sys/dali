@@ -66,7 +66,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           eq(contractWorkerAssignments.contractProfessionId, profession.id),
           eq(contractWorkerAssignments.status, "active"),
         ));
-      if (activeAssignments.length >= profession.requiredCount) throw new Error("CONTRACT_PROFESSION_CAPACITY_REACHED");
+      if (contract.quantityMode !== "open" && activeAssignments.length >= profession.requiredCount) throw new Error("CONTRACT_PROFESSION_CAPACITY_REACHED");
 
       const [updatedWorker] = await tx.update(workers).set({
         status: "assigned",

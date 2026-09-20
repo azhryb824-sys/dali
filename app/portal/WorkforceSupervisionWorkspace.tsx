@@ -1,5 +1,6 @@
 "use client";
 
+import { contractWorkforceCoverage } from "@/lib/contract-workforce-coverage";
 import WorkerIncidentsPanel from "./WorkerIncidentsPanel";
 import { useMemo, useState } from "react";
 
@@ -12,6 +13,7 @@ type Contract = {
   startDate: string;
   endDate: string;
   status: string;
+  quantityMode?: string;
 };
 type Profession = {
   id: number;
@@ -136,10 +138,9 @@ export default function WorkforceSupervisionWorkspace({
           const assignedWorkers = workers.filter((worker) =>
             active.some((item) => item.workerId === worker.id),
           );
-          const shortage = Math.max(0, required - active.length);
-          const percent = required
-            ? Math.min(100, Math.round((active.length / required) * 100))
-            : 0;
+          const coverage = contractWorkforceCoverage(requirements, active, contract.quantityMode === "open");
+          const shortage = coverage.shortage;
+          const percent = coverage.percent ?? 0;
           return {
             contract,
             requirements,
@@ -194,7 +195,7 @@ export default function WorkforceSupervisionWorkspace({
       <div className="supervision-kpis">
         <article><span>المطلوب</span><strong>{totalRequired}</strong></article>
         <article><span>المسند</span><strong>{totalAssigned}</strong></article>
-        <article><span>العجز</span><strong>{Math.max(0, totalRequired - totalAssigned)}</strong></article>
+        <article><span>العجز</span><strong>{operational.reduce((sum, row) => sum + row.shortage, 0)}</strong></article>
         <article><span>عمال متاحون</span><strong>{available}</strong></article>
       </div>
       <section className="panel">
@@ -231,7 +232,7 @@ export default function WorkforceSupervisionWorkspace({
                   </header>
                   <div className="coverage-meter">
                     <span><i style={{ width: `${percent}%` }} /></span>
-                    <b>{active.length}/{required} · {percent}%</b>
+                    <b>{contract.quantityMode === "open" ? `${active.length} · عدد مفتوح` : `${active.length}/${required} · ${percent}%`}</b>
                   </div>
                   <div className="profession-coverage">
                     {requirements.map((item) => {
@@ -240,7 +241,7 @@ export default function WorkforceSupervisionWorkspace({
                       ).length;
                       const matchingAvailable = workers.filter(
                         (worker) =>
-                          worker.status === "available" &&
+                          !worker.archivedAt && worker.status === "available" &&
                           worker.profession === item.profession &&
                           sponsorshipMatches(worker, item),
                       ).length;
@@ -277,7 +278,7 @@ export default function WorkforceSupervisionWorkspace({
                       const candidates = workers.filter(
                         (worker) =>
                           !worker.archivedAt &&
-                          worker.status === "available" &&
+                          !worker.archivedAt && worker.status === "available" &&
                           worker.profession === profession.profession &&
                           sponsorshipMatches(worker, profession) &&
                           !assignedIds.has(worker.id),
@@ -303,7 +304,7 @@ export default function WorkforceSupervisionWorkspace({
                             })}
                             {!professionAssignments.length && <p>لا يوجد عامل مسند لهذه المهنة.</p>}
                           </div>
-                          {contract.status === "active" && remaining > 0 && (
+                          {contract.status === "active" && (contract.quantityMode === "open" || remaining > 0) && (
                             <div className="supervision-assign-control">
                               <select value={choices[profession.id] || ""} onChange={(event) => setChoices((current) => ({ ...current, [profession.id]: event.target.value }))}>
                                 <option value="">اختر عاملًا مطابقًا</option>

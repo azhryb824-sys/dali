@@ -1,3 +1,5 @@
+import { parseCommercialLineItems } from "@/lib/commercial-line-items";
+import { commercialAttachmentRefs, withCommercialAttachments } from "@/lib/commercial-attachments";
 import { representativeRequests, quoteConversionRequests, workforceContracts } from "@/db/schema";
 import { WorkflowError } from "@/lib/quote-request-workflow";
 import { commercialTermsFromRequest, readCommercialTerms } from "@/lib/commercial-terms";
@@ -516,15 +518,15 @@ async function createRecord(
     const accommodationParty =
       payload.accommodationParty === "dali"
         ? "dali"
-        : payload.accommodationParty === "counterparty"
+        : payload.accommodationParty === "counterparty" || payload.accommodationParty === "client"
           ? "counterparty"
-          : null;
+          : payload.accommodationParty === "not_applicable" ? "not_applicable" : null;
     const transportParty =
       payload.transportParty === "dali"
         ? "dali"
-        : payload.transportParty === "counterparty"
+        : payload.transportParty === "counterparty" || payload.transportParty === "client"
           ? "counterparty"
-          : null;
+          : payload.transportParty === "not_applicable" ? "not_applicable" : null;
     const vatRate = Number(payload.vatRate || 0);
     const quantityMode = payload.quantityMode === "open" ? "open" : "fixed";
     const seasonType =
@@ -610,63 +612,7 @@ async function createRecord(
       const percentages = annualInstallmentPercentages();
       if (quantityMode === "fixed") paymentSchedule = annual.dueDates.map((dueDate, index) => ({ title: `الدفعة الشهرية ${index + 1}`, titleEn: `Monthly installment ${index + 1}`, dueDate, percentageBps: percentages[index] }));
     }
-    const normalizedItems = rawItems.slice(0, 50).map((raw, index) => {
-      const item =
-        raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-      const profession = text(item.profession, 120);
-      const quantity = integer(
-        item.quantity,
-        quantityMode === "open" ? 0 : 1,
-        100000,
-      );
-      const requestedDurationMonths = integer(item.durationMonths, 1, 120);
-      const durationMonths =
-        activityLabel === "توريد العمالة" && seasonType === "regular"
-          ? 12
-          : requestedDurationMonths;
-      const unitPriceHalalas = Math.round((Number(item.unitPrice) || 0) * 100);
-      const actualSalaryHalalas = Math.round(
-        (Number(item.actualSalary) || 0) * 100,
-      );
-      const sponsorshipType =
-        item.sponsorshipType === "dali"
-          ? "dali"
-          : item.sponsorshipType === "other"
-            ? "other"
-            : null;
-      const sponsorName =
-        sponsorshipType === "other" ? text(item.sponsorName, 160) : null;
-      const ajirContractStatus =
-        item.ajirContractStatus === "with_ajir"
-          ? "with_ajir"
-          : item.ajirContractStatus === "without_ajir"
-            ? "without_ajir"
-            : "not_applicable";
-      if (
-        !profession ||
-        quantity === null ||
-        (quantityMode === "fixed" && quantity < 1) ||
-        !durationMonths ||
-        unitPriceHalalas < 1 ||
-        actualSalaryHalalas < 0
-      )
-        throw new Error(`بيانات البند ${index + 1} غير صحيحة`);
-      const normalizedQuantity = quantityMode === "open" ? 0 : quantity;
-      return {
-        profession,
-        quantity: normalizedQuantity,
-        durationMonths,
-        unitPriceHalalas,
-        actualSalaryHalalas,
-        lineTotalHalalas:
-          normalizedQuantity * durationMonths * unitPriceHalalas,
-        notes: text(item.notes, 500) || null,
-        sponsorshipType,
-        sponsorName,
-        ajirContractStatus,
-        sortOrder: index,
-      };
-    });
+    const normalizedItems = parseCommercialLineItems(rawItems, { quantityMode, seasonType, workforce: activityLabel === "توريد العمالة" });
     const allocationKeys = normalizedItems.map((item) =>
       [
         item.profession,
@@ -730,7 +676,7 @@ async function createRecord(
         subtotalHalalas,
         discountHalalas,
         totalHalalas: subtotalHalalas - discountHalalas + vatHalalas,
-        commercialTermsJson: JSON.stringify(commercialTerms),
+        commercialTermsJson: withCommercialAttachments(commercialTerms, commercialAttachmentRefs(sourceRequest?.quotationTermsJson)),
         assumptions,
         terms: text(payload.terms, 3000) || null,
         createdBy: actor,

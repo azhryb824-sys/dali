@@ -71,8 +71,8 @@ export const workforceRequestAttachments = pgTable(
   {
     id: serial("id").primaryKey(),
     requestId: integer("request_id")
-      .notNull()
       .references(() => workforceRequests.id, { onDelete: "cascade" }),
+    quoteVersionId: integer("quote_version_id").references(() => quoteVersions.id, { onDelete: "restrict" }),
     fileName: text("file_name").notNull(),
     storageKey: text("storage_key").notNull().unique(),
     contentType: text("content_type").notNull(),
@@ -83,6 +83,8 @@ export const workforceRequestAttachments = pgTable(
   },
   (table) => [
     index("workforce_request_attachments_request_idx").on(table.requestId),
+    index("workforce_request_attachments_quote_idx").on(table.quoteVersionId),
+    check("workforce_request_attachments_owner_check", sql`(${table.requestId} is not null and ${table.quoteVersionId} is null) or (${table.requestId} is null and ${table.quoteVersionId} is not null)`),
     check(
       "workforce_request_attachments_size_check",
       sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 10485760`,
@@ -3290,7 +3292,7 @@ export const quoteItems = pgTable(
   },
   (table) => [
     index("quote_items_quote_idx").on(table.quoteVersionId),
-    check("quote_items_quantity_check", sql`${table.quantity} > 0`),
+    check("quote_items_quantity_check", sql`${table.quantity} >= 0`),
     check("quote_items_duration_check", sql`${table.durationMonths} > 0`),
   ],
 );

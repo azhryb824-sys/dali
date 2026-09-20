@@ -6,6 +6,10 @@ import { getRuntimeEnv } from "@/lib/runtime-env";
 import { defaultWorkforceContractClauses, parseWorkforceContractClauses } from "@/lib/workforce-contract-clauses";
 
 type ContractMetadata = {
+  subtotalHalalas?: number;
+  vatHalalas?: number;
+  titleEn?: string;
+  detailsEn?: string;
   clientAddress?: string;
   clientRepresentative?: string;
   clientRepresentativeTitle?: string;
@@ -52,8 +56,14 @@ export async function regenerateWorkforceContractPdf(documentId: number, pdfLang
     clientCr: contract.clientCr || undefined,
     clientVat: contract.clientVat || undefined,
     title: contract.title,
+    titleEn: metadata.titleEn,
+    detailsEn: metadata.detailsEn,
+    quantityMode: contract.quantityMode as "fixed" | "open",
+    vatRateBps: contract.vatRateBps,
     issueDate: contract.issueDate,
     amountHalalas: contract.amountHalalas,
+    subtotalHalalas: metadata.subtotalHalalas,
+    vatHalalas: metadata.vatHalalas,
     contractDirection,
     contractClauses: printableClauses,
     details: contract.details,

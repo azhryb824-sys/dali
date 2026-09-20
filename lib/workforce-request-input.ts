@@ -37,7 +37,7 @@ export function parseWorkforceRequestInput(payload: Record<string, unknown>) {
     const quantityMode = text(payload.quantityMode, 20) || "fixed";
     const clientCr = text(payload.clientCr, 10);
     const clientVat = text(payload.clientVat, 15);
-    const clientAddress = text(payload.clientAddress, 300);
+    const clientAddress = text(payload.clientAddress, 240);
     const representativeTitle = text(payload.representativeTitle, 120);
     const rawItems = Array.isArray(payload.quotationItems) ? payload.quotationItems : [];
     const quotationItems = rawItems.slice(0, 30).map((raw) => {
@@ -49,28 +49,32 @@ export function parseWorkforceRequestInput(payload: Record<string, unknown>) {
             durationMonths: Number(item.durationMonths),
             unit: text(item.unit, 40) || (activityType === "workforce" ? "عامل/شهر" : "وحدة"),
             notes: text(item.notes, 500) || null,
+            unitPrice: Number(item.unitPrice || 0),
+            actualSalary: Number(item.actualSalary || 0),
             sponsorshipType: activityType === "workforce" ? sponsorshipType : null,
             sponsorName: activityType === "workforce" && sponsorshipType === "other" ? text(item.sponsorName, 160) : null,
-            ajirContractStatus: activityType === "workforce" && sponsorshipType === "other" ? (item.ajirContractStatus === "with_ajir" ? "with_ajir" : item.ajirContractStatus === "without_ajir" ? "without_ajir" : null) : activityType === "workforce" ? "not_applicable" : null,
+            ajirContractStatus: activityType === "workforce" ? (item.ajirContractStatus === "with_ajir" ? "with_ajir" : item.ajirContractStatus === "without_ajir" ? "without_ajir" : sponsorshipType === "dali" ? "not_applicable" : null) : null,
         };
     });
     const rawTerms = payload.quotationTerms && typeof payload.quotationTerms === "object" ? payload.quotationTerms as Record<string, unknown> : {};
     const quotationTerms = {
         ...readCommercialTerms(rawTerms),
+        vatRate: rawTerms.vatRate == null || rawTerms.vatRate === "" ? 15 : Number(rawTerms.vatRate),
+        issueDate: text(rawTerms.issueDate, 10) || null,
         seasonType: rawTerms.seasonType === "hajj" || rawTerms.seasonType === "ramadan" ? rawTerms.seasonType : "regular",
         paymentSchedule: parsePaymentSchedule(rawTerms.paymentSchedule),
         endDate: text(rawTerms.endDate, 10) || null,
-        workingHours: text(rawTerms.workingHours, 120) || null,
+        workingHours: text(rawTerms.workingHours, 240) || null,
         weeklyOff: text(rawTerms.weeklyOff, 120) || null,
         accommodationParty: text(rawTerms.accommodationParty, 40) || null,
         transportParty: text(rawTerms.transportParty, 40) || null,
-        paymentTerms: text(rawTerms.paymentTerms, 500) || null,
-        specialTerms: text(rawTerms.specialTerms, 1000) || null,
+        paymentTerms: text(rawTerms.paymentTerms, 1200) || null,
+        specialTerms: text(rawTerms.specialTerms, 2000) || null,
     };
     if (quotationTerms.paymentSchedule.length && !validateSeasonalSchedule(quotationTerms.paymentSchedule))
         throw new Error("أكمل جدول الدفعات المقترح بمواعيد صحيحة ومجموع نسب 100٪");
     const specialization = requestType === "quotation" && activityLabels[activityType] ? activityLabels[activityType] : text(payload.specialization, 80);
-    const details = text(payload.details, 2000);
+    const details = text(payload.details, 4000);
     const idempotencyKey = text(payload.idempotencyKey, 80);
     if (fullName.length < 2 ||
         !/^\+?[0-9\s()-]{8,20}$/.test(mobile) ||
@@ -86,7 +90,7 @@ export function parseWorkforceRequestInput(payload: Record<string, unknown>) {
             representativeTitle.length < 2 ||
             (clientCr && !/^\d{10}$/.test(clientCr)) ||
             (clientVat && !/^3\d{13}3$/.test(clientVat)) ||
-            !quotationItems.length || quotationItems.some((item) => !item.description || !Number.isInteger(item.durationMonths) || item.durationMonths < 1 || item.durationMonths > 120 || (quantityMode === "fixed" && (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 100000)) || (item.sponsorshipType === "other" && (!item.sponsorName || !item.ajirContractStatus))) ||
+            !Number.isFinite(quotationTerms.vatRate) || quotationTerms.vatRate < 0 || quotationTerms.vatRate > 100 || rawItems.length > 30 || !quotationItems.length || quotationItems.some((item) => !Number.isFinite(item.unitPrice) || item.unitPrice < 0 || item.unitPrice > 1000000 || !Number.isFinite(item.actualSalary) || item.actualSalary < 0 || item.actualSalary > 1000000 || !item.description || !Number.isInteger(item.durationMonths) || item.durationMonths < 1 || item.durationMonths > 120 || (quantityMode === "fixed" && (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 100000)) || (item.sponsorshipType === "other" && (!item.sponsorName || !item.ajirContractStatus))) ||
             !allowedDurations.has(duration) ||
             !allowedContactMethods.has(preferredContact) ||
             !/^\d{4}-\d{2}-\d{2}$/.test(requiredStartDate) ||

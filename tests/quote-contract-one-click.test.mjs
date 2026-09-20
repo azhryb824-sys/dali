@@ -33,16 +33,12 @@ test("quote salary is internal and schema migration is additive", () => {
   assert.match(api, /actualSalaryHalalas/);
 });
 
-test("contract editing uses the same four-step creation layout", () => {
+test("contract editing exposes the shared complete commercial fields without step locks", () => {
   const editor = read("app/portal/ContractFullEditDialog.tsx");
-  for (const label of [
-    "بيانات العقد",
-    "المهن والأعداد",
-    "التفاصيل والتجهيز",
-    "الدفعات والمراجعة",
-  ])
-    assert.match(editor, new RegExp(label));
-  assert.match(editor, /contract-wizard-steps/);
-  assert.match(editor, /issue-form-step/);
-  assert.match(editor, /profession-builder/);
+  assert.match(editor, /CommercialDetailsFields defaults=/);
+  assert.match(editor, /CommercialLineItemsEditor lines=/);
+  assert.match(editor, /RequestedPaymentSchedule defaults=/);
+  assert.match(editor, /versionNumber:contract.versionNumber/);
+  assert.match(editor, /تعديل العقد بالكامل/);
+  assert.match(editor, /حفظ جميع التعديلات/);
 });
