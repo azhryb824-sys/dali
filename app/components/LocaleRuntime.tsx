@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { isAppLocale, localeDirection, localeNames, translateUi, type AppLocale } from "@/lib/i18n";
 import { readClientLocale, saveClientLocale, setClientLocale, useAppLocale } from "@/lib/client-locale";
@@ -8,6 +8,11 @@ import { observeLocaleTree } from "@/lib/locale-dom";
 
 type TranslationCatalogs = Partial<Record<"en" | "bn", Record<string, string>>>;
 const emptyTranslations: Record<string, string> = {};
+// SSR markup is visible before React attaches handlers. Keep the switcher
+// disabled until its own hydration has completed, including streamed portals.
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
 
 export default function LocaleRuntime({ initialLocale, portal = false, showSwitcher = true, translationCatalogs = {} }: {
   initialLocale: AppLocale;
@@ -16,6 +21,7 @@ export default function LocaleRuntime({ initialLocale, portal = false, showSwitc
   translationCatalogs?: TranslationCatalogs;
 }) {
   const locale = useAppLocale(initialLocale);
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
   const pathname = usePathname() || "";
   const portalPage = pathname === "/portal" || pathname.startsWith("/portal/");
   const host = useRef<HTMLLabelElement>(null);
@@ -41,7 +47,7 @@ export default function LocaleRuntime({ initialLocale, portal = false, showSwitc
   }, [locale, portal, portalPage, translations]);
 
   async function change(value: string) {
-    if (!isAppLocale(value) || value === locale || pending.current) return;
+    if (!hydrated || !isAppLocale(value) || value === locale || pending.current) return;
     pending.current = true;
     setBusy(true);
     setError("");
@@ -57,7 +63,7 @@ export default function LocaleRuntime({ initialLocale, portal = false, showSwitc
 
   return <label ref={host} hidden={!showSwitcher} data-dali-no-translate className={`language-switcher ${portal ? "portal-language-switcher" : ""}`}>
     <span>{translateUi("اللغة", locale)}</span>
-    <select value={locale} disabled={busy} aria-busy={busy} onChange={event => void change(event.target.value)} aria-label={translateUi("اختيار اللغة", locale)}>
+    <select value={locale} disabled={!hydrated || busy} aria-busy={!hydrated || busy} onChange={event => void change(event.target.value)} aria-label={translateUi("اختيار اللغة", locale)}>
       {(["ar", "en", "bn"] as AppLocale[]).map(item => <option key={item} value={item}>{localeNames[item]}</option>)}
     </select>
     {error && <small role="alert">{translateUi(error, locale)}</small>}
