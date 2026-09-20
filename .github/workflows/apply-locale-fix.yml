@@ -39,6 +39,9 @@ jobs:
               path = (root / item['path']).resolve()
               assert path.is_relative_to(root) and '.git' not in path.relative_to(root).parts
               original = path.read_bytes() if path.exists() else b''
+              if item['path'] == '.github/workflows/locale-browser.yml':
+                  assert hashlib.sha256(original).hexdigest() == item['after'], 'Authorized workflow differs'
+                  continue
               assert hashlib.sha256(original).hexdigest() == item['before'], f"Source changed: {item['path']}"
               lines = original.decode().splitlines(keepends=True)
               for start, end, replacement in reversed(item['edits']):
@@ -59,7 +62,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git rm -r review-patches/locale
           git rm .github/workflows/apply-locale-fix.yml
-          git add app lib tests .github/workflows/locale-browser.yml
+          git add app lib tests
           git diff --cached --check
           git commit -m 'Fix locale switching without reload, unsafe DOM translation or session disruption'
           git push origin HEAD:codex/language-switch-fix-20260921
