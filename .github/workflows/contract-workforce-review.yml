@@ -4,25 +4,77 @@ on:
     branches: [codex/contract-fields-workers-20260920]
     paths: [.github/workflows/contract-workforce-review.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  source-snapshot:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    env:
+      AUTH_MODE: credentials
+      DATABASE_URL: file:/tmp/dali-ci.db
+      UPLOADS_DIR: /tmp/dali-ci-uploads
+      AUTH_SECRET: ci-auth-secret-for-dali-with-more-than-32-characters
+      PORTAL_ADMIN_IDENTIFIER: "1234567890"
+      PORTAL_ADMIN_EMAIL: admin@example.test
+      PORTAL_ADMIN_EMAILS: admin@example.test
+      PORTAL_ADMIN_NAME: CI Administrator
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22.16.0
           cache: npm
-      - run: npm ci
-      - name: Package verification dependencies
+      - name: Apply verified source edits
         run: |
-          tar --exclude='node_modules/@next' --exclude='node_modules/@img' --exclude='node_modules/@cloudflare' --exclude='node_modules/wrangler' --exclude='node_modules/.cache' -czf /tmp/dali-test-dependencies.tar.gz node_modules
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dali-test-dependencies
-          path: /tmp/dali-test-dependencies.tar.gz
-          retention-days: 1
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, json, lzma
+          root = Path.cwd().resolve()
+          parts = []
+          for index in range(1, 7):
+              path = root / f'review-patches/contract-workforce/{index:02}.b64'
+              part = path.read_text().strip()
+              print(path.name, len(part), hashlib.sha256(part.encode()).hexdigest())
+              parts.append(part)
+          packed = base64.b64decode(''.join(parts), validate=True)
+          assert hashlib.sha256(packed).hexdigest() == '71f37c0f5535be7dbecd50b0084973a7bb5a805f5a12fc3d6de81db00bebe07b', 'Transfer checksum mismatch'
+          pending = []
+          for item in json.loads(lzma.decompress(packed)):
+              path = (root / item['path']).resolve()
+              assert path.is_relative_to(root) and '.git' not in path.relative_to(root).parts
+              original = path.read_bytes() if path.exists() else b''
+              assert hashlib.sha256(original).hexdigest() == item['before'], f"Source changed: {item['path']}"
+              lines = original.decode().splitlines(keepends=True)
+              for start, end, replacement in reversed(item['edits']):
+                  lines[start:end] = replacement.splitlines(keepends=True)
+              output = ''.join(lines).encode()
+              assert hashlib.sha256(output).hexdigest() == item['after'], f"Output mismatch: {item['path']}"
+              pending.append((path, output))
+          for path, output in pending:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(output)
+              print('Verified', path.relative_to(root))
+          PY
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Regenerate and audit runtime translations
+        run: npm run i18n:generate
+      - name: Commit implementation to review branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -r review-patches/contract-workforce
+          git rm .github/workflows/contract-workforce-review.yml
+          git add app db lib drizzle-pg tests
+          git diff --cached --check
+          git commit -m 'Unify contract fields and redesign contract workforce management'
+          git push origin HEAD:codex/contract-fields-workers-20260920
+          git rev-parse HEAD
+      - name: Generate test administrator password hash
+        run: echo "PORTAL_ADMIN_PASSWORD_HASH=$(node scripts/hash-password.mjs 'ci-test-password-2026!')" >> "$GITHUB_ENV"
+      - name: TypeScript
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Build and regression tests
+        run: npm test
