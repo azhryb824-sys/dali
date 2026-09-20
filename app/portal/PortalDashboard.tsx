@@ -47,6 +47,7 @@ import VideoInterviewDesk from "./VideoInterviewDesk";
 import ServiceRatingsPanel from "./ServiceRatingsPanel";
 import ExecutivePeopleCommandCenter from "./ExecutivePeopleCommandCenter";
 import LocaleRuntime from "@/app/components/LocaleRuntime";
+import { useAppLocale } from "@/lib/client-locale";
 import GovernmentAffairsWorkspace from "./GovernmentAffairsWorkspace";
 import TaskCenter, { GlobalTaskReminder } from "./TaskCenter";
 import ContractualDocumentsWorkspace from "./ContractualDocumentsWorkspace";
@@ -863,6 +864,7 @@ export default function PortalDashboard({
   signOutPath: string;
 }) {
   const router = useRouter();
+  const activeLocale = useAppLocale(currentUser.preferredLanguage);
   const [view, setView] = useState<View>("overview");
   const [quoteSourceRequestId, setQuoteSourceRequestId] = useState<number | undefined>();
   const [sharingDocumentId, setSharingDocumentId] = useState<number | null>(null);
@@ -2188,7 +2190,7 @@ export default function PortalDashboard({
 
   return (
     <main className="admin-shell">
-      <LocaleRuntime initialLocale={currentUser.preferredLanguage} portal websiteTranslations={currentUser.preferredLanguage === "ar" ? {} : initialWebsiteContent.translations[currentUser.preferredLanguage]} />
+      <LocaleRuntime initialLocale={currentUser.preferredLanguage} portal translationCatalogs={initialWebsiteContent.translations} />
       <aside className={`admin-sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
           <Image src="/dally-logo.jpg" alt="شعار شركة دالي" width={545} height={280} sizes="160px" />
@@ -2577,7 +2579,7 @@ export default function PortalDashboard({
           {view === "tasks" && <TaskCenter />}
           {view === "guide" && (
             <SystemGuide
-              locale={currentUser.preferredLanguage}
+              locale={activeLocale}
               userName={currentUser.displayName}
               role={currentUser.role}
               department={currentUser.department}

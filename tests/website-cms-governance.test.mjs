@@ -29,7 +29,7 @@ test("translation governance inventories every authored Arabic string and blocks
     source("lib/website-translation-audit.ts"),
     source("app/portal/WebsiteManager.tsx"),
     source("app/api/portal/website/route.ts"),
-    source("app/components/LocaleRuntime.tsx"),
+    source("lib/locale-dom.ts"),
   ]);
   assert.match(audit, /new Set<string>\(authoredUiStrings\)/);
   assert.match(audit, /\[\\u0600-\\u06ff\]/);
