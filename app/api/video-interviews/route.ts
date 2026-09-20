@@ -5,7 +5,7 @@ import { auditPortalAction } from "@/lib/audit";
 import { getBusinessHoursState } from "@/lib/business-hours";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { enforcePublicRateLimit, jsonNoStore, rateLimitResponse, readLimitedJson, rejectCrossSiteRequest, sha256 } from "@/lib/security";
-import { interviewReference, interviewRoomName, interviewRoomUrl, listAvailableInterviewStaff, liveInterviewStatuses } from "@/lib/video-interviews";
+import { expireOldVideoInterviews, interviewReference, interviewRoomName, interviewRoomUrl, listAvailableInterviewStaff, liveInterviewStatuses } from "@/lib/video-interviews";
 
 const COOKIE_NAME = "dali_live_chat";
 
@@ -24,7 +24,7 @@ async function publicPayload(conversationId: string) {
     where: eq(videoInterviews.conversationId, conversationId),
     orderBy: [desc(videoInterviews.createdAt)],
   });
-  if (!interview || (["completed", "cancelled", "expired"].includes(interview.status) && Boolean(interview.ratedAt))) return null;
+  if (!interview || ["cancelled", "expired"].includes(interview.status) || (interview.status === "completed" && Boolean(interview.ratedAt))) return null;
   const assignee = interview.assignedTo ? await getDb().query.portalUsers.findFirst({ where: eq(portalUsers.email, interview.assignedTo) }) : null;
   return {
     id: interview.id,
@@ -41,6 +41,7 @@ async function publicPayload(conversationId: string) {
 export async function GET(request: Request) {
   const conversation = await publicConversation(request);
   if (!conversation) return jsonNoStore({ interview: null, businessHours: await getBusinessHoursState() });
+  await expireOldVideoInterviews(conversation.id);
   return jsonNoStore({ interview: await publicPayload(conversation.id), businessHours: await getBusinessHoursState() });
 }
 
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
   if (action !== "request") return jsonNoStore({ error: "إجراء المكالمة غير صحيح." }, { status: 400 });
   const businessHours = await getBusinessHoursState();
   if (!businessHours.isOpen) return jsonNoStore({ error: `المقابلة المرئية متاحة خلال ساعات العمل فقط. العودة ${businessHours.nextOpenLabel}.`, businessHours }, { status: 409 });
+  await expireOldVideoInterviews(conversation.id);
   const existing = await db.query.videoInterviews.findFirst({ where: and(eq(videoInterviews.conversationId, conversation.id), inArray(videoInterviews.status, [...liveInterviewStatuses])), orderBy: [desc(videoInterviews.createdAt)] });
   if (existing) return jsonNoStore({ interview: await publicPayload(conversation.id), businessHours });
   const available = await listAvailableInterviewStaff();

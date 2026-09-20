@@ -128,6 +128,8 @@ export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
   "يوم. رصيد الخصومات للشهر التالي:": {"en": "Days. Deductions carried forward:", "bn": "দিন। পরের মাসে বহন করা কর্তন:"},
 
   "اختبار الكاميرا والميكروفون": {"en": "Test camera and microphone", "bn": "ক্যামেরা ও মাইক্রোফোন পরীক্ষা করুন"},
+  "انتهت مهلة المقابلة المرئية": {"en": "The video call has expired", "bn": "ভিডিও কলের সময়সীমা শেষ হয়েছে"},
+  "لديك مكالمة جارية؛ أنهها أو حوّلها قبل قبول مكالمة أخرى.": {"en": "You have an active call. End or transfer it before accepting another call.", "bn": "আপনার একটি কল চলছে। আরেকটি কল গ্রহণের আগে সেটি শেষ করুন বা স্থানান্তর করুন।"},
   "استخدم التطبيق المحدّث أو متصفحًا يدعم الكاميرا عبر اتصال آمن.": {"en": "Use the updated app or a browser that supports camera access over a secure connection.", "bn": "হালনাগাদ অ্যাপ বা নিরাপদ সংযোগে ক্যামেরা সমর্থন করে এমন ব্রাউজার ব্যবহার করুন।"},
   "اسمح للتطبيق باستخدام الكاميرا والميكروفون من إعدادات الجهاز ثم أعد الاختبار.": {"en": "Allow camera and microphone access in device settings, then test again.", "bn": "ডিভাইসের সেটিংসে ক্যামেরা ও মাইক্রোফোন ব্যবহারের অনুমতি দিয়ে আবার পরীক্ষা করুন।"},
   "إضافة بند مقترح": {"en": "Add a proposed clause", "bn": "প্রস্তাবিত ধারা যোগ করুন"},

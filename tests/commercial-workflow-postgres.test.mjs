@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { before, after, test } from "node:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -16,7 +17,7 @@ before(async () => {
   await mkdir(resolve("node_modules/.cache"), { recursive: true });
   directory = await mkdtemp(resolve("node_modules/.cache/dali-commercial-"));
   const outfile = resolve(directory, "qa.mjs");
-  await build({ stdin: { contents: `export * as schema from './db/schema.ts'; export * as quoteEdit from './app/api/portal/operations/quotes/[id]/route.ts'; export * as generate from './app/api/portal/documents/generate/route.ts'; export * as requests from './app/api/portal/requests/route.ts'; export * as operations from './app/api/portal/operations/route.ts'; export * as quoteShare from './app/api/portal/operations/quotes/[id]/share/route.ts'; export * as documentShare from './app/api/portal/documents/share/route.ts'; export * as download from './app/api/shared-documents/[token]/route.ts'; export * as conversations from './app/api/portal/conversations/route.ts'; export * as video from './lib/video-interviews.ts'; export * as notifications from './lib/portal-notifications.ts'; export * as notificationRoute from './app/api/portal/notifications/route.ts'; export {resolveShareRecipient} from './lib/share-recipient.ts'; export {readCommercialTerms,commercialTermsFromRequest} from './lib/commercial-terms.ts'; export {setTestDb,setTestActor} from 'qa-control';`, resolveDir: process.cwd() }, outfile, bundle: true, platform: "node", format: "esm", packages: "external", logLevel: "silent", plugins: [{ name: "isolate-environment", setup(b) {
+  await build({ stdin: { contents: `export * as schema from './db/schema.ts'; export * as quoteEdit from './app/api/portal/operations/quotes/[id]/route.ts'; export * as generate from './app/api/portal/documents/generate/route.ts'; export * as requests from './app/api/portal/requests/route.ts'; export * as operations from './app/api/portal/operations/route.ts'; export * as quoteShare from './app/api/portal/operations/quotes/[id]/share/route.ts'; export * as documentShare from './app/api/portal/documents/share/route.ts'; export * as download from './app/api/shared-documents/[token]/route.ts'; export * as conversations from './app/api/portal/conversations/route.ts'; export * as video from './lib/video-interviews.ts'; export * as videoPortal from './app/api/portal/video-interviews/route.ts'; export * as videoPublic from './app/api/video-interviews/route.ts'; export * as notifications from './lib/portal-notifications.ts'; export * as notificationRoute from './app/api/portal/notifications/route.ts'; export {resolveShareRecipient} from './lib/share-recipient.ts'; export {readCommercialTerms,commercialTermsFromRequest} from './lib/commercial-terms.ts'; export {setTestDb,setTestActor} from 'qa-control';`, resolveDir: process.cwd() }, outfile, bundle: true, platform: "node", format: "esm", packages: "external", logLevel: "silent", plugins: [{ name: "isolate-environment", setup(b) {
     b.onResolve({ filter: /^(qa-control|@\/db|@\/lib\/portal-access)$/ }, () => ({ path: "state", namespace: "state" }));
     b.onLoad({ filter: /.*/, namespace: "state" }, () => ({ contents: `let db,actor; export function getDb(){return db} export function getSqlClient(){throw new Error('Unexpected raw SQL dependency')} export function setTestDb(value){db=value} export function setTestActor(value){actor=value} export async function requirePortalApiRole(){return actor} export function canAdministerPortalUsers(a){return a.role==='admin'||a.functionalRoles.some(r=>['system_owner','system_admin'].includes(r))} export async function hasPortalPermission(a,r,v){return canAdministerPortalUsers(a)||a.functionalPermissions.includes(r+'.'+v)} export function canSharePortalDocuments(a){return a.role==='admin'||a.functionalPermissions.includes('documents.share')} export function canAccessPortalDocuments(a){return a.role==='admin'||a.functionalPermissions.includes('documents.read')} export function canAccessPortalConversations(a){return a.role==='admin'||a.functionalPermissions.includes('conversations.write')} export const canManagePortalConversations=canAccessPortalConversations;` }));
     b.onResolve({ filter: /^@\/lib\/pdf-generator$/ }, () => ({ path: "pdf", namespace: "pdf" }));
@@ -191,4 +192,117 @@ test("invoice recipient is recovered from a client's chat even without a quote r
   await db.insert(qa.schema.visitorConversations).values({ id: "qa-chat", trackingCode: "QA-CHAT", publicTokenHash: "qa-chat-token", visitorName: "Chat Contact", visitorEmail: "chat-only@qa.test", visitorMobile: "٠٠٩٦٦ ٥٤ ١٢٣ ٤٥٦٧", subject: "QA", lastVisitorMessageAt: new Date().toISOString() });
   const [invoice] = await db.insert(qa.schema.companyDocuments).values({ referenceCode: "QA-CHAT-INV", title: "QA invoice", category: "finance", documentType: "invoice", fileName: "invoice.pdf", storageKey: "chat-invoice.pdf", contentType: "application/pdf", sizeBytes: 7, metadataJson: JSON.stringify({ clientId: client.id }), createdBy: "qa" }).returning();
   assert.equal((await qa.resolveShareRecipient({ documentId: invoice.id })).mobile, "966541234567");
+});
+
+async function resetVideoFixtures() {
+  await db.delete(qa.schema.videoInterviews);
+  await db.delete(qa.schema.portalUserPresence);
+  await db.insert(qa.schema.portalUsers).values([
+    { email: "owner@qa.test", displayName: "QA owner", role: "admin", department: "management", status: "active" },
+    { email: "receiver@qa.test", displayName: "QA receiver", role: "admin", department: "management", status: "active" },
+  ]).onConflictDoNothing();
+  qa.setTestActor(actor(true));
+  await qa.video.touchInterviewPresence("owner@qa.test", "away");
+}
+
+async function videoFixture(status = "active", assignedTo = "staff@qa.test", expired = false) {
+  const id = crypto.randomUUID(), conversationId = crypto.randomUUID(), token = crypto.randomUUID(), now = new Date().toISOString();
+  await db.insert(qa.schema.visitorConversations).values({ id: conversationId, trackingCode: `QA-${conversationId}`, publicTokenHash: createHash("sha256").update(token).digest("hex"), visitorName: "QA video", visitorMobile: "0500000000", subject: "QA", lastVisitorMessageAt: now });
+  const [interview] = await db.insert(qa.schema.videoInterviews).values({ id, referenceCode: `VID-${id}`, conversationId, roomName: `qa-${id}`, status, assignedTo, requestedAt: now, expiresAt: new Date(Date.now() + (expired ? -60_000 : 600_000)).toISOString(), createdAt: now, updatedAt: now }).returning();
+  return { ...interview, token };
+}
+const videoPresence = async (email) => (await pg.query("select * from portal_user_presence where user_email=$1", [email])).rows[0];
+const videoAction = (action, interviewId, extra = {}) => qa.videoPortal.POST(request("/api/portal/video-interviews", { action, interviewId, ...extra }));
+
+test("owner completion releases the actual employee without fabricating a heartbeat or changing owner availability", async () => {
+  await resetVideoFixtures();
+  const interview = await videoFixture();
+  await qa.video.touchInterviewPresence("staff@qa.test", "busy", interview.id);
+  const previousSeen = new Date(Date.now() - 300_000).toISOString();
+  await pg.query("update portal_user_presence set last_seen_at=$1 where user_email='staff@qa.test'", [previousSeen]);
+  const response = await videoAction("complete", interview.id);
+  assert.equal(response.status, 200);
+  const staff = await videoPresence("staff@qa.test");
+  assert.equal(staff.availability, "online"); assert.equal(staff.current_interview_id, null); assert.equal(staff.last_seen_at, previousSeen);
+  assert.equal((await videoPresence("owner@qa.test")).availability, "away");
+  assert.equal((await videoAction("complete", interview.id)).status, 409);
+  assert.equal((await pg.query("select count(*)::int n from portal_notifications where event_type='video-interview-completed' and entity_id=$1", [interview.id])).rows[0].n, 1);
+});
+
+test("owner transfer releases the original employee and records the correct transfer history", async () => {
+  await resetVideoFixtures();
+  const interview = await videoFixture();
+  await qa.video.touchInterviewPresence("staff@qa.test", "busy", interview.id);
+  await qa.video.touchInterviewPresence("receiver@qa.test");
+  const response = await videoAction("transfer", interview.id, { toEmail: "receiver@qa.test", reason: "QA transfer reason" });
+  assert.equal(response.status, 200, JSON.stringify(await response.json()));
+  assert.equal((await videoPresence("staff@qa.test")).availability, "online");
+  assert.equal((await videoPresence("owner@qa.test")).availability, "away");
+  const transfer = (await pg.query("select * from video_interview_transfers where interview_id=$1", [interview.id])).rows[0];
+  assert.equal(transfer.from_email, "staff@qa.test"); assert.equal(transfer.to_email, "receiver@qa.test");
+  assert.equal(transfer.transferred_by, "owner@qa.test");
+});
+
+test("cancelling a ringing call preserves manually selected away status", async () => {
+  await resetVideoFixtures();
+  const interview = await videoFixture("ringing");
+  await qa.video.touchInterviewPresence("staff@qa.test", "away");
+  assert.equal((await videoAction("cancel", interview.id)).status, 200);
+  assert.equal((await videoPresence("staff@qa.test")).availability, "away");
+  assert.equal((await videoPresence("owner@qa.test")).availability, "away");
+});
+
+test("releasing an old call preserves a newer active call and its busy presence", async () => {
+  await resetVideoFixtures();
+  const oldCall = await videoFixture("completed");
+  const current = await videoFixture();
+  await qa.video.touchInterviewPresence("staff@qa.test", "busy", current.id);
+  await qa.video.releaseInterviewPresence("staff@qa.test", oldCall.id);
+  assert.equal((await videoPresence("staff@qa.test")).current_interview_id, current.id);
+  await pg.query("update portal_user_presence set current_interview_id=$1 where user_email='staff@qa.test'", [oldCall.id]);
+  await qa.video.releaseInterviewPresence("staff@qa.test", oldCall.id);
+  const staff = await videoPresence("staff@qa.test");
+  assert.equal(staff.availability, "busy"); assert.equal(staff.current_interview_id, current.id);
+});
+
+test("concurrent accepts cannot give one employee two active video calls", async () => {
+  await resetVideoFixtures();
+  const first = await videoFixture("ringing", "owner@qa.test"), second = await videoFixture("ringing", "owner@qa.test");
+  const responses = await Promise.all([videoAction("accept", first.id), videoAction("accept", second.id)]);
+  assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
+  const active = (await pg.query("select id from video_interviews where assigned_to='owner@qa.test' and status='active'")).rows;
+  assert.equal(active.length, 1);
+  assert.equal((await videoPresence("owner@qa.test")).current_interview_id, active[0].id);
+});
+
+test("visitor polling expires only its own call, removes stale join links and permits retry", async () => {
+  await resetVideoFixtures();
+  const own = await videoFixture("active", "staff@qa.test", true), other = await videoFixture("requested", null, true);
+  await db.insert(qa.schema.portalUserPresence).values({ userEmail: "staff@qa.test", availability: "busy", currentInterviewId: own.id, lastSeenAt: new Date().toISOString() });
+  const poll = () => qa.videoPublic.GET(new Request("https://www.dally.info/api/video-interviews", { headers: { cookie: `dali_live_chat=${own.conversationId}.${own.token}` } }));
+  assert.equal((await (await poll()).json()).interview, null);
+  assert.equal((await videoPresence("staff@qa.test")).availability, "online");
+  assert.equal((await pg.query("select status from video_interviews where id=$1", [other.id])).rows[0].status, "requested");
+  assert.equal((await (await poll()).json()).interview, null);
+  const alerts = (await pg.query("select * from portal_notifications where event_type='video-interview-expired' and entity_id=$1", [own.conversationId])).rows;
+  assert.equal(alerts.length, 1); assert.equal(alerts[0].target_email, "staff@qa.test");
+  assert.equal(alerts[0].entity_type, "visitor-conversation"); assert.equal(alerts[0].action_view, "conversations");
+  qa.setTestActor(actor());
+  assert.ok((await qa.notifications.listPortalNotifications(actor())).some(item => item.id === alerts[0].id));
+  const noticeAction = action => qa.notificationRoute.PATCH(request("/api/portal/notifications", { action, ids: [alerts[0].id] }, "PATCH"));
+  assert.equal((await noticeAction("read")).status, 200);
+  await poll();
+  assert.ok((await qa.notifications.listPortalNotifications(actor())).find(item => item.id === alerts[0].id).readAt);
+  assert.equal((await noticeAction("dismiss")).status, 200);
+  assert.equal((await qa.notifications.listPortalNotifications(actor())).some(item => item.id === alerts[0].id), false);
+});
+
+test("old expired calls are processed even behind more than 300 recent requests", async () => {
+  await resetVideoFixtures();
+  const oldCall = await videoFixture("requested", null, true);
+  await pg.query("update video_interviews set requested_at='2000-01-01T00:00:00.000Z' where id=$1", [oldCall.id]);
+  const now = new Date().toISOString();
+  await db.insert(qa.schema.videoInterviews).values(Array.from({ length: 301 }, () => { const id = crypto.randomUUID(); return { id, referenceCode: `VID-${id}`, conversationId: oldCall.conversationId, roomName: `qa-${id}`, status: "requested", requestedAt: now, expiresAt: new Date(Date.now() + 600_000).toISOString() }; }));
+  assert.equal(await qa.video.expireOldVideoInterviews(), 1);
+  assert.equal((await pg.query("select status from video_interviews where id=$1", [oldCall.id])).rows[0].status, "expired");
 });

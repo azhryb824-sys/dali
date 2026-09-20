@@ -1,7 +1,8 @@
-import { and, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/db";
 import { portalAccessScopes, portalRoles, portalUserPermissions, portalUserPresence, portalUsers, videoInterviews } from "@/db/schema";
 import { parseRolePermissions } from "@/lib/portal-permissions";
+import { emitPortalNotification } from "@/lib/portal-notifications";
 
 export const liveInterviewStatuses = ["requested", "ringing", "transferred", "active"] as const;
 
@@ -74,12 +75,27 @@ export async function touchInterviewPresence(userEmail: string, availability: "o
   return now;
 }
 
-export async function expireOldVideoInterviews() {
+export async function releaseInterviewPresence(userEmail: string | null, interviewId: string) {
+  if (!userEmail) return;
+  const db = getDb();
+  const now = new Date().toISOString();
+  const active = await db.query.videoInterviews.findFirst({ where: and(eq(videoInterviews.assignedTo, userEmail), eq(videoInterviews.status, "active"), gt(videoInterviews.expiresAt, now)) });
+  // Release only this call's busy state. A newer call or a manually selected
+  // away/offline state must survive an owner's action on an older call.
+  // Keep lastSeenAt: an administrative action is not an employee heartbeat.
+  await db.update(portalUserPresence).set({
+    availability: active ? "busy" : "online", currentInterviewId: active?.id || null, updatedAt: now,
+  }).where(and(eq(portalUserPresence.userEmail, userEmail), eq(portalUserPresence.availability, "busy"), eq(portalUserPresence.currentInterviewId, interviewId)));
+}
+
+export async function expireOldVideoInterviews(conversationId?: string) {
   const now = new Date().toISOString();
   const db = getDb();
-  const open = await db.select().from(videoInterviews).where(inArray(videoInterviews.status, [...liveInterviewStatuses])).orderBy(desc(videoInterviews.requestedAt)).limit(300);
-  const expired = open.filter((item) => item.expiresAt <= now);
-  for (const item of expired) await db.update(videoInterviews).set({ status: "expired", endedAt: now, updatedAt: now }).where(and(eq(videoInterviews.id, item.id), eq(videoInterviews.status, item.status)));
-  for (const item of expired) if (item.assignedTo) await touchInterviewPresence(item.assignedTo);
+  const expired = await db.update(videoInterviews).set({ status: "expired", endedAt: now, updatedAt: now })
+    .where(and(inArray(videoInterviews.status, [...liveInterviewStatuses]), lte(videoInterviews.expiresAt, now), conversationId ? eq(videoInterviews.conversationId, conversationId) : undefined)).returning();
+  for (const item of expired) {
+    await releaseInterviewPresence(item.assignedTo, item.id);
+    await emitPortalNotification({ eventType: "video-interview-expired", title: "انتهت مهلة المقابلة المرئية", message: item.referenceCode, severity: "warning", module: "conversations", entityType: "visitor-conversation", entityId: item.conversationId, actionView: "conversations", ...(item.assignedTo ? { targetEmail: item.assignedTo } : { targetRole: "admin" as const }), dedupeKey: `video-interview:${item.id}:expired` }).catch(() => undefined);
+  }
   return expired.length;
 }

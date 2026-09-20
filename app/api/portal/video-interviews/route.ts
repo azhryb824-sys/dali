@@ -1,11 +1,11 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { portalAccessScopes, portalUsers, videoInterviewTransfers, videoInterviews, visitorConversations } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
-import { expireOldVideoInterviews, interviewRoomUrl, listAvailableInterviewStaff, liveInterviewStatuses, refreshInterviewPresence, touchInterviewPresence } from "@/lib/video-interviews";
+import { expireOldVideoInterviews, interviewRoomUrl, listAvailableInterviewStaff, liveInterviewStatuses, refreshInterviewPresence, releaseInterviewPresence, touchInterviewPresence } from "@/lib/video-interviews";
 
 async function interviewAccess() {
   return requirePortalApiRole(["admin", "manager", "employee"]);
@@ -75,8 +75,17 @@ export async function POST(request: Request) {
 
   if (action === "accept") {
     if (!["requested", "ringing", "transferred"].includes(interview.status) || interview.expiresAt <= now) return jsonNoStore({ error: "لم تعد المقابلة قابلة للقبول" }, { status: 409 });
-    const [updated] = await db.update(videoInterviews).set({ status: "active", assignedTo: access.user.email, acceptedAt: interview.acceptedAt || now, startedAt: interview.startedAt || now, updatedAt: now }).where(and(eq(videoInterviews.id, interview.id), eq(videoInterviews.status, interview.status), eq(videoInterviews.updatedAt, interview.updatedAt))).returning();
+    const accepted = await db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`video-accept:${access.user.email}`}))`);
+      const active = await tx.query.videoInterviews.findFirst({ where: and(eq(videoInterviews.assignedTo, access.user.email), eq(videoInterviews.status, "active"), gt(videoInterviews.expiresAt, now)) });
+      if (active) return { busy: true, updated: null };
+      const [updated] = await tx.update(videoInterviews).set({ status: "active", assignedTo: access.user.email, acceptedAt: interview.acceptedAt || now, startedAt: interview.startedAt || now, updatedAt: now }).where(and(eq(videoInterviews.id, interview.id), eq(videoInterviews.status, interview.status), eq(videoInterviews.updatedAt, interview.updatedAt), gt(videoInterviews.expiresAt, new Date().toISOString()))).returning();
+      return { busy: false, updated };
+    });
+    if (accepted.busy) return jsonNoStore({ error: "لديك مكالمة جارية؛ أنهها أو حوّلها قبل قبول مكالمة أخرى." }, { status: 409 });
+    const updated = accepted.updated;
     if (!updated) return jsonNoStore({ error: "تغيرت المكالمة أثناء الإجراء؛ حدّث القائمة" }, { status: 409 });
+    if (interview.assignedTo !== access.user.email) await releaseInterviewPresence(interview.assignedTo, interview.id);
     await touchInterviewPresence(access.user.email, "busy", interview.id);
     await auditPortalAction({ actorEmail: access.user.email, action: "video-interview-accepted", entityType: "video-interview", entityId: interview.id, before: interview, after: updated, correlationId: requestCorrelationId(request) });
     await emitPortalNotification({ eventType: "video-interview-accepted", title: "تم قبول المقابلة المرئية", message: `${interview.referenceCode} — بدأ ${access.user.displayName} استقبال الزائر.`, severity: "success", module: "conversations", entityType: "video-interview", entityId: interview.id, actionView: "conversations", targetRole: "admin" }).catch(() => undefined);
@@ -95,7 +104,7 @@ export async function POST(request: Request) {
     const [updated] = await db.update(videoInterviews).set({ status: "transferred", assignedTo: toEmail, transferCount: interview.transferCount + 1, lastTransferredBy: access.user.email, transferReason: reason, updatedAt: now }).where(and(eq(videoInterviews.id, interview.id), eq(videoInterviews.status, interview.status), eq(videoInterviews.updatedAt, interview.updatedAt))).returning();
     if (!updated) return jsonNoStore({ error: "تغيرت المكالمة أثناء الإجراء؛ حدّث القائمة" }, { status: 409 });
     await db.insert(videoInterviewTransfers).values({ interviewId: interview.id, fromEmail: interview.assignedTo, toEmail, transferredBy: access.user.email, reason, createdAt: now });
-    await touchInterviewPresence(access.user.email, "online");
+    await releaseInterviewPresence(interview.assignedTo, interview.id);
     await auditPortalAction({ actorEmail: access.user.email, action: "video-interview-transferred", entityType: "video-interview", entityId: interview.id, before: interview, after: updated, reason, correlationId: requestCorrelationId(request) });
     await emitPortalNotification({ eventType: "video-interview-transferred", title: "حُوّلت إليك مقابلة مرئية", message: `${interview.referenceCode} — من ${access.user.displayName}: ${reason}`, severity: "critical", module: "conversations", entityType: "video-interview", entityId: interview.id, actionView: "conversations", targetEmail: toEmail, dedupeKey: `video-interview:${interview.id}:transfer:${interview.transferCount + 1}` }).catch(() => undefined);
     return jsonNoStore(await payload(access));
@@ -105,7 +114,7 @@ export async function POST(request: Request) {
     const nextStatus = action === "complete" ? "completed" : "cancelled";
     const [updated] = await db.update(videoInterviews).set({ status: nextStatus, endedAt: now, updatedAt: now }).where(and(eq(videoInterviews.id, interview.id), eq(videoInterviews.status, interview.status), eq(videoInterviews.updatedAt, interview.updatedAt))).returning();
     if (!updated) return jsonNoStore({ error: "تغيرت المكالمة أثناء الإجراء؛ حدّث القائمة" }, { status: 409 });
-    await touchInterviewPresence(access.user.email, "online");
+    await releaseInterviewPresence(interview.assignedTo, interview.id);
     await auditPortalAction({ actorEmail: access.user.email, action: `video-interview-${nextStatus}`, entityType: "video-interview", entityId: interview.id, before: interview, after: updated, correlationId: requestCorrelationId(request) });
     await emitPortalNotification({ eventType: `video-interview-${nextStatus}`, title: nextStatus === "completed" ? "اكتملت المقابلة المرئية" : "أُلغيت المقابلة المرئية", message: interview.referenceCode, severity: nextStatus === "completed" ? "success" : "warning", module: "conversations", entityType: "video-interview", entityId: interview.id, actionView: "conversations", targetRole: "admin" }).catch(() => undefined);
     return jsonNoStore(await payload(access));
