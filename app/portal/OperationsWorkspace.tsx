@@ -1,6 +1,9 @@
 "use client";
 
 import { parsePaymentSchedule } from "@/lib/payment-schedules";
+import QuoteFullEditFields from "./QuoteFullEditFields";
+import CommercialAttachmentFields from "@/app/components/CommercialAttachmentFields";
+import { uploadCommercialAttachments } from "@/lib/upload-commercial-attachments";
 import CommercialDetailsFields from "@/app/components/CommercialDetailsFields";
 import { commercialTermsFromRequest } from "@/lib/commercial-terms";
 import type { workforceRequests } from "@/db/schema";
@@ -57,6 +60,8 @@ type Representative = {
   status: string;
 };
 type Quote = {
+  assumptions: string | null;
+  discountHalalas: number;
   commercialTermsJson: string | null;
   id: number;
   quoteCode: string;
@@ -69,8 +74,8 @@ type Quote = {
   quantityMode: "fixed" | "open";
   seasonType: "regular" | "ramadan" | "hajj";
   paymentScheduleJson: string | null;
-  accommodationParty: "dali" | "counterparty";
-  transportParty: "dali" | "counterparty";
+  accommodationParty: "dali" | "counterparty" | "not_applicable";
+  transportParty: "dali" | "counterparty" | "not_applicable";
   vatRateBps: number;
   approvedBy: string | null;
   createdBy: string;
@@ -84,6 +89,7 @@ type QuoteItem = {
   durationMonths: number;
   unitPriceHalalas: number;
   actualSalaryHalalas: number;
+  notes: string | null;
   lineTotalHalalas: number;
   sponsorshipType: "dali" | "other" | null;
   sponsorName: string | null;
@@ -327,10 +333,11 @@ export default function OperationsWorkspace({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const result = (await readApiJson(response)) as { error?: string };
+      const result = (await readApiJson(response)) as { error?: string; quote?: { id: number } };
       if (!response.ok) throw new Error(result.error || "تعذّر إنشاء السجل");
+      const attachmentErrors = result.quote?.id ? await uploadCommercialAttachments(new FormData(form), { quoteId: result.quote.id }) : [];
       form.reset();
-      setNotice("تم حفظ السجل وربطه بسير العمل والإشعارات.");
+      setNotice(attachmentErrors.length ? `حُفظ العرض، لكن تعذر رفع بعض المرفقات. افتح التعديل لإعادة رفعها: ${attachmentErrors.join("؛ ")}` : "تم حفظ السجل وربطه بسير العمل والإشعارات.");
       await load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "تعذّر تنفيذ العملية");
@@ -399,8 +406,9 @@ export default function OperationsWorkspace({
       const result = (await readApiJson(response)) as { error?: string };
       if (!response.ok)
         throw new Error(result.error || "تعذّر تعديل عرض السعر");
+      const attachmentErrors = await uploadCommercialAttachments(fd, { quoteId: editingQuote.id });
       setEditingQuote(null);
-      setNotice("تم تعديل عرض السعر وإعادته للمسودة لاعتماده مجددًا.");
+      setNotice(attachmentErrors.length ? `حُفظ العرض، لكن تعذر رفع بعض المرفقات. افتح التعديل لإعادة رفعها: ${attachmentErrors.join("؛ ")}` : "تم تعديل عرض السعر وإعادته للمسودة لاعتماده مجددًا.");
       await load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "تعذّر تعديل العرض");
@@ -1222,25 +1230,7 @@ export default function OperationsWorkspace({
               </button>
             </div>
             <form className="feature-form" onSubmit={saveQuoteEdit}>
-              <CommercialDetailsFields defaults={editingQuote.commercialTermsJson}/>
-              <label>
-                تاريخ الإصدار
-                <input
-                  name="issueDate"
-                  type="date"
-                  required
-                  defaultValue={editingQuote.issueDate}
-                />
-              </label>
-              <label>
-                صالح حتى
-                <input
-                  name="validUntil"
-                  type="date"
-                  required
-                  defaultValue={editingQuote.validUntil}
-                />
-              </label>
+              <QuoteFullEditFields quote={editingQuote} items={data.quoteItems.filter(item => item.quoteVersionId === editingQuote.id)}/>
               <div className="modal-actions span-two">
                 <button type="button" onClick={() => setEditingQuote(null)}>
                   إلغاء
@@ -1697,10 +1687,10 @@ function QuoteFormFields({
     initialTerms.seasonType === "hajj" || initialTerms.seasonType === "ramadan" ? initialTerms.seasonType : "regular",
   );
   const [accommodationParty, setAccommodationParty] = useState<
-    "dali" | "counterparty"
-  >(initialTerms.accommodationParty === "dali" ? "dali" : sourceRequest ? "counterparty" : "dali");
-  const [transportParty, setTransportParty] = useState<"dali" | "counterparty">(
-    initialTerms.transportParty === "dali" ? "dali" : sourceRequest ? "counterparty" : "dali",
+    "dali" | "counterparty" | "not_applicable"
+  >(initialTerms.accommodationParty === "not_applicable" ? "not_applicable" : initialTerms.accommodationParty === "dali" ? "dali" : sourceRequest ? "counterparty" : "dali");
+  const [transportParty, setTransportParty] = useState<"dali" | "counterparty" | "not_applicable">(
+    initialTerms.transportParty === "not_applicable" ? "not_applicable" : initialTerms.transportParty === "dali" ? "dali" : sourceRequest ? "counterparty" : "dali",
   );
   const [payments, setPayments] = useState(() => {
     const rows = parsePaymentSchedule(initialTerms.paymentSchedule);
@@ -1712,7 +1702,7 @@ function QuoteFormFields({
   const [items, setItems] = useState<Line[]>(() => {
     try {
       const rows = JSON.parse(sourceRequest?.quotationItemsJson || "[]") as Array<Record<string, unknown>>;
-      if (rows.length) return rows.map((row, index) => ({ ...activities[initialActivity].seed, key: `request-${index}`, profession: initialActivity === "workforce" ? normalizeWorkforceProfession(String(row.description || "")) : String(row.description || ""), quantity: Number(row.quantity) || 0, durationMonths: Number(row.durationMonths) || 12, unit: String(row.unit || ""), notes: String(row.notes || ""), sponsorshipType: row.sponsorshipType === "other" ? "other" : "dali", sponsorName: String(row.sponsorName || ""), ajirContractStatus: row.ajirContractStatus === "with_ajir" ? "with_ajir" : row.ajirContractStatus === "without_ajir" ? "without_ajir" : "not_applicable" }));
+      if (rows.length) return rows.map((row, index) => ({ ...activities[initialActivity].seed, key: `request-${index}`, profession: initialActivity === "workforce" ? normalizeWorkforceProfession(String(row.description || "")) : String(row.description || ""), quantity: Number(row.quantity) || 0, durationMonths: Number(row.durationMonths) || 12, unitPrice: Number(row.unitPrice) || 0, actualSalary: Number(row.actualSalary) || 0, unit: String(row.unit || ""), notes: String(row.notes || ""), sponsorshipType: row.sponsorshipType === "other" ? "other" : "dali", sponsorName: String(row.sponsorName || ""), ajirContractStatus: row.ajirContractStatus === "with_ajir" ? "with_ajir" : row.ajirContractStatus === "without_ajir" ? "without_ajir" : "not_applicable" }));
     } catch { /* A malformed legacy request starts with an editable line. */ }
     return [{ key: "line-1", ...activities.workforce.seed }];
   });
@@ -1795,6 +1785,7 @@ function QuoteFormFields({
       {sourceRequest && <p className="span-two">الطلب المعتمد: {sourceRequest.trackingCode}</p>}
       {!sourceRequest && <label className="span-two">طلب عرض سعر معتمد<select value="" onChange={event => onSelectSource(Number(event.target.value))}><option value="">اختر طلبًا لنقل بياناته إلى العرض</option>{(data.quoteRequests || []).filter(item => !data.quoteRequestConversions?.some(converted => converted.requestId === item.id)).map(item => <option key={item.id} value={item.id} disabled={item.approvalStatus !== "approved"}>{item.trackingCode} — {item.companyName || item.fullName}{item.approvalStatus !== "approved" ? " — بانتظار الاعتماد" : ""}</option>)}</select></label>}
       <CommercialDetailsFields key={sourceRequestId} defaults={sourceTerms} omit={["clientName", "workSite", "paymentTerms"]}/>
+      <CommercialAttachmentFields defaults={sourceRequest?.quotationTermsJson}/>
       <div className="quote-form-section span-two">
         <strong>1. نوع طلب العميل</strong>
         <p>اختر المسار؛ تتغير الحقول والبنود والتسعير بما يناسب النشاط.</p>
@@ -1888,7 +1879,7 @@ function QuoteFormFields({
       </label>
       <label>
         تاريخ الإصدار
-        <input name="issueDate" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
+        <input name="issueDate" type="date" required defaultValue={typeof initialTerms.issueDate === "string" ? initialTerms.issueDate : new Date().toISOString().slice(0, 10)} />
       </label>
       <label>
         العرض صالح حتى
@@ -1923,17 +1914,7 @@ function QuoteFormFields({
                   ? "بند الأعمال"
                   : "الخدمة أو الأصل"}
               {activity === "workforce" ? (
-                <select
-                  required
-                  value={item.profession}
-                  onChange={(e) =>
-                    update(item.key, "profession", e.target.value)
-                  }
-                >
-                  {workforceProfessions.map((option) => (
-                    <option key={option.label}>{option.label}</option>
-                  ))}
-                </select>
+                <><input required list="quote-profession-options" value={item.profession} onChange={e=>update(item.key,"profession",e.target.value)} /><datalist id={index===0?"quote-profession-options":undefined}>{index===0&&workforceProfessions.map(option=><option key={option.label} value={option.label}/>)}</datalist></>
               ) : (
                 <input
                   required
@@ -2233,11 +2214,11 @@ function QuoteFormFields({
         <select
           value={accommodationParty}
           onChange={(event) =>
-            setAccommodationParty(event.target.value as "dali" | "counterparty")
+            setAccommodationParty(event.target.value as "dali" | "counterparty" | "not_applicable")
           }
         >
           <option value="dali">توفره دالي</option>
-          <option value="counterparty">يوفره الطرف الثاني</option>
+          <option value="counterparty">يوفره الطرف الثاني</option><option value="not_applicable">لا ينطبق</option>
         </select>
       </label>
       <label>
@@ -2245,11 +2226,11 @@ function QuoteFormFields({
         <select
           value={transportParty}
           onChange={(event) =>
-            setTransportParty(event.target.value as "dali" | "counterparty")
+            setTransportParty(event.target.value as "dali" | "counterparty" | "not_applicable")
           }
         >
           <option value="dali">توفره دالي</option>
-          <option value="counterparty">يوفره الطرف الآخر</option>
+          <option value="counterparty">يوفره الطرف الآخر</option><option value="not_applicable">لا ينطبق</option>
         </select>
       </label>
       {quantityMode === "fixed" && activity !== "workforce" && (
@@ -2266,10 +2247,7 @@ function QuoteFormFields({
       )}
       <label>
         ضريبة القيمة المضافة
-        <select name="vatRate" defaultValue="15">
-          <option value="0">بدون ضريبة</option>
-          <option value="15">ضريبة 15%</option>
-        </select>
+        <input name="vatRate" type="number" min={0} max={100} step="0.01" required defaultValue={String(initialTerms.vatRate ?? 15)}/>
       </label>
       <label className="span-two">
         شروط الدفع

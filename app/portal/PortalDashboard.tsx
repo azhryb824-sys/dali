@@ -1,4 +1,8 @@
 "use client";
+import { commercialAttachmentRefs } from "@/lib/commercial-attachments";
+import ContractFullEditDialog from "./ContractFullEditDialog";
+import ContractWorkforceBoard from "./ContractWorkforceBoard";
+import { contractWorkforceCoverage } from "@/lib/contract-workforce-coverage";
 
 import WorkerIncidentsPanel from "./WorkerIncidentsPanel";
 import ConversationQuoteRequests from "./ConversationQuoteRequests";
@@ -315,6 +319,12 @@ type WorkforceContract = {
   details: string;
   status: string;
   seasonType: string;
+  quantityMode: string;
+  vatRateBps: number;
+  contractDirection: string;
+  accommodationParty: string | null;
+  transportParty: string | null;
+  showPaymentSchedule: boolean;
   versionNumber: number;
   parentContractId: number | null;
   approvedBy: string | null;
@@ -2035,13 +2045,7 @@ export default function PortalDashboard({
 
   async function editContract(
     contract: WorkforceContract,
-    changes: {
-      clientName: string;
-      title: string;
-      workSite: string;
-      startDate: string;
-      endDate?: string;
-    },
+    changes: Record<string, unknown>,
   ) {
     setBusy(`contract-edit-${contract.id}`);
     try {
@@ -2052,9 +2056,11 @@ export default function PortalDashboard({
       });
       const result = (await readApiJson(response)) as {
         contract?: WorkforceContract;
+        professions?: ContractProfession[];
         error?: string;
       };
       if (!response.ok || !result.contract) throw new Error(result.error || "تعذّر تعديل العقد");
+      if (result.professions) setContractProfessions(items=>[...items.filter(item=>item.contractId!==contract.id),...result.professions!]);
       setContracts((items) => items.map((item) => (item.id === contract.id ? (result.contract as WorkforceContract) : item)));
       notify("تم تعديل العقد وإعادته للمسودة؛ يلزم اعتماد المالك مجددًا.");
     } catch (error) {
@@ -4359,8 +4365,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
     paymentScheduleJson: string | null;
     vatRateBps: number;
     subtotalHalalas: number;
-    accommodationParty: "dali" | "counterparty";
-    transportParty: "dali" | "counterparty";
+    accommodationParty: "dali" | "counterparty" | "not_applicable";
+    transportParty: "dali" | "counterparty" | "not_applicable";
     clientName: string;
     title: string;
     items: Array<{
@@ -4375,6 +4381,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
   };
   const [convertibleQuotes, setConvertibleQuotes] = useState<ConvertibleQuote[]>([]);
   const [selectedQuoteId, setSelectedQuoteId] = useState(initialQuoteId ? String(initialQuoteId) : "");
+  const savedQuoteFiles = commercialAttachmentRefs(convertibleQuotes.find(quote=>String(quote.id)===selectedQuoteId)?.commercialTermsJson);
   const [quantityMode, setQuantityMode] = useState<"fixed" | "open">("fixed");
   const [seasonType, setSeasonType] = useState<"regular" | "ramadan" | "hajj">("regular");
   const [contractStartDate, setContractStartDate] = useState("");
@@ -4383,8 +4390,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
   const [contractVatRate, setContractVatRate] = useState("15");
   const [contractDirection, setContractDirection] = useState<WorkforceContractDirection>("dali_supplier");
   const [showPaymentSchedule, setShowPaymentSchedule] = useState(true);
-  const [accommodationParty, setAccommodationParty] = useState<"dali" | "counterparty">("dali");
-  const [transportParty, setTransportParty] = useState<"dali" | "counterparty">("dali");
+  const [accommodationParty, setAccommodationParty] = useState<"dali" | "counterparty" | "not_applicable">("dali");
+  const [transportParty, setTransportParty] = useState<"dali" | "counterparty" | "not_applicable">("dali");
   const [contractClauses, setContractClauses] = useState<Array<WorkforceContractClause & { key: string }>>(() =>
     defaultWorkforceContractClauses("dali_supplier").map((item, index) => ({
       ...item,
@@ -4446,8 +4453,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
             paymentScheduleJson: string | null;
             vatRateBps: number;
             subtotalHalalas: number;
-            accommodationParty?: "dali" | "counterparty";
-            transportParty?: "dali" | "counterparty";
+            accommodationParty?: "dali" | "counterparty" | "not_applicable";
+            transportParty?: "dali" | "counterparty" | "not_applicable";
           }>;
           quoteItems?: Array<{
             quoteVersionId: number;
@@ -5045,8 +5052,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
           {isContract && (
             <>
               <input type="hidden" name="showPaymentSchedule" value={showPaymentSchedule ? "true" : "false"} />
-              <input type="hidden" name="accommodationParty" value={accommodationParty === "dali" ? "توفره دالي" : "يوفره الطرف الثاني"} />
-              <input type="hidden" name="transportParty" value={transportParty === "dali" ? "توفره دالي" : "يوفره الطرف الآخر"} />
+              <input type="hidden" name="accommodationParty" value={accommodationParty === "not_applicable" ? "لا ينطبق" : accommodationParty === "dali" ? "توفره دالي" : "يوفره الطرف الثاني"} />
+              <input type="hidden" name="transportParty" value={transportParty === "not_applicable" ? "لا ينطبق" : transportParty === "dali" ? "توفره دالي" : "يوفره الطرف الآخر"} />
             </>
           )}
           {isContract && (
@@ -5080,7 +5087,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
               <>
                 <label className="span-two">
                   اتجاه عقد العمالة
-                  <select value={contractDirection} onChange={(event) => changeContractDirection(event.target.value as WorkforceContractDirection)} disabled={Boolean(selectedQuoteId)}>
+                  <select value={contractDirection} onChange={(event) => changeContractDirection(event.target.value as WorkforceContractDirection)} disabled={Boolean(selectedQuoteId) && conversionMode === "as_is"}>
                     <option value="dali_supplier">دالي مورّد العمالة — عقد إيراد مع عميل</option>
                     <option value="dali_purchaser">دالي مشتري العمالة — عقد تكلفة مع مورّد</option>
                   </select>
@@ -5116,7 +5123,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                 )}
                 <label className="span-two">
                   نطاق العدد
-                  <select value={quantityMode} onChange={(event) => setQuantityMode(event.target.value as "fixed" | "open")} disabled={Boolean(selectedQuoteId)}>
+                  <select value={quantityMode} onChange={(event) => setQuantityMode(event.target.value as "fixed" | "open")} disabled={Boolean(selectedQuoteId) && conversionMode === "as_is"}>
                     <option value="fixed">عدد محدد — قيمة وجدول دفعات وضريبة</option>
                     <option value="open">عدد مفتوح — دون قيمة إجمالية، والضريبة عند الفوترة</option>
                   </select>
@@ -5156,6 +5163,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
               {isContract && contractDirection === "dali_purchaser" ? "اسم مورّد العمالة" : "اسم العميل أو الجهة"}
               <input name="clientName" required maxLength={160} />
             </label>
+            {isContract && commercialTextFields.filter(field => ["title", "titleEn", "clientRepresentative", "clientRepresentativeTitle", "workingHours", "weeklyOff", "paymentTerms", "specialTerms", "detailsEn"].includes(field.name)).map(field => <label key={field.name} className={"multiline" in field ? "span-two" : undefined}>{field.label}{"multiline" in field ? <textarea name={field.name} maxLength={field.max} rows={3}/> : <input name={field.name} maxLength={field.max}/>}</label>)}
             {isContract && <><label>رقم جوال العميل<input name="clientMobile" type="tel" maxLength={30}/></label><label>البريد الإلكتروني<input name="clientEmail" type="email" maxLength={160}/></label></>}
             <label>
               {isContract && contractDirection === "dali_purchaser" ? "السجل التجاري للمورّد" : "السجل التجاري للعميل"}
@@ -5278,7 +5286,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                       </span>
                     </div>
                     <p className={item.registeredShortage || item.availableShortage ? "shortage" : "ready"}>{item.registeredShortage ? `أقل من هذا التوزيع في السجلات بفارق ${item.registeredShortage}` : item.availableShortage ? `عجز تشغيلي في التوزيع: ${item.availableShortage}` : "العدد المطابق متاح حالياً"}</p>
-                    <button className="quote-add-line" type="button" onClick={() => addSponsorAllocation(item)} disabled={Boolean(selectedQuoteId)}>
+                    <button className="quote-add-line" type="button" onClick={() => addSponsorAllocation(item)} disabled={Boolean(selectedQuoteId) && conversionMode === "as_is"}>
                       + توزيع كفيل آخر
                     </button>
                     {professions.length > 1 && (
@@ -5321,14 +5329,14 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                     </label>
                     <label>
                       جهة الكفالة
-                      <select value={item.sponsorshipType} onChange={(event) => setProfessionSponsorship(item.key, event.target.value as "dali" | "other")} disabled={Boolean(selectedQuoteId)}>
+                      <select value={item.sponsorshipType} onChange={(event) => setProfessionSponsorship(item.key, event.target.value as "dali" | "other")} disabled={Boolean(selectedQuoteId) && conversionMode === "as_is"}>
                         <option value="dali">على كفالة شركة دالي</option>
                         <option value="other">على كفالة جهة أخرى</option>
                       </select>
                     </label>
                     <label>
                       حالة عقد أجير
-                      <select required value={item.ajirContractStatus} onChange={(event) => setProfessionAjir(item.key, event.target.value as "not_applicable" | "with_ajir" | "without_ajir")} disabled={Boolean(selectedQuoteId)}>
+                      <select required value={item.ajirContractStatus} onChange={(event) => setProfessionAjir(item.key, event.target.value as "not_applicable" | "with_ajir" | "without_ajir")} disabled={Boolean(selectedQuoteId) && conversionMode === "as_is"}>
                         <option value="not_applicable">لا ينطبق</option>
                         <option value="with_ajir">بعقد أجير</option>
                         <option value="without_ajir">بدون عقد أجير</option>
@@ -5422,16 +5430,16 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                   </label>
                   <label>
                     السكن
-                    <select value={accommodationParty} onChange={(event) => setAccommodationParty(event.target.value as "dali" | "counterparty")} disabled={Boolean(selectedQuoteId)}>
+                    <select value={accommodationParty} onChange={(event) => setAccommodationParty(event.target.value as "dali" | "counterparty" | "not_applicable")} disabled={Boolean(selectedQuoteId) && conversionMode === "as_is"}>
                       <option value="dali">توفره دالي</option>
-                      <option value="counterparty">يوفره الطرف الثاني</option>
+                      <option value="counterparty">يوفره الطرف الثاني</option><option value="not_applicable">لا ينطبق</option>
                     </select>
                   </label>
                   <label>
                     النقل
-                    <select value={transportParty} onChange={(event) => setTransportParty(event.target.value as "dali" | "counterparty")} disabled={Boolean(selectedQuoteId)}>
+                    <select value={transportParty} onChange={(event) => setTransportParty(event.target.value as "dali" | "counterparty" | "not_applicable")} disabled={Boolean(selectedQuoteId) && conversionMode === "as_is"}>
                       <option value="dali">توفره دالي</option>
-                      <option value="counterparty">يوفره الطرف الآخر</option>
+                      <option value="counterparty">يوفره الطرف الآخر</option><option value="not_applicable">لا ينطبق</option>
                     </select>
                   </label>
                   {quantityMode === "fixed" && seasonType !== "regular" && (
@@ -5444,7 +5452,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                   {selectedQuoteId && <input type="hidden" name="vatEnabled" value={contractVatEnabled ? "true" : "false"} />}
                   <label>
                     {quantityMode === "open" ? "الضريبة عند الفوترة الفعلية" : "تطبيق ضريبة القيمة المضافة"}
-                    <select name={selectedQuoteId ? undefined : "vatEnabled"} value={contractVatEnabled ? "true" : "false"} onChange={(event) => setContractVatEnabled(event.target.value === "true")} disabled={Boolean(selectedQuoteId)}>
+                    <select name={selectedQuoteId ? undefined : "vatEnabled"} value={contractVatEnabled ? "true" : "false"} onChange={(event) => setContractVatEnabled(event.target.value === "true")} disabled={Boolean(selectedQuoteId) && conversionMode === "as_is"}>
                       <option value="false">بدون ضريبة</option>
                       <option value="true">تطبيق الضريبة</option>
                     </select>
@@ -5663,7 +5671,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                     <strong>السجل التجاري</strong>
                     <small>نسخة سارية وواضحة</small>
                     <em>إلزامي</em>
-                    <input required name="commercialRegistrationFile" type="file" accept="application/pdf,image/jpeg,image/png" />
+                    <input required={!savedQuoteFiles.some(file=>file.kind==="commercial-registration")} disabled={conversionMode === "as_is" && savedQuoteFiles.some(file=>file.kind==="commercial-registration")} name="commercialRegistrationFile" type="file" accept="application/pdf,image/jpeg,image/png" />{savedQuoteFiles.find(file=>file.kind==="commercial-registration") && <small>محفوظ مع العرض: {savedQuoteFiles.find(file=>file.kind==="commercial-registration")?.fileName}</small>}
                   </label>
                   <label>
                     <span>
@@ -5672,7 +5680,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                     <strong>الشهادة الضريبية</strong>
                     <small>شهادة التسجيل في ضريبة القيمة المضافة</small>
                     <em>إلزامي</em>
-                    <input required name="vatCertificateFile" type="file" accept="application/pdf,image/jpeg,image/png" />
+                    <input required={!savedQuoteFiles.some(file=>file.kind==="vat-certificate")} disabled={conversionMode === "as_is" && savedQuoteFiles.some(file=>file.kind==="vat-certificate")} name="vatCertificateFile" type="file" accept="application/pdf,image/jpeg,image/png" />{savedQuoteFiles.find(file=>file.kind==="vat-certificate") && <small>محفوظ مع العرض: {savedQuoteFiles.find(file=>file.kind==="vat-certificate")?.fileName}</small>}
                   </label>
                   <label>
                     <span>
@@ -5681,7 +5689,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                     <strong>العنوان الوطني</strong>
                     <small>إثبات العنوان الوطني للمنشأة</small>
                     <em>إلزامي</em>
-                    <input required name="nationalAddressFile" type="file" accept="application/pdf,image/jpeg,image/png" />
+                    <input required={!savedQuoteFiles.some(file=>file.kind==="national-address")} disabled={conversionMode === "as_is" && savedQuoteFiles.some(file=>file.kind==="national-address")} name="nationalAddressFile" type="file" accept="application/pdf,image/jpeg,image/png" />{savedQuoteFiles.find(file=>file.kind==="national-address") && <small>محفوظ مع العرض: {savedQuoteFiles.find(file=>file.kind==="national-address")?.fileName}</small>}
                   </label>
                 </div>
                 <div className="attachment-save-note">
@@ -6447,19 +6455,14 @@ function ContractDrawer({
   onStatus: (contractId: number, status: string, reason: string, reasonCode?: "late_payment" | "other") => Promise<void>;
   onEdit: (
     contract: WorkforceContract,
-    changes: {
-      clientName: string;
-      title: string;
-      workSite: string;
-      startDate: string;
-      endDate?: string;
-    },
+    changes: Record<string, unknown>,
   ) => Promise<void>;
   onDelete: (contract: WorkforceContract) => Promise<void>;
   onRecordAbsence: (contractId: number, contractProfessionId: number, absenceDate: string, absenceEndDate: string, workerId: number | null, replacementWorkerId: number | null, absentCount: number, notes: string) => Promise<ContractAbsence | null>;
   onVoidAbsence: (contractId: number, absenceId: number) => Promise<ContractAbsence | null>;
 }) {
-  const [choices, setChoices] = useState<Record<number, string>>({});
+  const [workspaceTab, setWorkspaceTab] = useState<"workers" | "attendance" | "contract">("workers");
+  const [absenceError, setAbsenceError] = useState("");
   const [nextStatus, setNextStatus] = useState("");
   const [statusReason, setStatusReason] = useState("");
   const [showCancellation, setShowCancellation] = useState(false);
@@ -6479,7 +6482,7 @@ function ContractDrawer({
   const [showEditForm, setShowEditForm] = useState(false);
   const activeAssignments = assignments.filter((item) => item.status === "active");
   const plannedAssignments = assignments.filter((item) => item.status === "planned");
-  const requiredTotal = professions.reduce((sum, item) => sum + item.requiredCount, 0);
+  const coverage = contractWorkforceCoverage(professions, assignments, contract.quantityMode === "open");
   const maxAbsenceDate = [contract.endDate, todayInSaudiArabia].sort()[0];
   useEffect(() => {
     let active = true;
@@ -6492,8 +6495,8 @@ function ContractDrawer({
         setCanRecordAbsence(Boolean(result.canRecord));
         setCanViewAbsenceFinance(Boolean(result.canViewFinancialImpact));
       })
-      .catch(() => {
-        if (active) setAbsenceHistory([]);
+      .catch((error) => {
+        if (active) { setAbsenceError(error instanceof Error ? error.message : "تعذر تحميل سجل الغياب"); setCanRecordAbsence(false); }
       })
       .finally(() => {
         if (active) setAbsenceHistoryLoading(false);
@@ -6502,22 +6505,10 @@ function ContractDrawer({
       active = false;
     };
   }, [contract.id]);
-  function submitContractEdit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const fd = new FormData(event.currentTarget);
-    const changes = {
-      clientName: String(fd.get("clientName") || ""),
-      title: String(fd.get("title") || ""),
-      workSite: String(fd.get("workSite") || ""),
-      startDate: String(fd.get("startDate") || ""),
-      ...(contract.seasonType !== "regular" ? { endDate: String(fd.get("endDate") || "") } : {}),
-    };
-    void onEdit(contract, changes).then(() => setShowEditForm(false));
-  }
   return (
     <div className="drawer-layer">
       <button className="drawer-backdrop" aria-label="إغلاق إدارة العقد" onClick={onClose} />
-      <aside className="request-drawer contract-drawer" role="dialog" aria-modal="true" aria-label={`إدارة عمالة العقد ${contract.referenceCode}`}>
+      <aside className="request-drawer contract-drawer contract-workforce-workspace" role="dialog" aria-modal="true" aria-label={`إدارة عمالة العقد ${contract.referenceCode}`}>
         <div className="drawer-head">
           <div>
             <span dir="ltr">{contract.referenceCode}</span>
@@ -6541,9 +6532,9 @@ function ContractDrawer({
           <div>
             <span>التغطية الحالية</span>
             <strong>
-              {activeAssignments.length} / {requiredTotal}
+              {activeAssignments.length} / {contract.quantityMode === "open" ? "مفتوح" : coverage.required}
             </strong>
-            <small>{plannedAssignments.length ? `${plannedAssignments.length} عامل مخطط للإسناد عند السريان` : `متبقٍ ${Math.max(0, requiredTotal - activeAssignments.length)} عامل`}</small>
+            <small>{plannedAssignments.length ? `${plannedAssignments.length} عامل مخطط للإسناد عند السريان` : `متبقٍ ${coverage.shortage} عامل`}</small>
           </div>
           <div>
             <span>مدة العقد</span>
@@ -6551,6 +6542,12 @@ function ContractDrawer({
             <small>حتى {formatDate(contract.endDate)}</small>
           </div>
         </div>
+        <nav className="contract-workspace-tabs" aria-label="أقسام إدارة العقد">
+          <button type="button" aria-pressed={workspaceTab === "workers"} onClick={()=>setWorkspaceTab("workers")}>العمالة والإسناد</button>
+          <button type="button" aria-pressed={workspaceTab === "attendance"} onClick={()=>setWorkspaceTab("attendance")}>الغياب والاستبدال</button>
+          <button type="button" aria-pressed={workspaceTab === "contract"} onClick={()=>setWorkspaceTab("contract")}>بيانات العقد وإجراءاته</button>
+        </nav>
+        <div hidden={workspaceTab !== "contract"}>
         {isOwner && ["draft", "internal_review", "legal_review"].includes(contract.status) && (
           <button className="admin-primary contract-direct-approve" disabled={busy === `contract-status-${contract.id}`} onClick={() => void onStatus(contract.id, "approved", "اعتماد مباشر من شاشة العقد")}>
             {busy === `contract-status-${contract.id}` ? "جارٍ اعتماد العقد..." : "اعتماد العقد الآن"}
@@ -6565,44 +6562,9 @@ function ContractDrawer({
           </a>
         </div>
         {!contract.approvedBy && <p className="readonly-note">نسخة مسودة غير معتمدة.</p>}
-        {showEditForm && (
-          <section className="drawer-section">
-            <h3>تعديل بيانات العقد</h3>
-            <form className="feature-form" onSubmit={submitContractEdit}>
-              <label>
-                العميل أو الجهة
-                <input name="clientName" required defaultValue={contract.clientName} />
-              </label>
-              <label>
-                عنوان العقد
-                <input name="title" required defaultValue={contract.title} />
-              </label>
-              <label>
-                موقع العمل
-                <input name="workSite" required defaultValue={contract.workSite} />
-              </label>
-              <label>
-                تاريخ البداية
-                <input name="startDate" type="date" required defaultValue={contract.startDate} />
-              </label>
-              {contract.seasonType !== "regular" && (
-                <label>
-                  تاريخ النهاية
-                  <input name="endDate" type="date" required defaultValue={contract.endDate} />
-                </label>
-              )}
-              <div className="modal-actions span-two">
-                <button type="button" onClick={() => setShowEditForm(false)}>
-                  إلغاء
-                </button>
-                <button className="admin-primary" disabled={busy === `contract-edit-${contract.id}`}>
-                  حفظ التعديلات
-                </button>
-              </div>
-            </form>
-          </section>
-        )}
-        {canWrite && !["active", "suspended", "expired", "terminated", "superseded"].includes(contract.status) && (
+        {showEditForm && <ContractFullEditDialog contract={contract} professions={[]} payments={[]} busy={busy === `contract-edit-${contract.id}`} onClose={()=>setShowEditForm(false)} onSubmit={changes=>onEdit(contract,changes)} onSaved={async()=>{}}/>}
+
+        {canWrite && !["active", "suspended", "signed", "expired", "terminated", "cancelled", "superseded"].includes(contract.status) && (
           <div className="document-actions">
             <button disabled={busy === `contract-edit-${contract.id}`} onClick={() => setShowEditForm(true)}>
               تعديل بيانات العقد
@@ -6649,7 +6611,9 @@ function ContractDrawer({
             </div>
           </section>
         )}
-        {isOwner && canRecordAbsence && contract.status === "active" && (
+        </div><div hidden={workspaceTab !== "attendance"}>
+        {absenceError && <p role="alert" className="form-error">{absenceError}</p>}
+        {isOwner && canRecordAbsence && !absenceHistoryLoading && !absenceError && contract.status === "active" && (
           <section className="drawer-section contract-absence-panel">
             <h3>تسجيل غياب العمالة وخصم اليومية</h3>
             <p>اختر عاملًا محددًا، أو اترك العامل فارغًا وسجّل عدد المتغيبين من المهنة. اليومية = الراتب الفعلي ÷ 30، ويحسب النظام الأيام تلقائياً دون يوم الجمعة ثم يخصمها من دفعة شهر الغياب.</p>
@@ -6741,7 +6705,7 @@ function ContractDrawer({
         <section className="drawer-section contract-absence-history">
           <h3>سجل غياب عمالة العقد</h3>
           {absenceHistoryLoading && <p className="readonly-note">جارٍ تحميل سجل الغياب...</p>}
-          {!absenceHistoryLoading && !absenceHistory.length && <p className="empty-operational">لا توجد قيود غياب مسجلة على هذا العقد.</p>}
+          {!absenceHistoryLoading && !absenceError && !absenceHistory.length && <p className="empty-operational">لا توجد قيود غياب مسجلة على هذا العقد.</p>}
           {absenceHistory.map((absence) => {
             const absentWorker = workers.find((worker) => worker.id === absence.workerId);
             const replacementWorker = workers.find((worker) => worker.id === absence.replacementWorkerId);
@@ -6780,86 +6744,8 @@ function ContractDrawer({
             );
           })}
         </section>
-        <div className="contract-profession-sections">
-          {professions.map((profession) => {
-            const professionActive = activeAssignments.filter((item) => item.contractProfessionId === profession.id);
-            const professionPlanned = plannedAssignments.filter((item) => item.contractProfessionId === profession.id);
-            const visibleAssignments = professionActive.length ? professionActive : professionPlanned;
-            const assignedIds = new Set(visibleAssignments.map((item) => item.workerId));
-            const candidates = workers.filter((worker) => worker.profession === profession.profession && worker.status === "available" && sponsorshipMatches(worker, profession) && !assignedIds.has(worker.id));
-            const remaining = Math.max(0, profession.requiredCount - visibleAssignments.length);
-            return (
-              <section key={profession.id}>
-                <header>
-                  <div>
-                    <strong>{profession.profession}</strong>
-                    <small>
-                      مطلوب {profession.requiredCount} عامل · {profession.sponsorshipType === "dali" ? "على كفالة شركة دالي" : profession.sponsorshipType === "other" ? `على كفالة ${profession.sponsorName || "جهة أخرى"} — ${profession.ajirContractStatus === "with_ajir" ? "بعقد أجير" : "بدون عقد أجير"}` : "الكفالة غير محددة"}
-                    </small>
-                  </div>
-                  <span className={remaining === 0 ? "complete" : ""}>
-                    {visibleAssignments.length}/{profession.requiredCount}
-                  </span>
-                </header>
-                <div className="contract-assigned-list">
-                  {visibleAssignments.map((assignment) => {
-                    const worker = workers.find((item) => item.id === assignment.workerId);
-                    const planned = assignment.status === "planned";
-                    return (
-                      <article key={assignment.id}>
-                        <span>{initials(worker?.fullName || "عامل")}</span>
-                        <p>
-                          <strong>{worker?.fullName || `عامل رقم ${assignment.workerId}`}</strong>
-                          <small>
-                            {worker?.iqamaNumber || "رقم الإقامة غير متاح"} · {planned ? "مخطط عند السريان" : formatDate(assignment.assignedAt)}
-                          </small>
-                        </p>
-                        {planned ? (
-                          <b className="planned-assignment">مخطط</b>
-                        ) : (
-                          canManageWorkerAssignments && (
-                            <button disabled={busy === `contract-release-${assignment.id}`} onClick={() => void onRelease(contract.id, assignment.id)}>
-                              {busy === `contract-release-${assignment.id}` ? "جارٍ..." : "إنهاء الإسناد"}
-                            </button>
-                          )
-                        )}
-                      </article>
-                    );
-                  })}
-                  {!visibleAssignments.length && <p className="empty-operational">لم تُحدّد عمالة لهذه المهنة بعد.</p>}
-                </div>
-                {canManageWorkerAssignments && contract.status === "active" && remaining > 0 && (
-                  <div className="contract-add-worker">
-                    <label>
-                      إضافة عامل متاح
-                      <select
-                        value={choices[profession.id] || ""}
-                        onChange={(event) =>
-                          setChoices((items) => ({
-                            ...items,
-                            [profession.id]: event.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">اختر العامل</option>
-                        {candidates.map((worker) => (
-                          <option value={worker.id} key={worker.id}>
-                            {worker.fullName} — {worker.iqamaNumber} — {sponsorshipLabel(worker)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button className="admin-primary" disabled={!choices[profession.id] || busy === `contract-assign-${profession.id}`} onClick={() => choices[profession.id] && void onAssign(contract.id, profession.id, Number(choices[profession.id]))}>
-                      {busy === `contract-assign-${profession.id}` ? "جارٍ الإسناد..." : "إضافة إلى العقد"}
-                    </button>
-                    {!candidates.length && <small>لا توجد عمالة متاحة مطابقة للمهنة حالياً.</small>}
-                  </div>
-                )}
-                {contract.status !== "active" && remaining > 0 && <p className="readonly-note">يُتاح الإسناد اليدوي بعد اعتماد العقد وتوقيعه وتحويله إلى ساري.</p>}
-                {remaining === 0 && <p className="profession-complete-note">اكتمل العدد المطلوب لهذه المهنة.</p>}
-              </section>
-            );
-          })}
+        </div><div hidden={workspaceTab !== "workers"}>
+          <ContractWorkforceBoard contract={contract} professions={professions} assignments={assignments} workers={workers} canManage={canManageWorkerAssignments} busy={busy} onAssign={onAssign} onRelease={onRelease}/>
         </div>
       </aside>
       {showCancellation && (

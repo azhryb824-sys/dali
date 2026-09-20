@@ -2,6 +2,8 @@ import { parseWorkforceContractClauses, type WorkforceContractClause } from "@/l
 
 // Contract field names are canonical across request, quotation, PDF and contract.
 export const commercialTextFields = [
+  { name: "title", label: "عنوان العقد", max: 220 },
+  { name: "titleEn", label: "عنوان العقد بالإنجليزية", max: 220 },
   { name: "clientName", label: "الاسم النظامي للمنشأة", max: 160 },
   { name: "clientCr", label: "السجل التجاري", max: 30 },
   { name: "clientVat", label: "الرقم الضريبي", max: 30 },
@@ -18,6 +20,7 @@ export const commercialTextFields = [
   { name: "paymentTerms", label: "شروط الدفع", max: 1200, multiline: true },
   { name: "specialTerms", label: "اشتراطات خاصة", max: 2000, multiline: true },
   { name: "details", label: "نطاق العمل والتفاصيل", max: 4000, multiline: true },
+  { name: "detailsEn", label: "نطاق العمل بالإنجليزية", max: 4000, multiline: true },
 ] as const;
 export type CommercialTerms = Partial<Record<typeof commercialTextFields[number]["name"], string>> & {
   contractDirection: "dali_supplier" | "dali_purchaser";
@@ -38,5 +41,5 @@ export function readCommercialTerms(value: unknown): CommercialTerms {
 }
 
 export function commercialTermsFromRequest(request: { companyName: string | null; fullName: string; mobile: string; email: string; clientCr: string | null; clientVat: string | null; clientAddress: string | null; representativeTitle: string | null; workSite: string | null; requiredStartDate: string | null; details: string; quotationTermsJson: string | null }): CommercialTerms {
-  return readCommercialTerms({ ...readCommercialTerms(request.quotationTermsJson), clientName: request.companyName || request.fullName, clientCr: request.clientCr || "", clientVat: request.clientVat || "", clientAddress: request.clientAddress || "", clientRepresentative: request.fullName, clientRepresentativeTitle: request.representativeTitle || "", clientMobile: request.mobile, clientEmail: request.email, workSite: request.workSite || "", startDate: request.requiredStartDate || "", details: request.details });
+  return readCommercialTerms({ ...readCommercialTerms(request.quotationTermsJson), clientName: request.companyName || request.fullName, clientCr: request.clientCr || "", clientVat: request.clientVat || "", clientAddress: request.clientAddress || "", clientRepresentative: readCommercialTerms(request.quotationTermsJson).clientRepresentative || request.fullName, clientRepresentativeTitle: readCommercialTerms(request.quotationTermsJson).clientRepresentativeTitle || request.representativeTitle || "", clientMobile: request.mobile, clientEmail: request.email, workSite: request.workSite || "", startDate: request.requiredStartDate || "", details: request.details });
 }

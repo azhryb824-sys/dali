@@ -1,5 +1,13 @@
 // Generated translations for interface text containing runtime values.
 export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = [
+{"source": "تم حفظ الطلب. تعذر حفظ بعض المرفقات؛ أعد المحاولة لرفعها دون إنشاء طلب مكرر. {{0}}", "en": "The request was saved. Some attachments failed; retry uploading them without creating a duplicate request. {{0}}", "bn": "অনুরোধ সংরক্ষিত হয়েছে। কিছু সংযুক্তি আপলোড হয়নি; অনুরোধ পুনরায় তৈরি না করে আপলোডের চেষ্টা করুন। {{0}}"},
+{"source": "{{0}} · عدد مفتوح", "en": "{{0}} · Open quantity", "bn": "{{0}} · উন্মুক্ত সংখ্যা"},
+{"source": "{{0}} مسند", "en": "{{0}} assigned", "bn": "{{0}} জন নিয়োজিত"},
+{"source": "التغطية {{0}}%", "en": "Coverage {{0}}%", "bn": "পূরণের হার {{0}}%"},
+{"source": "تاريخ الإسناد: {{0}}", "en": "Assignment date: {{0}}", "bn": "নিয়োগের তারিখ: {{0}}"},
+{"source": "تغطية {{0}}", "en": "{{0}} coverage", "bn": "{{0}} পূরণের হার"},
+{"source": "حُفظ العرض، لكن تعذر رفع بعض المرفقات. افتح التعديل لإعادة رفعها: {{0}}", "en": "The quotation was saved, but some attachments failed. Open editing to retry: {{0}}", "bn": "দরপত্র সংরক্ষিত হয়েছে, কিন্তু কিছু সংযুক্তি আপলোড হয়নি। আবার চেষ্টা করতে সম্পাদনা খুলুন: {{0}}"},
+
 {"source": "— {{0}} ريال", "en": "— {{0}} SAR", "bn": "— {{0}} সৌদি রিয়াল"},
 {"source": "التعديلات المطلوبة على طلب عرض السعر {{0}}: {{1}}", "en": "Required changes to quotation request {{0}}: {{1}}", "bn": "দরপত্রের অনুরোধ {{0}}-এ প্রয়োজনীয় পরিবর্তন: {{1}}"},
 {"source": "عامل #{{0}}", "en": "Worker #{{0}}", "bn": "কর্মী #{{0}}"},

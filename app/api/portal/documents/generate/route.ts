@@ -1,3 +1,5 @@
+import { commercialAttachmentRefs } from "@/lib/commercial-attachments";
+import { storedQuoteAttachment } from "@/lib/commercial-attachment-storage";
 import { quoteConversionRequests } from "@/db/schema";
 import { WorkflowError } from "@/lib/quote-request-workflow";
 import { commercialTextFields, readCommercialTerms } from "@/lib/commercial-terms";
@@ -193,8 +195,8 @@ export async function POST(request: Request) {
     if (documentType === "construction_record" || clientName.length < 2 || !issueDate || expiryDate === "" || details.length < 5) {
       return Response.json({ error: "بيانات المستند غير مكتملة أو غير صحيحة" }, { status: 400 });
     }
-    const title = `${issuedDocumentLabels[documentType]} — ${clientName}`;
-    const titleEn = documentType === "invoice" ? `Invoice - ${clientName}` : undefined;
+    const title = cleanText(payload.title, 220) || `${issuedDocumentLabels[documentType]} — ${clientName}`;
+    const titleEn = cleanText(payload.titleEn, 220) || (documentType === "invoice" ? `Invoice - ${clientName}` : undefined);
     if (!Number.isFinite(amount) || amount < 0 || amount > 1000000000 || (documentType === "workforce_contract" && quantityMode === "fixed" && seasonType !== "regular" && amount <= 0)) {
       return Response.json({ error: "قيمة المستند غير صحيحة" }, { status: 400 });
     }
@@ -251,7 +253,21 @@ export async function POST(request: Request) {
       if (!clientCr || !clientVat || !clientAddress) {
         return Response.json({ error: "السجل التجاري والرقم الضريبي والعنوان الوطني للعميل بيانات إلزامية عند إنشاء العقد" }, { status: 400 });
       }
-      for (const [file, kind, label] of [[commercialRegistrationFile, "commercial-registration", "السجل التجاري"], [vatCertificateFile, "vat-certificate", "الشهادة الضريبية"], [nationalAddressFile, "national-address", "العنوان الوطني"]] as const) {
+      const attachmentSourceQuote = quoteVersionId ? await getDb().query.quoteVersions.findFirst({ where: eq(quoteVersions.id, quoteVersionId) }) : null;
+      if (quoteVersionId && (!attachmentSourceQuote?.approvedBy || !["approved", "sent", "accepted"].includes(attachmentSourceQuote.status))) return Response.json({ error: "عرض السعر المصدر غير معتمد" }, { status: 409 });
+      const savedFiles = commercialAttachmentRefs(attachmentSourceQuote?.commercialTermsJson);
+      for (const [selectedFile, kind, label] of [[commercialRegistrationFile, "commercial-registration", "السجل التجاري"], [vatCertificateFile, "vat-certificate", "الشهادة الضريبية"], [nationalAddressFile, "national-address", "العنوان الوطني"]] as const) {
+        let file = selectedFile;
+        const saved = savedFiles.find(ref => ref.kind === kind);
+        if (saved && attachmentSourceQuote) {
+          if (conversionMode === "as_is" && file instanceof File && file.size) return Response.json({ error: "تغيير مرفقات العرض المعتمد يتطلب التحويل مع تعديل" }, { status: 409 });
+          if (!(file instanceof File) || !file.size) {
+            const record = await storedQuoteAttachment(attachmentSourceQuote, saved.id);
+            const object = record ? await getRuntimeEnv().BUCKET.get(record.storageKey) : null;
+            if (!record || !object) return Response.json({ error: `تعذر استرجاع ملف ${label} المحفوظ مع العرض` }, { status: 409 });
+            file = new File([await object.arrayBuffer()], record.fileName, { type: record.contentType });
+          }
+        }
         if (!(file instanceof File) || !file.size) return Response.json({ error: `ملف ${label} إلزامي عند إنشاء العقد` }, { status: 400 });
         const validation = await validateUploadedFile(file, { contentTypes: new Set(["application/pdf", "image/png", "image/jpeg"]), maxBytes: 12 * 1024 * 1024 });
         if (!validation.valid) return Response.json({ error: `${label}: ${validation.error}` }, { status: 400 });
@@ -299,7 +315,7 @@ export async function POST(request: Request) {
       if (approvedTerms.contractDirection !== contractDirection) return Response.json({ error: "اتجاه العقد لا يطابق العرض المعتمد" }, { status: 409 });
     }
     if (conversionMode === "as_is" && sourceQuote && sourceQuote.quantityMode !== quantityMode) return Response.json({ error: "نوع العدد في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
-    if (conversionMode === "as_is" && sourceQuote && ((sourceQuote.accommodationParty && (sourceQuote.accommodationParty === "dali" ? "توفره دالي" : "يوفره الطرف الثاني") !== accommodationParty) || (sourceQuote.transportParty && (sourceQuote.transportParty === "dali" ? "توفره دالي" : "يوفره الطرف الآخر") !== transportParty))) return Response.json({ error: "مسؤولية السكن والنقل يجب أن تطابق العرض المعتمد" }, { status: 409 });
+    if (conversionMode === "as_is" && sourceQuote && ((sourceQuote.accommodationParty && (sourceQuote.accommodationParty === "not_applicable" ? "لا ينطبق" : sourceQuote.accommodationParty === "dali" ? "توفره دالي" : "يوفره الطرف الثاني") !== accommodationParty) || (sourceQuote.transportParty && (sourceQuote.transportParty === "not_applicable" ? "لا ينطبق" : sourceQuote.transportParty === "dali" ? "توفره دالي" : "يوفره الطرف الآخر") !== transportParty))) return Response.json({ error: "مسؤولية السكن والنقل يجب أن تطابق العرض المعتمد" }, { status: 409 });
     if (conversionMode === "as_is" && sourceQuote && sourceQuote.seasonType !== seasonType) return Response.json({ error: "نوع الموسم والفوترة في العقد يجب أن يطابق عرض السعر" }, { status: 409 });
     if (conversionMode === "as_is" && sourceQuote && seasonType !== "regular" && quantityMode === "fixed") {
       const sourceSchedule = parsePaymentSchedule(sourceQuote.paymentScheduleJson);

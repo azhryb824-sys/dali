@@ -102,7 +102,8 @@ test("draft deletion is concurrency-safe and cancellation stays owner-controlled
   assert.match(deleteRoute, /representativeRequests\)\.set\(\{ status: "approved"/);
   assert.match(deleteRoute, /hasSignedCopy/);
   assert.match(deleteRoute, /CONTRACT_CHANGED_DURING_DELETE/);
-  assert.ok(deleteRoute.indexOf("delete(contractWorkerAbsences)") < deleteRoute.indexOf("delete(contractPaymentSchedules)"));
+  const deletion = deleteRoute.slice(deleteRoute.indexOf("export async function DELETE"));
+  assert.ok(deletion.indexOf("delete(contractWorkerAbsences)") < deletion.indexOf("delete(contractPaymentSchedules)"));
   assert.match(deleteRoute, /CONTRACT_DELETE_BLOCKED/);
   assert.match(statusRoute, /\["signed", "terminated", "cancelled", "superseded"\]\.includes\(status\) && !canApprove/);
   assert.match(statusRoute, /contract-cancellation-referred-legal/);

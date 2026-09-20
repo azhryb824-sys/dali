@@ -1,3 +1,4 @@
+import { commercialAttachmentRefs, withCommercialAttachments } from "@/lib/commercial-attachments";
 import { and, desc, eq, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { representativeRequests, salesRepresentatives, visitorConversations, workforceRequests } from "@/db/schema";
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
                     throw new WorkflowError("لا يقبل الطلب التعديل الآن؛ حدّث الصفحة", 409);
                 const { idempotencyKey: _key, ...updatedValues } = values;
                 void _key;
-                const [updated] = await tx.update(workforceRequests).set({ ...updatedValues, approvalStatus: "pending", approvedAt: null, approvedBy: null, version: before.version + 1, updatedAt: now }).where(eq(workforceRequests.id, id)).returning();
+                const [updated] = await tx.update(workforceRequests).set({ ...updatedValues, quotationTermsJson: withCommercialAttachments(updatedValues.quotationTermsJson, commercialAttachmentRefs(before.quotationTermsJson)), approvalStatus: "pending", approvedAt: null, approvedBy: null, version: before.version + 1, updatedAt: now }).where(eq(workforceRequests.id, id)).returning();
                 await tx.update(representativeRequests).set({ status: "submitted", clientName: values.companyName, clientMobile: values.mobile, details: values.details, workSite: values.workSite, itemsJson: values.quotationItemsJson, updatedAt: now }).where(eq(representativeRequests.workforceRequestId, id));
                 return updated;
             }

@@ -1,3 +1,4 @@
+import "./components/commercial-forms.css";
 import type { Metadata, Viewport } from "next";
 import "@fontsource/tajawal/400.css";
 import "@fontsource/tajawal/500.css";

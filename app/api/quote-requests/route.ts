@@ -1,3 +1,5 @@
+import { CommercialAttachmentError, saveCommercialAttachment } from "@/lib/commercial-attachment-storage";
+import { commercialAttachmentFields, type CommercialAttachmentKind } from "@/lib/commercial-attachments";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { workforceRequestAttachments, workforceRequests } from "@/db/schema";
@@ -27,10 +29,16 @@ export async function POST(request:Request){
   const limit=await enforcePublicRateLimit(request,{scope:"quote-attachment",limit:12,windowSeconds:1800,blockSeconds:1800});if(!limit.allowed)return rateLimitResponse(limit.retryAfterSeconds);
   let storageKey="";try{const form=await request.formData();const quote=await findRequest(trackingValue(form.get("trackingCode")),emailValue(form.get("email")));if(!quote)return jsonNoStore({error:"تعذّر مطابقة الطلب."},{status:404});
     const file=form.get("file");if(!(file instanceof File))return jsonNoStore({error:"اختر ملفًا صالحًا."},{status:400});
+    const kind = String(form.get("kind") || "");
+    if (commercialAttachmentFields.some(field => field.kind === kind)) {
+      const attachment = await saveCommercialAttachment({ requestId: quote.id }, file, kind as CommercialAttachmentKind, `public-request:${quote.id}`);
+      return jsonNoStore({ attachment }, { status: 201 });
+    }
+    if (quote.approvedBy || !["pending", "changes_requested"].includes(quote.approvalStatus)) return jsonNoStore({ error: "لا يمكن إضافة مرفق إلى طلب معتمد" }, { status: 409 });
     const validation=await validateUploadedFile(file,{contentTypes:uploadContentTypes,maxBytes:10*1024*1024});if(!validation.valid)return jsonNoStore({error:validation.error},{status:400});
     const existing=await getDb().select().from(workforceRequestAttachments).where(eq(workforceRequestAttachments.requestId,quote.id));if(existing.length>=8)return jsonNoStore({error:"وصل الطلب إلى الحد الأقصى وهو 8 مرفقات."},{status:409});
     const fileName=safeFileName(file.name);storageKey=objectKey(`public-quotes/${quote.id}`,fileName);await getRuntimeEnv().BUCKET.put(storageKey,validation.bytes,{httpMetadata:{contentType:file.type},customMetadata:{requestId:String(quote.id),validation:validation.validationDetails}});
     const [saved]=await getDb().insert(workforceRequestAttachments).values({requestId:quote.id,fileName,storageKey,contentType:file.type,sizeBytes:file.size}).returning({id:workforceRequestAttachments.id,fileName:workforceRequestAttachments.fileName,sizeBytes:workforceRequestAttachments.sizeBytes,createdAt:workforceRequestAttachments.createdAt});
     return jsonNoStore({attachment:saved},{status:201});
-  }catch(error){if(storageKey)await getRuntimeEnv().BUCKET.delete(storageKey).catch(()=>undefined);console.error("public-quote-attachment-failed",error);return jsonNoStore({error:"تعذّر حفظ المرفق حاليًا."},{status:500})}
+  }catch(error){if(storageKey)await getRuntimeEnv().BUCKET.delete(storageKey).catch(()=>undefined);console.error("public-quote-attachment-failed",error);return jsonNoStore({error:error instanceof CommercialAttachmentError ? error.message : "تعذّر حفظ المرفق حاليًا."},{status:error instanceof CommercialAttachmentError ? error.status : 500})}
 }

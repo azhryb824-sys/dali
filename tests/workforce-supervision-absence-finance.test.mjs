@@ -87,7 +87,8 @@ test("document edit buttons open system forms and draft delete actions remain av
   assert.match(letters,/setEditingLetter\(letter\)/);
   assert.match(letters,/aria-label="تعديل الخطاب الرسمي"/);
   assert.match(dashboard,/setShowEditForm\(true\)/);
-  assert.match(dashboard,/submitContractEdit/);
+  assert.match(dashboard,/ContractFullEditDialog contract=\{contract\}/);
+  assert.match(dashboard,/onSubmit=\{changes=>onEdit\(contract,changes\)\}/);
   assert.match(billing,/method:\s*"DELETE"/);
   assert.match(operations,/method: "DELETE"/);
   assert.match(letters,/method:\s*"DELETE"/);
