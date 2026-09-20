@@ -6,6 +6,13 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "اللغة غير مدعومة": { en: "Unsupported language", bn: "এই ভাষা সমর্থিত নয়" },
+  "جارٍ حفظ اللغة...": { en: "Saving language...", bn: "ভাষা সংরক্ষণ করা হচ্ছে..." },
+  "تعذّر تحميل مساحة العمل": { en: "Unable to load the workspace", bn: "কর্মক্ষেত্র লোড করা যায়নি" },
+  "تعذّر حفظ اللغة. بقيت اللغة الحالية دون تغيير؛ أعد المحاولة.": { en: "Could not save the language. Your current language is unchanged; please try again.", bn: "ভাষা সংরক্ষণ করা যায়নি। বর্তমান ভাষা অপরিবর্তিত আছে; আবার চেষ্টা করুন।" },
+  "حدث خطأ أثناء عرض البوابة. أعد المحاولة، أو عد إلى العربية ثم حاول مجددًا.": { en: "An error occurred while displaying the portal. Try again, or switch back to Arabic and retry.", bn: "পোর্টাল দেখানোর সময় একটি ত্রুটি হয়েছে। আবার চেষ্টা করুন, অথবা আরবিতে ফিরে আবার চেষ্টা করুন।" },
+  "العودة للعربية وإعادة المحاولة": { en: "Switch to Arabic and retry", bn: "আরবিতে ফিরে আবার চেষ্টা করুন" },
+
   "اتجاه التعاقد": {"en": "Contract direction", "bn": "চুক্তির দিক"},
   "إضافة بند": {"en": "Add item", "bn": "আইটেম যোগ করুন"},
   "أضف جدول دفعات مجموع نسبه 100% قبل الحفظ.": {"en": "Add a payment schedule totaling 100% before saving.", "bn": "সংরক্ষণের আগে মোট ১০০% কিস্তির সময়সূচি যোগ করুন।"},

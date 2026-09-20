@@ -15,10 +15,12 @@ test("Arabic, English and Bengali share a persistent direction-aware translation
   assert.match(i18n, /bn: "বাংলা"/);
   assert.match(i18n, /locale === "ar" \? "rtl" : "ltr"/);
   assert.match(i18n, /"لوحة المتابعة".*bn: "ড্যাশবোর্ড"/);
-  assert.match(runtime, /MutationObserver/);
+  const dom = await source("lib/locale-dom.ts");
+  const client = await source("lib/client-locale.ts");
+  assert.match(dom, /MutationObserver/);
   assert.match(runtime, /document\.documentElement\.dir/);
-  assert.match(runtime, /document\.cookie/);
-  assert.match(runtime, /originalText/);
+  assert.match(client, /document\.cookie/);
+  assert.match(dom, /originalText/);
   assert.doesNotMatch(runtime, /getBrowserTranslator|BrowserTranslator/);
   assert.match(i18n, /compiledGeneratedUiTemplates/);
   assert.match(i18n, /generatedUiTranslations/);
@@ -27,7 +29,7 @@ test("Arabic, English and Bengali share a persistent direction-aware translation
   assert.match(authoredCatalog, /إدارة الموظفين/);
   assert.match(authoredCatalog, /طلب عرض سعر/);
   assert.match(packageJson, /"prebuild": "npm run i18n:audit"/);
-  assert.match(runtime, /\/api\/locale/);
+  assert.match(client, /\/api\/locale/);
   assert.match(layout, /localeCookieName/);
   assert.match(layout, /<html lang=\{locale\} dir=\{localeDirection\(locale\)\}>/);
   assert.match(publicApi, /SameSite=Lax/);

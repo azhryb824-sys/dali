@@ -1,14 +1,71 @@
 "use client";
-import { useEffect, useState } from "react";
-import { AppLocale, localeCookieName, localeDirection, localeNames, translateUi } from "@/lib/i18n";
 
-const originalText=new WeakMap<Text,string>();
-const originalAttributes=new WeakMap<HTMLElement,Map<string,string>>();
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
+import { isAppLocale, localeDirection, localeNames, translateUi, type AppLocale } from "@/lib/i18n";
+import { readClientLocale, saveClientLocale, setClientLocale, useAppLocale } from "@/lib/client-locale";
+import { observeLocaleTree } from "@/lib/locale-dom";
 
-function translateTree(root:unknown,locale:AppLocale,websiteTranslations:Record<string,string>){
-  document.documentElement.lang=locale;document.documentElement.dir=localeDirection(locale);document.body.dir=localeDirection(locale);
-  const walker=document.createTreeWalker(root as Node,NodeFilter.SHOW_TEXT);const nodes:Text[]=[];while(walker.nextNode())nodes.push(walker.currentNode as Text);
-  for(const node of nodes){if(!originalText.has(node))originalText.set(node,node.nodeValue||"");const raw=originalText.get(node)||"",trimmed=raw.trim();if(!trimmed)continue;const translated=websiteTranslations[trimmed]||translateUi(trimmed,locale);node.nodeValue=translated===trimmed?raw:raw.replace(trimmed,translated)}
-  (root as Document).querySelectorAll?.<HTMLElement>("[placeholder],[aria-label],[title]").forEach(element=>{let originals=originalAttributes.get(element);if(!originals){originals=new Map;originalAttributes.set(element,originals)}for(const attr of ["placeholder","aria-label","title"]){if(!originals.has(attr)){const value=element.getAttribute(attr);if(value)originals.set(attr,value)}const value=originals.get(attr);if(value)element.setAttribute(attr,websiteTranslations[value]||translateUi(value,locale))}});
+type TranslationCatalogs = Partial<Record<"en" | "bn", Record<string, string>>>;
+const emptyTranslations: Record<string, string> = {};
+// SSR markup is visible before React attaches handlers. Keep the switcher
+// disabled until its own hydration has completed, including streamed portals.
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
+
+export default function LocaleRuntime({ initialLocale, portal = false, showSwitcher = true, translationCatalogs = {} }: {
+  initialLocale: AppLocale;
+  portal?: boolean;
+  showSwitcher?: boolean;
+  translationCatalogs?: TranslationCatalogs;
+}) {
+  const locale = useAppLocale(initialLocale);
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
+  const pathname = usePathname() || "";
+  const portalPage = pathname === "/portal" || pathname.startsWith("/portal/");
+  const host = useRef<HTMLLabelElement>(null);
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const translations = locale === "ar" ? emptyTranslations : translationCatalogs[locale] || emptyTranslations;
+
+  useEffect(() => {
+    if (portal && !readClientLocale()) setClientLocale(initialLocale);
+  }, [initialLocale, portal]);
+
+  useEffect(() => {
+    // The root-layout runtime must not translate the portal's streamed HTML
+    // before PortalDashboard hydrates. Only its own mounted runtime owns it.
+    document.documentElement.lang = locale;
+    document.documentElement.dir = localeDirection(locale);
+    document.body.dir = localeDirection(locale);
+    if (!portal && portalPage) return;
+    const root = portal ? host.current?.closest(".admin-shell") : document.body;
+    if (!root) return;
+    return observeLocaleTree(root, locale, translations, !portal);
+  }, [locale, portal, portalPage, translations]);
+
+  async function change(value: string) {
+    if (!hydrated || !isAppLocale(value) || value === locale || pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await saveClientLocale(value, portal || portalPage);
+    } catch {
+      setError("تعذّر حفظ اللغة. بقيت اللغة الحالية دون تغيير؛ أعد المحاولة.");
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
+
+  return <label ref={host} hidden={!showSwitcher} data-dali-no-translate className={`language-switcher ${portal ? "portal-language-switcher" : ""}`}>
+    <span>{translateUi("اللغة", locale)}</span>
+    <select value={locale} disabled={!hydrated || busy} aria-busy={!hydrated || busy} onChange={event => void change(event.target.value)} aria-label={translateUi("اختيار اللغة", locale)}>
+      {(["ar", "en", "bn"] as AppLocale[]).map(item => <option key={item} value={item}>{localeNames[item]}</option>)}
+    </select>
+    {error && <small role="alert">{translateUi(error, locale)}</small>}
+  </label>;
 }
-export default function LocaleRuntime({initialLocale,portal=false,showSwitcher=true,websiteTranslations={}}:{initialLocale:AppLocale;portal?:boolean;showSwitcher?:boolean;websiteTranslations?:Record<string,string>}){const[locale,setLocale]=useState(initialLocale);useEffect(()=>{translateTree(document,locale,websiteTranslations);const observer=new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{if(node.nodeType===Node.ELEMENT_NODE)translateTree(node as Element,locale,websiteTranslations);else if(node.nodeType===Node.TEXT_NODE&&node.parentElement)translateTree(node.parentElement,locale,websiteTranslations)})));observer.observe(document.body,{subtree:true,childList:true});return()=>observer.disconnect()},[locale,websiteTranslations]);async function change(next:AppLocale){setLocale(next);document.cookie=`${localeCookieName}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;await fetch(portal?"/api/portal/language":"/api/locale",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({locale:next})}).catch(()=>undefined);window.location.reload()}return showSwitcher?<label className={`language-switcher ${portal?"portal-language-switcher":""}`}><span>{translateUi("اللغة",locale)}</span><select value={locale} onChange={event=>void change(event.target.value as AppLocale)} aria-label={translateUi("اختيار اللغة",locale)}>{(["ar","en","bn"]as AppLocale[]).map(item=><option key={item} value={item}>{localeNames[item]}</option>)}</select></label>:null}

@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, ReactNode, RefObject, useCallback, useEffect, useRef, useState } from "react";
-import { normalizeAppLocale, translateUi } from "@/lib/i18n";
+import { translateUi } from "@/lib/i18n";
+import { useAppLocale } from "@/lib/client-locale";
 
 type DialogKind = "prompt" | "confirm" | "alert";
 type DialogResult = string | boolean | undefined | null;
@@ -54,12 +55,9 @@ export async function appAlert(message: string, options: AppDialogOptions = {}) 
   await requestDialog("alert", message, options);
 }
 
-function translated(value: string) {
-  if (typeof document === "undefined") return value;
-  return translateUi(value, normalizeAppLocale(document.documentElement.lang) || "ar");
-}
-
 export function AppDialogProvider({ children }: { children: ReactNode }) {
+  const locale = useAppLocale();
+  const translated = (value: string) => translateUi(value, locale);
   const queue = useRef<DialogRequest[]>([]);
   const activeRef = useRef<DialogRequest | null>(null);
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
@@ -173,7 +171,7 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
 
   return <>
     {children}
-    {active && <div className="app-dialog-layer" role="presentation">
+    {active && <div className="app-dialog-layer" role="presentation" data-dali-localized>
       <button className="app-dialog-backdrop" type="button" aria-label={translated("إغلاق")} onClick={cancel} />
       <section
         ref={cardRef}
@@ -186,12 +184,12 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
         <header>
           <div>
             <span>{active.kind === "alert" ? translated("تنبيه") : translated("تأكيد الإجراء")}</span>
-            <h2 id={`app-dialog-title-${active.id}`}>{active.options.title || (active.kind === "alert" ? translated("تنبيه") : translated("تأكيد"))}</h2>
+            <h2 id={`app-dialog-title-${active.id}`}>{translated(active.options.title || (active.kind === "alert" ? "تنبيه" : "تأكيد"))}</h2>
           </div>
           <button type="button" aria-label={translated("إغلاق")} onClick={cancel}>×</button>
         </header>
         <form onSubmit={submit}>
-          <p id={`app-dialog-message-${active.id}`}>{active.message}</p>
+          <p id={`app-dialog-message-${active.id}`}>{translated(active.message)}</p>
           {active.kind === "prompt" && (active.options.multiline
             ? <textarea
                 ref={inputRef as RefObject<HTMLTextAreaElement>}
