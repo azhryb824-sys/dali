@@ -64,6 +64,9 @@ try {
       await page.goto(`${origin}/?locale=${initial}&delay=1`);
       await page.waitForSelector(".admin-shell");
       await page.waitForFunction(() => Boolean(window.localeProbe));
+      // A visible server-rendered control is not necessarily hydrated yet.
+      // The real switcher stays disabled until its handlers are attached.
+      await page.waitForSelector(".portal-language-switcher select:not(:disabled)");
       await page.waitForFunction(locale => {
         const title = document.querySelector(".admin-shell h1")?.textContent || "";
         return locale === "ar" ? title.includes("مرحباً") : locale === "en" ? title.includes("Welcome") : title.includes("স্বাগত");
@@ -73,6 +76,7 @@ try {
       await search.fill("مسودة الجمعة 123");
       const before = documents.length;
       for (const locale of ["en", "bn", "ar", "bn", "en", "ar"]) {
+        console.log(JSON.stringify({ phase: "switch", initial, viewport: viewport.width, locale }));
         await page.locator(".portal-language-switcher select").selectOption(locale);
         await page.waitForFunction(value => document.documentElement.lang === value && !document.querySelector(".portal-language-switcher select").disabled, locale);
         await page.waitForFunction(locale => {
@@ -135,6 +139,27 @@ try {
   assert.ok(saves.every(save => save.path === "/api/portal/language"));
   console.log(JSON.stringify({ status: "passed", cases: results.length, results }, null, 2));
   await writeFile(join(artifacts, "results.json"), JSON.stringify({ status: "passed", cases: results.length, results }, null, 2));
+} catch (error) {
+  const diagnostics = [];
+  for (const context of browser.contexts()) {
+    for (const page of context.pages()) {
+      if (page.isClosed()) continue;
+      const state = await page.evaluate(() => ({
+        lang: document.documentElement.lang,
+        heading: document.querySelector(".admin-shell h1")?.textContent,
+        selected: document.querySelector(".portal-language-switcher select")?.value,
+        disabled: document.querySelector(".portal-language-switcher select")?.disabled,
+        alert: document.querySelector(".portal-language-switcher [role=alert]")?.textContent,
+        locale: window.localeProbe?.readClientLocale(),
+      })).catch(() => ({ unavailable: true }));
+      diagnostics.push(state);
+      await page.screenshot({ path: join(artifacts, `failure-${diagnostics.length}.png`), fullPage: true }).catch(() => {});
+    }
+  }
+  const failure = { status: "failed", error: String(error), diagnostics, saves, results };
+  console.error(JSON.stringify(failure, null, 2));
+  await writeFile(join(artifacts, "results.json"), JSON.stringify(failure, null, 2));
+  throw error;
 } finally {
   await browser.close(); await new Promise(resolve => server.close(resolve)); await rm(dir, { recursive: true, force: true });
 }
