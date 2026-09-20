@@ -3,6 +3,7 @@ import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb } from "pdf-lib";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { halalasToArabicWords } from "@/lib/arabic-money";
 import { cairoFontBytes } from "@/lib/cairo-font-bytes";
+import { hospitalityProfessionTranslations } from "@/lib/workforce-requirements";
 import { latinDigits, rtlPdfDigits } from "@/lib/latin-digits";
 import { defaultWorkforceContractClauses, publicManpowerText, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
@@ -97,6 +98,8 @@ const englishDocumentLabels: Record<IssuedDocumentType, string> = {
 
 function englishText(value?: string | null) {
   if (!value) return "Not specified";
+  const profession = hospitalityProfessionTranslations[value.trim()];
+  if (profession) return profession.en;
   const replacements: Array<[RegExp, string]> = [
     [/خصم غياب العمالة قبل الضريبة:\s*([0-9.,]+)\s*ر\.س\./g, "Manpower absence deduction before VAT: $1 SAR."],
     [/فاتورة الدفعة رقم\s+([0-9]+)\s+\(([^)]+)\)\s+من العقد\s+([A-Za-z0-9_-]+)\./g, "Invoice for installment No. $1 ($2) under contract $3."],

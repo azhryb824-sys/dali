@@ -15,9 +15,9 @@ test("contractual documents use dedicated tabs and the canonical quotation modal
   assert.match(workspace, />\s*عروض الأسعار\s*<\/button>/);
   assert.match(workspace, />\s*الخطابات\s*<\/button>/);
   assert.match(workspace, /onCreateQuotation=\{onCreateQuotation\}/);
-  assert.match(operations, /onClick=\{onCreateQuotation\}[\s\S]*?>\s*إنشاء عرض سعر\s*<\/button>/);
-  assert.match(dashboard, /onCreateQuotation=\{\(\)\s*=>\s*openIssueDocument\("quotation"\)\}/);
-  assert.match(dashboard, /issueReturnView === "contractual-documents"/);
+  assert.match(operations, /onClick=\{\(\) => onCreateQuotation\(\)\}[\s\S]*?>\s*إنشاء عرض سعر\s*<\/button>/);
+  assert.match(dashboard, /onCreateQuotation=\{\(requestId\) => \{ setQuoteSourceRequestId\(requestId\); openIssueDocument\("quotation"\); \}\}/);
+  assert.match(dashboard, /onCreated=\{\(message\) => \{[\s\S]*?setContractualTab\("quotes"\);[\s\S]*?setCommercialRevision\(value => value \+ 1\);[\s\S]*?changeView\("contractual-documents"\)/);
   assert.match(operations, /quote-approve/);
   assert.match(operations, /اعتماد عرض السعر/);
   assert.match(operations, /tab === "contracts"[\s\S]*?<ContractBillingWorkspace\s*\/>/);

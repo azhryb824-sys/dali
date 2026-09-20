@@ -6,6 +6,16 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "أُنشئ عرض لهذا الطلب؛ استخدم إصدار العرض المرتبط": {"en": "A quotation already exists for this request; use the linked quotation version.", "bn": "এই অনুরোধের জন্য একটি দরপত্র ইতিমধ্যে তৈরি হয়েছে; সংযুক্ত দরপত্রের সংস্করণ ব্যবহার করুন।"},
+  "تم التحويل إلى عقد:": {"en": "Converted to contract:", "bn": "চুক্তিতে রূপান্তরিত হয়েছে:"},
+  "تم إنشاء عرض السعر:": {"en": "Quotation created:", "bn": "দরপত্র তৈরি হয়েছে:"},
+  "طلب عرض السعر غير معتمد أو غير متاح": {"en": "The quotation request is not approved or is unavailable.", "bn": "দরপত্রের অনুরোধ অনুমোদিত নয় অথবা অনুপলব্ধ।"},
+  "عرض السعر غير معتمد أو سبق تحويله إلى عقد": {"en": "The quotation is not approved or has already been converted to a contract.", "bn": "দরপত্র অনুমোদিত নয় অথবা ইতিমধ্যে চুক্তিতে রূপান্তরিত হয়েছে।"},
+  "تعذر تحميل بيانات عرض السعر": {"en": "Could not load quotation details.", "bn": "দরপত্রের তথ্য লোড করা যায়নি।"},
+  "السجل المحدد غير صحيح": {"en": "The selected record is invalid.", "bn": "নির্বাচিত রেকর্ডটি সঠিক নয়।"},
+  "الفرصة لا تطابق طلب عرض السعر المحدد": {"en": "The opportunity does not match the selected quotation request.", "bn": "বিক্রয় সুযোগটি নির্বাচিত দরপত্রের অনুরোধের সঙ্গে মেলে না।"},
+  "تغير طلب عرض السعر؛ أعد فتح النموذج لنقل أحدث البيانات": {"en": "The quotation request changed; reopen the form to load the latest details.", "bn": "দরপত্রের অনুরোধ পরিবর্তিত হয়েছে; সর্বশেষ তথ্য লোড করতে ফর্মটি আবার খুলুন।"},
+  "تغير العرض أو اعتماده؛ أعد فتح نموذج التحويل": {"en": "The quotation or its approval changed; reopen the conversion form.", "bn": "দরপত্র অথবা তার অনুমোদন পরিবর্তিত হয়েছে; রূপান্তরের ফর্মটি আবার খুলুন।"},
   "تعذر تنزيل المرفقات. تحقق من اتصال الإنترنت ثم أعد تجهيز المشاركة.": {"en": "Attachments could not be downloaded. Check your internet connection and prepare the share again.", "bn": "সংযুক্তি ডাউনলোড করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার শেয়ারের প্রস্তুতি নিন।"},
   "رابط الملف غير متاح أو انتهت صلاحيته. أعد تجهيز المشاركة للحصول على رابط جديد.": {"en": "The file link is unavailable or expired. Prepare the share again to get a new link.", "bn": "ফাইলের লিংকটি অনুপলব্ধ বা মেয়াদোত্তীর্ণ। নতুন লিংকের জন্য আবার শেয়ারের প্রস্তুতি নিন।"},
   "تعذر تنزيل المرفقات من الخادم. أعد المحاولة بعد قليل.": {"en": "Attachments could not be downloaded from the server. Try again shortly.", "bn": "সার্ভার থেকে সংযুক্তি ডাউনলোড করা যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।"},

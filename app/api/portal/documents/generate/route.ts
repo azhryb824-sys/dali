@@ -1,4 +1,5 @@
 import { quoteConversionRequests } from "@/db/schema";
+import { WorkflowError } from "@/lib/quote-request-workflow";
 import { commercialTextFields, readCommercialTerms } from "@/lib/commercial-terms";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
@@ -24,7 +25,7 @@ import {
 } from "@/db/schema";
 import { cleanDate, cleanText, makeReference, objectKey, safeFileName } from "@/lib/company-documents";
 import { generateIssuedPdf, issuedDocumentLabels, type IssuedDocumentType } from "@/lib/pdf-generator";
-import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
+import { canAdministerPortalUsers, hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, requestCorrelationId, validateUploadedFile } from "@/lib/security";
@@ -142,7 +143,7 @@ export async function POST(request: Request) {
           : documentType === "construction_record"
             ? "construction"
             : "documents";
-    if (!(await hasPortalPermission(access, permissionResource, "write"))) {
+    if (!(permissionResource === "contracts" && canAdministerPortalUsers(access)) && !(await hasPortalPermission(access, permissionResource, "write"))) {
       return Response.json({ error: "غير مصرح بإصدار هذا النوع من المستندات" }, { status: 403 });
     }
     const clientName = cleanText(payload.clientName, 160);
@@ -447,6 +448,13 @@ export async function POST(request: Request) {
       progress_claim: "progress_claim",
     };
     const persisted = await db.transaction(async (tx) => {
+      if (sourceQuote) {
+        const [lockedQuote] = await tx.select().from(quoteVersions).where(eq(quoteVersions.id, sourceQuote.id)).for("update");
+        if (!lockedQuote?.approvedBy || !["approved", "sent", "accepted"].includes(lockedQuote.status) || lockedQuote.recordVersion !== sourceQuote.recordVersion)
+          throw new WorkflowError("تغير العرض أو اعتماده؛ أعد فتح نموذج التحويل", 409);
+        if (await tx.query.workforceContracts.findFirst({ where: eq(workforceContracts.quoteVersionId, sourceQuote.id) }))
+          throw new WorkflowError("تم تحويل عرض السعر إلى عقد سابقًا", 409);
+      }
       let client: typeof clients.$inferSelect | null = null;
       let supplier: typeof suppliers.$inferSelect | null = null;
       let createdClientId: number | null = null;
@@ -573,6 +581,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (storageKey) await getRuntimeEnv().BUCKET.delete(storageKey).catch(() => undefined);
     for (const key of auxiliaryStorageKeys) await getRuntimeEnv().BUCKET.delete(key).catch(() => undefined);
+    if (error instanceof WorkflowError) return Response.json({ error: error.message }, { status: error.status });
     console.error(`[issued-document-save:${correlationId}]`, error);
     const safeMessage = error instanceof Error && error.message.startsWith("تعذر التحقق من حفظ ملف")
       ? error.message

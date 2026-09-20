@@ -19,7 +19,7 @@ before(async () => {
   const outfile = resolve(directory, "qa.mjs");
   await build({ stdin: { contents: `export * as schema from './db/schema.ts'; export * as quoteEdit from './app/api/portal/operations/quotes/[id]/route.ts'; export * as generate from './app/api/portal/documents/generate/route.ts'; export * as requests from './app/api/portal/requests/route.ts'; export * as operations from './app/api/portal/operations/route.ts'; export * as quoteShare from './app/api/portal/operations/quotes/[id]/share/route.ts'; export * as documentShare from './app/api/portal/documents/share/route.ts'; export * as download from './app/api/shared-documents/[token]/route.ts'; export * as conversations from './app/api/portal/conversations/route.ts'; export * as video from './lib/video-interviews.ts'; export * as videoPortal from './app/api/portal/video-interviews/route.ts'; export * as videoPublic from './app/api/video-interviews/route.ts'; export * as notifications from './lib/portal-notifications.ts'; export * as notificationRoute from './app/api/portal/notifications/route.ts'; export {resolveShareRecipient} from './lib/share-recipient.ts'; export {readCommercialTerms,commercialTermsFromRequest} from './lib/commercial-terms.ts'; export {setTestDb,setTestActor} from 'qa-control';`, resolveDir: process.cwd() }, outfile, bundle: true, platform: "node", format: "esm", packages: "external", logLevel: "silent", plugins: [{ name: "isolate-environment", setup(b) {
     b.onResolve({ filter: /^(qa-control|@\/db|@\/lib\/portal-access)$/ }, () => ({ path: "state", namespace: "state" }));
-    b.onLoad({ filter: /.*/, namespace: "state" }, () => ({ contents: `let db,actor; export function getDb(){return db} export function getSqlClient(){throw new Error('Unexpected raw SQL dependency')} export function setTestDb(value){db=value} export function setTestActor(value){actor=value} export async function requirePortalApiRole(){return actor} export function canAdministerPortalUsers(a){return a.role==='admin'||a.functionalRoles.some(r=>['system_owner','system_admin'].includes(r))} export async function hasPortalPermission(a,r,v){return canAdministerPortalUsers(a)||a.functionalPermissions.includes(r+'.'+v)} export function canSharePortalDocuments(a){return a.role==='admin'||a.functionalPermissions.includes('documents.share')} export function canAccessPortalDocuments(a){return a.role==='admin'||a.functionalPermissions.includes('documents.read')} export function canAccessPortalConversations(a){return a.role==='admin'||a.functionalPermissions.includes('conversations.write')} export const canManagePortalConversations=canAccessPortalConversations;` }));
+    b.onLoad({ filter: /.*/, namespace: "state" }, () => ({ contents: `let db,actor; export function getDb(){return db} export function getSqlClient(){throw new Error('Unexpected raw SQL dependency')} export function setTestDb(value){db=value} export function setTestActor(value){actor=value} export async function requirePortalApiRole(){return actor} export function canAdministerPortalUsers(a){return a.role==='admin'||a.functionalRoles.some(r=>['system_owner','system_admin'].includes(r))} export async function hasPortalPermission(a,r,v){if(a.denyCommercial&&r==='contracts'&&['read','write'].includes(v))return false; return canAdministerPortalUsers(a)||a.functionalPermissions.includes(r+'.'+v)} export function canSharePortalDocuments(a){return a.role==='admin'||a.functionalPermissions.includes('documents.share')} export function canAccessPortalDocuments(a){return a.role==='admin'||a.functionalPermissions.includes('documents.read')} export function canAccessPortalConversations(a){return a.role==='admin'||a.functionalPermissions.includes('conversations.write')} export const canManagePortalConversations=canAccessPortalConversations;` }));
     b.onResolve({ filter: /^@\/lib\/pdf-generator$/ }, () => ({ path: "pdf", namespace: "pdf" }));
     b.onLoad({ filter: /.*/, namespace: "pdf" }, () => ({ contents: "export const issuedDocumentLabels={workforce_contract:'عقد',quotation:'عرض سعر',invoice:'فاتورة'}; export async function generateIssuedPdf(){return new TextEncoder().encode('%PDF-QA')}" }));
     b.onResolve({ filter: /^@\/lib\/audit$/ }, () => ({ path: "audit", namespace: "effects" }));
@@ -306,3 +306,73 @@ test("old expired calls are processed even behind more than 300 recent requests"
   assert.equal(await qa.video.expireOldVideoInterviews(), 1);
   assert.equal((await pg.query("select status from video_interviews where id=$1", [oldCall.id])).rows[0].status, "expired");
 });
+
+for (const functionalRole of ["system_owner", "system_admin"]) {
+  test(`${functionalRole} converts approved requests and quotes with complete data and no duplicate records`, async () => {
+    const administrator = { ...actor(), role: "employee", functionalRoles: [functionalRole], functionalPermissions: [], denyCommercial: true, user: { email: `${functionalRole}@qa.test`, displayName: functionalRole } };
+    const reader = { ...actor(), role: "employee", functionalPermissions: ["contracts.read"] };
+    const [source] = await db.insert(qa.schema.workforceRequests).values({ ...requestRow, id: undefined, trackingCode: `QA-${functionalRole}`, companyName: `QA ${functionalRole}`, clientId: null, opportunityId: null, version: 1, approvalStatus: "pending", approvedBy: null, approvedAt: null, approvalReason: null }).returning();
+    const [client] = await db.insert(qa.schema.clients).values({ clientCode: `QA-${functionalRole}`, legalName: source.companyName, sourceRequestId: source.id, createdBy: "qa" }).returning();
+    const [sourceOpportunity] = await db.insert(qa.schema.salesOpportunities).values({ opportunityCode: `QA-${functionalRole}`, clientId: client.id, sourceRequestId: source.id, title: source.companyName, ownerEmail: "qa", createdBy: "qa" }).returning();
+    await pg.query("update workforce_requests set client_id=$1,opportunity_id=$2 where id=$3", [client.id, sourceOpportunity.id, source.id]);
+    const createQuote = () => qa.operations.POST(request("/api/portal/operations", { ...quoteInput(), sourceRequestId: source.id, opportunityId: sourceOpportunity.id }));
+    qa.setTestActor(administrator);
+    assert.equal((await createQuote()).status, 400, "approval cannot be skipped by a root functional role");
+    assert.equal((await qa.requests.PATCH(request("/api/portal/requests", { id: source.id, version: 1, action: "approve" }, "PATCH"))).status, 200);
+    qa.setTestActor(reader);
+    assert.equal((await createQuote()).status, 403);
+    qa.setTestActor(administrator);
+    const attempts = await Promise.all([createQuote(), createQuote()]);
+    assert.deepEqual(attempts.map(response => response.status).sort(), [201, 409]);
+    const createdQuote = (await attempts.find(response => response.status === 201).json()).quote;
+    const lookup = async () => {
+      const response = await qa.operations.GET(new Request(`https://www.dally.info/api/portal/operations?limit=10&offset=9999&quoteId=${createdQuote.id}&sourceRequestId=${source.id}`));
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    let data = await lookup();
+    assert.equal(data.canWriteContracts, true, "functional root roles can convert even when a legacy contracts bit is absent or denied");
+    assert.deepEqual(data.quotes.map(row => row.id), [createdQuote.id]);
+    assert.deepEqual(data.quoteRequests.map(row => row.id), [source.id]);
+    assert.equal(data.quoteItems.length, 1);
+    assert.equal(data.quoteItems[0].actualSalaryHalalas, 80000);
+    assert.equal(data.quoteSources[0].clientName, source.companyName);
+    assert.equal(data.quoteSources[0].sourceRequestId, source.id);
+    assert.equal(data.quoteRequestConversions[0].quoteId, createdQuote.id);
+    assert.equal(data.contractConversions.length, 0);
+    const terms = qa.readCommercialTerms(createdQuote.commercialTermsJson);
+    const mode = functionalRole === "system_owner" ? "as_is" : "modified";
+    const workingHours = mode === "modified" ? "6 hours" : terms.workingHours;
+    const contractInput = { ...terms, documentType: "workforce_contract", conversionMode: mode, clientCr: "1010000000", clientVat: "300000000000003", issueDate: "2026-09-17", quoteVersionId: createdQuote.id, sourceRequestId: source.id, quantityMode: "fixed", seasonType: "regular", vatEnabled: "true", vatRate: 15, workingHours, accommodationParty: "يوفره الطرف الثاني", transportParty: "توفره دالي", professions: JSON.stringify([{ profession: "عامل عام", requiredCount: 2, unitSalary: 1000, actualSalary: 800, sponsorshipType: "dali", ajirContractStatus: "not_applicable", workerIds: [] }]) };
+    const createContract = async () => {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(contractInput)) form.set(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
+      for (const key of ["commercialRegistrationFile", "vatCertificateFile", "nationalAddressFile"]) form.set(key, new File(["%PDF-1.7\nQA attachment"], `${key}.pdf`, { type: "application/pdf" }));
+      return qa.generate.POST(new Request("https://www.dally.info/api/portal/documents/generate", { method: "POST", body: form }));
+    };
+    assert.equal((await createContract()).status, 409, "quote approval remains required");
+    const stamp = await db.query.documentStamps.findFirst();
+    const approval = await qa.operations.PATCH(request("/api/portal/operations", { action: "transition-quote", id: createdQuote.id, status: "approved", version: createdQuote.recordVersion, stampId: stamp.id }, "PATCH"));
+    assert.equal(approval.status, 200, JSON.stringify(await approval.json()));
+    qa.setTestActor(reader);
+    assert.equal((await createContract()).status, 403);
+    qa.setTestActor(administrator);
+    const contractAttempts = await Promise.all([createContract(), createContract()]);
+    const contractBodies = await Promise.all(contractAttempts.map(response => response.json()));
+    assert.deepEqual(contractAttempts.map(response => response.status).sort(), [201, 409], JSON.stringify(contractBodies));
+    const result = contractBodies[contractAttempts.findIndex(response => response.status === 201)];
+    assert.equal(result.contract.quoteVersionId, createdQuote.id);
+    assert.equal(result.contract.sourceRequestId, source.id);
+    assert.equal(result.contract.status, "draft");
+    const metadata = JSON.parse(result.document.metadataJson);
+    assert.equal(metadata.workingHours, workingHours);
+    assert.equal(metadata.clientMobile, terms.clientMobile);
+    assert.equal(metadata.specialTerms, terms.specialTerms);
+    assert.equal(metadata.conversionMode, mode);
+    assert.equal(qa.readCommercialTerms(metadata.sourceQuoteSnapshot.commercialTermsJson).workingHours, terms.workingHours);
+    assert.equal((await pg.query("select count(*)::int n from contract_clauses where contract_id=$1", [result.contract.id])).rows[0].n, 20);
+    data = await lookup();
+    assert.equal(data.contractConversions[0].contractId, result.contract.id);
+    assert.equal((await pg.query("select count(*)::int n from portal_notifications where event_type='workforce-contract-created' and entity_id=$1", [String(result.contract.id)])).rows[0].n, 1);
+  });
+}

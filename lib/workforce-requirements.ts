@@ -1,5 +1,32 @@
 export type ProfessionRequirement = { code: string; label: string };
 
+// Arabic values remain stable in saved workers, request lines and contracts.
+export const hospitalityProfessionTranslations: Record<string, { en: string; bn: string }> = {
+  "عامل تنظيف فندقي": { en: "Housekeeping", bn: "হাউসকিপিং কর্মী" },
+  "ويتر": { en: "Waiter", bn: "ওয়েটার" },
+  "حامل أمتعة": { en: "Bellman", bn: "লাগেজ বহনকারী" },
+  "عامل نظافة مطابخ": { en: "Steward", bn: "রান্নাঘর পরিচ্ছন্নতাকর্মী" },
+  "عامل نظافة المناطق العامة": { en: "Public Area", bn: "সাধারণ এলাকা পরিচ্ছন্নতাকর্মী" },
+  "عامل مغسلة": { en: "Laundry", bn: "লন্ড্রি কর্মী" },
+};
+
+const professionSearchKey = (value: string) => value.toLowerCase().replace(/[\s_-]+/g, "");
+
+export function normalizeWorkforceProfession(value: string) {
+  const key = professionSearchKey(value);
+  const match = Object.entries(hospitalityProfessionTranslations).find(([label, names]) =>
+    [label, names.en, names.bn].some(name => professionSearchKey(name) === key),
+  );
+  return match?.[0] || value.trim();
+}
+
+export function matchesWorkforceProfession(label: string, search: string) {
+  const names = hospitalityProfessionTranslations[label];
+  return [label, names?.en || "", names?.bn || ""].some(name =>
+    professionSearchKey(name).includes(professionSearchKey(search)),
+  );
+}
+
 export const workforceNationalities = [
   "السعودية", "السودانية", "المصرية", "اليمنية", "السورية", "الأردنية", "الفلسطينية", "اللبنانية",
   "الباكستانية", "الهندية", "البنغلاديشية", "النيبالية", "الفلبينية", "السريلانكية", "الإندونيسية",
@@ -10,6 +37,9 @@ export const workforceNationalities = [
 export const workforceProfessions: Array<{ label: string; requirements: ProfessionRequirement[] }> = [
   { label: "عامل تنظيف فندقي", requirements: [{ code: "hygiene_certificate", label: "شهادة النظافة والصحة المهنية" }, { code: "fitness_certificate", label: "شهادة اللياقة الطبية" }] },
   { label: "ويتر", requirements: [{ code: "food_safety_certificate", label: "شهادة سلامة الغذاء" }, { code: "fitness_certificate", label: "شهادة اللياقة الطبية" }] },
+  { label: "حامل أمتعة", requirements: [] },
+  { label: "عامل نظافة مطابخ", requirements: [] },
+  { label: "عامل نظافة المناطق العامة", requirements: [] },
   { label: "عامل نظافة", requirements: [{ code: "hygiene_certificate", label: "شهادة النظافة والصحة المهنية" }, { code: "fitness_certificate", label: "شهادة اللياقة الطبية" }] },
   { label: "عامل ضيافة", requirements: [{ code: "food_safety_certificate", label: "شهادة سلامة الغذاء أو الضيافة" }, { code: "fitness_certificate", label: "شهادة اللياقة الطبية" }] },
   { label: "طباخ", requirements: [{ code: "food_safety_certificate", label: "شهادة سلامة الغذاء" }, { code: "fitness_certificate", label: "شهادة اللياقة الطبية" }] },

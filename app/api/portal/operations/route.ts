@@ -1,6 +1,7 @@
-import { representativeRequests, quoteConversionRequests } from "@/db/schema";
+import { representativeRequests, quoteConversionRequests, workforceContracts } from "@/db/schema";
+import { WorkflowError } from "@/lib/quote-request-workflow";
 import { commercialTermsFromRequest, readCommercialTerms } from "@/lib/commercial-terms";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   capacityPlans,
@@ -68,6 +69,7 @@ const code = (prefix: string) =>
 async function requireOperationsAccess(write = false) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access) return null;
+  if (canAdministerPortalUsers(access)) return access;
   const action = write ? "write" : "read";
   const allowed = await Promise.all([
     hasPortalPermission(access, "operations", action),
@@ -89,6 +91,10 @@ export async function GET(request: Request) {
   const correlationId = requestCorrelationId(request);
   try {
     const params = new URL(request.url).searchParams;
+    const selectedQuoteId = integer(params.get("quoteId"), 1);
+    const selectedRequestId = integer(params.get("sourceRequestId"), 1);
+    if ((params.has("quoteId") && !selectedQuoteId) || (params.has("sourceRequestId") && !selectedRequestId))
+      return jsonNoStore({ error: "السجل المحدد غير صحيح" }, { status: 400 });
     const limit = Math.min(
       100,
       Math.max(10, Number(params.get("limit")) || 50),
@@ -96,7 +102,7 @@ export async function GET(request: Request) {
     const offset = Math.max(0, Number(params.get("offset")) || 0);
     const [canSeeOperations, canSeeContracts, canSeePrivacy] = await Promise.all([
       hasPortalPermission(access, "operations", "read"),
-      hasPortalPermission(access, "contracts", "read"),
+      canAdministerPortalUsers(access) || hasPortalPermission(access, "contracts", "read"),
       hasPortalPermission(access, "legal", "read"),
     ]);
     const canAdministerUsers = canAdministerPortalUsers(access);
@@ -106,7 +112,6 @@ export async function GET(request: Request) {
       opportunityRows,
       representativeRows,
       quoteRows,
-      quoteItemRows,
       orderRows,
       requirementRows,
       sheetRows,
@@ -143,15 +148,10 @@ export async function GET(request: Request) {
       canSeeContracts ? getDb()
         .select()
         .from(quoteVersions)
+        .where(selectedQuoteId ? eq(quoteVersions.id, selectedQuoteId) : undefined)
         .orderBy(desc(quoteVersions.updatedAt))
         .limit(limit)
-        .offset(offset) : Promise.resolve([]),
-      canSeeContracts ? getDb()
-        .select()
-        .from(quoteItems)
-        .orderBy(quoteItems.sortOrder)
-        .limit(limit * 10)
-        .offset(offset) : Promise.resolve([]),
+        .offset(selectedQuoteId ? 0 : offset) : Promise.resolve([]),
       canSeeOperations ? getDb()
         .select()
         .from(workOrders)
@@ -226,9 +226,20 @@ export async function GET(request: Request) {
             .offset(offset)
         : Promise.resolve([]),
     ]);
-    const quoteRequests = canSeeContracts ? await getDb().select().from(workforceRequests).where(eq(workforceRequests.requestType, "quotation")).orderBy(desc(workforceRequests.updatedAt)).limit(200) : [];
+    const quoteRequests = canSeeContracts ? await getDb().select().from(workforceRequests).where(and(eq(workforceRequests.requestType, "quotation"), selectedRequestId ? eq(workforceRequests.id, selectedRequestId) : undefined)).orderBy(desc(workforceRequests.updatedAt)).limit(200) : [];
+    const quoteIds = quoteRows.map(row => row.id);
+    const [quoteItemRows, contractConversions, quoteSources, quoteRequestConversions] = await Promise.all([
+      quoteIds.length ? getDb().select().from(quoteItems).where(inArray(quoteItems.quoteVersionId, quoteIds)).orderBy(quoteItems.sortOrder) : [],
+      quoteIds.length ? getDb().select({ quoteId: workforceContracts.quoteVersionId, contractId: workforceContracts.id, referenceCode: workforceContracts.referenceCode }).from(workforceContracts).where(inArray(workforceContracts.quoteVersionId, quoteIds)) : [],
+      quoteIds.length ? getDb().select({ quoteId: quoteVersions.id, sourceRequestId: salesOpportunities.sourceRequestId, clientName: clients.legalName, title: salesOpportunities.title }).from(quoteVersions).leftJoin(salesOpportunities, eq(salesOpportunities.id, quoteVersions.opportunityId)).leftJoin(clients, eq(clients.id, salesOpportunities.clientId)).where(inArray(quoteVersions.id, quoteIds)) : [],
+      quoteRequests.length ? getDb().select({ requestId: salesOpportunities.sourceRequestId, quoteId: quoteVersions.id, quoteCode: quoteVersions.quoteCode }).from(quoteVersions).innerJoin(salesOpportunities, eq(salesOpportunities.id, quoteVersions.opportunityId)).where(inArray(salesOpportunities.sourceRequestId, quoteRequests.map(row => row.id))).orderBy(desc(quoteVersions.versionNumber), desc(quoteVersions.id)) : [],
+    ]);
     return jsonNoStore({
       quoteRequests,
+      quoteRequestConversions,
+      contractConversions,
+      quoteSources,
+      canWriteContracts: canAdministerPortalUsers(access) || await hasPortalPermission(access, "contracts", "write"),
       conversionRequests: canSeeContracts ? await getDb().select().from(quoteConversionRequests).where(eq(quoteConversionRequests.status, "pending")) : [],
       clients: clientRows,
       contacts: contactRows,
@@ -290,7 +301,7 @@ export async function POST(request: Request) {
       : action === "transition-privacy-request"
         ? ["legal", "write"] as const
         : ["operations", "write"] as const;
-    if (!(await hasPortalPermission(access, permission[0], permission[1]))) {
+    if (!(quoteActions.has(action) && canAdministerPortalUsers(access)) && !(await hasPortalPermission(access, permission[0], permission[1]))) {
       return jsonNoStore({ error: "غير مصرح بتنفيذ هذا الإجراء" }, { status: 403 });
     }
     const operation = await beginOperation(
@@ -320,7 +331,7 @@ export async function POST(request: Request) {
     return jsonNoStore(
       { error: message },
       {
-        status: message.includes("غير مصرح")
+        status: error instanceof WorkflowError ? error.status : message.includes("غير مصرح")
           ? 403
           : message.includes("غير موجود")
             ? 404
@@ -493,7 +504,7 @@ async function createRecord(
 
   if (action === "create-quote") {
     const sourceRequestId = integer(payload.sourceRequestId, 1);
-    const sourceRequest = sourceRequestId ? await db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) }) : null;
+    let sourceRequest = sourceRequestId ? await db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) }) : null;
     if (sourceRequestId && (!sourceRequest || sourceRequest.requestType !== "quotation" || sourceRequest.approvalStatus !== "approved" || !sourceRequest.approvedBy)) throw new Error("يجب اعتماد طلب عرض السعر من المالك أو المشرف قبل تحويله");
     let opportunityId = sourceRequest ? sourceRequest.opportunityId : integer(payload.opportunityId, 1);
     const directClientName = text(payload.clientName, 180) || sourceRequest?.companyName || sourceRequest?.fullName || "";
@@ -589,6 +600,8 @@ async function createRecord(
     if (opportunity.sourceRequestId) {
       const linkedRequest = await db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, opportunity.sourceRequestId) });
       if (!linkedRequest?.approvedBy || linkedRequest.approvalStatus !== "approved") throw new Error("يجب اعتماد طلب عرض السعر من المالك أو المشرف قبل تحويله");
+      if (sourceRequest && sourceRequest.id !== linkedRequest.id) throw new WorkflowError("الفرصة لا تطابق طلب عرض السعر المحدد", 409);
+      sourceRequest = linkedRequest;
     }
     const commercialTerms = readCommercialTerms({ ...(sourceRequest ? commercialTermsFromRequest(sourceRequest) : {}), ...payload, paymentTerms: payload.paymentTerms || payload.terms });
     if (activityLabel === "توريد العمالة" && seasonType === "regular" && commercialTerms.startDate) {
@@ -691,6 +704,9 @@ async function createRecord(
       if (sourceRequest) {
         const [locked] = await tx.select().from(workforceRequests).where(eq(workforceRequests.id,sourceRequest.id)).for("update");
         if (!locked?.approvedBy || locked.approvalStatus!=="approved") throw new Error("طلب عرض السعر غير معتمد");
+        if (locked.version !== sourceRequest.version) throw new WorkflowError("تغير طلب عرض السعر؛ أعد فتح النموذج لنقل أحدث البيانات", 409);
+        const [existingQuote] = await tx.select({ id: quoteVersions.id }).from(quoteVersions).innerJoin(salesOpportunities, eq(salesOpportunities.id, quoteVersions.opportunityId)).where(eq(salesOpportunities.sourceRequestId, sourceRequest.id)).limit(1);
+        if (existingQuote) throw new WorkflowError("أُنشئ عرض لهذا الطلب؛ استخدم إصدار العرض المرتبط", 409);
         const linkedRep = await tx.query.representativeRequests.findFirst({where:eq(representativeRequests.workforceRequestId,sourceRequest.id)});
         if (linkedRep?.quoteVersionId) throw new Error("أُنشئ عرض لهذا الطلب؛ استخدم إصدار العرض المرتبط");
       }

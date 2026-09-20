@@ -13,6 +13,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   workforceNationalities,
   workforceProfessions,
+  normalizeWorkforceProfession,
 } from "@/lib/workforce-requirements";
 import IntegrationManager from "./IntegrationManager";
 import ContractBillingWorkspace from "./ContractBillingWorkspace";
@@ -178,6 +179,9 @@ type DocumentStamp = {
   updatedAt: string;
 };
 type OperationsData = {
+  canWriteContracts: boolean;
+  quoteRequestConversions?: Array<{ requestId: number | null; quoteId: number; quoteCode: string }>;
+  contractConversions?: Array<{ quoteId: number; contractId: number; referenceCode: string }>;
   conversionRequests?: Array<{id:number;quoteVersionId:number;requestedBy:string;status:string}>;
   quoteRequests: Array<typeof workforceRequests.$inferSelect>;
   clients: Client[];
@@ -244,7 +248,7 @@ export default function OperationsWorkspace({
   initialTab?: OperationsTab;
   initialQuery?: string;
   onCreateContract: (quoteId?: number, mode?: "as_is" | "modified") => void;
-  onCreateQuotation?: () => void;
+  onCreateQuotation?: (sourceRequestId?: number) => void;
   allowedTabs?: OperationsTab[];
   embedded?: boolean;
 }) {
@@ -707,7 +711,7 @@ export default function OperationsWorkspace({
                 <button
                   type="button"
                   className="admin-primary"
-                  onClick={onCreateQuotation}
+                  onClick={() => onCreateQuotation()}
                 >
                   إنشاء عرض سعر
                 </button>
@@ -717,8 +721,22 @@ export default function OperationsWorkspace({
             ) : null
           }
         >
-          <section className="panel"><h3>طلبات عرض السعر المعتمدة</h3>{(data.quoteRequests||[]).filter(r=>r.approvalStatus==="approved").map(r=><p key={r.id}>{r.trackingCode} — {r.companyName||r.fullName}</p>)}<p>اختر الطلب المعتمد داخل نموذج إنشاء عرض السعر لنقل بياناته كاملة.</p></section>
-          {(data.conversionRequests||[]).length>0&&<section className="panel"><h3>طلبات التحويل إلى عقد</h3>{(data.conversionRequests||[]).map(item=><article className="record-actions" key={item.id}><span>{data.quotes.find(q=>q.id===item.quoteVersionId)?.quoteCode||`عرض #${item.quoteVersionId}`} — {item.requestedBy}</span>{canWrite&&<><button onClick={()=>onCreateContract(item.quoteVersionId,"as_is")}>تحويل العرض كما هو</button><button onClick={()=>onCreateContract(item.quoteVersionId,"modified")}>تحويل بعد تعديل</button></>}</article>)}</section>}
+          <section className="panel">
+            <h3>طلبات عرض السعر المعتمدة</h3>
+            <div className="feature-list">
+              {(data.quoteRequests || []).filter(request => request.approvalStatus === "approved" && request.approvedBy).map(request => {
+                const converted = data.quoteRequestConversions?.find(item => item.requestId === request.id);
+                return <article key={request.id}>
+                  <div><strong>{request.trackingCode}</strong><small>{request.companyName || request.fullName}</small></div>
+                  {converted ? <span>تم إنشاء عرض السعر: {converted.quoteCode}</span> : data.canWriteContracts && onCreateQuotation && (
+                    <button type="button" className="admin-primary" onClick={() => onCreateQuotation(request.id)}>تحويل الطلب إلى عرض سعر</button>
+                  )}
+                </article>;
+              })}
+            </div>
+            <p>اختر الطلب المعتمد داخل نموذج إنشاء عرض السعر لنقل بياناته كاملة.</p>
+          </section>
+          {(data.conversionRequests||[]).length>0&&<section className="panel"><h3>طلبات التحويل إلى عقد</h3>{(data.conversionRequests||[]).map(item=><article className="record-actions" key={item.id}><span>{data.quotes.find(q=>q.id===item.quoteVersionId)?.quoteCode||`عرض #${item.quoteVersionId}`} — {item.requestedBy}</span>{data.canWriteContracts&&<><button onClick={()=>onCreateContract(item.quoteVersionId,"as_is")}>تحويل العرض كما هو</button><button onClick={()=>onCreateContract(item.quoteVersionId,"modified")}>تحويل بعد تعديل</button></>}</article>)}</section>}
           <div className="operations-list quote-record-list">
             {data.quotes.filter(includes).map((quote) => (
               <article className="quote-record" key={quote.id}>
@@ -751,6 +769,13 @@ export default function OperationsWorkspace({
                   {quoteStatusLabels[quote.status] || quote.status}
                 </span>
                 <div className="quote-record-actions">
+                  {data.contractConversions?.some(item => item.quoteId === quote.id) ? (
+                    <span>تم التحويل إلى عقد: {data.contractConversions.find(item => item.quoteId === quote.id)?.referenceCode}</span>
+                  ) : data.canWriteContracts && quote.approvedBy && ["approved", "sent", "accepted"].includes(quote.status) && <>
+                    <button type="button" className="admin-primary" onClick={() => onCreateContract(quote.id,"as_is")}>تحويل العرض كما هو</button>
+                    <button type="button" onClick={() => onCreateContract(quote.id,"modified")}>تحويل بعد تعديل</button>
+                  </>}
+
                   {quote.approvedBy ? (
                     <span className="pdf-language-actions">
                       <a
@@ -921,12 +946,10 @@ export default function OperationsWorkspace({
                   >
                     مشاركة واتساب
                   </button>
-                  <button
-                    className="admin-primary"
-                    onClick={() => onCreateContract(quote.id,"as_is")}
-                  >
-                    تحويل إلى عقد
-                  </button>
+                  {data.canWriteContracts && !data.contractConversions?.some(item => item.quoteId === quote.id) && <>
+                    <button type="button" className="admin-primary" onClick={() => onCreateContract(quote.id,"as_is")}>تحويل إلى عقد</button>
+                    <button type="button" onClick={() => onCreateContract(quote.id,"modified")}>تحويل بعد تعديل</button>
+                  </>}
                 </article>
               ))}
           </section>
@@ -1689,7 +1712,7 @@ function QuoteFormFields({
   const [items, setItems] = useState<Line[]>(() => {
     try {
       const rows = JSON.parse(sourceRequest?.quotationItemsJson || "[]") as Array<Record<string, unknown>>;
-      if (rows.length) return rows.map((row, index) => ({ ...activities[initialActivity].seed, key: `request-${index}`, profession: String(row.description || ""), quantity: Number(row.quantity) || 0, durationMonths: Number(row.durationMonths) || 12, unit: String(row.unit || ""), notes: String(row.notes || ""), sponsorshipType: row.sponsorshipType === "other" ? "other" : "dali", sponsorName: String(row.sponsorName || ""), ajirContractStatus: row.ajirContractStatus === "with_ajir" ? "with_ajir" : row.ajirContractStatus === "without_ajir" ? "without_ajir" : "not_applicable" }));
+      if (rows.length) return rows.map((row, index) => ({ ...activities[initialActivity].seed, key: `request-${index}`, profession: initialActivity === "workforce" ? normalizeWorkforceProfession(String(row.description || "")) : String(row.description || ""), quantity: Number(row.quantity) || 0, durationMonths: Number(row.durationMonths) || 12, unit: String(row.unit || ""), notes: String(row.notes || ""), sponsorshipType: row.sponsorshipType === "other" ? "other" : "dali", sponsorName: String(row.sponsorName || ""), ajirContractStatus: row.ajirContractStatus === "with_ajir" ? "with_ajir" : row.ajirContractStatus === "without_ajir" ? "without_ajir" : "not_applicable" }));
     } catch { /* A malformed legacy request starts with an editable line. */ }
     return [{ key: "line-1", ...activities.workforce.seed }];
   });
@@ -1770,7 +1793,7 @@ function QuoteFormFields({
     >
       <input type="hidden" name="sourceRequestId" value={sourceRequestId || ""}/>
       {sourceRequest && <p className="span-two">الطلب المعتمد: {sourceRequest.trackingCode}</p>}
-      {!sourceRequest && <label className="span-two">طلب عرض سعر معتمد<select value="" onChange={event => onSelectSource(Number(event.target.value))}><option value="">اختر طلبًا لنقل بياناته إلى العرض</option>{(data.quoteRequests || []).map(item => <option key={item.id} value={item.id} disabled={item.approvalStatus !== "approved"}>{item.trackingCode} — {item.companyName || item.fullName}{item.approvalStatus !== "approved" ? " — بانتظار الاعتماد" : ""}</option>)}</select></label>}
+      {!sourceRequest && <label className="span-two">طلب عرض سعر معتمد<select value="" onChange={event => onSelectSource(Number(event.target.value))}><option value="">اختر طلبًا لنقل بياناته إلى العرض</option>{(data.quoteRequests || []).filter(item => !data.quoteRequestConversions?.some(converted => converted.requestId === item.id)).map(item => <option key={item.id} value={item.id} disabled={item.approvalStatus !== "approved"}>{item.trackingCode} — {item.companyName || item.fullName}{item.approvalStatus !== "approved" ? " — بانتظار الاعتماد" : ""}</option>)}</select></label>}
       <CommercialDetailsFields key={sourceRequestId} defaults={sourceTerms} omit={["clientName", "workSite", "paymentTerms"]}/>
       <div className="quote-form-section span-two">
         <strong>1. نوع طلب العميل</strong>
@@ -2296,13 +2319,18 @@ export function QuotationIssueModal({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
-    void fetch("/api/portal/operations?limit=100", { cache: "no-store" })
+    void fetch(`/api/portal/operations?limit=100${initialSourceRequestId ? `&sourceRequestId=${initialSourceRequestId}` : ""}`, { cache: "no-store" })
       .then(async (response) => {
         const result = (await readApiJson(response)) as OperationsData & {
           error?: string;
         };
         if (!response.ok)
           throw new Error(result.error || "تعذّر تحميل بيانات عرض السعر");
+        if (initialSourceRequestId) {
+          const source = result.quoteRequests.find(item => item.id === initialSourceRequestId);
+          if (!source?.approvedBy || source.approvalStatus !== "approved") throw new Error("طلب عرض السعر غير معتمد أو غير متاح");
+          if (result.quoteRequestConversions?.some(item => item.requestId === initialSourceRequestId)) throw new Error("أُنشئ عرض لهذا الطلب؛ استخدم إصدار العرض المرتبط");
+        }
         setData(result);
       })
       .catch((problem) =>
@@ -2312,7 +2340,7 @@ export function QuotationIssueModal({
             : "تعذّر تحميل بيانات عرض السعر",
         ),
       );
-  }, []);
+  }, [initialSourceRequestId]);
   const create: CreateOperation = async (action, form, extra = {}) => {
     setBusy(action);
     setError("");
@@ -2367,12 +2395,12 @@ export function QuotationIssueModal({
         {error && <div className="contract-form-error">{error}</div>}
         {data ? (
           <QuoteForm key={initialSourceRequestId || "direct"} initialSourceRequestId={initialSourceRequestId} data={data} busy={busy} onCreate={create} embedded />
-        ) : (
+        ) : !error ? (
           <div className="operations-loading">
             <span />
             <p>جارٍ تجهيز نموذج عرض السعر...</p>
           </div>
-        )}
+        ) : null}
       </section>
     </div>
   );

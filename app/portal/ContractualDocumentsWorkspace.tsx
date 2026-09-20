@@ -60,7 +60,7 @@ export default function ContractualDocumentsWorkspace({
   isAdmin: boolean;
   isOwner: boolean;
   onCreateContract: (quoteId?: number, mode?: "as_is" | "modified") => void;
-  onCreateQuotation: () => void;
+  onCreateQuotation: (sourceRequestId?: number) => void;
 }) {
   const [activeTab, setActiveTab] = useState<
       "contracts" | "quotes" | "letters"
