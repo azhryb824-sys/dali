@@ -108,3 +108,30 @@ test("desktop bridge receives validated file descriptors and preserves a native 
   assert.equal(result.opened, false); assert.equal(result.reason, "windows-share-ui-timeout");
   await assert.rejects(runtime.shareDaliFilesOnDesktop([descriptor({ url: "https://other.example/file.pdf" })], options), /تعذر التحقق/);
 });
+
+test("desktop copy requires confirmed native files and retains errors without claiming delivery", async () => {
+  assert.equal(runtime.supportsDaliDesktopFileCopy(), false);
+  const calls = [];
+  window.daliDesktop = { fileShare: { copyFiles: async (files, options) => { calls.push({ files, options }); return { copied: true }; } } };
+  assert.equal(runtime.supportsDaliDesktopFileCopy(), true);
+  assert.deepEqual(await runtime.copyDaliFilesOnDesktop([descriptor()], options), { copied: true });
+  assert.equal(calls[0].files[0].url, descriptor().url);
+  await assert.rejects(runtime.copyDaliFilesOnDesktop([descriptor({ url: "file:///private.pdf" })], options), /تعذر التحقق/);
+  assert.equal(calls.length, 1);
+  window.daliDesktop.fileShare.copyFiles = async () => ({ copied: false, reason: "windows-share-helper-launch-failed" });
+  assert.equal((await runtime.copyDaliFilesOnDesktop([descriptor()], options)).copied, false);
+});
+
+test("browser refuses empty or truncated attachments and blocks redirects", async () => {
+  for (const body of ["", "truncated"]) {
+    setGlobal("fetch", async (_url, init) => { assert.equal(init.redirect, "error"); return new Response(body); });
+    await assert.rejects(runtime.prepareDaliShareFiles([descriptor()]), /لم يكتمل تنزيل الملف/);
+  }
+});
+
+test("download failures and missing Windows components have distinct actionable messages", () => {
+  assert.match(runtime.daliDesktopFileShareError("share-download-network"), /اتصال الإنترنت/);
+  assert.match(runtime.daliDesktopFileShareError("share-download-410"), /رابط جديد/);
+  assert.match(runtime.daliDesktopFileShareError("windows-share-ui-timeout"), /نسخ الملفات وفتح واتساب/);
+  assert.match(runtime.daliDesktopFileShareError("windows-share-helper-launch-failed"), /أحدث إصدار/);
+});

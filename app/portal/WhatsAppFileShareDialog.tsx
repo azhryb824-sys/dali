@@ -6,6 +6,8 @@ import { normalizeSaudiWhatsAppNumber } from "@/lib/whatsapp";
 import { openDaliWhatsApp, type DaliWhatsAppLinks } from "@/lib/whatsapp-runtime";
 import { daliDesktopFileShareError, downloadDaliShareFiles, prepareDaliShareFiles, shareDaliFilesNatively, shareDaliFilesOnDesktop, sharePreparedDaliFiles, supportsDaliDesktopFileShare, supportsDaliNativeFileShare, supportsDaliWebFileShare, type DaliPreparedShareFiles, type DaliShareFileDescriptor } from "@/lib/file-share-runtime";
 
+import DesktopFileShareFallback from "./DesktopFileShareFallback";
+
 type ShareResult = DaliWhatsAppLinks & { files: DaliShareFileDescriptor[]; message: string; mobile: string };
 
 export default function WhatsAppFileShareDialog({ title, endpoint, source, onClose }: {
@@ -36,14 +38,15 @@ export default function WhatsAppFileShareDialog({ title, endpoint, source, onClo
     event.preventDefault();
     const normalized = normalizeSaudiWhatsAppNumber(mobile);
     if (!normalized) { setError("اكتب رقم واتساب سعودي صحيحًا"); return; }
-    setMobile(normalized); setBusy(true); setError(""); setResult(null); setPrepared(null);
+    setMobile(normalized); setBusy(true); setError(""); setNotice(""); setResult(null); setPrepared(null);
     try {
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...source, whatsappNumber: normalized, expiresInDays: 7, maxDownloads: 20 }) });
       const data = await readApiJson(response) as { error?: string; files?: DaliShareFileDescriptor[]; shareMessage?: string; whatsappUrl?: string; whatsappAppUrl?: string; whatsappWebUrl?: string; whatsappLaunchUrl?: string };
       if (!response.ok || !data.files?.length || !data.shareMessage || !data.whatsappUrl || !data.whatsappAppUrl || !data.whatsappWebUrl || !data.whatsappLaunchUrl) throw new Error(data.error || "تعذر تجهيز الملفات للمشاركة");
+      setResult({ appUrl: data.whatsappAppUrl, universalUrl: data.whatsappUrl, webUrl: data.whatsappWebUrl, secureLaunchUrl: data.whatsappLaunchUrl, message: data.shareMessage, files: data.files, mobile: normalized });
+      // Keep download/open-chat actions available even if browser preparation fails.
       // Fetch before the share-button gesture: navigator.share must run during user activation.
       if (!supportsDaliNativeFileShare() && !supportsDaliDesktopFileShare() && supportsDaliWebFileShare()) setPrepared(await prepareDaliShareFiles(data.files));
-      setResult({ appUrl: data.whatsappAppUrl, universalUrl: data.whatsappUrl, webUrl: data.whatsappWebUrl, secureLaunchUrl: data.whatsappLaunchUrl, message: data.shareMessage, files: data.files, mobile: normalized });
       setNotice("الملفات جاهزة. اضغط مشاركة الملفات، ثم اختر واتساب والمستلم وأكد الإرسال داخله.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "تعذر تجهيز الملفات للمشاركة"); }
     finally { setBusy(false); }
@@ -52,7 +55,7 @@ export default function WhatsAppFileShareDialog({ title, endpoint, source, onClo
   async function shareFiles() {
     if (!result) return;
     const options = { title, text: result.message };
-    setError(""); setBusy(true);
+    setError(""); setNotice(""); setBusy(true);
     try {
       if (supportsDaliNativeFileShare()) {
         await shareDaliFilesNatively(result.files, options);
@@ -75,7 +78,7 @@ export default function WhatsAppFileShareDialog({ title, endpoint, source, onClo
     {candidates.length > 1 && <label className="span-two">أرقام العميل المسجلة<select value={candidates.some(item => item.mobile === mobile) ? mobile : ""} onChange={event => { edited.current = true; setMobile(event.target.value); setResult(null); setPrepared(null); }}><option value="" disabled>اختر رقم العميل</option>{candidates.map(item => <option key={item.mobile} value={item.mobile}>{item.label} — {item.mobile}</option>)}</select></label>}
     {!result && <button className="admin-primary span-two" disabled={busy || loadingNumber}>{busy ? "جارٍ تجهيز الملفات…" : "تجهيز الملفات للمشاركة"}</button>}
     {error && <p className="whatsapp-share-feedback error span-two" role="alert">{error}</p>}
-    {result && <div className="span-two"><ul>{result.files.map(file => <li key={file.url}>{file.fileName}</li>)}</ul><div className="record-actions"><button type="button" className="admin-primary" disabled={busy} onClick={() => void shareFiles()}>مشاركة الملفات في واتساب</button><button type="button" onClick={() => openDaliWhatsApp("app", result)}>فتح محادثة العميل في التطبيق</button><button type="button" onClick={() => openDaliWhatsApp("web", result)}>فتح واتساب ويب</button><button type="button" onClick={() => downloadDaliShareFiles(result.files)}>تنزيل الملفات</button></div><p>زر فتح المحادثة يجهّز الرسالة والرابط. لإرفاق الملفات استخدم زر مشاركة الملفات، أو نزّلها وأرفقها داخل المحادثة.</p></div>}
+    {result && <div className="span-two"><ul>{result.files.map(file => <li key={file.url}>{file.fileName}</li>)}</ul><div className="record-actions"><button type="button" className="admin-primary" disabled={busy} onClick={() => void shareFiles()}>مشاركة الملفات في واتساب</button><DesktopFileShareFallback files={result.files} title={title} text={result.message} links={result} disabled={busy} onNotice={setNotice} onError={setError}/><button type="button" onClick={() => openDaliWhatsApp("app", result)}>فتح محادثة العميل في التطبيق</button><button type="button" onClick={() => openDaliWhatsApp("web", result)}>فتح واتساب ويب</button><button type="button" onClick={() => downloadDaliShareFiles(result.files)}>تنزيل الملفات</button></div><p>زر فتح المحادثة يجهّز الرسالة والرابط. لإرفاق الملفات استخدم زر مشاركة الملفات، أو نزّلها وأرفقها داخل المحادثة.</p></div>}
     {notice && <p className="span-two" role="status">{notice}</p>}
   </form></section></div>;
 }

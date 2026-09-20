@@ -152,6 +152,9 @@ contextBridge.exposeInMainWorld("daliDesktop", {
       : Promise.resolve({ opened: false }),
   },
   fileShare: {
+    copyFiles: process.platform === "win32" ? (files, options) => isTrustedPortalPage()
+      ? ipcRenderer.invoke("dali:files:copy", { files, options })
+      : Promise.resolve({ copied: false, reason: "untrusted-renderer" }) : undefined,
     share: (files, options) => isTrustedPortalPage()
       ? ipcRenderer.invoke("dali:files:share", { files, options })
       : Promise.resolve({ opened: false, reason: "untrusted-renderer" }),

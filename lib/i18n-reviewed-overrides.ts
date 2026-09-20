@@ -6,6 +6,19 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "تعذر تنزيل المرفقات. تحقق من اتصال الإنترنت ثم أعد تجهيز المشاركة.": {"en": "Attachments could not be downloaded. Check your internet connection and prepare the share again.", "bn": "সংযুক্তি ডাউনলোড করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার শেয়ারের প্রস্তুতি নিন।"},
+  "رابط الملف غير متاح أو انتهت صلاحيته. أعد تجهيز المشاركة للحصول على رابط جديد.": {"en": "The file link is unavailable or expired. Prepare the share again to get a new link.", "bn": "ফাইলের লিংকটি অনুপলব্ধ বা মেয়াদোত্তীর্ণ। নতুন লিংকের জন্য আবার শেয়ারের প্রস্তুতি নিন।"},
+  "تعذر تنزيل المرفقات من الخادم. أعد المحاولة بعد قليل.": {"en": "Attachments could not be downloaded from the server. Try again shortly.", "bn": "সার্ভার থেকে সংযুক্তি ডাউনলোড করা যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।"},
+  "لم يكتمل تنزيل الملف بصورة صحيحة. أعد تجهيز المشاركة قبل إرسال المرفقات.": {"en": "The file did not download correctly. Prepare the share again before sending attachments.", "bn": "ফাইলটি সঠিকভাবে ডাউনলোড হয়নি। সংযুক্তি পাঠানোর আগে আবার শেয়ারের প্রস্তুতি নিন।"},
+  "حجم الملفات يتجاوز 200 ميغابايت. نزّل الملفات وأرفقها على دفعات.": {"en": "The files exceed 200 MB. Download them and attach them in smaller batches.", "bn": "ফাইলগুলোর আকার ২০০ মেগাবাইটের বেশি। ডাউনলোড করে ছোট ছোট দলে সংযুক্ত করুন।"},
+  "لم تستجب نافذة مشاركة Windows. استخدم «نسخ الملفات وفتح واتساب» ثم الصق المرفقات داخل المحادثة.": {"en": "Windows sharing did not respond. Use “Copy files and open WhatsApp”, then paste the attachments into the conversation.", "bn": "উইন্ডোজ শেয়ার উইন্ডো সাড়া দেয়নি। “ফাইল কপি করে হোয়াটসঅ্যাপ খুলুন” ব্যবহার করে কথোপকথনে সংযুক্তিগুলো পেস্ট করুন।"},
+  "رفض Windows فتح المشاركة أو نسخ الملفات. أغلق نوافذ المشاركة ثم أعد المحاولة، أو نزّل الملفات وأرفقها يدويًا.": {"en": "Windows could not open sharing or copy the files. Close sharing windows and try again, or download and attach the files manually.", "bn": "উইন্ডোজ শেয়ার খুলতে বা ফাইল কপি করতে পারেনি। শেয়ার উইন্ডোগুলো বন্ধ করে আবার চেষ্টা করুন, অথবা ফাইল ডাউনলোড করে নিজে সংযুক্ত করুন।"},
+  "أُغلقت نافذة المشاركة قبل تجهيز المرفقات. يمكنك المحاولة مجددًا أو نسخ الملفات إلى واتساب.": {"en": "The sharing window closed before attachments were ready. Try again or copy the files to WhatsApp.", "bn": "সংযুক্তি প্রস্তুত হওয়ার আগে শেয়ার উইন্ডো বন্ধ হয়েছে। আবার চেষ্টা করুন বা ফাইলগুলো হোয়াটসঅ্যাপে কপি করুন।"},
+  "تعذر تشغيل مكوّن مشاركة Windows. ثبّت أحدث إصدار من تطبيق دالي ثم أعد المحاولة.": {"en": "The Windows sharing component could not start. Install the latest Dali app and try again.", "bn": "উইন্ডোজ শেয়ার উপাদান চালু করা যায়নি। দালি অ্যাপের সর্বশেষ সংস্করণ ইনস্টল করে আবার চেষ্টা করুন।"},
+  "تعذرت مشاركة الملفات. يمكنك تنزيلها وإرفاقها في محادثة واتساب.": {"en": "The files could not be shared. You can download and attach them in WhatsApp.", "bn": "ফাইল শেয়ার করা যায়নি। ডাউনলোড করে হোয়াটসঅ্যাপ কথোপকথনে সংযুক্ত করতে পারেন।"},
+  "نُسخت الملفات الفعلية. في محادثة العميل اضغط Ctrl+V، وتحقق من ظهور المرفقات ثم اضغط إرسال. لم تُرسل الملفات تلقائيًا.": {"en": "The actual files were copied. In the client conversation, press Ctrl+V, check that the attachments appear, then press Send. Files were not sent automatically.", "bn": "মূল ফাইলগুলো কপি হয়েছে। গ্রাহকের কথোপকথনে Ctrl+V চাপুন, সংযুক্তিগুলো দেখা যাচ্ছে কিনা যাচাই করে পাঠান চাপুন। ফাইল স্বয়ংক্রিয়ভাবে পাঠানো হয়নি।"},
+  "جارٍ نسخ الملفات…": {"en": "Copying files…", "bn": "ফাইল কপি হচ্ছে…"},
+  "نسخ الملفات وفتح واتساب": {"en": "Copy files and open WhatsApp", "bn": "ফাইল কপি করে হোয়াটসঅ্যাপ খুলুন"},
   "استكمال طلب عرض السعر": {en:"Complete quotation request",bn:"দরপত্রের অনুরোধ সম্পূর্ণ করুন"},
   "عمالة إنشائية": {"en": "Construction workers", "bn": "নির্মাণ শ্রমিক"},
   "فريق متكامل": {"en": "Complete team", "bn": "পূর্ণাঙ্গ দল"},

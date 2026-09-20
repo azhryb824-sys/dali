@@ -222,6 +222,7 @@ async function shareDesktopFileAttachments(event, value) {
       app,
       value?.files,
       value?.options,
+      (url, init) => event.sender.session.fetch(url, init),
     );
     const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow;
     if (process.platform === "darwin") {
@@ -238,14 +239,15 @@ async function shareDesktopFileAttachments(event, value) {
       return { opened: true, method: "macos-share-menu" };
     }
 
-    await openWindowsFileShare(app, prepared.manifestPath);
+    await openWindowsFileShare(app, prepared.manifestPath, prepared.statusPath);
     scheduleDesktopShareCleanup(prepared.directory);
     return { opened: true, method: "windows-share-ui" };
   } catch (error) {
     if (prepared?.directory)
       scheduleDesktopShareCleanup(prepared.directory, 0);
-    console.error("Dali Universal file share failed:", error?.message || error);
-    return { opened: false, reason: "native-file-share-failed" };
+    const reason = String(error?.message || "native-file-share-failed").slice(0, 160);
+    console.error("Dali Universal file share failed:", reason);
+    return { opened: false, reason };
   }
 }
 

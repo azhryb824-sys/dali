@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const PORTAL_ORIGIN = "https://www.dally.info";
@@ -11,12 +11,14 @@ const MAX_SHARE_BYTES = 200 * 1024 * 1024;
 const CLEANUP_DELAY_MS = 30 * 60 * 1000;
 
 function safeFileName(value, index) {
-  return String(value || "")
+  const name = String(value || "")
     .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]/g, "-")
     .replace(/[. ]+$/g, "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 180) || `dali-file-${index + 1}`;
+    .slice(0, 180).replace(/[. ]+$/g, "") || `dali-file-${index + 1}`;
+  // Windows device names remain reserved even when they have an extension.
+  return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name) ? `dali-${name}` : name;
 }
 
 function trustedDescriptor(value, index) {
@@ -48,21 +50,20 @@ function trustedOptions(value) {
 }
 
 function uniqueFileName(fileName, index, usedNames) {
-  const key = fileName.toLocaleLowerCase("en");
-  if (!usedNames.has(key)) {
-    usedNames.add(key);
-    return fileName;
-  }
   const dot = fileName.lastIndexOf(".");
-  const suffix = `-${index + 1}`;
-  const candidate = dot > 0
-    ? `${fileName.slice(0, dot)}${suffix}${fileName.slice(dot)}`
-    : `${fileName}${suffix}`;
+  let candidate = fileName;
+  let number = index + 1;
+  while (usedNames.has(candidate.toLocaleLowerCase("en"))) {
+    const suffix = `-${number++}`;
+    candidate = dot > 0
+      ? `${fileName.slice(0, dot)}${suffix}${fileName.slice(dot)}`
+      : `${fileName}${suffix}`;
+  }
   usedNames.add(candidate.toLocaleLowerCase("en"));
   return candidate;
 }
 
-export async function prepareDesktopFileShare(app, rawFiles, rawOptions) {
+export async function prepareDesktopFileShare(app, rawFiles, rawOptions, fetchFile = globalThis.fetch) {
   if (
     !Array.isArray(rawFiles) ||
     rawFiles.length < 1 ||
@@ -77,19 +78,34 @@ export async function prepareDesktopFileShare(app, rawFiles, rawOptions) {
 
   const directory = await mkdtemp(join(app.getPath("temp"), "dali-share-"));
   const filePaths = [];
-  const usedNames = new Set();
+  const usedNames = new Set(["share.dali", "share-status.dali"]);
   let totalBytes = 0;
   try {
     for (const [index, file] of files.entries()) {
-      const response = await fetch(file.url, {
-        headers: { accept: "application/octet-stream,application/pdf,*/*" },
-        redirect: "error",
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error(`share-download-${response.status}`);
-      const bytes = Buffer.from(await response.arrayBuffer());
-      totalBytes += bytes.length;
-      if (totalBytes > MAX_SHARE_BYTES) throw new Error("share-files-too-large");
+      let bytes;
+      try {
+        const response = await fetchFile(file.url, {
+          headers: { accept: "application/octet-stream,application/pdf,*/*" },
+          redirect: "error",
+          cache: "no-store",
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!response.ok) throw new Error(`share-download-${response.status}`);
+        // Read incrementally so a bad Content-Length cannot exhaust memory.
+        const chunks = [];
+        if (!response.body) throw new Error("share-file-empty");
+        for await (const chunk of response.body) {
+          totalBytes += chunk.byteLength;
+          if (totalBytes > MAX_SHARE_BYTES) throw new Error("share-files-too-large");
+          chunks.push(Buffer.from(chunk));
+        }
+        bytes = Buffer.concat(chunks);
+        if (!bytes.length) throw new Error("share-file-empty");
+      } catch (error) {
+        if (/^share-/.test(error?.message || "")) throw error;
+        throw new Error(error?.name === "TimeoutError" || error?.name === "AbortError"
+          ? "share-download-timeout" : "share-download-network");
+      }
       if (file.sizeBytes > 0 && bytes.length !== file.sizeBytes)
         throw new Error("share-file-size-mismatch");
       const fileName = uniqueFileName(file.fileName, index, usedNames);
@@ -100,12 +116,22 @@ export async function prepareDesktopFileShare(app, rawFiles, rawOptions) {
 
     const encode = (value) => Buffer.from(value, "utf8").toString("base64");
     const manifestPath = join(directory, "share.dali");
+    const statusPath = join(directory, "share-status.dali");
     await writeFile(
       manifestPath,
-      [options.title, options.text, ...filePaths].map(encode).join("\r\n"),
+      [options.title, options.text, statusPath, ...filePaths]
+        .map(encode)
+        .join("\r\n"),
       { encoding: "utf8", mode: 0o600, flag: "wx" },
     );
-    return { ...options, directory, filePaths, manifestPath, totalBytes };
+    return {
+      ...options,
+      directory,
+      filePaths,
+      manifestPath,
+      statusPath,
+      totalBytes,
+    };
   } catch (error) {
     await rm(directory, { force: true, recursive: true }).catch(() => undefined);
     throw error;
@@ -125,24 +151,41 @@ function windowsHelperPath(app) {
     : join(app.getAppPath(), "native-share", "bin", "DaliNativeShare.exe");
 }
 
-export async function openWindowsFileShare(app, manifestPath) {
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function openWindowsFileShare(app, manifestPath, statusPath, mode = "share") {
   const helperPath = windowsHelperPath(app);
   if (!existsSync(helperPath)) throw new Error("windows-share-helper-missing");
-  const child = spawn(helperPath, [manifestPath], {
+  await rm(statusPath, { force: true });
+  const child = spawn(helperPath, mode === "copy" ? ["--copy-files", manifestPath] : [manifestPath], {
     detached: true,
     windowsHide: true,
     stdio: "ignore",
   });
-  const outcome = await Promise.race([
-    new Promise((resolve, reject) => {
-      child.once("spawn", () => resolve({ spawned: true }));
-      child.once("error", reject);
-      child.once("exit", (code) => {
-        if (code && code !== 0) reject(new Error(`windows-share-helper-${code}`));
-      });
-    }),
-    new Promise((resolve) => setTimeout(() => resolve({ spawned: true }), 1_500)),
-  ]);
-  child.unref();
-  return outcome;
+  try {
+    await new Promise((resolve, reject) => {
+      child.once("spawn", resolve);
+      child.once("error", () => reject(new Error("windows-share-helper-launch-failed")));
+    });
+
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      const status = await readFile(statusPath, "utf8").catch(() => "");
+      if ((mode === "copy" && status === "copied") || (mode !== "copy" && status === "ready")) {
+        child.unref();
+        return { opened: mode !== "copy", copied: mode === "copy", status };
+      }
+      if (status.startsWith("error:"))
+        throw new Error(status.slice("error:".length) || "windows-share-helper-failed");
+      if (child.exitCode !== null)
+        throw new Error(`windows-share-helper-${child.exitCode}`);
+      await wait(100);
+    }
+    throw new Error("windows-share-ui-timeout");
+  } catch (error) {
+    if (child.exitCode === null) child.kill();
+    throw error;
+  }
 }

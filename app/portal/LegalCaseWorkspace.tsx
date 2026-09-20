@@ -1,5 +1,7 @@
 "use client";
 
+import DesktopFileShareFallback from "./DesktopFileShareFallback";
+
 import {
   FormEvent,
   type ReactNode,
@@ -3278,6 +3280,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                               ? "تحميل الملفات للمشاركة المباشرة"
                               : "تنزيل الملفات لإرفاقها يدويًا"}
                     </button>
+                    <DesktopFileShareFallback files={shareLinks.files} title={`ملفات القضية ${matter?.referenceCode || ""}`} text={shareLinks.shareMessage} links={shareLinks} disabled={fileShareBusy} onNotice={setNotice} onError={setShareError} />
                     <button
                       type="button"
                       onClick={() => openDaliWhatsApp("app", shareLinks)}

@@ -1,5 +1,7 @@
 "use client";
 
+import DesktopFileShareFallback from "./DesktopFileShareFallback";
+
 import { readApiJson } from "@/lib/client-api";
 import { appConfirm, appPrompt } from "@/app/components/AppDialogProvider";
 
@@ -1273,6 +1275,7 @@ export default function ContractBillingWorkspace({ onlyPendingApproval = false }
                               ? "تحميل PDF للمشاركة المباشرة"
                               : "تنزيل PDF لإرفاقه يدويًا"}
                     </button>
+                    <DesktopFileShareFallback files={contractShareResult.files} title={`العقد المعتمد ${sharingContract.referenceCode}`} text={contractShareResult.shareMessage} links={contractShareResult} disabled={contractFileShareBusy} onNotice={setNotice} onError={setContractShareError} />
                     <button
                       type="button"
                       onClick={() =>

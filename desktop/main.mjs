@@ -201,7 +201,7 @@ function mutateStore(handler) {
   return operation;
 }
 
-async function shareDesktopFileAttachments(event, value) {
+async function shareDesktopFileAttachments(event, value, mode = "share") {
   if (!trustedRendererPath(event, "/portal"))
     return { opened: false, reason: "untrusted-renderer" };
   if (!['win32', 'darwin'].includes(process.platform))
@@ -213,7 +213,14 @@ async function shareDesktopFileAttachments(event, value) {
       app,
       value?.files,
       value?.options,
+      (url, init) => event.sender.session.fetch(url, init),
     );
+    if (mode === "copy") {
+      if (process.platform !== "win32") throw new Error("unsupported-platform");
+      await openWindowsFileShare(app, prepared.manifestPath, prepared.statusPath, "copy");
+      scheduleDesktopShareCleanup(prepared.directory);
+      return { copied: true, opened: false, method: "windows-file-clipboard" };
+    }
     const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow;
     if (process.platform === "darwin") {
       const shareMenu = new ShareMenu({
@@ -301,7 +308,8 @@ function registerIpc() {
       return true;
     });
   });
-  ipcMain.handle("dali:files:share", shareDesktopFileAttachments);
+  ipcMain.handle("dali:files:share", (event, value) => shareDesktopFileAttachments(event, value));
+  ipcMain.handle("dali:files:copy", (event, value) => shareDesktopFileAttachments(event, value, "copy"));
   ipcMain.handle("dali:whatsapp:open", async (event, value) => {
     if (!trustedRendererPath(event, "/portal")) return { opened: false };
     const target = value?.target === "web" ? "web" : "app";

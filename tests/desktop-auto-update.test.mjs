@@ -20,7 +20,7 @@ test("desktop build publishes the updater metadata with the installer", async ()
   const desktopPackage = JSON.parse(await readFile(new URL("desktop/package.json", root), "utf8"));
   const workflow = await readFile(new URL(".github/workflows/desktop-windows.yml", root), "utf8");
 
-  assert.equal(desktopPackage.version, "0.2.11");
+  assert.equal(desktopPackage.version, "0.2.12");
   assert.equal(desktopPackage.build.publish.provider, "github");
   assert.equal(desktopPackage.build.publish.owner, "azhryb824-sys");
   assert.equal(desktopPackage.build.publish.repo, "dali");
@@ -86,7 +86,7 @@ test("Windows desktop shares actual downloaded files through the native share UI
   assert.match(preload, /fileShare:/);
   assert.match(preload, /dali:files:share/);
   assert.match(bridge, /ALLOWED_DOWNLOAD_PATH/);
-  assert.match(bridge, /response\.arrayBuffer\(\)/);
+  assert.match(bridge, /for await \(const chunk of response\.body\)/);
   assert.match(bridge, /DaliNativeShare\.exe/);
   assert.match(bridge, /status === "ready"/);
   assert.match(bridge, /windows-share-ui-timeout/);

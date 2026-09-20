@@ -37,6 +37,10 @@ type DaliMobileWindow = Window & {
 };
 
 type DaliDesktopFileShareBridge = {
+  copyFiles?: (
+    files: DaliShareFileDescriptor[],
+    options: { title: string; text: string },
+  ) => Promise<{ copied?: boolean; reason?: string }>;
   share: (
     files: DaliShareFileDescriptor[],
     options: { title: string; text: string },
@@ -164,13 +168,40 @@ export function requiresDaliDesktopFileShareUpdate() {
 }
 
 export function daliDesktopFileShareError(reason?: string) {
+  if (reason === "share-download-network" || reason === "share-download-timeout")
+    return "تعذر تنزيل المرفقات. تحقق من اتصال الإنترنت ثم أعد تجهيز المشاركة.";
+  if (/^share-download-(401|403|404|410)$/.test(reason || ""))
+    return "رابط الملف غير متاح أو انتهت صلاحيته. أعد تجهيز المشاركة للحصول على رابط جديد.";
+  if (reason?.startsWith("share-download-"))
+    return "تعذر تنزيل المرفقات من الخادم. أعد المحاولة بعد قليل.";
+  if (["share-file-size-mismatch", "share-file-empty", "share-file-unavailable"].includes(reason || ""))
+    return "لم يكتمل تنزيل الملف بصورة صحيحة. أعد تجهيز المشاركة قبل إرسال المرفقات.";
+  if (reason === "share-files-too-large")
+    return "حجم الملفات يتجاوز 200 ميغابايت. نزّل الملفات وأرفقها على دفعات.";
   if (reason === "windows-share-ui-timeout")
-    return "لم تستجب نافذة مشاركة Windows. أغلق تطبيق دالي بالكامل ثم افتحه وحاول مرة أخرى.";
+    return "لم تستجب نافذة مشاركة Windows. استخدم «نسخ الملفات وفتح واتساب» ثم الصق المرفقات داخل المحادثة.";
   if (reason === "windows-share-helper-missing")
     return "مكوّن مشاركة الملفات غير موجود. أغلق تطبيق دالي وافتحه لإكمال التحديث.";
   if (reason?.startsWith("windows-share-hresult-"))
-    return "تعذر على Windows فتح نافذة مشاركة الملفات. أعد تشغيل تطبيق دالي ثم حاول مرة أخرى.";
-  return "تعذر فتح نافذة مشاركة الملفات في Windows.";
+    return "رفض Windows فتح المشاركة أو نسخ الملفات. أغلق نوافذ المشاركة ثم أعد المحاولة، أو نزّل الملفات وأرفقها يدويًا.";
+  if (reason === "windows-share-window-closed")
+    return "أُغلقت نافذة المشاركة قبل تجهيز المرفقات. يمكنك المحاولة مجددًا أو نسخ الملفات إلى واتساب.";
+  if (reason?.startsWith("windows-share-helper-"))
+    return "تعذر تشغيل مكوّن مشاركة Windows. ثبّت أحدث إصدار من تطبيق دالي ثم أعد المحاولة.";
+  return "تعذرت مشاركة الملفات. يمكنك تنزيلها وإرفاقها في محادثة واتساب.";
+}
+
+export function supportsDaliDesktopFileCopy() {
+  return typeof desktopFileShareBridge()?.copyFiles === "function";
+}
+
+export async function copyDaliFilesOnDesktop(
+  descriptors: DaliShareFileDescriptor[],
+  options: { title: string; text: string },
+) {
+  const bridge = desktopFileShareBridge();
+  if (!bridge?.copyFiles) return { copied: false, reason: "windows-share-helper-missing" };
+  return bridge.copyFiles(trustedDescriptors(descriptors), options);
 }
 
 export function supportsDaliWebFileShare() {
@@ -202,15 +233,30 @@ export async function prepareDaliShareFiles(
     const response = await fetch(descriptor.url, {
       credentials: "same-origin",
       cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(120_000),
     });
     if (!response.ok)
       throw new Error(`تعذر تحميل الملف «${descriptor.fileName}» للمشاركة`);
-    const blob = await response.blob();
-    totalBytes += blob.size;
-    if (totalBytes > maxBrowserShareBytes)
-      throw new Error(
-        "حجم الملفات كبير للمشاركة المباشرة من المتصفح؛ استخدم تنزيل الملفات ثم افتح واتساب.",
-      );
+    const chunks: Uint8Array<ArrayBuffer>[] = [];
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error(daliDesktopFileShareError("share-file-empty"));
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBrowserShareBytes)
+          throw new Error("حجم الملفات كبير للمشاركة المباشرة من المتصفح؛ استخدم تنزيل الملفات ثم افتح واتساب.");
+        chunks.push(new Uint8Array(value));
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
+    }
+    const blob = new Blob(chunks, { type: response.headers.get("content-type") || descriptor.contentType });
+    if (!blob.size || (descriptor.sizeBytes > 0 && blob.size !== descriptor.sizeBytes))
+      throw new Error(daliDesktopFileShareError("share-file-size-mismatch"));
     files.push(
       new File([blob], safeFileName(descriptor.fileName, index), {
         type: blob.type || descriptor.contentType,

@@ -35,6 +35,8 @@ jobs:
           $helper = Get-Item "desktop/native-share/bin/DaliNativeShare.exe"
           if ($helper.Length -lt 25000) { throw "Native share helper is unexpectedly small" }
           Get-FileHash $helper.FullName -Algorithm SHA256
+      - name: Exercise actual Windows file package and clipboard
+        run: node desktop/native-share/verify-windows.mjs
       - name: Read desktop version
         id: desktop-version
         shell: pwsh
