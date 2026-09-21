@@ -1160,6 +1160,7 @@ export default function PortalDashboard({
 
   function canOpenView(next: View) {
     if (["overview", "notifications", "tasks", "guide"].includes(next)) return true;
+    if (next === "executive-center") return isRoot;
     if (next === "employees" || next === "finance" || next === "legal" || next === "workforce") return canAccess(next);
     if (next === "government") return canAccessGovernment;
     if (next === "operations") return canAccessOperations;
