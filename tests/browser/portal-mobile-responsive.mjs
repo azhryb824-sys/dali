@@ -79,7 +79,7 @@ try{
     assert.notEqual(before,"none");
     await menu.click();
     await page.locator(".sidebar-backdrop").waitFor();
-    await page.waitForFunction(()=>getComputedStyle(document.querySelector(".admin-sidebar")).transform.includes("1, 0, 0, 1") || document.querySelector(".admin-sidebar").classList.contains("sidebar-open"));
+    await page.waitForFunction(()=>{const el=document.querySelector(".admin-sidebar");const r=el?.getBoundingClientRect();return Boolean(r&&r.left>=-1&&r.right<=innerWidth+1)});
     const box=await sidebar.boundingBox();assert.ok(box&&box.x>=-1&&box.x+box.width<=v.width+1,JSON.stringify(box));
     await page.locator(".sidebar-backdrop").click();await page.waitForTimeout(100);
   } else {
