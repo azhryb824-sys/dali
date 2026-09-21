@@ -1,6 +1,7 @@
 "use client";
 
 import { contractWorkforceCoverage } from "@/lib/contract-workforce-coverage";
+import { resolveWorkerContractPlacement } from "@/lib/worker-contract-placement";
 import WorkerIncidentsPanel from "./WorkerIncidentsPanel";
 import { useMemo, useState } from "react";
 
@@ -163,7 +164,7 @@ export default function WorkforceSupervisionWorkspace({
   });
   const visibleWorkers = workers.filter((worker) => {
     if (worker.archivedAt) return false;
-    const haystack = `${worker.workerNumber || ""} ${worker.iqamaNumber || ""} ${worker.fullName} ${worker.profession} ${worker.nationality || ""} ${worker.beneficiaryName || ""}`.toLowerCase();
+    const placement = resolveWorkerContractPlacement(worker.id, assignments, contracts, worker.clientSite);\n    const haystack = `${worker.workerNumber || ""} ${worker.iqamaNumber || ""} ${worker.fullName} ${worker.profession} ${worker.nationality || ""} ${placement.contract?.clientName || worker.beneficiaryName || ""} ${placement.contract?.referenceCode || ""} ${placement.site}`.toLowerCase();
     return (
       (!workerQuery.trim() ||
         haystack.includes(workerQuery.trim().toLowerCase())) &&
@@ -339,16 +340,25 @@ export default function WorkforceSupervisionWorkspace({
           </div>
         </div>
         <div className="supervision-worker-grid">
-          {visibleWorkers.map((worker) => (
-            <article key={worker.id}>
-              <div><strong>{worker.fullName}</strong><small>{worker.workerNumber || "—"} · {worker.iqamaNumber || "دون رقم إقامة"}</small><small>{worker.profession} · {worker.nationality || "—"}</small><small>{worker.beneficiaryName ? `${worker.beneficiaryName} — ${worker.clientSite}` : worker.clientSite}</small></div>
-              {canManage && worker.status !== "assigned" ? (
-                <select value={worker.status} disabled={busy === `worker-status-${worker.id}`} onChange={(event) => void onWorkerStatus(worker.id, event.target.value)}>
-                  <option value="available">متاح</option><option value="leave">إجازة</option><option value="suspended">موقوف</option>
-                </select>
-              ) : <span className={`workflow-status ${worker.status}`}>{workerStatusLabels[worker.status] || worker.status}</span>}
-            </article>
-          ))}
+          {visibleWorkers.map((worker) => {
+            const placement = resolveWorkerContractPlacement(worker.id, assignments, contracts, worker.clientSite);
+            return (
+              <article key={worker.id}>
+                <div>
+                  <strong>{worker.fullName}</strong>
+                  <small>{worker.workerNumber || "—"} · {worker.iqamaNumber || "دون رقم إقامة"}</small>
+                  <small>{worker.profession} · {worker.nationality || "—"}</small>
+                  <small>{placement.contract ? `العقد ${placement.contract.referenceCode} · ${placement.contract.clientName}` : worker.beneficiaryName || "غير مسند"}</small>
+                  <small>{placement.contract ? `موقع العمل من العقد: ${placement.site || "غير محدد"}` : `موقع العمل: ${placement.site || "غير محدد"}`}</small>
+                </div>
+                {canManage && worker.status !== "assigned" ? (
+                  <select value={worker.status} disabled={busy === `worker-status-${worker.id}`} onChange={(event) => void onWorkerStatus(worker.id, event.target.value)}>
+                    <option value="available">متاح</option><option value="leave">إجازة</option><option value="suspended">موقوف</option>
+                  </select>
+                ) : <span className={`workflow-status ${worker.status}`}>{workerStatusLabels[worker.status] || worker.status}</span>}
+              </article>
+            );
+          })}
           {!visibleWorkers.length && <p className="empty-operational">لا توجد عمالة مطابقة.</p>}
         </div>
       </section>
