@@ -5,8 +5,12 @@ on:
     paths: [.github/workflows/worker-attendance-finalize.yml]
 permissions:
   contents: write
+concurrency:
+  group: attendance-review-finalization
+  cancel-in-progress: false
 jobs:
   verify:
+    if: github.ref == 'refs/heads/codex/owner-admin-worker-absence-20260921'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -25,39 +29,49 @@ jobs:
         with:
           node-version: 22.16.0
           cache: npm
-      - name: Move retry state initialization into the initiating event
+      - name: Apply three checksum-guarded review corrections
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import subprocess
-          def rep(text,old,new):
-              assert text.count(old)==1,old
-              return text.replace(old,new,1)
-          p=Path('app/portal/PortalDashboard.tsx')
-          assert subprocess.check_output(['git','hash-object',str(p)],text=True).strip()=='d4d14db2287a5aff9bf49e99594982e9ee34e434'
-          text=p.read_text()
-          text=rep(text,'    setAbsenceHistoryLoading(true);\n    setAbsenceError("");\n    setCanRecordAbsence(false);\n    setPendingVoidAbsenceId(null);\n','')
-          text=rep(text,'onClick={() => setAttendanceRevision(value => value + 1)}','onClick={() => { setAbsenceHistoryLoading(true); setAbsenceError(""); setCanRecordAbsence(false); setPendingVoidAbsenceId(null); setAttendanceRevision(value => value + 1); }}')
-          p.write_text(text)
-          p=Path('tests/browser/worker-attendance.mjs')
-          assert subprocess.check_output(['git','hash-object',str(p)],text=True).strip()=='d8fda7bd6303708b1053a22b5e21ba870eb0862f'
-          text=p.read_text()
-          assert text.count("assert.equal(await panel.isDisabled(),true);")==3
-          text=text.replace("assert.equal(await panel.isDisabled(),true);","assert.equal(await panel.evaluate(fieldset=>fieldset.disabled),true);assert.equal(await panel.locator('select').first().isDisabled(),true);")
-          p.write_text(text)
+          import json, subprocess
+          def read_checked(name, expected):
+              path = Path(name)
+              assert subprocess.check_output(['git', 'hash-object', name], text=True).strip() == expected, name
+              return path, path.read_text()
+          def replace_once(text, old, new):
+              assert text.count(old) == 1, old
+              return text.replace(old, new, 1)
+          pending = []
+          p, text = read_checked('app/portal/PortalDashboard.tsx', 'd4d14db2287a5aff9bf49e99594982e9ee34e434')
+          text = replace_once(text, '    setAbsenceHistoryLoading(true);\n    setAbsenceError("");\n    setCanRecordAbsence(false);\n    setPendingVoidAbsenceId(null);\n', '')
+          text = replace_once(text, 'onClick={() => setAttendanceRevision(value => value + 1)}', 'onClick={() => { setAbsenceHistoryLoading(true); setAbsenceError(""); setCanRecordAbsence(false); setPendingVoidAbsenceId(null); setAttendanceRevision(value => value + 1); }}')
+          pending.append((p, text))
+          p, text = read_checked('tests/browser/worker-attendance.mjs', 'd8fda7bd6303708b1053a22b5e21ba870eb0862f')
+          old = 'assert.equal(await panel.isDisabled(),true);'
+          assert text.count(old) == 3
+          text = text.replace(old, "assert.equal(await panel.evaluate(fieldset=>fieldset.disabled),true);assert.equal(await panel.locator('select').first().isDisabled(),true);")
+          pending.append((p, text))
+          p, text = read_checked('lib/i18n-reviewed-overrides.ts', '690a48a5f8595dd3e71f58593415437f3a629eb3')
+          translations = {
+              'تسجيل غياب العمالة والخصم المالي من صلاحيات المالك أو مشرف النظام فقط': {
+                  'en': 'Only the owner or system administrator may record worker absence and financial deductions',
+                  'bn': 'শুধু মালিক বা সিস্টেম প্রশাসক শ্রমিকের অনুপস্থিতি এবং আর্থিক কর্তন নথিভুক্ত করতে পারেন'
+              },
+              'لا يمكن تسجيل الغياب إلا على عقد نشط': {
+                  'en': 'Absence can only be recorded for an active contract',
+                  'bn': 'শুধু সক্রিয় চুক্তির জন্য অনুপস্থিতি নথিভুক্ত করা যায়'
+              }
+          }
+          entries = ''.join('  ' + json.dumps(key, ensure_ascii=False) + ': ' + json.dumps(value, ensure_ascii=False) + ',\n' for key, value in translations.items())
+          marker = 'export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {\n'
+          text = replace_once(text, marker, marker + entries)
+          pending.append((p, text))
+          for p, text in pending:
+              p.write_text(text)
+              print('Updated', p)
           PY
       - run: npm ci
       - run: npm run i18n:generate
-      - name: Commit reviewed source changes on review branch
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/workflows/worker-attendance-finalize.yml
-          git add app lib tests
-          git diff --cached --check
-          git commit -m 'Keep attendance retry state event-driven and verify disabled form controls'
-          git push origin HEAD:codex/owner-admin-worker-absence-20260921
-          echo "TESTED_COMMIT=$(git rev-parse HEAD)"
       - name: Test-only administrator hash
         run: echo "PORTAL_ADMIN_PASSWORD_HASH=$(node scripts/hash-password.mjs 'ci-test-password-2026!')" >> "$GITHUB_ENV"
       - name: Attendance integration and authorization
@@ -70,7 +84,7 @@ jobs:
         run: |
           mkdir -p /tmp/dali-attendance-browser
           if ! npm test > /tmp/dali-attendance-browser/regression.log 2>&1; then
-            grep -n -A 24 -B 5 'not ok\|error\|Error\|fail' /tmp/dali-attendance-browser/regression.log | tail -200
+            tail -200 /tmp/dali-attendance-browser/regression.log
             exit 1
           fi
           tail -12 /tmp/dali-attendance-browser/regression.log
@@ -82,6 +96,20 @@ jobs:
         run: node tests/browser/worker-attendance.mjs
       - name: Language browser regression
         run: node tests/browser/locale-runtime.mjs
+      - name: Commit only tested files to the review branch
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/codex/owner-admin-worker-absence-20260921 | cut -f1)" = "$GITHUB_SHA"
+          git restore -- tsconfig.tsbuildinfo
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/worker-attendance-finalize.yml
+          git add app/portal/PortalDashboard.tsx lib/i18n-reviewed-overrides.ts lib/i18n-authored-strings.ts tests/browser/worker-attendance.mjs
+          git diff --cached --check
+          git diff --exit-code
+          git commit -m 'Finalize tested owner and administrator attendance controls and translations'
+          git push origin HEAD:codex/owner-admin-worker-absence-20260921
+          git rev-parse HEAD | tee /tmp/dali-attendance-browser/tested-commit.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
