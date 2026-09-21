@@ -6804,8 +6804,8 @@ function WorkerTable({ records, attachments, contracts, assignments, query, onSe
       <dl>
         <dt>رقم الإقامة</dt><dd dir="ltr">{item.iqamaNumber || "غير مسجل"}</dd>
         <dt>الجهة المستفيدة</dt><dd>{placement.contract?.clientName || item.beneficiaryName || "غير مسند"}</dd>
-        <dt>{placement.contract ? "موقع العمل (من العقد)" : "موقع العمل"}</dt><dd>{placement.site || "غير محدد"}</dd>
-        <dt>العقد المرتبط</dt><dd>{placement.contract?.referenceCode || "لا يوجد عقد نشط"}</dd>
+        <dt>موقع العمل</dt><dd>{placement.site || "غير محدد"}</dd>
+        <dt>العقد النشط</dt><dd>{placement.contract?.referenceCode || "لا يوجد عقد نشط"}</dd>
         <dt>انتهاء الإقامة</dt><dd className={daysUntil(item.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(item.iqamaExpiry)}</dd>
       </dl>
       <div className="file-completion"><span><i style={{width:`${profile.percent}%`}} /></span><small>{profile.percent}% · {profile.missing.length ? `${profile.missing.length} ناقص` : "مكتمل"}</small></div>
