@@ -2,6 +2,7 @@
 import { commercialAttachmentRefs } from "@/lib/commercial-attachments";
 import ContractFullEditDialog from "./ContractFullEditDialog";
 import ContractWorkforceBoard from "./ContractWorkforceBoard";
+import { canManageWorkerAttendance } from "@/lib/worker-attendance-access";
 import { contractWorkforceCoverage } from "@/lib/contract-workforce-coverage";
 
 import WorkerIncidentsPanel from "./WorkerIncidentsPanel";
@@ -2799,7 +2800,7 @@ export default function PortalDashboard({
       {selectedConversation && <ConversationDrawer conversation={selectedConversation} messages={conversationMessages.filter((item) => item.conversationId === selectedConversation.id)} businessHours={businessHours} canWrite={canWriteConversations} busy={busy} onClose={() => setSelectedConversationId(null)} onReply={sendConversationReply} onStatus={updateConversationStatus} />}
       {selected && <RequestDrawer canConvert={canIssueContracts} canApprove={isRoot} onApproval={decideQuoteRequest} onConvert={(id) => { setQuoteSourceRequestId(id); setSelectedId(null); openIssueDocument("quotation"); }} request={selected} replies={requestReplies.filter((item) => item.requestId === selected.id)} emailConfigured={emailConfigured} canWrite={canWrite} statusBusy={busy === `request-${selected.id}`} replyBusy={busy === `reply-${selected.id}`} onClose={() => setSelectedId(null)} onStatus={updateRequestStatus} onReply={sendRequestReply} />}
       {selectedWorker && <WorkerDrawer key={`${selectedWorker.id}-${selectedWorker.updatedAt}`} worker={selectedWorker} attachments={workerAttachments.filter((item) => item.workerId === selectedWorker.id)} contracts={contracts} contractAssignments={contractAssignments} canWrite={canWrite} canArchive={canArchiveWorkers} canViewFinance={canViewWorkerFinance} busy={busy} onClose={() => setSelectedWorkerId(null)} onUploadAttachment={uploadWorkerAttachment} />}
-      {selectedContract && <ContractDrawer key={selectedContract.id} contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} canManageWorkerAssignments={canManageWorkerAssignments} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={isRoot} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus} onEdit={editContract} onDelete={deleteContract} onRecordAbsence={recordContractAbsence} onVoidAbsence={voidContractAbsence} />}
+      {selectedContract && <ContractDrawer key={selectedContract.id} contract={selectedContract} professions={contractProfessions.filter((item) => item.contractId === selectedContract.id)} assignments={contractAssignments.filter((item) => item.contractId === selectedContract.id)} workers={workers} canWrite={canWrite} canManageWorkerAssignments={canManageWorkerAssignments} canManageAttendance={canManageWorkerAttendance(currentUser)} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={isRoot} busy={busy} onClose={() => setSelectedContractId(null)} onAssign={assignWorkerToContract} onRelease={releaseWorkerFromContract} onStatus={updateContractStatus} onEdit={editContract} onDelete={deleteContract} onRecordAbsence={recordContractAbsence} onVoidAbsence={voidContractAbsence} />}
       {pendingContractApproval && (
         <ContractApprovalStampDialog
           stamps={pendingContractApproval.stamps}
@@ -6430,6 +6431,7 @@ function ContractDrawer({
   workers,
   canWrite,
   canManageWorkerAssignments,
+  canManageAttendance,
   isAdmin,
   isOwner,
   busy,
@@ -6448,6 +6450,7 @@ function ContractDrawer({
   workers: WorkerRecord[];
   canWrite: boolean;
   canManageWorkerAssignments: boolean;
+  canManageAttendance: boolean;
   isAdmin: boolean;
   isOwner: boolean;
   busy: string | null;
@@ -6478,8 +6481,9 @@ function ContractDrawer({
   const [absenceNotes, setAbsenceNotes] = useState("");
   const [absenceHistory, setAbsenceHistory] = useState<ContractAbsence[]>([]);
   const [absenceHistoryLoading, setAbsenceHistoryLoading] = useState(true);
-  const [canRecordAbsence, setCanRecordAbsence] = useState(isOwner);
-  const [canViewAbsenceFinance, setCanViewAbsenceFinance] = useState(isOwner);
+  const [canRecordAbsence, setCanRecordAbsence] = useState(false);
+  const [attendanceRevision, setAttendanceRevision] = useState(0);
+  const [canViewAbsenceFinance, setCanViewAbsenceFinance] = useState(false);
   const [pendingVoidAbsenceId, setPendingVoidAbsenceId] = useState<number | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const activeAssignments = assignments.filter((item) => item.status === "active");
@@ -6488,25 +6492,30 @@ function ContractDrawer({
   const maxAbsenceDate = [contract.endDate, todayInSaudiArabia].sort()[0];
   useEffect(() => {
     let active = true;
-    fetch(`/api/portal/contracts/${contract.id}/attendance`, { cache: "no-store" })
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    fetch(`/api/portal/contracts/${contract.id}/attendance`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const result = await readApiJson(response) as { absences?: ContractAbsence[]; canRecord?: boolean; canViewFinancialImpact?: boolean; error?: string };
         if (!response.ok) throw new Error(result.error || "تعذر تحميل سجل الغياب");
         if (!active) return;
         setAbsenceHistory(result.absences || []);
-        setCanRecordAbsence(Boolean(result.canRecord));
+        setCanRecordAbsence(canManageAttendance && result.canRecord === true);
         setCanViewAbsenceFinance(Boolean(result.canViewFinancialImpact));
       })
       .catch((error) => {
-        if (active) { setAbsenceError(error instanceof Error ? error.message : "تعذر تحميل سجل الغياب"); setCanRecordAbsence(false); }
+        if (active) { setAbsenceError(controller.signal.aborted ? "تعذر تحميل سجل الغياب" : error instanceof Error ? error.message : "تعذر تحميل سجل الغياب"); setCanRecordAbsence(false); }
       })
       .finally(() => {
+        clearTimeout(timeout);
         if (active) setAbsenceHistoryLoading(false);
       });
     return () => {
       active = false;
+      clearTimeout(timeout);
+      controller.abort();
     };
-  }, [contract.id]);
+  }, [contract.id, canManageAttendance, attendanceRevision]);
   return (
     <div className="drawer-layer">
       <button className="drawer-backdrop" aria-label="إغلاق إدارة العقد" onClick={onClose} />
@@ -6614,9 +6623,12 @@ function ContractDrawer({
           </section>
         )}
         </div><div hidden={workspaceTab !== "attendance"}>
-        {absenceError && <p role="alert" className="form-error">{absenceError}</p>}
-        {isOwner && canRecordAbsence && !absenceHistoryLoading && !absenceError && contract.status === "active" && (
-          <section className="drawer-section contract-absence-panel">
+        {absenceError && <div role="alert" className="form-error"><p>{absenceError}</p><button type="button" disabled={absenceHistoryLoading} onClick={() => { setAbsenceHistoryLoading(true); setAbsenceError(""); setCanRecordAbsence(false); setPendingVoidAbsenceId(null); setAttendanceRevision(value => value + 1); }}>إعادة المحاولة</button></div>}
+        {!canManageAttendance && <p className="readonly-note">تسجيل غياب العمالة والخصم المالي من صلاحيات المالك أو مشرف النظام فقط</p>}
+        {canManageAttendance && contract.status !== "active" && <p className="readonly-note">لا يمكن تسجيل الغياب إلا على عقد نشط</p>}
+        {canManageAttendance && !absenceHistoryLoading && !absenceError && !canRecordAbsence && <p role="alert" className="readonly-note">غير مصرح</p>}
+        {canManageAttendance && (
+          <fieldset className="drawer-section contract-absence-panel" disabled={!canRecordAbsence || absenceHistoryLoading || Boolean(absenceError) || contract.status !== "active" || Boolean(busy)} aria-busy={absenceHistoryLoading}>
             <h3>تسجيل غياب العمالة وخصم اليومية</h3>
             <p>اختر عاملًا محددًا، أو اترك العامل فارغًا وسجّل عدد المتغيبين من المهنة. اليومية = الراتب الفعلي ÷ 30، ويحسب النظام الأيام تلقائياً دون يوم الجمعة ثم يخصمها من دفعة شهر الغياب.</p>
             <div>
@@ -6627,6 +6639,7 @@ function ContractDrawer({
                   onChange={(event) => {
                     setAbsenceProfessionId(event.target.value);
                     setAbsenceWorkerId("");
+                    setReplacementWorkerId("");
                   }}
                 >
                   <option value="">اختر المهنة</option>
@@ -6639,10 +6652,10 @@ function ContractDrawer({
               </label>
               <label>
                 العامل — اختياري
-                <select value={absenceWorkerId} onChange={(event) => setAbsenceWorkerId(event.target.value)}>
+                <select value={absenceWorkerId} onChange={(event) => { setAbsenceWorkerId(event.target.value); setReplacementWorkerId(""); }}>
                   <option value="">تسجيل بالعدد والمهنة</option>
-                  {activeAssignments
-                    .filter((item) => String(item.contractProfessionId) === absenceProfessionId)
+                  {assignments
+                    .filter((item) => ["active", "released"].includes(item.status) && String(item.contractProfessionId) === absenceProfessionId && item.assignedAt.slice(0, 10) <= absenceDate && (!item.releasedAt || item.releasedAt.slice(0, 10) >= absenceEndDate))
                     .map((item) => {
                       const worker = workers.find((row) => row.id === item.workerId);
                       return (
@@ -6658,7 +6671,10 @@ function ContractDrawer({
                 <select value={replacementWorkerId} disabled={!absenceWorkerId} onChange={(event) => setReplacementWorkerId(event.target.value)}>
                   <option value="">دون بديل — تخصم الدفعة</option>
                   {workers
-                    .filter((worker) => worker.status === "available" && String(worker.id) !== absenceWorkerId && worker.profession === professions.find((item) => String(item.id) === absenceProfessionId)?.profession)
+                    .filter((worker) => {
+                      const profession = professions.find(item => String(item.id) === absenceProfessionId);
+                      return profession && !worker.archivedAt && worker.status === "available" && String(worker.id) !== absenceWorkerId && worker.profession === profession.profession && worker.sponsorshipType === profession.sponsorshipType && (profession.sponsorshipType !== "other" || worker.sponsorName === profession.sponsorName);
+                    })
                     .map((worker) => (
                       <option key={worker.id} value={worker.id}>
                         {worker.fullName} — {sponsorshipLabel(worker)}
@@ -6681,12 +6697,14 @@ function ContractDrawer({
                   onChange={(event) => {
                     setAbsenceDate(event.target.value);
                     setAbsenceEndDate(event.target.value);
+                    setAbsenceWorkerId("");
+                    setReplacementWorkerId("");
                   }}
                 />
               </label>
               <label>
                 نهاية الغياب
-                <input type="date" value={absenceEndDate} min={absenceDate || contract.startDate} max={maxAbsenceDate} onChange={(event) => setAbsenceEndDate(event.target.value)} />
+                <input type="date" value={absenceEndDate} min={absenceDate || contract.startDate} max={maxAbsenceDate} onChange={(event) => { setAbsenceEndDate(event.target.value); setAbsenceWorkerId(""); setReplacementWorkerId(""); }} />
                 <small>لا تُحتسب أيام الجمعة تلقائياً.</small>
               </label>
               <label className="span-two">
@@ -6702,7 +6720,7 @@ function ContractDrawer({
                 {busy === `contract-absence-${contract.id}` ? "جارٍ تسجيل الخصم..." : "تسجيل الغياب وخصم اليومية"}
               </button>
             </div>
-          </section>
+          </fieldset>
         )}
         <section className="drawer-section contract-absence-history">
           <h3>سجل غياب عمالة العقد</h3>
@@ -6724,10 +6742,10 @@ function ContractDrawer({
                   )}
                 </div>
                 <span className={`status-pill ${absence.status === "active" ? "status-reviewing" : "status-closed"}`}>{absence.status === "active" ? "نشط" : "ملغى"}</span>
-                {canRecordAbsence && absence.status === "active" && (
+                {canManageAttendance && canRecordAbsence && !absenceHistoryLoading && !absenceError && absence.status === "active" && (
                   <button
                     className={pendingVoidAbsenceId === absence.id ? "danger-action" : ""}
-                    disabled={busy === `contract-absence-void-${absence.id}`}
+                    disabled={Boolean(busy)}
                     onClick={() => {
                       if (pendingVoidAbsenceId !== absence.id) {
                         setPendingVoidAbsenceId(absence.id);
@@ -6747,6 +6765,7 @@ function ContractDrawer({
           })}
         </section>
         </div><div hidden={workspaceTab !== "workers"}>
+          {canManageAttendance && <button type="button" className="admin-primary" onClick={() => setWorkspaceTab("attendance")}>الغياب والاستبدال</button>}
           <ContractWorkforceBoard contract={contract} professions={professions} assignments={assignments} workers={workers} canManage={canManageWorkerAssignments} busy={busy} onAssign={onAssign} onRelease={onRelease}/>
         </div>
       </aside>

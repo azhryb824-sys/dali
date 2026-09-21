@@ -1,0 +1,38 @@
+name: Verify worker attendance controls
+on:
+  pull_request:
+    paths:
+      - app/portal/PortalDashboard.tsx
+      - app/portal/portal.css
+      - app/api/portal/contracts/**/attendance/route.ts
+      - lib/worker-attendance-access.ts
+      - tests/browser/worker-attendance.mjs
+      - .github/workflows/worker-attendance.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - run: npm install --prefix /tmp/dali-playwright playwright@1.56.1 --no-audit --no-fund
+      - run: /tmp/dali-playwright/node_modules/.bin/playwright install --with-deps chromium
+      - run: node tests/browser/worker-attendance.mjs
+        env:
+          DALI_PLAYWRIGHT_MODULE: /tmp/dali-playwright/node_modules/playwright/index.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: worker-attendance-browser
+          path: /tmp/dali-attendance-browser
+          retention-days: 7
+          if-no-files-found: ignore
