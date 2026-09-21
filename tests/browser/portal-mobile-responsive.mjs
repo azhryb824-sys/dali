@@ -81,7 +81,7 @@ try{
     await page.locator(".sidebar-backdrop").waitFor();
     await page.waitForFunction(()=>{const el=document.querySelector(".admin-sidebar");const r=el?.getBoundingClientRect();return Boolean(r&&r.left>=-1&&r.right<=innerWidth+1)});
     const box=await sidebar.boundingBox();assert.ok(box&&box.x>=-1&&box.x+box.width<=v.width+1,JSON.stringify(box));
-    await page.locator(".sidebar-backdrop").click();await page.waitForTimeout(100);
+    await page.mouse.click(10,Math.min(220,v.height/2));await page.waitForFunction(()=>!document.querySelector(".admin-sidebar")?.classList.contains("sidebar-open"));
   } else {
     assert.equal(await page.locator(".mobile-menu").isVisible(),false);
   }
