@@ -116,6 +116,8 @@ try{
  const executivePage=await executiveContext.newPage();
  await executivePage.goto(origin+"/?locale=ar");
  await executivePage.waitForSelector(".admin-shell");
+ await executivePage.waitForFunction(()=>Boolean(window.localeProbe));
+ await executivePage.waitForTimeout(200);
  await executivePage.getByRole("button",{name:"مركز المالك والمشرف"}).click();
  await executivePage.waitForSelector(".executive-center-heading");
  const centerContrast=await executivePage.evaluate(()=>({
