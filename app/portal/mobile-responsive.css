@@ -622,3 +622,138 @@
 @media (prefers-reduced-motion:reduce){
   .admin-sidebar{transition:none!important}
 }
+
+
+/* Overview + executive center contrast hardening.
+ * These rules are intentionally explicit because the glass theme applies broad
+ * typography colors that must not leak onto dark command surfaces.
+ */
+.admin-shell .content-heading:not(.feature-heading) h1,
+.admin-shell .overview-grid .panel-head h2,
+.admin-shell .overview-grid .department-grid > button strong,
+.admin-shell .overview-grid .activity-list strong,
+.admin-shell .module-metrics button strong{
+  color:#082f3f!important;
+}
+.admin-shell .content-heading:not(.feature-heading) > div > span,
+.admin-shell .overview-grid .panel-head p,
+.admin-shell .overview-grid .department-grid > button p,
+.admin-shell .overview-grid .activity-list :where(small,time),
+.admin-shell .module-metrics button :where(p,small){
+  color:#526b77!important;
+}
+.admin-shell .overview-grid .department-grid > button small{
+  color:#b21e2b!important;
+}
+.admin-shell .overview-grid .department-grid > button{
+  background:rgba(255,255,255,.92)!important;
+}
+.admin-shell .overview-grid .department-grid > button:hover{
+  background:#f4f9fa!important;
+}
+.admin-shell .overview-grid .activity-list > div > span{
+  background:#e9f6ef!important;
+  color:#176b49!important;
+}
+.admin-shell .module-metrics > button{
+  background:linear-gradient(145deg,#fff,#f5f9fa)!important;
+  color:#102f3c!important;
+}
+
+/* Owner/system-admin decision center dark header. */
+.admin-shell .executive-action-center{
+  color:#102f3c;
+}
+.admin-shell .executive-center-heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  margin:0 0 16px;
+  padding:22px 24px;
+  border:1px solid rgba(255,255,255,.13);
+  border-radius:18px;
+  background:linear-gradient(125deg,#052c3b,#0a5363);
+  box-shadow:0 16px 36px rgba(3,40,53,.14);
+}
+.admin-shell .executive-center-heading :where(h1,h2,h3,h4,strong,b){
+  color:#fff!important;
+}
+.admin-shell .executive-center-heading > div > span{
+  color:#9fe0df!important;
+  font-weight:800;
+}
+.admin-shell .executive-center-heading p{
+  color:#d7e7eb!important;
+}
+.admin-shell .executive-center-heading > button{
+  flex:0 0 auto;
+  border:1px solid rgba(255,255,255,.25)!important;
+  background:rgba(255,255,255,.11)!important;
+  color:#fff!important;
+  box-shadow:none!important;
+}
+.admin-shell .executive-center-heading > button:hover{
+  background:rgba(255,255,255,.18)!important;
+}
+
+/* Existing people-governance dark hero: override the generic glass typography. */
+.admin-shell .executive-command-head :where(h1,h2,h3,h4,strong){
+  color:#fff!important;
+}
+.admin-shell .executive-command-head > div > span{
+  color:#ff8d94!important;
+}
+.admin-shell .executive-command-head p,
+.admin-shell .executive-command-head > b{
+  color:#dce8ec!important;
+}
+
+/* Executive KPI cards always remain light surfaces with dark readable text. */
+.admin-shell .executive-kpis > :where(article,button){
+  background:linear-gradient(145deg,#fff,#f3f8f9)!important;
+  color:#102f3c!important;
+}
+.admin-shell .executive-kpis > :where(article,button) span{
+  color:#536d78!important;
+}
+.admin-shell .executive-kpis > :where(article,button) strong{
+  color:#062f40!important;
+}
+.admin-shell .executive-kpis > :where(article,button) small{
+  color:#667b84!important;
+}
+.admin-shell .executive-alert-strip span{
+  background:#fff4df!important;
+  color:#755016!important;
+}
+.admin-shell .executive-alert-strip .critical{
+  background:#fff0f1!important;
+  color:#9b1d28!important;
+}
+.admin-shell .executive-alert-strip .healthy{
+  background:#eaf7ef!important;
+  color:#176b49!important;
+}
+.admin-shell .executive-tabs button{
+  color:#405d68!important;
+}
+.admin-shell .executive-tabs button.active,
+.admin-shell .legal-tabs button[aria-pressed="true"]{
+  background:#083f51!important;
+  color:#fff!important;
+}
+.admin-shell .executive-action-center .legal-tabs button:not([aria-pressed="true"]){
+  background:#fff!important;
+  color:#405d68!important;
+}
+
+@media(max-width:620px){
+  .admin-shell .executive-center-heading{
+    flex-direction:column;
+    padding:18px 14px;
+  }
+  .admin-shell .executive-center-heading > button{
+    width:100%;
+  }
+}
