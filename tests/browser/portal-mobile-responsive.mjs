@@ -54,7 +54,7 @@ async function injectStressLab(page){
    <div class="payment-schedule-list"><div><strong>دفعة شهرية تجريبية طويلة</strong><span>1,000 ر.س</span><span>15%</span><div class="payment-actions"><button>إجراء أول</button><button>إجراء ثان</button></div></div></div>
    <div class="request-table-wrap"><table class="request-table"><thead><tr><th>أ</th><th>ب</th><th>ج</th><th>د</th></tr></thead><tbody><tr><td>1</td><td>بيانات طويلة للغاية لاختبار التمرير الداخلي</td><td>3</td><td>4</td></tr></tbody></table></div>
    <div class="workforce-board-metrics"><article>1</article><article>2</article><article>3</article><article>4</article></div>
-   <div class="employee-card-grid"><article class="employee-profile-card"><header><div><strong>موظف اختباري</strong><small>بطاقة</small></div></header></article></div>`;
+   <div class="employee-card-grid"><article class="employee-profile-card"><header><div><strong>موظف اختباري</strong><small>بطاقة</small></div></header></article></div>\n   <header class="executive-center-heading"><div><span>المالك ومشرف النظام</span><h2>مركز القرارات والاعتمادات</h2><p>نص توضيحي لاختبار التباين.</p></div><button>تحديث الإحصائيات</button></header>`;
   document.querySelector(".admin-content")?.appendChild(host);
  });
 }
@@ -71,7 +71,47 @@ try{
   await page.waitForSelector(".admin-shell");
   await page.waitForTimeout(150);
   await injectStressLab(page);
+  await page.evaluate(() => {
+    const host=document.querySelector("#mobile-stress-lab");
+    if(!host) return;
+    const executive=document.createElement("section");
+    executive.innerHTML='<header class="executive-center-heading"><div><span>المالك ومشرف النظام</span><h2>مركز القرارات والاعتمادات</h2><p>نص توضيحي على خلفية داكنة</p></div><button>تحديث</button></header><div class="executive-kpis"><button><span>مؤشر</span><strong>12</strong><small>تفصيل ثانوي</small></button></div>';
+    host.appendChild(executive);
+  });
+  const overviewContrast=await page.evaluate(()=>{
+    const executiveHeading=document.querySelector(".executive-command-head h2");
+    const executiveCopy=document.querySelector(".executive-command-head p");
+    const metric=document.querySelector(".module-metrics button strong");
+    return {
+      executiveHeading: executiveHeading ? getComputedStyle(executiveHeading).color : "",
+      executiveCopy: executiveCopy ? getComputedStyle(executiveCopy).color : "",
+      metric: metric ? getComputedStyle(metric).color : "",
+    };
+  });
+  assert.equal(overviewContrast.executiveHeading,"rgb(255, 255, 255)");
+  assert.notEqual(overviewContrast.executiveCopy,"rgb(82, 107, 119)");
+  assert.notEqual(overviewContrast.metric,"rgb(255, 255, 255)");
+  const syntheticExecutiveContrast=await page.evaluate(()=>({
+    title:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading h2")).color,
+    copy:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading p")).color,
+    button:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading > button")).color,
+  }));
+  assert.equal(syntheticExecutiveContrast.title,"rgb(255, 255, 255)");
+  assert.notEqual(syntheticExecutiveContrast.button,"rgb(255, 255, 255)");
+  assert.notEqual(syntheticExecutiveContrast.copy,"rgb(82, 107, 119)");
   const overflow=await assertNoPageOverflow(page,"base-"+v.width);
+  const contrast=await page.evaluate(() => {
+    const rgb=(selector)=>getComputedStyle(document.querySelector(selector)).color.match(/\d+/g).slice(0,3).map(Number);
+    const lum=([r,g,b])=>{const f=x=>{x/=255;return x<=.04045?x/12.92:Math.pow((x+.055)/1.055,2.4)};return .2126*f(r)+.7152*f(g)+.0722*f(b)};
+    const ratio=(a,b)=>{const [hi,lo]=[lum(a),lum(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05)};
+    const headBg=[12,53,69];
+    const light=rgb(".executive-center-heading h2");
+    const secondary=rgb(".executive-center-heading p");
+    const kpiStrong=rgb(".executive-kpis strong");
+    return {heading:ratio(light,headBg),secondary:ratio(secondary,headBg),kpiStrong};
+  });
+  assert.ok(contrast.heading>=4.5, "executive heading contrast "+JSON.stringify(contrast));
+  assert.ok(contrast.secondary>=4.5, "executive secondary contrast "+JSON.stringify(contrast));
   if(v.width<=820){
     const menu=page.locator(".mobile-menu");assert.equal(await menu.isVisible(),true);
     const sidebar=page.locator(".admin-sidebar");
@@ -96,7 +136,7 @@ try{
   await assertNoPageOverflow(page,"stress-"+v.width);
   assert.deepEqual(errors,[]);
   await page.screenshot({path:join(artifacts,"portal-"+v.width+"-"+v.locale+".png"),fullPage:true});
-  results.push({width:v.width,locale:v.locale,overflow,mobileMenu:v.width<=820});
+  results.push({width:v.width,locale:v.locale,overflow,mobileMenu:v.width<=820,overviewContrast,syntheticExecutiveContrast});
   await context.close();
  }
  await writeFile(join(artifacts,"results.json"),JSON.stringify({status:"passed",cases:results.length,results},null,2));
