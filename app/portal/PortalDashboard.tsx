@@ -4,6 +4,7 @@ import ContractFullEditDialog from "./ContractFullEditDialog";
 import ContractWorkforceBoard from "./ContractWorkforceBoard";
 import { canManageWorkerAttendance } from "@/lib/worker-attendance-access";
 import { contractWorkforceCoverage } from "@/lib/contract-workforce-coverage";
+import { resolveWorkerContractPlacement } from "@/lib/worker-contract-placement";
 
 import WorkerIncidentsPanel from "./WorkerIncidentsPanel";
 import ConversationQuoteRequests from "./ConversationQuoteRequests";
@@ -2667,7 +2668,7 @@ export default function PortalDashboard({
               <WorkforceOperations workers={workers} attachments={workerAttachments} />
               <ContractOperations contracts={contracts} professions={contractProfessions} assignments={contractAssignments} onSelect={setSelectedContractId} />
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالاسم أو رقم الإقامة أو المهنة أو الجهة">
-                <WorkerTable records={workers} attachments={workerAttachments} query={query} onSelect={setSelectedWorkerId} />
+                <WorkerTable records={workers} attachments={workerAttachments} contracts={contracts} assignments={contractAssignments} query={query} onSelect={setSelectedWorkerId} />
               </ManagementPanel>
               <section className="panel request-panel workforce-requests">
                 <div className="panel-head">
@@ -6786,15 +6787,27 @@ function ContractDrawer({
   );
 }
 
-function WorkerTable({ records, attachments, query, onSelect }: { records: WorkerRecord[]; attachments: WorkerAttachment[]; query: string; onSelect: (id: number) => void }) {
-  const rows = filterRecords(records, query);
+function WorkerTable({ records, attachments, contracts, assignments, query, onSelect }: { records: WorkerRecord[]; attachments: WorkerAttachment[]; contracts: WorkforceContract[]; assignments: ContractAssignment[]; query: string; onSelect: (id: number) => void }) {
+  const needle = query.trim().toLowerCase();
+  const rows = records.filter((item) => {
+    const placement = resolveWorkerContractPlacement(item.id, assignments, contracts, item.clientSite);
+    const haystack = `${JSON.stringify(item)} ${placement.contract?.referenceCode || ""} ${placement.contract?.clientName || ""} ${placement.site}`.toLowerCase();
+    return !needle || haystack.includes(needle);
+  });
   if (!rows.length) return <EmptyRows label="أضف أول ملف عامل متكامل ليظهر هنا." />;
   return <div className="legal-card-grid workforce-cards">{rows.map(item => {
     const profile = workerRequirementStatus(item, attachments);
     const photo = profile.files.find(file => file.documentType === "photo");
+    const placement = resolveWorkerContractPlacement(item.id, assignments, contracts, item.clientSite);
     return <details className="legal-source-card" key={item.id}>
       <summary><div className="worker-identity">{photo ? <Image unoptimized src={`/api/portal/workers/attachments/${photo.id}?inline=1`} alt={`صورة ${item.fullName}`} width={56} height={56} /> : <span>{initials(item.fullName)}</span>}<p><strong>{item.fullName}</strong><small>{item.profession} · {item.nationality}</small></p></div><span className={`status-pill ${statusClass(item.status)}`}>{recordStatus.workforce[item.status] || item.status}</span></summary>
-      <dl><dt>رقم الإقامة</dt><dd dir="ltr">{item.iqamaNumber || "غير مسجل"}</dd><dt>الجهة المستفيدة</dt><dd>{item.beneficiaryName || "غير مسند"}</dd><dt>موقع العمل</dt><dd>{item.clientSite}</dd><dt>انتهاء الإقامة</dt><dd className={daysUntil(item.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(item.iqamaExpiry)}</dd></dl>
+      <dl>
+        <dt>رقم الإقامة</dt><dd dir="ltr">{item.iqamaNumber || "غير مسجل"}</dd>
+        <dt>الجهة المستفيدة</dt><dd>{placement.contract?.clientName || item.beneficiaryName || "غير مسند"}</dd>
+        <dt>{placement.contract ? "موقع العمل (من العقد)" : "موقع العمل"}</dt><dd>{placement.site || "غير محدد"}</dd>
+        <dt>العقد المرتبط</dt><dd>{placement.contract?.referenceCode || "لا يوجد عقد نشط"}</dd>
+        <dt>انتهاء الإقامة</dt><dd className={daysUntil(item.iqamaExpiry) <= 30 ? "date-alert" : ""}>{formatDate(item.iqamaExpiry)}</dd>
+      </dl>
       <div className="file-completion"><span><i style={{width:`${profile.percent}%`}} /></span><small>{profile.percent}% · {profile.missing.length ? `${profile.missing.length} ناقص` : "مكتمل"}</small></div>
       <button className="worker-view" onClick={() => onSelect(item.id)}>عرض الملف ←</button>
     </details>;
