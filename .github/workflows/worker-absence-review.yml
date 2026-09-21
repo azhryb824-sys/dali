@@ -1,0 +1,30 @@
+name: Worker absence review
+on:
+  push:
+    branches: [codex/owner-admin-worker-absence-20260921]
+    paths: [.github/workflows/worker-absence-review.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Inspect relevant source locations
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for name in ['app/portal/PortalDashboard.tsx', 'lib/portal-access.ts', 'app/portal/WorkerIncidentsPanel.tsx']:
+              lines=Path(name).read_text().splitlines()
+              print('\nFILE',name,'LINES',len(lines))
+              for i,line in enumerate(lines,1):
+                  if re.search(r'canRecordAbsence|canManageAbsence|contractAttendance|Absence|absence|Replacement|replacement|canManageWorkforce|isSystemOwner|isRoot|system_owner|system_admin',line):
+                      print(f'{i}: {line[:2800]}')
+          print('\nTEST FILES')
+          for p in sorted(Path('tests').rglob('*')):
+              if p.is_file() and re.search(r'postgres|absence|supervision|permission|notification',p.name): print(str(p))
+          PY
