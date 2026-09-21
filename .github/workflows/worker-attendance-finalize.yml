@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 22.16.0
           cache: npm
-      - name: Apply three checksum-guarded review corrections
+      - name: Apply checksum-guarded review corrections
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -50,6 +50,9 @@ jobs:
           old = 'assert.equal(await panel.isDisabled(),true);'
           assert text.count(old) == 3
           text = text.replace(old, "assert.equal(await panel.evaluate(fieldset=>fieldset.disabled),true);assert.equal(await panel.locator('select').first().isDisabled(),true);")
+          pending.append((p, text))
+          p, text = read_checked('tests/worker-attendance-access-postgres.test.mjs', '068da19f2bbcd9cd8154904352cfdeb67b3934c5')
+          text = replace_once(text, 'export function getDb(){return db}', "export function getDb(){return db} export function getSqlClient(){throw new Error('Unexpected raw SQL dependency in attendance fixture')}")
           pending.append((p, text))
           p, text = read_checked('lib/i18n-reviewed-overrides.ts', '690a48a5f8595dd3e71f58593415437f3a629eb3')
           translations = {
@@ -104,7 +107,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git rm .github/workflows/worker-attendance-finalize.yml
-          git add app/portal/PortalDashboard.tsx lib/i18n-reviewed-overrides.ts lib/i18n-authored-strings.ts tests/browser/worker-attendance.mjs
+          git add app/portal/PortalDashboard.tsx lib/i18n-reviewed-overrides.ts lib/i18n-authored-strings.ts tests/browser/worker-attendance.mjs tests/worker-attendance-access-postgres.test.mjs
           git diff --cached --check
           git diff --exit-code
           git commit -m 'Finalize tested owner and administrator attendance controls and translations'
