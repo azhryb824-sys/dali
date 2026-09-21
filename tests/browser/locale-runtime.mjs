@@ -24,7 +24,7 @@ await build({ entryPoints: ["tests/browser/locale-fixture-client.jsx"], bundle: 
 await build({ entryPoints: ["tests/browser/locale-fixture-server.jsx"], bundle: true, platform: "node", packages: "external", format: "cjs", jsx: "automatic", outfile: join(dir, "server.cjs"), plugins });
 const { render } = require(join(dir, "server.cjs"));
 const js = await readFile(join(dir, "client.js"));
-const css = (await Promise.all(["app/globals.css", "app/portal/portal.css", "app/portal/premium-glass.css", "app/portal/visual-accessibility.css"].map(path => readFile(path, "utf8")))).join("\n");
+const css = (await Promise.all(["app/globals.css", "app/portal/portal.css", "app/portal/premium-glass.css", "app/portal/visual-accessibility.css", "app/portal/mobile-responsive.css"].map(path => readFile(path, "utf8")))).join("\n");
 let failSave = false, saveDelay = 0;
 const saves = [], documents = [];
 const server = createServer(async (req, res) => {
