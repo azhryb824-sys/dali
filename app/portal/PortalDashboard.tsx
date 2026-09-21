@@ -1159,8 +1159,8 @@ export default function PortalDashboard({
   const waitingConversations = conversations.filter((item) => item.status === "waiting").length;
 
   function canOpenView(next: View) {
-    if (["overview", "notifications", "tasks", "guide"].includes(next)) return true;
     if (next === "executive-center") return isRoot;
+    if (["overview", "notifications", "tasks", "guide"].includes(next)) return true;
     if (next === "employees" || next === "finance" || next === "legal" || next === "workforce") return canAccess(next);
     if (next === "government") return canAccessGovernment;
     if (next === "operations") return canAccessOperations;
