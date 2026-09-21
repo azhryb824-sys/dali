@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { contractPaymentSchedules, contractProfessions, contractWorkerAbsences, contractWorkerAssignments, workers, workforceContracts } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
+import { canManageWorkerAttendance } from "@/lib/worker-attendance-access";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest, requestCorrelationId } from "@/lib/security";
@@ -17,7 +18,7 @@ const clean = (value: unknown, max: number) => typeof value === "string" ? value
 const todayInSaudiArabia = () => new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 function canRecordAbsence(access: NonNullable<Awaited<ReturnType<typeof requirePortalApiRole>>>) {
-  return access.role === "admin" || access.functionalRoles.some((role) => role === "system_owner" || role === "system_admin");
+  return canManageWorkerAttendance(access);
 }
 
 function editablePayment(payment: typeof contractPaymentSchedules.$inferSelect) {
@@ -28,7 +29,7 @@ function editablePayment(payment: typeof contractPaymentSchedules.$inferSelect) 
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
-  if (!access || !(await hasPortalPermission(access, "contracts", "read"))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
+  if (!access || (!canRecordAbsence(access) && !(await hasPortalPermission(access, "contracts", "read")))) return jsonNoStore({ error: "غير مصرح" }, { status: 403 });
   const contractId = positiveId((await params).id);
   if (!contractId) return jsonNoStore({ error: "العقد غير صحيح" }, { status: 400 });
   const db = getDb();
