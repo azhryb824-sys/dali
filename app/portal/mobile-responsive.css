@@ -857,3 +857,12 @@
     color:#334f5a!important;
   }
 }
+
+
+/* Contract and quotation creation are destructive-to-dismiss forms.
+ * The backdrop is intentionally non-interactive so an outside tap cannot
+ * discard a multi-step draft. Users close explicitly with × or Cancel.
+ */
+.static-modal-backdrop{
+  cursor:default!important;
+}
