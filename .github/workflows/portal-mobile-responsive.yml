@@ -1,0 +1,43 @@
+name: Verify portal mobile responsiveness
+on:
+  push:
+    branches: [codex/portal-mobile-responsive-20260921]
+  pull_request:
+    paths:
+      - app/portal/mobile-responsive.css
+      - app/portal/layout.tsx
+      - tests/browser/portal-mobile-responsive.mjs
+      - tests/browser/locale-runtime.mjs
+      - .github/workflows/portal-mobile-responsive.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      DALI_PLAYWRIGHT_MODULE: /tmp/dali-playwright/node_modules/playwright/index.mjs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm install --prefix /tmp/dali-playwright playwright@1.56.1 --no-audit --no-fund
+      - run: /tmp/dali-playwright/node_modules/.bin/playwright install --with-deps chromium
+      - run: node tests/browser/portal-mobile-responsive.mjs
+      - run: node tests/browser/locale-runtime.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portal-mobile-responsive-evidence
+          path: |
+            /tmp/dali-mobile-browser
+            /tmp/dali-locale-browser
+          retention-days: 7
+          if-no-files-found: ignore
