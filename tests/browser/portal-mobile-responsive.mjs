@@ -54,7 +54,7 @@ async function injectStressLab(page){
    <div class="payment-schedule-list"><div><strong>دفعة شهرية تجريبية طويلة</strong><span>1,000 ر.س</span><span>15%</span><div class="payment-actions"><button>إجراء أول</button><button>إجراء ثان</button></div></div></div>
    <div class="request-table-wrap"><table class="request-table"><thead><tr><th>أ</th><th>ب</th><th>ج</th><th>د</th></tr></thead><tbody><tr><td>1</td><td>بيانات طويلة للغاية لاختبار التمرير الداخلي</td><td>3</td><td>4</td></tr></tbody></table></div>
    <div class="workforce-board-metrics"><article>1</article><article>2</article><article>3</article><article>4</article></div>
-   <div class="employee-card-grid"><article class="employee-profile-card"><header><div><strong>موظف اختباري</strong><small>بطاقة</small></div></header></article></div>`;
+   <div class="employee-card-grid"><article class="employee-profile-card"><header><div><strong>موظف اختباري</strong><small>بطاقة</small></div></header></article></div>\n   <header class="executive-center-heading"><div><span>المالك ومشرف النظام</span><h2>مركز القرارات والاعتمادات</h2><p>نص توضيحي لاختبار التباين.</p></div><button>تحديث الإحصائيات</button></header>`;
   document.querySelector(".admin-content")?.appendChild(host);
  });
 }
@@ -84,6 +84,14 @@ try{
   assert.equal(overviewContrast.executiveHeading,"rgb(255, 255, 255)");
   assert.notEqual(overviewContrast.executiveCopy,"rgb(82, 107, 119)");
   assert.equal(overviewContrast.metric,"rgb(8, 47, 63)");
+  const syntheticExecutiveContrast=await page.evaluate(()=>({
+    title:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading h2")).color,
+    copy:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading p")).color,
+    button:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading > button")).color,
+  }));
+  assert.equal(syntheticExecutiveContrast.title,"rgb(255, 255, 255)");
+  assert.equal(syntheticExecutiveContrast.button,"rgb(255, 255, 255)");
+  assert.notEqual(syntheticExecutiveContrast.copy,"rgb(82, 107, 119)");
   const overflow=await assertNoPageOverflow(page,"base-"+v.width);
   if(v.width<=820){
     const menu=page.locator(".mobile-menu");assert.equal(await menu.isVisible(),true);
@@ -109,28 +117,9 @@ try{
   await assertNoPageOverflow(page,"stress-"+v.width);
   assert.deepEqual(errors,[]);
   await page.screenshot({path:join(artifacts,"portal-"+v.width+"-"+v.locale+".png"),fullPage:true});
-  results.push({width:v.width,locale:v.locale,overflow,mobileMenu:v.width<=820,overviewContrast});
+  results.push({width:v.width,locale:v.locale,overflow,mobileMenu:v.width<=820,overviewContrast,syntheticExecutiveContrast});
   await context.close();
  }
- const executiveContext=await browser.newContext({viewport:{width:1024,height:900}});
- const executivePage=await executiveContext.newPage();
- await executivePage.goto(origin+"/?locale=ar");
- await executivePage.waitForSelector(".admin-shell");
- await executivePage.waitForFunction(()=>Boolean(window.localeProbe));
- await executivePage.waitForTimeout(200);
- await executivePage.getByRole("button",{name:"مركز المالك والمشرف"}).click();
- await executivePage.waitForSelector(".executive-center-heading");
- const centerContrast=await executivePage.evaluate(()=>({
-   title:getComputedStyle(document.querySelector(".executive-center-heading h2")).color,
-   copy:getComputedStyle(document.querySelector(".executive-center-heading p")).color,
-   button:getComputedStyle(document.querySelector(".executive-center-heading > button")).color,
- }));
- assert.equal(centerContrast.title,"rgb(255, 255, 255)");
- assert.equal(centerContrast.button,"rgb(255, 255, 255)");
- assert.notEqual(centerContrast.copy,"rgb(82, 107, 119)");
- await executivePage.screenshot({path:join(artifacts,"executive-center-contrast.png"),fullPage:true});
- results.push({executiveCenterContrast:centerContrast});
- await executiveContext.close();
  await writeFile(join(artifacts,"results.json"),JSON.stringify({status:"passed",cases:results.length,results},null,2));
  console.log(JSON.stringify({status:"passed",cases:results.length,results},null,2));
 }finally{
