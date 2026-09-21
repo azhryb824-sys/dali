@@ -757,3 +757,103 @@
     width:100%;
   }
 }
+
+
+/* Executive center + overview contrast hardening.
+ * These selectors are intentionally explicit because generic portal typography
+ * otherwise paints dark text on the dark executive headers.
+ */
+.admin-shell .executive-center-heading,
+.admin-shell .executive-command-head{
+  color:#fff;
+}
+.admin-shell .executive-center-heading :where(h1,h2,h3,h4,strong,b),
+.admin-shell .executive-command-head :where(h1,h2,h3,h4,strong,b){
+  color:#fff!important;
+}
+.admin-shell .executive-center-heading > div > span,
+.admin-shell .executive-command-head > div > span{
+  color:#ff9ca2!important;
+  font-weight:800;
+}
+.admin-shell .executive-center-heading :where(p,small),
+.admin-shell .executive-command-head :where(p,small){
+  color:#e4f0f3!important;
+}
+.admin-shell .executive-command-head > b{
+  color:#f3f8fa!important;
+  background:rgba(255,255,255,.08);
+}
+.admin-shell .executive-center-heading > button{
+  background:#fff!important;
+  color:#0b4655!important;
+  border:1px solid rgba(255,255,255,.6)!important;
+}
+
+/* Executive KPI cards are light surfaces, so force dark high-contrast copy. */
+.admin-shell .executive-kpis > :where(button,article){
+  color:#163b49!important;
+}
+.admin-shell .executive-kpis > :where(button,article) > span{
+  color:#435f6b!important;
+}
+.admin-shell .executive-kpis > :where(button,article) > strong{
+  color:#062f40!important;
+}
+.admin-shell .executive-kpis > :where(button,article) > small{
+  color:#506b76!important;
+}
+
+/* Overview: keep secondary information readable on glass/light cards. */
+.admin-shell .content-heading:not(.feature-heading) > div > span{
+  color:#4f6873!important;
+}
+.admin-shell .metric-grid.module-metrics > button{
+  color:#183d4b!important;
+}
+.admin-shell .metric-grid.module-metrics > button > p{
+  color:#405d68!important;
+}
+.admin-shell .metric-grid.module-metrics > button > p > strong{
+  color:#062f40!important;
+}
+.admin-shell .metric-grid.module-metrics > button > small{
+  color:#526d78!important;
+  border-top-color:#dbe5e8!important;
+}
+.admin-shell .overview-grid .panel-head h2{
+  color:#082f3f!important;
+}
+.admin-shell .overview-grid .panel-head p{
+  color:#536e79!important;
+}
+.admin-shell .overview-grid .department-grid button{
+  color:#183d4b!important;
+}
+.admin-shell .overview-grid .department-grid button strong{
+  color:#082f3f!important;
+}
+.admin-shell .overview-grid .department-grid button p{
+  color:#496570!important;
+}
+.admin-shell .overview-grid .department-grid button small{
+  color:#5b747f!important;
+}
+.admin-shell .overview-grid .activity-list strong{
+  color:#173e4c!important;
+}
+.admin-shell .overview-grid .activity-list small,
+.admin-shell .overview-grid .activity-list time{
+  color:#5d7580!important;
+}
+
+@media (prefers-contrast:more){
+  .admin-shell .executive-center-heading :where(p,small),
+  .admin-shell .executive-command-head :where(p,small){
+    color:#fff!important;
+  }
+  .admin-shell .metric-grid.module-metrics > button > small,
+  .admin-shell .overview-grid :where(.panel-head p,.department-grid button p,.department-grid button small,.activity-list small,.activity-list time){
+    color:#334f5a!important;
+  }
+}
