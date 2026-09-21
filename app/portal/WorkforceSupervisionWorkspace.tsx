@@ -349,8 +349,12 @@ export default function WorkforceSupervisionWorkspace({
                   <strong>{worker.fullName}</strong>
                   <small>{worker.workerNumber || "—"} · {worker.iqamaNumber || "دون رقم إقامة"}</small>
                   <small>{worker.profession} · {worker.nationality || "—"}</small>
-                  <small>{placement.contract ? `العقد ${placement.contract.referenceCode} · ${placement.contract.clientName}` : worker.beneficiaryName || "غير مسند"}</small>
-                  <small>{placement.contract ? `موقع العمل من العقد: ${placement.site || "غير محدد"}` : `موقع العمل: ${placement.site || "غير محدد"}`}</small>
+                  {placement.contract ? (
+                    <small><b>العقد النشط</b> · {placement.contract.referenceCode} · {placement.contract.clientName}</small>
+                  ) : (
+                    <small>{worker.beneficiaryName || "غير مسند"}</small>
+                  )}
+                  <small><b>موقع العمل</b> · {placement.site || "غير محدد"}</small>
                 </div>
                 {canManage && worker.status !== "assigned" ? (
                   <select value={worker.status} disabled={busy === `worker-status-${worker.id}`} onChange={(event) => void onWorkerStatus(worker.id, event.target.value)}>
