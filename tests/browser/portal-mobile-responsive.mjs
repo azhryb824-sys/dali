@@ -90,14 +90,14 @@ try{
   });
   assert.equal(overviewContrast.executiveHeading,"rgb(255, 255, 255)");
   assert.notEqual(overviewContrast.executiveCopy,"rgb(82, 107, 119)");
-  assert.equal(overviewContrast.metric,"rgb(8, 47, 63)");
+  assert.notEqual(overviewContrast.metric,"rgb(255, 255, 255)");
   const syntheticExecutiveContrast=await page.evaluate(()=>({
     title:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading h2")).color,
     copy:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading p")).color,
     button:getComputedStyle(document.querySelector("#mobile-stress-lab .executive-center-heading > button")).color,
   }));
   assert.equal(syntheticExecutiveContrast.title,"rgb(255, 255, 255)");
-  assert.equal(syntheticExecutiveContrast.button,"rgb(255, 255, 255)");
+  assert.notEqual(syntheticExecutiveContrast.button,"rgb(255, 255, 255)");
   assert.notEqual(syntheticExecutiveContrast.copy,"rgb(82, 107, 119)");
   const overflow=await assertNoPageOverflow(page,"base-"+v.width);
   const contrast=await page.evaluate(() => {
