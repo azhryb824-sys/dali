@@ -6,6 +6,8 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "تسجيل غياب العمالة والخصم المالي من صلاحيات المالك أو مشرف النظام فقط": {"en": "Only the owner or system administrator may record worker absence and financial deductions", "bn": "শুধু মালিক বা সিস্টেম প্রশাসক শ্রমিকের অনুপস্থিতি এবং আর্থিক কর্তন নথিভুক্ত করতে পারেন"},
+  "لا يمكن تسجيل الغياب إلا على عقد نشط": {"en": "Absence can only be recorded for an active contract", "bn": "শুধু সক্রিয় চুক্তির জন্য অনুপস্থিতি নথিভুক্ত করা যায়"},
   "اللغة غير مدعومة": { en: "Unsupported language", bn: "এই ভাষা সমর্থিত নয়" },
   "جارٍ حفظ اللغة...": { en: "Saving language...", bn: "ভাষা সংরক্ষণ করা হচ্ছে..." },
   "تعذّر تحميل مساحة العمل": { en: "Unable to load the workspace", bn: "কর্মক্ষেত্র লোড করা যায়নি" },

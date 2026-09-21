@@ -99,17 +99,17 @@ try {
   await page.screenshot({path:join(artifacts,`attendance-${role}-${width}.png`),fullPage:true});results.push({role,width,record:true,replacement:true,void:true,errors});await context.close();
  }
  reset({readStatus:503});{
-  const {context,panel,errors}=await open('system_admin');await page.getByRole('button',{name:'إعادة المحاولة',exact:true}).waitFor();assert.equal(await panel.isVisible(),true);assert.equal(await panel.isDisabled(),true);
+  const {context,panel,errors}=await open('system_admin');await page.getByRole('button',{name:'إعادة المحاولة',exact:true}).waitFor();assert.equal(await panel.isVisible(),true);assert.equal(await panel.evaluate(fieldset=>fieldset.disabled),true);assert.equal(await panel.locator('select').first().isDisabled(),true);
   scenario.readStatus=200;await page.getByRole('button',{name:'إعادة المحاولة',exact:true}).click();await ready();assert.equal(scenario.reads,2);assert.deepEqual(errors,[]);results.push({retryRestoresManagement:true});await context.close();
  }
  reset({canRecord:false});{
-  const {context,panel}=await open('system_owner');await page.getByRole('alert').filter({hasText:'غير مصرح'}).waitFor();assert.equal(await panel.isDisabled(),true);assert.equal(scenario.writes.length,0);results.push({serverPermissionRequired:true});await context.close();
+  const {context,panel}=await open('system_owner');await page.getByRole('alert').filter({hasText:'غير مصرح'}).waitFor();assert.equal(await panel.evaluate(fieldset=>fieldset.disabled),true);assert.equal(await panel.locator('select').first().isDisabled(),true);assert.equal(scenario.writes.length,0);results.push({serverPermissionRequired:true});await context.close();
  }
  reset();{
   const {context,panel}=await open('workforce_supervisor');await page.getByText('تسجيل غياب العمالة والخصم المالي من صلاحيات المالك أو مشرف النظام فقط',{exact:true}).waitFor();assert.equal(await panel.count(),0);assert.equal(await page.getByRole('button',{name:'إلغاء القيد',exact:true}).count(),0);results.push({fieldSupervisorNoFinancialAuthority:true});await context.close();
  }
  reset();{
-  const {context,panel}=await open('system_admin',1440,'&inactive=1');await page.getByText('لا يمكن تسجيل الغياب إلا على عقد نشط',{exact:true}).waitFor();assert.equal(await panel.isVisible(),true);assert.equal(await panel.isDisabled(),true);results.push({inactiveContractExplained:true});await context.close();
+  const {context,panel}=await open('system_admin',1440,'&inactive=1');await page.getByText('لا يمكن تسجيل الغياب إلا على عقد نشط',{exact:true}).waitFor();assert.equal(await panel.isVisible(),true);assert.equal(await panel.evaluate(fieldset=>fieldset.disabled),true);assert.equal(await panel.locator('select').first().isDisabled(),true);results.push({inactiveContractExplained:true});await context.close();
  }
  console.log(JSON.stringify({status:'passed',cases:results.length,results},null,2));await writeFile(join(artifacts,'results.json'),JSON.stringify({status:'passed',cases:results.length,results},null,2));
 } catch(error){

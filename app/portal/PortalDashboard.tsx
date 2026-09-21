@@ -6494,10 +6494,6 @@ function ContractDrawer({
     let active = true;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
-    setAbsenceHistoryLoading(true);
-    setAbsenceError("");
-    setCanRecordAbsence(false);
-    setPendingVoidAbsenceId(null);
     fetch(`/api/portal/contracts/${contract.id}/attendance`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const result = await readApiJson(response) as { absences?: ContractAbsence[]; canRecord?: boolean; canViewFinancialImpact?: boolean; error?: string };
@@ -6627,7 +6623,7 @@ function ContractDrawer({
           </section>
         )}
         </div><div hidden={workspaceTab !== "attendance"}>
-        {absenceError && <div role="alert" className="form-error"><p>{absenceError}</p><button type="button" disabled={absenceHistoryLoading} onClick={() => setAttendanceRevision(value => value + 1)}>إعادة المحاولة</button></div>}
+        {absenceError && <div role="alert" className="form-error"><p>{absenceError}</p><button type="button" disabled={absenceHistoryLoading} onClick={() => { setAbsenceHistoryLoading(true); setAbsenceError(""); setCanRecordAbsence(false); setPendingVoidAbsenceId(null); setAttendanceRevision(value => value + 1); }}>إعادة المحاولة</button></div>}
         {!canManageAttendance && <p className="readonly-note">تسجيل غياب العمالة والخصم المالي من صلاحيات المالك أو مشرف النظام فقط</p>}
         {canManageAttendance && contract.status !== "active" && <p className="readonly-note">لا يمكن تسجيل الغياب إلا على عقد نشط</p>}
         {canManageAttendance && !absenceHistoryLoading && !absenceError && !canRecordAbsence && <p role="alert" className="readonly-note">غير مصرح</p>}
