@@ -4986,7 +4986,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
   );
   return (
     <div className="modal-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق نافذة إصدار المستند" onClick={onClose} />
+      <div className="drawer-backdrop static-modal-backdrop" aria-hidden="true" />
       <section className="record-modal document-modal issue-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف PDF رسمي">
         <div className="drawer-head">
           <div>
