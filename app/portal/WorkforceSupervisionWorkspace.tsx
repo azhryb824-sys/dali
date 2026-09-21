@@ -164,7 +164,8 @@ export default function WorkforceSupervisionWorkspace({
   });
   const visibleWorkers = workers.filter((worker) => {
     if (worker.archivedAt) return false;
-    const placement = resolveWorkerContractPlacement(worker.id, assignments, contracts, worker.clientSite);\n    const haystack = `${worker.workerNumber || ""} ${worker.iqamaNumber || ""} ${worker.fullName} ${worker.profession} ${worker.nationality || ""} ${placement.contract?.clientName || worker.beneficiaryName || ""} ${placement.contract?.referenceCode || ""} ${placement.site}`.toLowerCase();
+    const placement = resolveWorkerContractPlacement(worker.id, assignments, contracts, worker.clientSite);
+    const haystack = `${worker.workerNumber || ""} ${worker.iqamaNumber || ""} ${worker.fullName} ${worker.profession} ${worker.nationality || ""} ${placement.contract?.clientName || worker.beneficiaryName || ""} ${placement.contract?.referenceCode || ""} ${placement.site}`.toLowerCase();
     return (
       (!workerQuery.trim() ||
         haystack.includes(workerQuery.trim().toLowerCase())) &&
