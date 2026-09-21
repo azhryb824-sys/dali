@@ -71,6 +71,13 @@ try{
   await page.waitForSelector(".admin-shell");
   await page.waitForTimeout(150);
   await injectStressLab(page);
+  await page.evaluate(() => {
+    const host=document.querySelector("#mobile-stress-lab");
+    if(!host) return;
+    const executive=document.createElement("section");
+    executive.innerHTML='<header class="executive-center-heading"><div><span>المالك ومشرف النظام</span><h2>مركز القرارات والاعتمادات</h2><p>نص توضيحي على خلفية داكنة</p></div><button>تحديث</button></header><div class="executive-kpis"><button><span>مؤشر</span><strong>12</strong><small>تفصيل ثانوي</small></button></div>';
+    host.appendChild(executive);
+  });
   const overviewContrast=await page.evaluate(()=>{
     const executiveHeading=document.querySelector(".executive-command-head h2");
     const executiveCopy=document.querySelector(".executive-command-head p");
@@ -93,6 +100,18 @@ try{
   assert.equal(syntheticExecutiveContrast.button,"rgb(255, 255, 255)");
   assert.notEqual(syntheticExecutiveContrast.copy,"rgb(82, 107, 119)");
   const overflow=await assertNoPageOverflow(page,"base-"+v.width);
+  const contrast=await page.evaluate(() => {
+    const rgb=(selector)=>getComputedStyle(document.querySelector(selector)).color.match(/\d+/g).slice(0,3).map(Number);
+    const lum=([r,g,b])=>{const f=x=>{x/=255;return x<=.04045?x/12.92:Math.pow((x+.055)/1.055,2.4)};return .2126*f(r)+.7152*f(g)+.0722*f(b)};
+    const ratio=(a,b)=>{const [hi,lo]=[lum(a),lum(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05)};
+    const headBg=[12,53,69];
+    const light=rgb(".executive-center-heading h2");
+    const secondary=rgb(".executive-center-heading p");
+    const kpiStrong=rgb(".executive-kpis strong");
+    return {heading:ratio(light,headBg),secondary:ratio(secondary,headBg),kpiStrong};
+  });
+  assert.ok(contrast.heading>=4.5, "executive heading contrast "+JSON.stringify(contrast));
+  assert.ok(contrast.secondary>=4.5, "executive secondary contrast "+JSON.stringify(contrast));
   if(v.width<=820){
     const menu=page.locator(".mobile-menu");assert.equal(await menu.isVisible(),true);
     const sidebar=page.locator(".admin-sidebar");
