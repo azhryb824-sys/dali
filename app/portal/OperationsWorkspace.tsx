@@ -2350,10 +2350,9 @@ export function QuotationIssueModal({
   };
   return (
     <div className="modal-layer">
-      <button
-        className="drawer-backdrop"
-        aria-label="إغلاق نموذج عرض السعر"
-        onClick={onClose}
+      <div
+        className="drawer-backdrop static-modal-backdrop"
+        aria-hidden="true"
       />
       <section
         className="record-modal quotation-document-modal"
