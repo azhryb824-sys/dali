@@ -71,6 +71,19 @@ try{
   await page.waitForSelector(".admin-shell");
   await page.waitForTimeout(150);
   await injectStressLab(page);
+  const overviewContrast=await page.evaluate(()=>{
+    const executiveHeading=document.querySelector(".executive-command-head h2");
+    const executiveCopy=document.querySelector(".executive-command-head p");
+    const metric=document.querySelector(".module-metrics button strong");
+    return {
+      executiveHeading: executiveHeading ? getComputedStyle(executiveHeading).color : "",
+      executiveCopy: executiveCopy ? getComputedStyle(executiveCopy).color : "",
+      metric: metric ? getComputedStyle(metric).color : "",
+    };
+  });
+  assert.equal(overviewContrast.executiveHeading,"rgb(255, 255, 255)");
+  assert.notEqual(overviewContrast.executiveCopy,"rgb(82, 107, 119)");
+  assert.equal(overviewContrast.metric,"rgb(8, 47, 63)");
   const overflow=await assertNoPageOverflow(page,"base-"+v.width);
   if(v.width<=820){
     const menu=page.locator(".mobile-menu");assert.equal(await menu.isVisible(),true);
@@ -96,9 +109,26 @@ try{
   await assertNoPageOverflow(page,"stress-"+v.width);
   assert.deepEqual(errors,[]);
   await page.screenshot({path:join(artifacts,"portal-"+v.width+"-"+v.locale+".png"),fullPage:true});
-  results.push({width:v.width,locale:v.locale,overflow,mobileMenu:v.width<=820});
+  results.push({width:v.width,locale:v.locale,overflow,mobileMenu:v.width<=820,overviewContrast});
   await context.close();
  }
+ const executiveContext=await browser.newContext({viewport:{width:1024,height:900}});
+ const executivePage=await executiveContext.newPage();
+ await executivePage.goto(origin+"/?locale=ar");
+ await executivePage.waitForSelector(".admin-shell");
+ await executivePage.getByRole("button",{name:"مركز المالك والمشرف"}).click();
+ await executivePage.waitForSelector(".executive-center-heading");
+ const centerContrast=await executivePage.evaluate(()=>({
+   title:getComputedStyle(document.querySelector(".executive-center-heading h2")).color,
+   copy:getComputedStyle(document.querySelector(".executive-center-heading p")).color,
+   button:getComputedStyle(document.querySelector(".executive-center-heading > button")).color,
+ }));
+ assert.equal(centerContrast.title,"rgb(255, 255, 255)");
+ assert.equal(centerContrast.button,"rgb(255, 255, 255)");
+ assert.notEqual(centerContrast.copy,"rgb(82, 107, 119)");
+ await executivePage.screenshot({path:join(artifacts,"executive-center-contrast.png"),fullPage:true});
+ results.push({executiveCenterContrast:centerContrast});
+ await executiveContext.close();
  await writeFile(join(artifacts,"results.json"),JSON.stringify({status:"passed",cases:results.length,results},null,2));
  console.log(JSON.stringify({status:"passed",cases:results.length,results},null,2));
 }finally{
