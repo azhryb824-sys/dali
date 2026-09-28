@@ -30,8 +30,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "assets/dali-icon.png",
-      "publisherName": "Dally Corporation"
+      "icon": "assets/dali-icon.png"
     },
     "nsis": {
       "oneClick": false,
