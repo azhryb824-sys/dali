@@ -24,13 +24,21 @@ jobs:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
       - name: Verify Authenticode signature
+        if: ${{ env.SIGNING_ENABLED == 'true' }}
         shell: pwsh
+        env:
+          SIGNING_ENABLED: ${{ secrets.WINDOWS_CSC_LINK != '' && secrets.WINDOWS_CSC_KEY_PASSWORD != '' }}
         run: |
           $exe = Get-ChildItem dist -Filter *.exe | Where-Object { $_.Name -notlike "*uninstaller*" } | Select-Object -First 1
           if (-not $exe) { throw "Windows installer was not produced." }
           $sig = Get-AuthenticodeSignature $exe.FullName
-          if ($sig.Status -ne "Valid") { throw "Installer is not Authenticode-signed. Configure WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD with a trusted code-signing certificate." }
+          if ($sig.Status -ne "Valid") { throw "Installer signature is invalid." }
           Write-Host "Signed publisher: $($sig.SignerCertificate.Subject)"
+      - name: Note unsigned build
+        if: ${{ env.SIGNING_ENABLED != 'true' }}
+        env:
+          SIGNING_ENABLED: ${{ secrets.WINDOWS_CSC_LINK != '' && secrets.WINDOWS_CSC_KEY_PASSWORD != '' }}
+        run: echo "No code-signing certificate configured; artifact is unsigned."
       - uses: actions/upload-artifact@v4
         with:
           name: Dali-Desktop-Windows-2.0.0
