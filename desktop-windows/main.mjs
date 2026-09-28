@@ -65,12 +65,8 @@ function wireNavigation(contents) {
   contents.on("will-navigate",stop); contents.on("will-redirect",stop);
 }
 async function entry() {
-  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),8000);
-  try {
-    const r=await fetch(`${PORTAL_ORIGIN}/api/portal/desktop/entry-link`,{method:"POST",headers:{"accept":"application/json","x-dali-desktop-app":MARKER,"x-dali-desktop-device":deviceId},signal:controller.signal});
-    if(!r.ok) throw new Error(String(r.status)); const p=await r.json();
-    return trusted(String(p?.url||"")) || FALLBACK;
-  } catch { return FALLBACK; } finally { clearTimeout(timer); }
+  // Enter through the real administrative login flow; authentication remains server-side.
+  return FALLBACK;
 }
 async function loadPortal() {
   if(!win||win.isDestroyed())return;
