@@ -1,0 +1,38 @@
+name: Build signed Windows desktop
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "desktop-windows/**"
+      - ".github/workflows/windows-desktop.yml"
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: desktop-windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm, cache-dependency-path: desktop-windows/package.json}
+      - run: npm install
+      - run: npm run check
+      - run: npm run build
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      - name: Verify Authenticode signature
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist -Filter *.exe | Where-Object { $_.Name -notlike "*uninstaller*" } | Select-Object -First 1
+          if (-not $exe) { throw "Windows installer was not produced." }
+          $sig = Get-AuthenticodeSignature $exe.FullName
+          if ($sig.Status -ne "Valid") { throw "Installer is not Authenticode-signed. Configure WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD with a trusted code-signing certificate." }
+          Write-Host "Signed publisher: $($sig.SignerCertificate.Subject)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Dali-Desktop-Windows-2.0.0
+          path: desktop-windows/dist/*.exe
+          if-no-files-found: error
