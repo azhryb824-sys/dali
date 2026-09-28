@@ -1,0 +1,51 @@
+{
+  "name": "dali-windows-desktop",
+  "version": "2.0.0",
+  "description": "تطبيق Windows مستقل وآمن لنظام دالي الإداري",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check main.mjs && node --check preload.mjs",
+    "build": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "44.1.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "sa.dally.desktop.windows",
+    "productName": "نظام دالي الإداري",
+    "artifactName": "Dali-Desktop-Windows-${version}.${ext}",
+    "asar": true,
+    "files": [
+      "main.mjs",
+      "preload.mjs",
+      "offline.html",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/dali-icon.png",
+      "publisherName": "Dally Corporation"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "نظام دالي الإداري",
+      "runAfterFinish": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "azhryb824-sys",
+      "repo": "dali",
+      "releaseType": "release"
+    }
+  }
+}
