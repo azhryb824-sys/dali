@@ -22,3 +22,37 @@
 .legal-payments-only>.legal-tabs,.legal-payments-only>header .heading-actions,.legal-payments-only .legal-defense-kpis{display:none!important}
 .legal-payments-only .legal-expandable-layout>main>:not(.legal-judgment-payments):not(.legal-matter-head){display:none!important}
 .legal-payments-only .legal-judgment-payments>form,.legal-payments-only .legal-case-toolbar{display:none!important}
+
+/* Compact legal cards keep every workflow available through disclosures. */
+.legal-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.legal-detail-grid>.legal-matter-head,.legal-detail-grid>.operations-notice{grid-column:1/-1}
+.legal-detail-grid>details,.legal-review-card{margin:0!important;min-width:0;border:1px solid #d5e2e9;border-radius:16px;background:linear-gradient(145deg,#fff,#f7fbfd);box-shadow:0 8px 25px #183b4910;overflow:hidden}
+.legal-detail-grid>details>summary,.legal-detail-card>summary{padding:17px 20px;background:linear-gradient(110deg,#edf5f8,#fff);color:#17465a;font-weight:800;cursor:pointer;border-bottom:1px solid transparent}
+.legal-detail-grid>details[open]>summary{border-bottom-color:#d5e2e9}
+.legal-detail-grid>details>*:not(summary){margin:16px;max-width:calc(100% - 32px);box-sizing:border-box}
+.legal-review-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;margin-block:18px}
+.legal-review-card>summary{display:block;padding:20px;cursor:pointer;border-top:4px solid #166878;line-height:1.8}
+.legal-review-card summary strong,.legal-review-card summary small,.legal-review-card summary span{display:block;overflow-wrap:anywhere}
+.legal-review-card summary strong{font-size:16px;color:#173f50}.legal-review-card summary small{font-size:12px;color:#607b87}
+.legal-review-body{padding:16px;border-top:1px solid #d5e2e9;display:grid;gap:12px}.legal-review-body p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9}
+.legal-review-clause{padding:12px;border:1px solid #d7e4e9;border-radius:10px}.legal-review-clause>summary{cursor:pointer;font-weight:700;color:#17465a}
+.legal-review-body fieldset{padding:0;border:0;display:grid;gap:12px;min-width:0}.legal-review-body label{display:grid;gap:7px}
+.legal-review-body textarea,.legal-review-body select{width:100%;box-sizing:border-box;border:1px solid #adc5cf;border-radius:9px;padding:10px;font:inherit;color:#193b4b;background:#fff}
+.legal-review-recommendation{padding:16px;border:1px solid #b9d7de;border-radius:12px;background:#f0f8f8;margin-block:12px;overflow-wrap:anywhere}
+.review-status{font-size:12px;font-weight:700;color:#a26c12}.review-status.approved,.review-status.recommended{color:#17694e}.review-status.rejected{color:#ac3434}
+.legal-module-tabs button,.legal-module-tabs a,.legal-clause-reviews button,.contract-defaults-panel>form>.record-actions button{min-height:40px;border:1px solid #b9cdd6;border-radius:9px;background:#f6fafc;color:#17465a;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer;box-sizing:border-box;white-space:normal}
+.legal-module-tabs button.admin-primary,.legal-clause-reviews button.admin-primary,.legal-module-tabs button[aria-pressed=true],.legal-clause-reviews button[aria-pressed=true]{background:#14576b;border-color:#14576b;color:white}
+.legal-module-tabs button.danger,.legal-module-tabs button.danger-action{color:#a42f3a;background:#fff5f6;border-color:#eac9ce}
+.legal-module-tabs button:disabled,.legal-clause-reviews button:disabled{opacity:.55;cursor:default}
+.legal-module-tabs button:focus-visible,.legal-module-tabs summary:focus-visible,.legal-clause-reviews button:focus-visible,.legal-clause-reviews summary:focus-visible{outline:3px solid #6db4c8;outline-offset:3px}
+.legal-detail-grid>.legal-case-toolbar,.legal-detail-grid>.legal-section-heading{grid-column:1/-1}
+.legal-module-tabs .record-actions,.legal-clause-reviews .record-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+@media(max-width:1150px){.legal-review-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.legal-detail-grid,.legal-review-grid{grid-template-columns:1fr}.legal-detail-grid>details{width:100%}.legal-section-heading{flex-wrap:wrap}}
+.legal-detail-grid .legal-activity-form,.legal-detail-grid .legal-case-files form{grid-template-columns:repeat(2,minmax(0,1fr))}
+.legal-detail-grid :is(input,select,textarea){min-width:0;max-width:100%;box-sizing:border-box}
+.legal-detail-grid .legal-activity-form textarea{grid-column:1/-1}
+.legal-detail-grid .legal-linked-file,.legal-detail-grid .legal-case-files{padding:0;display:block}
+.legal-payments-only .legal-expandable-layout>main>.legal-detail-grid{display:grid!important}
+.legal-payments-only .legal-detail-grid>:not(.legal-judgment-payments):not(.legal-matter-head){display:none!important}
+@media(max-width:480px){.legal-detail-grid .legal-activity-form,.legal-detail-grid .legal-case-files form{grid-template-columns:1fr}}

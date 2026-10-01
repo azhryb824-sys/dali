@@ -1,5 +1,6 @@
 // Generated translations for interface text containing runtime values.
 export const generatedUiTemplates: Array<{source:string;en:string;bn:string}> = [
+{"source": "· نسخة {{0}}", "en": "· Version {{0}}", "bn": "· সংস্করণ {{0}}"},
 {"source": "تم حفظ الطلب. تعذر حفظ بعض المرفقات؛ أعد المحاولة لرفعها دون إنشاء طلب مكرر. {{0}}", "en": "The request was saved. Some attachments failed; retry uploading them without creating a duplicate request. {{0}}", "bn": "অনুরোধ সংরক্ষিত হয়েছে। কিছু সংযুক্তি আপলোড হয়নি; অনুরোধ পুনরায় তৈরি না করে আপলোডের চেষ্টা করুন। {{0}}"},
 {"source": "{{0}} · عدد مفتوح", "en": "{{0}} · Open quantity", "bn": "{{0}} · উন্মুক্ত সংখ্যা"},
 {"source": "{{0}} مسند", "en": "{{0}} assigned", "bn": "{{0}} জন নিয়োজিত"},

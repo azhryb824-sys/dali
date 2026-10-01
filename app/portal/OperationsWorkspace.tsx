@@ -1,4 +1,5 @@
 "use client";
+import LegalClauseReviews from "./LegalClauseReviews";
 
 import { parsePaymentSchedule } from "@/lib/payment-schedules";
 import QuoteFullEditFields from "./QuoteFullEditFields";
@@ -969,6 +970,7 @@ export default function OperationsWorkspace({
 
       {tab === "contracts" && (
         <>
+          <LegalClauseReviews compact/>
           <div role="tablist" aria-label="تبويبات العقود" className="contract-subtabs">
             <button type="button" role="tab" aria-selected={contractSubtab === "register"} onClick={() => setContractSubtab("register")}>العقود والدفعات</button>
             <button type="button" role="tab" aria-selected={contractSubtab === "defaults"} onClick={() => setContractSubtab("defaults")}>البنود الافتراضية</button>

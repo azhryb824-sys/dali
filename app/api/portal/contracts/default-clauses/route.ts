@@ -1,9 +1,9 @@
+import { listClauseReviews, newDefaultClauseReview, notifyClauseReview, reviewKey } from "@/lib/legal-clause-reviews";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { portalSettings } from "@/db/schema";
 import { auditPortalAction } from "@/lib/audit";
 import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
-import { emitPortalNotification } from "@/lib/portal-notifications";
 import { clauseDefaultsKey, loadContractClauseDefaults } from "@/lib/contract-clause-defaults";
 import { parseWorkforceContractClauses, validateContractClauses } from "@/lib/workforce-contract-clauses";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest } from "@/lib/security";
@@ -18,7 +18,9 @@ export async function GET(request: Request) {
   if (!await access()) return jsonNoStore({ error: "غير مصرح بعرض البنود الافتراضية" }, { status: 403 });
   const direction = new URL(request.url).searchParams.get("direction");
   if (direction !== "dali_supplier" && direction !== "dali_purchaser") return jsonNoStore({ error: "اتجاه العقد غير صحيح" }, { status: 400 });
-  return jsonNoStore(await loadContractClauseDefaults(direction));
+  const defaults = await loadContractClauseDefaults(direction);
+  const pending = (await listClauseReviews()).filter(item => item.kind === "defaults" && item.direction === direction && item.status === "pending");
+  return jsonNoStore({ ...defaults, pendingReviews: pending });
 }
 export async function PUT(request: Request) {
   if (rejectCrossSiteRequest(request)) return jsonNoStore({ error: "مصدر الطلب غير مسموح" }, { status: 403 });
@@ -36,12 +38,13 @@ export async function PUT(request: Request) {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${key}))`);
     const current = await tx.query.portalSettings.findFirst({ where: eq(portalSettings.key, key) });
     if (payload.revision !== (current?.updatedAt || "builtin")) return null;
-    const updatedAt = new Date().toISOString(), valueJson = JSON.stringify(clauses);
-    await tx.insert(portalSettings).values({ key, valueJson, updatedBy: actor.user.email, updatedAt }).onConflictDoUpdate({ target: portalSettings.key, set: { valueJson, updatedBy: actor.user.email, updatedAt } });
-    return { revision: updatedAt, before: current?.valueJson || null };
+    const review = newDefaultClauseReview({ direction: payload.direction as "dali_supplier" | "dali_purchaser", clauses, baseRevision: current?.updatedAt || "builtin", actorEmail: actor.user.email });
+    await tx.insert(portalSettings).values({ key: reviewKey(review.id), valueJson: JSON.stringify(review), updatedBy: actor.user.email, updatedAt: review.createdAt });
+    return { review, before: current?.valueJson || null };
   });
   if (!saved) return jsonNoStore({ error: "تغيرت البنود الافتراضية لدى مستخدم آخر؛ أعد تحميلها قبل الحفظ" }, { status: 409 });
-  await auditPortalAction({ actorEmail: actor.user.email, action: "contract-clause-defaults-updated", entityType: "portal-settings", entityId: key, before: saved.before, after: clauses });
-  await emitPortalNotification({ eventType: "contract-clause-defaults-updated", title: "تحديث البنود الافتراضية للعقود", message: payload.direction === "dali_supplier" ? "تم تحديث بنود دالي كمورد؛ تطبق على العقود الجديدة" : "تم تحديث بنود دالي كمستورد؛ تطبق على العقود الجديدة", severity: "info", module: "contractual-documents", entityType: "portal-settings", entityId: key, actionView: "contractual-documents", targetDepartment: "workforce" });
-  return jsonNoStore({ clauses, revision: saved.revision, direction: payload.direction });
+  await auditPortalAction({ actorEmail: actor.user.email, action: "contract-clause-defaults-submitted", entityType: "clause-review", entityId: saved.review.id, before: saved.before, after: saved.review });
+  await notifyClauseReview(saved.review);
+  const active = await loadContractClauseDefaults(payload.direction);
+  return jsonNoStore({ ...active, review: saved.review, pendingReviews: (await listClauseReviews()).filter(item => item.kind === "defaults" && item.direction === payload.direction && item.status === "pending") }, { status: 202 });
 }

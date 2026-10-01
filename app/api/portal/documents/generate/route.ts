@@ -1,3 +1,4 @@
+import { queueContractClauseReview, notifyClauseReview } from "@/lib/legal-clause-reviews";
 import { loadContractClauseDefaults } from "@/lib/contract-clause-defaults";
 import { commercialAttachmentRefs } from "@/lib/commercial-attachments";
 import { storedQuoteAttachment } from "@/lib/commercial-attachment-storage";
@@ -504,6 +505,7 @@ export async function POST(request: Request) {
         createdBy: access.user.email,
       }).returning();
 
+      let clauseReview: Awaited<ReturnType<typeof queueContractClauseReview>> = null;
       let contract: typeof workforceContracts.$inferSelect | null = null;
       let professionRecords: Array<typeof contractProfessions.$inferSelect> = [];
       const assignmentRecords: Array<typeof contractWorkerAssignments.$inferSelect> = [];
@@ -539,6 +541,7 @@ export async function POST(request: Request) {
           details,
           createdBy: access.user.email,
         }).returning();
+        clauseReview = await queueContractClauseReview(tx, { contractId: contract!.id, contractVersion: contract!.versionNumber, reference: contract!.referenceCode, direction: contractDirection, clauses: clauseInputs, actorEmail: access.user.email });
         if (representativeRequestId) await tx.update(representativeRequests).set({ status: "converted", updatedAt: new Date().toISOString() }).where(eq(representativeRequests.id, representativeRequestId));
         await tx.insert(contractClauses).values(clauseInputs.map((clause, index) => ({ contractId: contract!.id, clauseNumber: index + 1, section: clause.section, sectionEn: clause.sectionEn || null, title: clause.title, titleEn: clause.titleEn || null, body: clause.body, bodyEn: clause.bodyEn || null, isPreamble: clause.isPreamble === true, subclausesJson: JSON.stringify(clause.subclauses || []), isOptional: false, isIncluded: clause.included })));
         if (paymentSchedule.length) await tx.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, titleEn: payment.titleEn, dueDate: payment.dueDate, percentageBps: payment.percentageBps, subtotalHalalas: payment.subtotalHalalas, vatHalalas: payment.vatHalalas, vatRateBps, amountHalalas: payment.amountHalalas, billingBasis: payment.billingBasis, servicePeriod: payment.servicePeriod, status: "scheduled", createdBy: access.user.email })));
@@ -561,9 +564,9 @@ export async function POST(request: Request) {
       }
       await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: documentType === "workforce_contract" ? "workforce-contract-created" : "official-pdf-issued", entityType: "company-document", entityId: String(saved.id) });
       if (createdClientId) await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: "client-created-from-contract", entityType: "client", entityId: String(createdClientId) });
-      return { saved, client, contract, professionRecords, assignmentRecords, financialRecord };
+      return { saved, client, clauseReview, contract, professionRecords, assignmentRecords, financialRecord };
     });
-    const { saved, client, contract, professionRecords, assignmentRecords, financialRecord } = persisted;
+    const { saved, client, clauseReview, contract, professionRecords, assignmentRecords, financialRecord } = persisted;
     const unassignedCount = capacity.reduce((total, item) => total + item.unassignedCount, 0);
     await emitPortalNotification(documentType === "workforce_contract" && contract ? {
       eventType: "workforce-contract-created",
@@ -586,7 +589,9 @@ export async function POST(request: Request) {
       actionView: category === "finance" ? "finance" : "documents",
       targetDepartment: category === "finance" ? "finance" : null,
     }).catch(() => undefined);
+    if (clauseReview) await notifyClauseReview(clauseReview).catch(error => console.error("clause-review-notification",error));
     return Response.json({
+      legalClauseReview: clauseReview,
       document: saved,
       client,
       contract,

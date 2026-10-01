@@ -1370,7 +1370,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
         </aside>
         <main>
           {matter ? (
-            <>
+            <div className="legal-detail-grid">
               {(data.referrals || []).filter(item => item.legalRecordId === matter.id).map(item => <div key={item.id} className="operations-notice"><strong>{item.sourceType === "employee" ? "مرتبط بملف موظف" : item.sourceType === "worker" ? "مرتبط بملف عامل" : item.sourceType === "payment" ? "إحالة دفعة مستقلة" : "إحالة عقد"}</strong><p>{item.status === "returned" ? item.returnReason : item.reason}</p>{data.canWrite && item.status === "active" && ["employee", "worker"].includes(item.sourceType) && <button onClick={async () => { const reason = await appPrompt("سبب الإرجاع والإجراء المطلوب من القسم:", { title: "إعادة الملف إلى القسم المختص", multiline: true }); if (!reason) return; const response = await fetch("/api/portal/legal-referrals", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: item.id, reason }) }); const result = await readApiJson(response) as { error?: string }; setNotice(response.ok ? "أعيد الملف مع إشعار القسم المختص" : result.error || "تعذر الإرجاع"); if (response.ok) await load(); }}>إعادة إلى القسم المختص</button>}</div>)}
               <div className="legal-matter-head">
                 <div>
@@ -1561,7 +1561,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                 </span>
               </div>
               {snapshot && (
-                <section className="legal-linked-file">
+                <details className="legal-linked-file legal-detail-card"><summary>العقد والملف المحال</summary>
                   <div className="legal-section-heading">
                     <div>
                       <h3>العقد والملف المحال</h3>
@@ -1619,7 +1619,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                       )}
                     </article>
                   ))}
-                </section>
+                </details>
               )}
               {matter.contractId && (
                 <LegalContractCorrespondence
@@ -2048,7 +2048,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                     ))}
                 </div>
               </details>
-              <section className="legal-judgment-payments">
+              <details className="legal-judgment-payments legal-detail-card"><summary>طلبات سداد المحكوم به</summary>
                 <h3>الأحكام والتعويضات والتكاليف القانونية</h3>
                 {data.canWrite && (
                   <form
@@ -2150,8 +2150,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                 {!judgmentPayments.length && (
                   <p className="legal-empty">لا توجد طلبات سداد محكوم به.</p>
                 )}
-              </section>
-              <section className="legal-case-files">
+              </details>
+              <details className="legal-case-files legal-detail-card"><summary>المرفقات والمستندات</summary>
                 <div className="legal-section-heading">
                   <div>
                     <h3>مرفقات الشؤون القانونية والعقد</h3>
@@ -2305,10 +2305,10 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                     </button>
                   </form>
                 )}
-              </section>
+              </details>
 
               {data.canWrite && (
-                <form className="legal-activity-form" onSubmit={add}>
+                <details className="legal-detail-card"><summary>إضافة إجراء قانوني</summary><form className="legal-activity-form" onSubmit={add}>
                   <select name="activityType" required defaultValue="task">
                     {Object.entries(types).map(([value, label]) => (
                       <option key={value} value={value}>
@@ -2339,7 +2339,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                     placeholder="الملاحظات والخطوة المطلوبة"
                   />
                   <button>إضافة إلى القضية</button>
-                </form>
+                </form></details>
               )}
               <div className="legal-timeline">
                 {activities.map((item) => (
@@ -2417,7 +2417,7 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                   </p>
                 )}
               </div>
-              <section className="legal-action-audit">
+              <details className="legal-action-audit legal-detail-card"><summary>سجل منفذي الإجراءات</summary>
                 <h3>سجل منفذي الإجراءات</h3>
                 {actionLog.map((log) => (
                   <article key={log.id}>
@@ -2440,8 +2440,8 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                 {!actionLog.length && (
                   <p className="legal-empty">لا توجد حركات موثقة بعد.</p>
                 )}
-              </section>
-            </>
+              </details>
+            </div>
           ) : (
             <p className="legal-empty">اختر ملفًا قانونيًا.</p>
           )}

@@ -12,12 +12,12 @@ const request = (body, method = "PUT", origin) => new Request("https://www.dally
 before(async () => {
   await mkdir(resolve("node_modules/.cache"), { recursive: true }); directory = await mkdtemp(resolve("node_modules/.cache/clause-hierarchy-"));
   const outfile = resolve(directory, "qa.mjs");
-  await build({ stdin: { contents: `export * from './lib/workforce-contract-clauses.ts'; export * as defaults from './app/api/portal/contracts/default-clauses/route.ts'; export * as schema from './db/schema.ts'; export { readCommercialTerms } from './lib/commercial-terms.ts'; export { setDb, setPermissions, effects } from 'qa-state';`, resolveDir: process.cwd() }, outfile, bundle: true, platform: "node", format: "esm", packages: "external", plugins: [{ name: "qa", setup(b) {
+  await build({ stdin: { contents: `export * from './lib/workforce-contract-clauses.ts'; export * as defaults from './app/api/portal/contracts/default-clauses/route.ts'; export * as reviews from './app/api/portal/legal-clause-reviews/route.ts'; export * from './lib/legal-clause-reviews.ts'; export * as schema from './db/schema.ts'; export { readCommercialTerms } from './lib/commercial-terms.ts'; export { setDb, setPermissions, effects } from 'qa-state';`, resolveDir: process.cwd() }, outfile, bundle: true, platform: "node", format: "esm", packages: "external", plugins: [{ name: "qa", setup(b) {
     b.onResolve({ filter: /^(qa-state|@\/db|@\/lib\/portal-access|@\/lib\/audit|@\/lib\/portal-notifications)$/ }, () => ({ path: "state", namespace: "qa" }));
     b.onLoad({ filter: /.*/, namespace: "qa" }, () => ({ contents: `let db,permissions=['contracts.read','contracts.write']; export const effects=[]; export function setDb(value){db=value} export function getDb(){return db} export function getSqlClient(){throw new Error('Unexpected raw SQL')} export function setPermissions(value){permissions=value} export async function requirePortalApiRole(){return {role:'employee',functionalRoles:[],user:{email:'qa@example.com'}}} export async function hasPortalPermission(a,r,v){return permissions.includes(r+'.'+v)} export async function auditPortalAction(input){effects.push({type:'audit',input})} export async function emitPortalNotification(input){effects.push({type:'notification',input})}` }));
   } }] });
   qa = await import(pathToFileURL(outfile)); pg = new PGlite();
-  await pg.exec((await generateMigration(generateDrizzleJson({}), generateDrizzleJson({ portalSettings: qa.schema.portalSettings }))).join("\n"));
+  await pg.exec((await generateMigration(generateDrizzleJson({}), generateDrizzleJson(qa.schema))).join("\n"));
   // PGlite has one connection and no advisory locks; test the production transaction's version semantics.
   await pg.exec("CREATE FUNCTION pg_advisory_xact_lock(integer) RETURNS void LANGUAGE sql AS 'SELECT';");
   qa.setDb(drizzle(pg, { schema: qa.schema }));
@@ -34,18 +34,46 @@ test("preamble and articles keep bilingual subclauses through commercial convers
   assert.equal(qa.contractClauseLabel(clauses, 0), "التمهيد"); assert.equal(qa.contractClauseLabel(clauses, 1), "البند الأول"); assert.equal(qa.contractClauseLabel(clauses, 2, "en"), "Article 2");
   assert.match(qa.contractClauseBody(clauses[1], "en"), /1\. First subclause\n2\. Second subclause/);
 });
-test("defaults are independent, versioned, and emit audit and notification after saving", async () => {
+test("default clauses cannot become active before an authorized legal review", async () => {
   const before = await (await qa.defaults.GET(request(null, "GET"))).json();
-  assert.equal(before.revision, "builtin"); const clauses = before.clauses;
+  assert.equal(before.revision, "builtin"); const clauses = structuredClone(before.clauses);
   clauses[1].subclauses = [{ body: "التزام فرعي محفوظ", bodyEn: "Saved subclause" }];
-  const response = await qa.defaults.PUT(request({ direction: "dali_supplier", clauses, revision: before.revision }));
-  assert.equal(response.status, 200); const saved = await response.json();
-  assert.deepEqual((await (await qa.defaults.GET(request(null, "GET"))).json()).clauses, clauses);
+  const response = await qa.defaults.PUT(request({ direction: "dali_supplier", clauses, revision: before.revision, action:"approve" }));
+  assert.equal(response.status, 202); const saved = await response.json();
+  assert.deepEqual((await (await qa.defaults.GET(request(null, "GET"))).json()).clauses, before.clauses);
+  assert.equal(saved.pendingReviews.length, 1);
+  const decision={id:saved.review.id,revision:saved.review.revision,action:"approve",recommendation:"تمت مراجعة الصياغة القانونية والترجمة واعتمادها"};
+  assert.equal((await qa.reviews.PATCH(request(decision,"PATCH"))).status,403);
+  qa.setPermissions(["legal.read","legal.write"]);
+  assert.equal((await qa.reviews.PATCH(request(decision,"PATCH","https://untrusted.example"))).status,403);
+  const approved=await qa.reviews.PATCH(request(decision,"PATCH"));assert.equal(approved.status,200);
+  assert.equal((await approved.json()).review.status,"approved");
+  assert.equal((await qa.reviews.PATCH(request(decision,"PATCH"))).status,409);
+  qa.setPermissions(["contracts.read","contracts.write"]);
+  const active=await (await qa.defaults.GET(request(null,"GET"))).json();assert.deepEqual(active.clauses,clauses);assert.notEqual(active.revision,"builtin");
   const buyer = await (await qa.defaults.GET(new Request("https://www.dally.info/api/portal/contracts/default-clauses?direction=dali_purchaser"))).json();
   assert.equal(buyer.revision, "builtin"); assert.notDeepEqual(buyer.clauses, clauses);
   assert.equal((await qa.defaults.PUT(request({ direction: "dali_supplier", clauses, revision: "builtin" }))).status, 409);
-  assert.equal(qa.effects.filter(e => e.type === "audit").length, 1); assert.equal(qa.effects.filter(e => e.type === "notification").length, 1);
-  assert.notEqual(saved.revision, before.revision);
+  assert.equal(qa.effects.filter(e => e.type === "audit").length, 2); assert.equal(qa.effects.filter(e => e.type === "notification").length, 2);
+});
+test("rejection and competing reviews preserve the approved default snapshot", async()=>{
+  qa.setPermissions(["contracts.read","contracts.write"]);
+  const active=await (await qa.defaults.GET(request(null,"GET"))).json();
+  const clauses=structuredClone(active.clauses);clauses[1].body+=" تعديل تجريبي";
+  const submit=async()=>await (await qa.defaults.PUT(request({direction:"dali_supplier",clauses,revision:active.revision}))).json();
+  const rejected=await submit();qa.setPermissions(["legal.read","legal.write"]);
+  assert.equal((await qa.reviews.PATCH(request({id:rejected.review.id,revision:rejected.review.revision,action:"reject",recommendation:"إعادة الصياغة لتوضيح نطاق مسؤولية الطرفين"},"PATCH"))).status,200);
+  qa.setPermissions(["contracts.read","contracts.write"]);assert.deepEqual((await (await qa.defaults.GET(request(null,"GET"))).json()).clauses,active.clauses);
+  const first=await submit(),second=await submit();qa.setPermissions(["legal.read","legal.write"]);
+  assert.equal((await qa.reviews.PATCH(request({id:first.review.id,revision:first.review.revision,action:"approve",recommendation:"تمت مراجعة التعديل والموافقة على الصياغة الجديدة"},"PATCH"))).status,200);
+  assert.equal((await qa.reviews.PATCH(request({id:second.review.id,revision:second.review.revision,action:"approve",recommendation:"تمت مراجعة التعديل والموافقة على الصياغة الجديدة"},"PATCH"))).status,409);
+  qa.setPermissions(["contracts.read","contracts.write"]);
+});
+test("additional contract clauses are detected independently of labels and inclusion",()=>{
+  const baseline=qa.defaultWorkforceContractClauses("dali_supplier",true),clauses=structuredClone(baseline);
+  clauses[1].title="عنوان سابق";assert.equal(qa.additionalContractClauses(clauses,baseline).length,0);
+  clauses[1].subclauses=[{body:"شرط إضافي",bodyEn:"Extra condition"}];assert.equal(qa.additionalContractClauses(clauses,baseline).length,1);
+  clauses[1].included=false;assert.equal(qa.additionalContractClauses(clauses,baseline).length,0);
 });
 test("rejects missing subclause translation, reordered preamble and unauthorized writes", async () => {
   const current = await (await qa.defaults.GET(request(null, "GET"))).json();

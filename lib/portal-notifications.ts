@@ -1,3 +1,4 @@
+import { listClauseReviews } from "@/lib/legal-clause-reviews";
 import { workerIncidents, quoteConversionRequests } from "@/db/schema";
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { getDb } from "@/db";
@@ -213,6 +214,7 @@ export async function refreshOperationalNotifications(options: { force?: boolean
     pendingChecks.set(input.dedupeKey, input);
   };
 
+  for (const review of await listClauseReviews()) if (review.status === "pending") ensure({ dedupeKey:`clause-review:${review.id}`,eventType:"legal-clause-review-requested",title:review.kind === "defaults" ? "بنود افتراضية تنتظر المراجعة القانونية" : "عقد ببنود إضافية للمراجعة القانونية",message:review.reference,module:"legal",severity:"warning",entityType:"clause-review",entityId:review.id,actionView:"legal",targetDepartment:"legal",source:"system-check" });
   const quoteRequestApprovals = await db.select().from(workforceRequests).where(and(eq(workforceRequests.requestType, "quotation"), eq(workforceRequests.approvalStatus, "pending"))).limit(1000);
   for (const item of quoteRequestApprovals) ensure({ dedupeKey: `quote-request-approval:${item.id}`, eventType: "quote-request-awaiting-approval", title: "طلب عرض سعر ينتظر الاعتماد", message: `${item.trackingCode} — ${item.companyName || item.fullName}`, severity: "warning", module: "workforce", entityType: "workforce-request", entityId: item.id, actionView: "workforce", targetRole: "admin", source: "system-check" });
   const [pendingIncidents,pendingConversions]=await Promise.all([db.select().from(workerIncidents).where(eq(workerIncidents.status,"pending")).limit(1000),db.select().from(quoteConversionRequests).where(eq(quoteConversionRequests.status,"pending")).limit(1000)]);

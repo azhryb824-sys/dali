@@ -1,3 +1,5 @@
+import SystemCalendar from "@/app/components/SystemCalendar";
+import "./components/system-calendar.css";
 import "./components/commercial-forms.css";
 import type { Metadata, Viewport } from "next";
 import "@fontsource/tajawal/400.css";
@@ -73,5 +75,5 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const content = await getWebsiteContent();
   const stored=(await cookies()).get(localeCookieName)?.value;const locale=normalizeAppLocale(stored)??"ar";
-  return <html lang={locale} dir={localeDirection(locale)}><body><LocaleRuntime initialLocale={locale} translationCatalogs={content.translations}/><TodayDateDefaults/><AppDialogProvider><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></AppDialogProvider></body></html>;
+  return <html lang={locale} dir={localeDirection(locale)}><body><LocaleRuntime initialLocale={locale} translationCatalogs={content.translations}/><TodayDateDefaults/><SystemCalendar/><AppDialogProvider><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></AppDialogProvider></body></html>;
 }

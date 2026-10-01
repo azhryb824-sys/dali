@@ -1,3 +1,4 @@
+import { queueContractClauseReview, notifyClauseReview } from "@/lib/legal-clause-reviews";
 import { readCommercialTerms } from "@/lib/commercial-terms";
 import { parseCommercialLineItems } from "@/lib/commercial-line-items";
 import { and, eq, isNotNull, or, sql } from "drizzle-orm";
@@ -127,11 +128,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (clauses) { await tx.delete(contractClauses).where(eq(contractClauses.contractId,id)); await tx.insert(contractClauses).values(clauses.map((row,index)=>({contractId:id,clauseNumber:index+1,section:row.section,sectionEn:row.sectionEn || null,title:row.title,titleEn:row.titleEn || null,body:row.body,bodyEn:row.bodyEn || null,isPreamble:row.isPreamble === true,subclausesJson:JSON.stringify(row.subclauses || []),isIncluded:row.included,isOptional:false}))); }
       await tx.delete(documentShareLinks).where(eq(documentShareLinks.documentId,document.id));
       const savedProfessions = await tx.select().from(contractProfessions).where(eq(contractProfessions.contractId,id));
-      return { before:contract,contract:updated,professions:savedProfessions };
+      const clauseReview = await queueContractClauseReview(tx, { contractId:id,contractVersion:updated.versionNumber,reference:updated.referenceCode,direction:terms.contractDirection,clauses:clauses || terms.contractClauses,actorEmail:actor.user.email });
+      return { before:contract,contract:updated,professions:savedProfessions,clauseReview };
     });
     await auditPortalAction({actorEmail:actor.user.email,action:"workforce-contract-edited",entityType:"workforce-contract",entityId:id,before:result.before,after:result.contract}).catch(error=>console.error("contract-edit-audit",error));
     await emitPortalNotification({ eventType:"workforce-contract-edited",title:"عُدّل عقد وأعيد للمسودة",message:`${result.contract.referenceCode} — يتطلب اعتماد المالك مجددًا.`,severity:"warning",module:"workforce",entityType:"workforce-contract",entityId:id,actionView:"workforce",targetRole:"admin" }).catch(()=>undefined);
-    return jsonNoStore({contract:result.contract,professions:result.professions});
+    if (result.clauseReview) await notifyClauseReview(result.clauseReview).catch(error=>console.error("clause-review-notification",error));
+    return jsonNoStore({contract:result.contract,professions:result.professions,legalClauseReview:result.clauseReview});
   } catch (error) {
     if (error instanceof ContractEditError) return jsonNoStore({error:error.message},{status:error.status});
     console.error("contract-full-edit-failed",error);

@@ -1,3 +1,4 @@
+import { listClauseReviews } from "@/lib/legal-clause-reviews";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { companyDocuments, contractPaymentSchedules, portalActivity } from "@/db/schema";
@@ -10,11 +11,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const access = await requirePortalApiRole(["admin", "manager", "employee"]);
   if (!access) return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });
   const canReadDocuments = canAccessPortalDocuments(access);
-  const [canReadContracts, canReadFinance] = await Promise.all([
+  const [canReadContracts, canReadFinance, canReadLegal] = await Promise.all([
     hasPortalPermission(access, "contracts", "read"),
     hasPortalPermission(access, "finance", "read"),
+    hasPortalPermission(access, "legal", "read"),
   ]);
-  if (!canReadDocuments && !canReadContracts && !canReadFinance) {
+  if (!canReadDocuments && !canReadContracts && !canReadFinance && !canReadLegal) {
     return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });
   }
 
@@ -30,7 +32,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const linkedContractPayment = canReadContracts && financialTypes.has(document.documentType || "")
     ? await db.query.contractPaymentSchedules.findFirst({ where: eq(contractPaymentSchedules.invoiceDocumentId, id) })
     : null;
+  const legalReviewDocument = canReadLegal && document.documentType === "workforce_contract"
+    && (await listClauseReviews(db)).some(review => review.kind === "contract" && review.contractSnapshot?.documentId === id);
   const allowed = canReadDocuments
+    || legalReviewDocument
     || (canReadContracts && (contractualTypes.has(document.documentType || "") || Boolean(linkedContractPayment)))
     || (canReadFinance && (document.category === "finance" || financialTypes.has(document.documentType || "")));
   if (!allowed) return Response.json({ error: "غير مصرح بتنزيل المستند" }, { status: 403 });

@@ -1,3 +1,4 @@
+import { listClauseReviews } from "@/lib/legal-clause-reviews";
 import { workerIncidents } from "@/db/schema";
 import { and, desc, eq, isNull, like, or } from "drizzle-orm";
 import { getDb } from "@/db";
@@ -107,7 +108,9 @@ export async function GET(request: Request) {
     const normalizedQuery = query.toLowerCase();
     const matchesTerm = (terms: string[]) => terms.some((term) => term.includes(normalizedQuery) || normalizedQuery.includes(term));
     const incidentRows=canSearchWorkforce?await db.select().from(workerIncidents).where(or(like(workerIncidents.referenceCode,pattern),like(workerIncidents.reason,pattern),like(workerIncidents.decisionReason,pattern))).orderBy(desc(workerIncidents.updatedAt)).limit(6):[];
+    const clauseReviews = canSearchLegal ? (await listClauseReviews()).filter(item=>`${item.reference} ${item.recommendation || ""} ${item.clauses.map(clause=>clause.body).join(" ")}`.toLowerCase().includes(normalizedQuery)).slice(0,6) : [];
     const results: Result[] = [
+      ...clauseReviews.map(item=>({key:`clause-review:${item.id}`,kind:"clause-review",id:0,view:"legal",title:item.reference,meta:"مراجعة البنود والتوصيات",searchValue:item.id})),
       ...(canSearchContracts && matchesTerm(["البنود الافتراضية", "تمهيد", "default clauses", "preamble"]) ? [{ key: "contract-clause-defaults", kind: "contract-clause-defaults", id: 0, view: "contractual-documents", title: "البنود الافتراضية", meta: "دالي مورد أو مستورد · العربية والإنجليزية", searchValue: "البنود الافتراضية" }] : []),
       ...incidentRows.map(item=>({key:`worker-incident-${item.id}`,kind:"worker-incident",id:item.id,view:"workforce-supervision",title:item.referenceCode,meta:`حالة عمالية · ${item.warning?"إنذار":"مراجعة"} · ${item.reason}`,searchValue:item.referenceCode})),
       ...((access.role === "admin" || access.functionalRoles.some(role => ["system_owner", "system_admin"].includes(role))) && matchesTerm(["المالك", "المشرف", "اعتماد", "تسويات", "executive"]) ? [{ key: "executive-center", kind: "executive-center", id: 0, view: "executive-center", title: "مركز المالك والمشرف", meta: "اعتماد العقود والفواتير وطلبات السداد", searchValue: "مركز المالك والمشرف" }] : []),

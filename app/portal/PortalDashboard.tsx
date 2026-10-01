@@ -896,6 +896,7 @@ export default function PortalDashboard({
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
+  const [selectedClauseReviewId, setSelectedClauseReviewId] = useState<string | undefined>();
   const [selectedLegalRecordId, setSelectedLegalRecordId] = useState<number | null>(null);
   const [requestFilter, setRequestFilter] = useState<"all" | RequestStatus>("all");
   const [query, setQuery] = useState("");
@@ -1411,6 +1412,7 @@ export default function PortalDashboard({
     if (item.entityType === "workforce-request" && item.entityId && actionView === "workforce") setSelectedId(Number(item.entityId));
     if (item.entityType === "worker" && item.entityId) setSelectedWorkerId(Number(item.entityId));
     if (item.entityType === "workforce-contract" && item.entityId) setSelectedContractId(Number(item.entityId));
+    if (item.entityType === "clause-review" && item.entityId) { setSelectedClauseReviewId(item.entityId); if (actionView !== "legal") setContractualTab("contracts"); }
     if (item.entityType === "legal-record" && item.entityId) setSelectedLegalRecordId(Number(item.entityId));
     if (item.entityType === "visitor-conversation" && item.entityId) void openConversation(item.entityId);
     if (item.entityType === "data-subject-request") setOperationsTab("privacy");
@@ -2344,6 +2346,7 @@ export default function PortalDashboard({
             onSelect={(result) => {
               setGlobalQuery("");
               changeView(result.view);
+              if (result.kind === "clause-review") setSelectedClauseReviewId(result.searchValue);
               if (result.kind === "request") setSelectedId(result.id);
               if (result.kind === "worker") setSelectedWorkerId(result.id);
               if (result.kind === "worker-incident") setSelectedIncidentId(result.id);
@@ -2644,7 +2647,7 @@ export default function PortalDashboard({
 
           {view === "legal" && canAccess("legal") && (
             <ModuleSection eyebrow="العقود والامتثال" title="الشؤون القانونية" description="متابعة العقود والقضايا والتراخيص والتنبيهات النظامية." actionLabel="إضافة ملف قانوني" canWrite={canWrite && canManageLegalCases} onAdd={() => setModal("legal")}>
-              <LegalWorkspaceTabs register={<>
+              <LegalWorkspaceTabs key={selectedClauseReviewId || "legal-tabs"} reviewId={selectedClauseReviewId} register={<>
               <section className="metric-grid compact-metrics">
                 <Metric label="إجمالي الملفات" value={legal.length} note="كل السجلات" />
                 <Metric label="عقود سارية" value={legal.filter((item) => item.category === "contract" && item.status === "active").length} note="عقود فعّالة" />

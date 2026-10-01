@@ -866,3 +866,8 @@ body:has(.modal-layer) .video-desk{visibility:hidden;pointer-events:none}
 /* Keep permission-gated attendance forms visible and recoverable. */
 fieldset.contract-absence-panel { min-inline-size: 0; margin-inline: 0; border: 0; }
 fieldset.contract-absence-panel:disabled { opacity: .7; }
+
+/* Consistent keyboard focus and wrapping across portal actions. */
+.admin-content :where(button,a[role="button"]):focus-visible{outline:3px solid #58a9c3;outline-offset:3px}
+.admin-content :where(.record-actions,.modal-actions,.heading-actions){gap:8px;flex-wrap:wrap}
+.admin-content :where(.record-actions button,.modal-actions button,.heading-actions button){min-height:40px;line-height:1.5;border-radius:9px;overflow-wrap:anywhere}
