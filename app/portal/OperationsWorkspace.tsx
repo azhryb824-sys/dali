@@ -969,7 +969,7 @@ export default function OperationsWorkspace({
 
       {tab === "contracts" && (
         <>
-          <div role="tablist" aria-label="تبويبات العقود" className="record-actions">
+          <div role="tablist" aria-label="تبويبات العقود" className="contract-subtabs">
             <button type="button" role="tab" aria-selected={contractSubtab === "register"} onClick={() => setContractSubtab("register")}>العقود والدفعات</button>
             <button type="button" role="tab" aria-selected={contractSubtab === "defaults"} onClick={() => setContractSubtab("defaults")}>البنود الافتراضية</button>
           </div>

@@ -34,11 +34,11 @@
 
 /* Clause hierarchy shared by RFQs, quotations, contracts and default templates. */
 .contract-clause-editor{display:grid;gap:16px;min-width:0}
-.contract-clause-editor>article{border:1px solid #d4dfe5;border-radius:12px;background:#fff;overflow:hidden;min-width:0}
-.contract-clause-editor>article.excluded{opacity:.65}
-.contract-clause-editor>article>header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px;background:#f2f6f8;border-bottom:1px solid #d4dfe5}
-.contract-clause-editor>article>header>b{margin-inline-end:auto;color:#173d52;font-size:15px}
-.contract-clause-editor>article>header>label{display:flex;align-items:center;gap:7px;font-size:13px}
+.contract-clause-editor>details{border:1px solid #d4dfe5;border-radius:12px;background:#fff;overflow:hidden;min-width:0}
+.contract-clause-editor>details.excluded{opacity:.65}
+.contract-clause-editor>details>header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px;background:#f2f6f8;border-bottom:1px solid #d4dfe5}
+.contract-clause-editor>details>header>b{margin-inline-end:auto;color:#173d52;font-size:15px}
+.contract-clause-editor>details>header>label{display:flex;align-items:center;gap:7px;font-size:13px}
 .contract-clause-editor input[type=checkbox]{width:18px;height:18px;accent-color:#173d52}
 .contract-clause-editor fieldset{min-width:0;border:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:16px;margin:0}
 .contract-clause-editor fieldset>label{display:grid;gap:7px;min-width:0;color:#233e4d;font-size:14px}
@@ -51,4 +51,14 @@
 .contract-defaults-panel>form>fieldset{border:0;padding:0;min-width:0}
 .contract-defaults-panel [role=tablist]{margin-block:15px}
 .contract-defaults-panel [role=tab][aria-selected=true],[aria-label="تبويبات العقود"] [aria-selected=true]{background:#173d52;color:#fff;border-color:#173d52}
-@media(max-width:640px){.contract-clause-editor fieldset{grid-template-columns:1fr;padding:12px}.contract-clause-editor>article>header{padding:12px}.contract-clause-editor .span-two{grid-column:1}.contract-clause-editor>article>header>b{width:100%}}
+@media(max-width:640px){.contract-clause-editor fieldset{grid-template-columns:1fr;padding:12px}.contract-clause-editor>details>header{padding:12px}.contract-clause-editor .span-two{grid-column:1}.contract-clause-editor>details>header>b{width:100%}}
+
+.contract-subtabs{display:flex;gap:8px;padding:6px;margin-block:16px;background:#edf3f6;border:1px solid #d4dfe5;border-radius:14px;flex-wrap:wrap}
+.contract-subtabs button{flex:1;min-height:46px;padding:10px 18px;border:1px solid transparent;border-radius:10px;background:transparent;color:#173d52;font:inherit;font-weight:700;cursor:pointer}
+.contract-subtabs button[aria-selected=true]{background:#173d52;color:#fff;box-shadow:0 3px 10px #173d5226}
+.contract-subtabs button:focus-visible,.contract-clause-editor summary:focus-visible{outline:3px solid #58a9c3;outline-offset:3px}
+.contract-clause-editor summary{padding:16px;cursor:pointer;color:#173d52;background:#f2f6f8}
+.contract-clause-editor summary span{display:block;margin-top:7px;font-size:13px;color:#607582;overflow-wrap:anywhere}
+.contract-clause-editor>details[open]>summary{border-bottom:1px solid #d4dfe5}
+.contract-clause-editor>details>header>b{display:none}
+.contract-clause-editor>.record-actions{display:flex;gap:8px;flex-wrap:wrap}
