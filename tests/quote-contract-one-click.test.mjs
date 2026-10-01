@@ -33,12 +33,14 @@ test("quote salary is internal and schema migration is additive", () => {
   assert.match(api, /actualSalaryHalalas/);
 });
 
-test("contract editing exposes the shared complete commercial fields without step locks", () => {
+test("contract editing uses the creation wizard with the saved snapshot and unrestricted step navigation", () => {
   const editor = read("app/portal/ContractFullEditDialog.tsx");
-  assert.match(editor, /CommercialDetailsFields defaults=/);
-  assert.match(editor, /CommercialLineItemsEditor lines=/);
-  assert.match(editor, /RequestedPaymentSchedule defaults=/);
-  assert.match(editor, /versionNumber:contract.versionNumber/);
-  assert.match(editor, /تعديل العقد بالكامل/);
-  assert.match(editor, /حفظ جميع التعديلات/);
+  const wizard = read("app/portal/PortalDashboard.tsx");
+  assert.match(editor, /default: module.IssueDocumentModal/);
+  assert.match(editor, /ContractWizard editSnapshot=\{snapshot\}/);
+  assert.match(editor, /versionNumber:snapshot.contract.versionNumber/);
+  assert.match(editor, /method:"PATCH"/);
+  assert.match(wizard, /if \(editSnapshot\) \{ setStep\(target\); return; \}/);
+  assert.match(wizard, /hydratedEditFields/);
+  assert.match(wizard, /editing \? "حفظ جميع التعديلات"/);
 });

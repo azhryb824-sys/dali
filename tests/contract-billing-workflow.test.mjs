@@ -117,7 +117,7 @@ test("seasonal and annual payment schedules flow through quotes contracts financ
   for(const sourceCode of [quotePdf,documentPdf]){assert.match(sourceCode,/language/);assert.match(sourceCode,/bilingual/);}
   assert.match(generator,/createBilingualIssuedPdf/);assert.match(generator,/PAGE\.width \* 2/);assert.match(generator,/x: PAGE\.width/);assert.match(generator,/Payment Schedule/);
   assert.match(quoteUi,/موسم رمضان/);assert.match(quoteUi,/موسم الحج/);assert.match(quoteUi,/مجموع النسب/);assert.match(quoteUi,/PDF عربي\/English/);
-  assert.match(contractUi,/تعديل موعد الدفعة/);assert.match(contractUi,/PDF عربي\/English/);assert.match(contractEditUi,/annualContractEndDate\(startDate\)/);assert.match(contractEditUi,/readOnly=\{season === "regular"\}/);
+  assert.match(contractUi,/تعديل موعد الدفعة/);assert.match(contractUi,/PDF عربي\/English/);assert.match(contractEditUi,/default: module.IssueDocumentModal/);assert.match(await source("app/portal/PortalDashboard.tsx"),/annualContractSchedule\(contractStartDate\)/);assert.match(await source("app/portal/PortalDashboard.tsx"),/const annualEndDate = annualSchedule\?\.endDate/);
   assert.match(schema,/paymentScheduleJson/);assert.match(schema,/seasonType/);assert.match(migration,/quote_versions_season_type_check/);
 });
 

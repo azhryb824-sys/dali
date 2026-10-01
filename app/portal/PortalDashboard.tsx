@@ -4343,7 +4343,7 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
   );
 }
 
-function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIssueContracts, canIssueFinance, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { initialType: string; initialQuoteId: number | null; conversionMode: "as_is"|"modified"; canIssueContracts: boolean; canIssueFinance: boolean; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+export function IssueDocumentModal({ editSnapshot, initialType, initialQuoteId, conversionMode, canIssueContracts, canIssueFinance, busy, assetsReady, workers, contracts, requests, onClose, onSubmit }: { editSnapshot?: import("./ContractFullEditDialog").ContractEditSnapshot; initialType: string; initialQuoteId: number | null; conversionMode: "as_is"|"modified"; canIssueContracts: boolean; canIssueFinance: boolean; busy: boolean; assetsReady: boolean; workers: WorkerRecord[]; contracts: WorkforceContract[]; requests: WorkforceRequest[]; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [representatives, setRepresentatives] = useState<
     Array<{
       id: number;
@@ -4393,23 +4393,26 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
   const [convertibleQuotes, setConvertibleQuotes] = useState<ConvertibleQuote[]>([]);
   const [selectedQuoteId, setSelectedQuoteId] = useState(initialQuoteId ? String(initialQuoteId) : "");
   const savedQuoteFiles = commercialAttachmentRefs(convertibleQuotes.find(quote=>String(quote.id)===selectedQuoteId)?.commercialTermsJson);
-  const [quantityMode, setQuantityMode] = useState<"fixed" | "open">("fixed");
-  const [seasonType, setSeasonType] = useState<"regular" | "ramadan" | "hajj">("regular");
-  const [contractStartDate, setContractStartDate] = useState("");
-  const [contractAmount, setContractAmount] = useState("");
-  const [contractVatEnabled, setContractVatEnabled] = useState(true);
-  const [contractVatRate, setContractVatRate] = useState("15");
-  const [contractDirection, setContractDirection] = useState<WorkforceContractDirection>("dali_supplier");
-  const [showPaymentSchedule, setShowPaymentSchedule] = useState(true);
-  const [accommodationParty, setAccommodationParty] = useState<"dali" | "counterparty" | "not_applicable">("dali");
-  const [transportParty, setTransportParty] = useState<"dali" | "counterparty" | "not_applicable">("dali");
+  const editing = editSnapshot?.contract;
+  const editTerms = editSnapshot?.terms || {};
+  const partyValue = (value: unknown): "dali" | "counterparty" | "not_applicable" => value === "لا ينطبق" || value === "not_applicable" ? "not_applicable" : value === "يوفره الطرف الثاني" || value === "يوفره الطرف الآخر" || value === "counterparty" ? "counterparty" : "dali";
+  const [quantityMode, setQuantityMode] = useState<"fixed" | "open">(editing?.quantityMode === "open" ? "open" : "fixed");
+  const [seasonType, setSeasonType] = useState<"regular" | "ramadan" | "hajj">(editing?.seasonType === "hajj" ? "hajj" : editing?.seasonType === "ramadan" ? "ramadan" : "regular");
+  const [contractStartDate, setContractStartDate] = useState(editing?.startDate || "");
+  const [contractAmount, setContractAmount] = useState(editing ? String((editing.amountHalalas || 0) / (1 + editing.vatRateBps / 10000) / 100) : "");
+  const [contractVatEnabled, setContractVatEnabled] = useState(editing ? editing.vatRateBps > 0 : true);
+  const [contractVatRate, setContractVatRate] = useState(editing ? String(editing.vatRateBps / 100) : "15");
+  const [contractDirection, setContractDirection] = useState<WorkforceContractDirection>(editing?.contractDirection === "dali_purchaser" ? "dali_purchaser" : "dali_supplier");
+  const [showPaymentSchedule, setShowPaymentSchedule] = useState(editing?.showPaymentSchedule ?? true);
+  const [accommodationParty, setAccommodationParty] = useState<"dali" | "counterparty" | "not_applicable">(partyValue(editing?.accommodationParty));
+  const [transportParty, setTransportParty] = useState<"dali" | "counterparty" | "not_applicable">(partyValue(editing?.transportParty));
   const [contractClauses, setContractClauses] = useState<Array<WorkforceContractClause & { key: string }>>(() =>
-    defaultWorkforceContractClauses("dali_supplier").map((item, index) => ({
+    (editSnapshot ? readCommercialTerms(editTerms).contractClauses : defaultWorkforceContractClauses("dali_supplier")).map((item, index) => ({
       ...item,
       key: `clause-${index}`,
     })),
   );
-  const clausesTouched = useRef(false);
+  const clausesTouched = useRef(Boolean(editSnapshot));
   const [clauseDefaults, setClauseDefaults] = useState<Partial<Record<WorkforceContractDirection, WorkforceContractClause[]>>>({});
   const [clauseDefaultsError, setClauseDefaultsError] = useState("");
   useEffect(() => {
@@ -4427,7 +4430,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
 
   const [submissionError, setSubmissionError] = useState("");
   useEffect(() => {
-    if (initialType !== "workforce_contract") return;
+    if (initialType !== "workforce_contract" || editSnapshot) return;
     void fetch("/api/portal/sales-representatives", { cache: "no-store" })
       .then((response) => (response.ok ? readApiJson(response) : Promise.reject()))
       .then((data: unknown) => {
@@ -4458,9 +4461,9 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
         setRepresentatives([]);
         setRepresentativeRequests([]);
       });
-  }, [initialType]);
+  }, [initialType, editSnapshot]);
   useEffect(() => {
-    if (initialType !== "workforce_contract") return;
+    if (initialType !== "workforce_contract" || editSnapshot) return;
     void fetch(`/api/portal/operations?limit=100${initialQuoteId ? `&quoteId=${initialQuoteId}` : ""}`, { cache: "no-store" })
       .then((response) => (response.ok ? readApiJson(response) : Promise.reject()))
       .then((raw: unknown) => {
@@ -4540,7 +4543,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
         setConvertibleQuotes([]);
         if (initialQuoteId) setSubmissionError(error instanceof Error ? error.message : "تعذر تحميل بيانات عرض السعر");
       });
-  }, [initialType, initialQuoteId]);
+  }, [initialType, initialQuoteId, editSnapshot]);
   type DraftProfession = {
     key: string;
     profession: string;
@@ -4575,7 +4578,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
     set("details", selectedSourceRequest.details || "");
   }, [selectedSourceRequest, selectedQuoteId]);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [professions, setProfessions] = useState<DraftProfession[]>([
+  const [professions, setProfessions] = useState<DraftProfession[]>(editSnapshot ? editSnapshot.professions.map((row,index)=>({key:`edit-${index}`,profession:row.profession,requiredCount:row.requiredCount,unitSalary:row.unitSalaryHalalas/100,actualSalary:row.actualSalaryHalalas/100,sponsorshipType:row.sponsorshipType === "other" ? "other" : "dali",sponsorName:row.sponsorName || "",ajirContractStatus:row.ajirContractStatus === "with_ajir" ? "with_ajir" : row.ajirContractStatus === "without_ajir" ? "without_ajir" : "not_applicable"})) : [
     {
       key: "profession-1",
       profession: workforceProfessions[0].label,
@@ -4587,7 +4590,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
       ajirContractStatus: "not_applicable",
     },
   ]);
-  const [payments, setPayments] = useState<DraftPayment[]>([{ key: "payment-1", title: "الدفعة الأولى", titleEn: "First installment", dueDate: "", percentage: 100 }]);
+  const [payments, setPayments] = useState<DraftPayment[]>(editSnapshot ? editSnapshot.payments.map((row,index)=>({key:`edit-payment-${index}`,title:row.title,titleEn:invoicePaymentTitleEnglish(row.title,row.titleEn,index+1),dueDate:row.dueDate,percentage:row.percentageBps/100})) : [{ key: "payment-1", title: "الدفعة الأولى", titleEn: "First installment", dueDate: "", percentage: 100 }]);
   const hydrateCommercialQuote = useCallback((quote: ConvertibleQuote) => {
     const terms = readCommercialTerms(quote.commercialTermsJson);
     setContractStartDate(terms.startDate || "");
@@ -4662,6 +4665,21 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
   /* eslint-enable react-hooks/set-state-in-effect */
   const [selectedWorkers, setSelectedWorkers] = useState<Record<string, number[]>>({});
   const isContract = documentType === "workforce_contract";
+  const editFormRef = useRef<HTMLFormElement>(null);
+  const hydratedEditFields = useRef(new WeakSet<Element>());
+  useEffect(() => {
+    if (!editSnapshot || !editFormRef.current) return;
+    const values = {...editSnapshot.terms, ...editSnapshot.contract};
+    for (const name of [...commercialTextFields.map(field=>field.name), "issueDate", "endDate", "clientMobile", "clientEmail"]) {
+      if (name === "startDate") continue;
+      const field = editFormRef.current.elements.namedItem(name);
+      if ((field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) && !hydratedEditFields.current.has(field)) {
+        const value = values[name as keyof typeof values];
+        if (typeof value === "string") field.value = value;
+        hydratedEditFields.current.add(field);
+      }
+    }
+  }, [editSnapshot, step]);
   const capacity = professions.map((item) => {
     const matchesAllocation = (worker: WorkerRecord) => worker.profession === item.profession && worker.sponsorshipType === item.sponsorshipType && worker.sponsorshipType === item.sponsorshipType;
     const registered = workers.filter(matchesAllocation).length;
@@ -4811,6 +4829,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
     }
   }
   function validateAndSetStep(target: 1 | 2 | 3 | 4) {
+    if (editSnapshot) { setStep(target); return; }
     if (target <= step) {
       setStep(target);
       return;
@@ -4963,11 +4982,11 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
   return (
     <div className="modal-layer">
       <div className="drawer-backdrop static-modal-backdrop" aria-hidden="true" />
-      <section className="record-modal document-modal issue-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف PDF رسمي">
+      <section className="record-modal document-modal issue-modal" role="dialog" aria-modal="true" aria-label={editing ? "تعديل العقد بالكامل" : "إنشاء ملف PDF رسمي"}>
         <div className="drawer-head">
           <div>
-            <span>الإصدار الرسمي</span>
-            <h2>{isContract ? "إنشاء عقد توفير عمالة" : "إنشاء ملف PDF"}</h2>
+            <span>{editing?.referenceCode || "الإصدار الرسمي"}</span>
+            <h2>{editing ? "تعديل العقد بالكامل" : isContract ? "إنشاء عقد توفير عمالة" : "إنشاء ملف PDF"}</h2>
           </div>
           <button onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
@@ -4982,7 +5001,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
             </p>
           </div>
         )}
-        <form className={`contract-quantity-${quantityMode}`} onSubmit={submit} noValidate>
+        <form ref={editFormRef} className={`contract-quantity-${quantityMode}`} onSubmit={submit} noValidate>
           {submissionError && (
             <div className="contract-save-error span-two" role="alert">
               <strong>تعذّر حفظ العقد</strong>
@@ -4993,6 +5012,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
             <label>
               نوع المستند
               <select
+                disabled={Boolean(editing)}
                 name="documentType"
                 value={documentType}
                 onChange={(event) => {
@@ -5076,7 +5096,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                 {contractDirection === "dali_supplier" && (
                   <label className="span-two">
                     عرض السعر المرتبط
-                    <select value={selectedQuoteId} onChange={applyQuote}>
+                    <select value={selectedQuoteId} onChange={applyQuote} disabled={Boolean(editing)}>
                       <option value="">عقد مباشر — دون عرض سعر</option>
                       {convertibleQuotes.map((quote) => (
                         <option key={quote.id} value={quote.id}>
@@ -5089,7 +5109,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                 {contractDirection === "dali_purchaser" && (
                   <label className="span-two">
                     طلب مندوب المشتريات المعتمد
-                    <select name="representativeRequestId" defaultValue="">
+                    <select name="representativeRequestId" defaultValue="" disabled={Boolean(editing)}>
                       <option value="">عقد شراء مباشر</option>
                       {representativeRequests
                         .filter((item) => item.requestType === "purchase")
@@ -5110,7 +5130,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                 </label>
                 <label>
                   مصدر العميل
-                  <select name="sourceRequestId" value={selectedSourceRequestId} onChange={(event) => setSelectedSourceRequestId(event.target.value)} disabled={contractDirection === "dali_purchaser"}>
+                  <select name="sourceRequestId" value={selectedSourceRequestId} onChange={(event) => setSelectedSourceRequestId(event.target.value)} disabled={Boolean(editing) || contractDirection === "dali_purchaser"}>
                     <option value="">{contractDirection === "dali_purchaser" ? "مورّد مباشر أو طلب مندوب مشتريات" : "عميل مباشر — غير قادم من الموقع"}</option>
                     {requests.map((request) => (
                       <option key={request.id} value={request.id}>
@@ -5122,7 +5142,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                 </label>
                 <label>
                   {contractDirection === "dali_purchaser" ? "مندوب المشتريات المسؤول" : "مندوب المبيعات المسؤول"}
-                  <select name="salesRepresentativeId" defaultValue="">
+                  <select name="salesRepresentativeId" defaultValue="" disabled={Boolean(editing)}>
                     <option value="">دون مندوب</option>
                     {representatives
                       .filter((item) => item.representativeType === (contractDirection === "dali_purchaser" ? "purchasing" : "sales"))
@@ -5586,7 +5606,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                 <ContractClauseEditor readOnly={conversionMode === "as_is" && !!selectedQuoteId} clauses={contractClauses} onChange={items => { clausesTouched.current = true; setContractClauses(items.map((item, index) => ({ ...item, key: `clause-${index}` }))); }}/>
                 <p className="form-hint">بيانات الكفالة وحالة أجير تشغيلية داخلية ولا تظهر في PDF. بند النظام والاختصاص يدرج آلياً فقط إذا كانت جميع عمالة العقد بعقود أجير.</p>
               </section>
-              <section className="contract-final-card attachments-card">
+              {!editing && <section className="contract-final-card attachments-card">
                 <header className="contract-final-heading">
                   <span>
                     <Icon name="documents" />
@@ -5633,11 +5653,11 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                     <span>عند إصدار العقد يُنشأ ملف العميل أو يُحدّث، وتصبح المستندات قابلة للمعاينة والتنزيل والمشاركة.</span>
                   </p>
                 </div>
-              </section>
+              </section>}
             </div>
           )}
 
-          <p className="form-hint span-two">سيُنشأ رقم مرجعي تلقائي، ويُحفظ الملف في المركز، ويُدرج الختم والتوقيع المعتمدان في النسخة الصادرة.</p>
+          <p className="form-hint span-two">{editing ? "تُحفظ التعديلات على العقد نفسه ويُعاد للمسودة لاعتماده مجددًا." : "سيُنشأ رقم مرجعي تلقائي، ويُحفظ الملف في المركز، ويُدرج الختم والتوقيع المعتمدان في النسخة الصادرة."}</p>
           <div className="modal-actions span-two">
             {isContract && step > 1 ? (
               <button type="button" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>
@@ -5653,8 +5673,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                 التالي
               </button>
             ) : (
-              <button className="admin-primary" type="submit" disabled={busy || !assetsReady || (isContract && quantityMode === "fixed" && seasonType !== "regular" && Math.abs(payments.reduce((sum, item) => sum + item.percentage, 0) - 100) > 0.001)}>
-                {busy ? "جارٍ الإصدار..." : isContract && totalShortage ? "إصدار العقد رغم العجز" : "إصدار واعتماد PDF"}
+              <button className="admin-primary" type="submit" disabled={busy || (!editing && !assetsReady) || (isContract && quantityMode === "fixed" && seasonType !== "regular" && Math.abs(payments.reduce((sum, item) => sum + item.percentage, 0) - 100) > 0.001)}>
+                {busy ? "جارٍ الإصدار..." : editing ? "حفظ جميع التعديلات" : isContract && totalShortage ? "إصدار العقد رغم العجز" : "إصدار واعتماد PDF"}
               </button>
             )}
           </div>

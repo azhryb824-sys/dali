@@ -6,6 +6,7 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "تُحفظ التعديلات على العقد نفسه ويُعاد للمسودة لاعتماده مجددًا.": { en: "Changes are saved to this contract, which returns to draft for approval again.", bn: "এই চুক্তিতেই পরিবর্তন সংরক্ষিত হবে এবং পুনরায় অনুমোদনের জন্য খসড়া অবস্থায় ফিরবে।" },
   "معاينة نسخة العقد الحالية": { en: "Preview current contract version", bn: "চুক্তির বর্তমান সংস্করণ দেখুন" },
   "اختيار التاريخ": {"en": "Choose a date", "bn": "তারিখ নির্বাচন করুন"},
   "السنة": {"en": "Year", "bn": "বছর"},
