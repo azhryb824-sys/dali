@@ -33,7 +33,7 @@ export async function regenerateWorkforceContractPdf(documentId: number, pdfLang
 
   const professions = await db.select().from(contractProfessions).where(eq(contractProfessions.contractId, contract.id));
   const paymentSchedule = await db.select().from(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId, contract.id));
-  const clauses = await db.select().from(contractClauses).where(eq(contractClauses.contractId, contract.id));
+  const clauses = await db.select().from(contractClauses).where(eq(contractClauses.contractId, contract.id)).orderBy(contractClauses.clauseNumber);
   const assignments = await db.select().from(contractWorkerAssignments).where(eq(contractWorkerAssignments.contractId, contract.id));
   const activeAssignments = assignments.filter((item) => item.status === "active");
   const workerIds = [...new Set(activeAssignments.map((item) => item.workerId))];
@@ -46,7 +46,7 @@ export async function regenerateWorkforceContractPdf(documentId: number, pdfLang
 
   const contractDirection = contract.contractDirection === "dali_purchaser" ? "dali_purchaser" : "dali_supplier";
   const allWorkersWithAjir = professions.length > 0 && professions.every((profession)=>profession.ajirContractStatus === "with_ajir");
-  const printableClauses = clauses.length ? parseWorkforceContractClauses(clauses.map((clause)=>({ section:clause.section, sectionEn:clause.sectionEn, title:clause.title, titleEn:clause.titleEn, body:clause.body, bodyEn:clause.bodyEn, included:clause.isIncluded })),contractDirection,allWorkersWithAjir) : defaultWorkforceContractClauses(contractDirection,allWorkersWithAjir);
+  const printableClauses = clauses.length ? parseWorkforceContractClauses(clauses.map((clause)=>({ section:clause.section, sectionEn:clause.sectionEn, title:clause.title, titleEn:clause.titleEn, body:clause.body, bodyEn:clause.bodyEn, isPreamble:clause.isPreamble, subclausesJson:clause.subclausesJson, included:clause.isIncluded })),contractDirection,allWorkersWithAjir) : defaultWorkforceContractClauses(contractDirection,allWorkersWithAjir);
   const pdfBytes = await generateIssuedPdf({
     pdfLanguage,
     approvalState: contract.approvedBy && ["approved", "sent", "signed", "active", "suspended", "expired", "terminated"].includes(contract.status) ? "approved" : "draft",

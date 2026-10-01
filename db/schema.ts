@@ -2718,6 +2718,8 @@ export const contractClauses = pgTable(
     titleEn: text("title_en"),
     body: text("body").notNull(),
     bodyEn: text("body_en"),
+    isPreamble: boolean("is_preamble").notNull().default(false),
+    subclausesJson: text("subclauses_json").notNull().default("[]"),
     section: text("section").notNull().default("بنود إضافية"),
     sectionEn: text("section_en"),
     isOptional: boolean("is_optional").notNull().default(false),

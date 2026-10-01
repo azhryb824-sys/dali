@@ -11,7 +11,7 @@ import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { jsonNoStore, rejectCrossSiteRequest, readLimitedJson } from "@/lib/security";
 import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
-import { parseWorkforceContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
+import { parseWorkforceContractClauses, validateContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 
@@ -108,6 +108,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         return { contractId:id, installmentNumber:index+1, ...row, titleEn:invoicePaymentTitleEnglish(row.title,row.titleEn,index+1), subtotalHalalas:subtotal, vatHalalas:vat, vatRateBps, amountHalalas:subtotal+vat, billingBasis:seasonType === "regular" ? "monthly_salary" : "seasonal_percentage", servicePeriod:seasonType === "regular" ? row.dueDate.slice(0,7) : null, status:"scheduled", createdBy:actor.user.email, updatedAt:now };
       });
       const clauses = payload.contractClauses === undefined ? null : parseWorkforceContractClauses(payload.contractClauses,terms.contractDirection,commercialProfessions.every(row=>row.ajirContractStatus === "with_ajir"));
+      if (clauses) { const clauseError = validateContractClauses(clauses); if (clauseError) throw new ContractEditError(clauseError); }
       if (clauses && !clauses.length) throw new ContractEditError("يجب إبقاء بند تعاقدي واحد على الأقل");
       const [updated] = await tx.update(workforceContracts).set({
         clientName:terms.clientName, clientCr:terms.clientCr || null, clientVat:terms.clientVat || null, title:terms.title,
@@ -123,7 +124,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (editedProfessions) { await tx.delete(contractProfessions).where(eq(contractProfessions.contractId,id)); await tx.insert(contractProfessions).values(editedProfessions.map(row=>({contractId:id,...row}))); }
       if (allPayments.length === payments.length) { for (const [index,row] of payments.entries()) await tx.update(contractPaymentSchedules).set(row).where(eq(contractPaymentSchedules.id,allPayments[index].id)); }
       else { await tx.delete(contractPaymentSchedules).where(eq(contractPaymentSchedules.contractId,id)); if(payments.length) await tx.insert(contractPaymentSchedules).values(payments); }
-      if (clauses) { await tx.delete(contractClauses).where(eq(contractClauses.contractId,id)); await tx.insert(contractClauses).values(clauses.map((row,index)=>({contractId:id,clauseNumber:index+1,section:row.section,sectionEn:row.sectionEn || null,title:row.title,titleEn:row.titleEn || null,body:row.body,bodyEn:row.bodyEn || null,isIncluded:row.included,isOptional:false}))); }
+      if (clauses) { await tx.delete(contractClauses).where(eq(contractClauses.contractId,id)); await tx.insert(contractClauses).values(clauses.map((row,index)=>({contractId:id,clauseNumber:index+1,section:row.section,sectionEn:row.sectionEn || null,title:row.title,titleEn:row.titleEn || null,body:row.body,bodyEn:row.bodyEn || null,isPreamble:row.isPreamble === true,subclausesJson:JSON.stringify(row.subclauses || []),isIncluded:row.included,isOptional:false}))); }
       await tx.delete(documentShareLinks).where(eq(documentShareLinks.documentId,document.id));
       const savedProfessions = await tx.select().from(contractProfessions).where(eq(contractProfessions.contractId,id));
       return { before:contract,contract:updated,professions:savedProfessions };

@@ -41,6 +41,7 @@ type Quote = {
 };
 export default function ContractualDocumentsWorkspace({
   initialTab="contracts",
+  initialContractSubtab = "register",
   documents,
   contracts,
   canManage,
@@ -52,6 +53,7 @@ export default function ContractualDocumentsWorkspace({
   onCreateQuotation,
 }: {
   initialTab?: "contracts"|"quotes"|"letters";
+  initialContractSubtab?: "register" | "defaults";
   documents: Document[];
   contracts: Contract[];
   canManage: boolean;
@@ -245,6 +247,7 @@ export default function ContractualDocumentsWorkspace({
           isAdmin={isAdmin}
           isOwner={isOwner}
           initialTab={activeTab}
+          initialContractSubtab={initialContractSubtab}
           allowedTabs={[activeTab]}
           embedded
           onCreateContract={onCreateContract}

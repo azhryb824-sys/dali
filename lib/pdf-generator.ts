@@ -5,7 +5,7 @@ import { halalasToArabicWords } from "@/lib/arabic-money";
 import { cairoFontBytes } from "@/lib/cairo-font-bytes";
 import { hospitalityProfessionTranslations } from "@/lib/workforce-requirements";
 import { latinDigits, rtlPdfDigits } from "@/lib/latin-digits";
-import { defaultWorkforceContractClauses, publicManpowerText, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
+import { defaultWorkforceContractClauses, contractClauseLabel, contractClauseBody, validateContractClauses, publicManpowerText, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 export const issuedDocumentLabels = {
   workforce_contract: "عقد توريد وتشغيل قوى عاملة",
@@ -199,7 +199,7 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
     const selectedClauses = input.contractClauses?.length
       ? input.contractClauses.filter((item) => item.included)
       : defaultWorkforceContractClauses(input.contractDirection || "dali_supplier", false);
-    const clauses = selectedClauses.map((item, index) => [`${index + 1}. ${item.titleEn || englishText(item.title)}`, item.bodyEn || englishText(item.body)]);
+    const clauses = selectedClauses.map((item, index) => [`${contractClauseLabel(selectedClauses, index, "en")}: ${item.titleEn || englishText(item.title)}`, contractClauseBody(item, "en") || englishText(item.body)]);
     clauses.forEach(([label, body], index) => { if (index > 0 && index % 5 === 0) { addPage(); heading("Terms and Conditions — Continued"); } row(label, body); });
     const daliRole = input.contractDirection === "dali_purchaser" ? "Purchaser" : "Supplier";
     const counterpartyRole = input.contractDirection === "dali_purchaser" ? "Supplier" : "Purchaser";
@@ -322,28 +322,25 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     const enValue = latinDigits(englishValue || "Not specified");
     const arLines = wrapWords(resources.regular, arValue, 7.2, columnWidth - 20);
     const enLines = wrapWords(resources.latinRegular, enValue, 7.1, columnWidth - 20);
+    const arLabels = wrapWords(resources.bold, arabicLabel, 7.2, columnWidth - 20);
+    const enLabels = wrapWords(resources.latinBold, englishLabel, 7, columnWidth - 20);
+    const labelHeight = Math.max(arLabels.length, enLabels.length, 1) * 10 + 16;
     const lines = Math.max(arLines.length, enLines.length, 1);
-    const height = 26 + lines * 10;
-    ensure(height + 4);
-
-    page.drawRectangle({
-      x: outerMargin,
-      y: y - height + 5,
-      width: PAGE.width - outerMargin * 2,
-      height,
-      color: emphasized ? rgb(0.94, 0.96, 0.97) : COLORS.pale,
-      borderColor: emphasized ? COLORS.navy : COLORS.line,
-      borderWidth: emphasized ? 0.7 : 0.45,
-    });
-    drawRight(page, arabicLabel, y - 8, resources.bold, 7.2, COLORS.red, arabicRight - 7);
-    drawLeft(page, englishLabel, y - 8, resources.latinBold, 7, COLORS.red, englishLeft + 7);
-    arLines.forEach((line, index) =>
-      drawRight(page, line, y - 22 - index * 10, resources.regular, 7.2, COLORS.text, arabicRight - 7),
-    );
-    enLines.forEach((line, index) =>
-      drawLeft(page, line, y - 22 - index * 10, resources.latinRegular, 7.1, COLORS.text, englishLeft + 7),
-    );
-    y -= height + 4;
+    let offset = 0;
+    while (offset < lines) {
+      ensure(labelHeight + 24);
+      const available = Math.max(1, Math.floor((y - contentBottom - labelHeight - 9) / 10));
+      const count = Math.min(lines - offset, available);
+      const height = labelHeight + count * 10;
+      page.drawRectangle({ x: outerMargin, y: y - height + 5, width: PAGE.width - outerMargin * 2, height, color: emphasized ? rgb(0.94, 0.96, 0.97) : COLORS.pale, borderColor: emphasized ? COLORS.navy : COLORS.line, borderWidth: emphasized ? 0.7 : 0.45 });
+      arLabels.forEach((line, index) => drawRight(page, line, y - 8 - index * 10, resources.bold, 7.2, COLORS.red, arabicRight - 7));
+      enLabels.forEach((line, index) => drawLeft(page, line, y - 8 - index * 10, resources.latinBold, 7, COLORS.red, englishLeft + 7));
+      arLines.slice(offset, offset + count).forEach((line, index) => drawRight(page, line, y - labelHeight + 4 - index * 10, resources.regular, 7.2, COLORS.text, arabicRight - 7));
+      enLines.slice(offset, offset + count).forEach((line, index) => drawLeft(page, line, y - labelHeight + 4 - index * 10, resources.latinRegular, 7.1, COLORS.text, englishLeft + 7));
+      y -= height + 4;
+      offset += count;
+      if (offset < lines) addPage();
+    }
   };
 
   const moneyEnglish = (halalas?: number) =>
@@ -584,7 +581,11 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     if (input.weeklyOff) pairedBlock("الراحة الأسبوعية", input.weeklyOff, "Weekly rest", englishText(input.weeklyOff));
     if (input.specialTerms) pairedBlock("الشروط الخاصة", input.specialTerms, "Special terms", englishText(input.specialTerms));
     if (input.showPaymentSchedule !== false && input.paymentSchedule?.length) input.paymentSchedule.forEach(payment => pairedBlock(payment.title, `${payment.dueDate} · ${moneyLabel(payment.amountHalalas)}`, payment.titleEn || englishText(payment.title), `${payment.dueDate} · ${moneyEnglish(payment.amountHalalas)}`));
-    for (const clause of input.contractClauses || []) if (clause.included) pairedBlock(clause.title, clause.body, clause.titleEn || englishText(clause.title), clause.bodyEn || englishText(clause.body));
+    const quoteClauses = (input.contractClauses || []).filter(clause => clause.included);
+    quoteClauses.forEach((clause, index) => {
+      pairedBlock(`${contractClauseLabel(quoteClauses, index)}: ${clause.title}`, clause.body, `${contractClauseLabel(quoteClauses, index, "en")}: ${clause.titleEn || englishText(clause.title)}`, clause.bodyEn || englishText(clause.body));
+      (clause.subclauses || []).forEach((sub, number) => pairedBlock(`${contractClauseLabel(quoteClauses, index)} / ${number + 1}`, sub.body, `${contractClauseLabel(quoteClauses, index, "en")} / ${number + 1}`, sub.bodyEn));
+    });
     if (input.expiryDate) pairedBlock("صلاحية العرض", dateLabel(input.expiryDate), "Quotation validity", input.expiryDate);
     if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
     if (input.assumptions) pairedBlock("الافتراضات والاستثناءات", publicManpowerText(input.assumptions), "Assumptions and exclusions", englishText(publicManpowerText(input.assumptions)));
@@ -633,14 +634,10 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     const selectedClauses = input.contractClauses?.length
       ? input.contractClauses.filter((item) => item.included)
       : defaultWorkforceContractClauses(input.contractDirection || "dali_supplier", false);
-    selectedClauses.forEach((item, index) =>
-      pairedBlock(
-        `${index + 1}. ${item.title}`,
-        item.body,
-        `${index + 1}. ${item.titleEn || englishText(item.title)}`,
-        item.bodyEn || englishText(item.body),
-      ),
-    );
+    selectedClauses.forEach((item, index) => {
+      pairedBlock(`${contractClauseLabel(selectedClauses, index)}: ${item.title}`, item.body, `${contractClauseLabel(selectedClauses, index, "en")}: ${item.titleEn || englishText(item.title)}`, item.bodyEn || englishText(item.body));
+      (item.subclauses || []).forEach((sub, number) => pairedBlock(`${contractClauseLabel(selectedClauses, index)} / ${number + 1}`, sub.body, `${contractClauseLabel(selectedClauses, index, "en")} / ${number + 1}`, sub.bodyEn));
+    });
     if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
     if (input.specialTerms) pairedBlock("الشروط الخاصة", input.specialTerms, "Special terms", englishText(input.specialTerms));
     ensureWithSignatures(92);
@@ -1006,11 +1003,13 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     if (!cleanValue) return;
     const lines = wrapWords(resources.regular, cleanValue, 10, PAGE.width - PAGE.margin * 2);
     const height = 29 + Math.max(1, lines.length) * 16;
-    if (reserveSignatures) ensureWithSignatures(height + 8);
-    else ensure(height);
-    drawRight(page, title, y, resources.bold, 10, COLORS.navy);
-    y -= 20;
+    if (reserveSignatures) ensureWithSignatures(Math.min(height + 8, 100));
+    else ensure(Math.min(height, 100));
+    const titleLines = wrapWords(resources.bold, title, 10, PAGE.width - PAGE.margin * 2);
+    const drawTitle = () => { for (const line of titleLines) { drawRight(page, line, y, resources.bold, 10, COLORS.navy); y -= 16; } y -= 4; };
+    drawTitle();
     for (const line of lines) {
+      if (y - 16 < contentBottom) { addPage(); drawTitle(); }
       drawRight(page, line || " ", y, resources.regular, 10, COLORS.text);
       y -= 16;
     }
@@ -1098,6 +1097,7 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
 }
 
 export async function generateIssuedPdf(input: IssuedDocumentInput, assets: CompanyAsset[]) {
+  if ((input.pdfLanguage === "en" || input.pdfLanguage === "bilingual") && input.contractClauses?.length && validateContractClauses(input.contractClauses, true)) throw new Error("BILINGUAL_CONTRACT_TRANSLATION_INCOMPLETE");
   if (input.pdfLanguage === "en") return createEnglishIssuedPdf(input, assets);
   if (input.pdfLanguage === "bilingual") {
     const incompleteClause = input.documentType === "workforce_contract" && input.contractClauses
@@ -1167,7 +1167,7 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     const selectedClauses = input.contractClauses?.length
       ? input.contractClauses.filter((item) => item.included)
       : defaultWorkforceContractClauses(input.contractDirection || "dali_supplier", false);
-    const clauses = selectedClauses.map((item, index) => [`${index + 1}. ${item.title}`, item.body]);
+    const clauses = selectedClauses.map((item, index) => [`${contractClauseLabel(selectedClauses, index)}: ${item.title}`, contractClauseBody(item, "ar")]);
     let currentSection = "";
     clauses.forEach(([title, body], index) => {
       const source = selectedClauses[index];
@@ -1212,7 +1212,8 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       composer.heading("جدول الدفعات");
       input.paymentSchedule.forEach(payment => composer.pair(payment.title, dateLabel(payment.dueDate), "النسبة والقيمة", `${(payment.percentageBps / 100).toFixed(2)}% · ${moneyLabel(payment.amountHalalas)}`));
     }
-    for (const clause of input.contractClauses || []) if (clause.included) composer.paragraph(clause.title, clause.body);
+    const quoteClauses = (input.contractClauses || []).filter(clause => clause.included);
+    quoteClauses.forEach((clause, index) => composer.paragraph(`${contractClauseLabel(quoteClauses, index)}: ${clause.title}`, contractClauseBody(clause, "ar")));
     if (input.expiryDate) composer.field("صلاحية العرض", dateLabel(input.expiryDate));
     if (input.paymentTerms) composer.paragraph("شروط الدفع", input.paymentTerms);
     if (input.assumptions) composer.paragraph("الافتراضات والاستثناءات", publicManpowerText(input.assumptions));

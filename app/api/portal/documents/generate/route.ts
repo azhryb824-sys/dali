@@ -1,3 +1,4 @@
+import { loadContractClauseDefaults } from "@/lib/contract-clause-defaults";
 import { commercialAttachmentRefs } from "@/lib/commercial-attachments";
 import { storedQuoteAttachment } from "@/lib/commercial-attachment-storage";
 import { quoteConversionRequests } from "@/db/schema";
@@ -33,7 +34,7 @@ import { getRuntimeEnv } from "@/lib/runtime-env";
 import { rejectCrossSiteRequest, requestCorrelationId, validateUploadedFile } from "@/lib/security";
 import { annualContractSchedule, parsePaymentSchedule, validateSeasonalSchedule } from "@/lib/payment-schedules";
 import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
-import { parseWorkforceContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
+import { parseWorkforceContractClauses, validateContractClauses, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 
 const prefixes: Record<IssuedDocumentType, string> = {
   workforce_contract: "CTR",
@@ -282,9 +283,10 @@ export async function POST(request: Request) {
       }
     }
     const allWorkersWithAjir = documentType === "workforce_contract" && professionInputs.length > 0 && professionInputs.every((item) => item.ajirContractStatus === "with_ajir");
-    const clauseInputs = documentType === "workforce_contract" ? parseWorkforceContractClauses(payload.contractClauses, contractDirection, allWorkersWithAjir) : [];
+    const clauseInputs = documentType === "workforce_contract" ? parseWorkforceContractClauses(payload.contractClauses || (await loadContractClauseDefaults(contractDirection)).clauses, contractDirection, allWorkersWithAjir) : [];
     if (documentType === "workforce_contract" && !clauseInputs.length) return Response.json({ error: "يجب إبقاء بند تعاقدي واحد على الأقل" }, { status: 400 });
 
+    if (documentType === "workforce_contract") { const clauseError = validateContractClauses(clauseInputs); if (clauseError) return Response.json({ error: clauseError }, { status: 400 }); }
     const db = getDb();
     const [sourceRequest, salesRepresentative, representativeRequest, sourceQuote, existingQuoteContract, linkedContract] = await Promise.all([
       sourceRequestId ? db.query.workforceRequests.findFirst({ where: eq(workforceRequests.id, sourceRequestId) }) : Promise.resolve(null),
@@ -538,7 +540,7 @@ export async function POST(request: Request) {
           createdBy: access.user.email,
         }).returning();
         if (representativeRequestId) await tx.update(representativeRequests).set({ status: "converted", updatedAt: new Date().toISOString() }).where(eq(representativeRequests.id, representativeRequestId));
-        await tx.insert(contractClauses).values(clauseInputs.map((clause, index) => ({ contractId: contract!.id, clauseNumber: index + 1, section: clause.section, sectionEn: clause.sectionEn || null, title: clause.title, titleEn: clause.titleEn || null, body: clause.body, bodyEn: clause.bodyEn || null, isOptional: false, isIncluded: clause.included })));
+        await tx.insert(contractClauses).values(clauseInputs.map((clause, index) => ({ contractId: contract!.id, clauseNumber: index + 1, section: clause.section, sectionEn: clause.sectionEn || null, title: clause.title, titleEn: clause.titleEn || null, body: clause.body, bodyEn: clause.bodyEn || null, isPreamble: clause.isPreamble === true, subclausesJson: JSON.stringify(clause.subclauses || []), isOptional: false, isIncluded: clause.included })));
         if (paymentSchedule.length) await tx.insert(contractPaymentSchedules).values(paymentSchedule.map((payment, index) => ({ contractId: contract!.id, installmentNumber: index + 1, title: payment.title, titleEn: payment.titleEn, dueDate: payment.dueDate, percentageBps: payment.percentageBps, subtotalHalalas: payment.subtotalHalalas, vatHalalas: payment.vatHalalas, vatRateBps, amountHalalas: payment.amountHalalas, billingBasis: payment.billingBasis, servicePeriod: payment.servicePeriod, status: "scheduled", createdBy: access.user.email })));
         for (const uploaded of uploadedClientFiles) {
           await tx.insert(companyDocuments).values({ referenceCode: makeReference("CLD"), title: `${uploaded.label} - ${clientName}`, category: "certificate", documentType: uploaded.kind, counterparty: clientName, fileName: uploaded.fileName, storageKey: uploaded.storageKey, contentType: uploaded.contentType, sizeBytes: uploaded.sizeBytes, source: "uploaded", validationStatus: "signature-validated", validationDetails: uploaded.validationDetails, metadataJson: JSON.stringify({ clientId: client?.id || null, supplierId: supplier?.id || null, clientName, contractId: contract.id, contractReference: contract.referenceCode, documentKind: uploaded.kind }), createdBy: access.user.email });

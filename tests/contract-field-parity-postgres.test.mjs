@@ -49,7 +49,10 @@ const quoteInput = () => ({ action: "create-quote", idempotencyKey: crypto.rando
 
 const ctx = id => ({params: Promise.resolve({id: String(id)})});
 const pdfFile = name => new File(["%PDF-1.7\nParity attachment"], name, {type: "application/pdf"});
-const commercial = {title: "عقد تشغيل متكامل", titleEn: "Full operation contract", clientCr: "1010000000", clientVat: "300000000000003", clientAddress: "Makkah address 2026", clientRepresentative: "First Representative", clientRepresentativeTitle: "Director", clientMobile: "0501234567", clientEmail: "director@qa.test", workingHours: "Eight hours", weeklyOff: "Friday", paymentTerms: "Monthly transfer", specialTerms: "Full scope terms", details: "Complete commercial service scope", detailsEn: "English scope for conversion", startDate: "2026-10-01", contractDirection: "dali_supplier", showPaymentSchedule: false};
+const commercial = {title: "عقد تشغيل متكامل", titleEn: "Full operation contract", clientCr: "1010000000", clientVat: "300000000000003", clientAddress: "Makkah address 2026", clientRepresentative: "First Representative", clientRepresentativeTitle: "Director", clientMobile: "0501234567", clientEmail: "director@qa.test", workingHours: "Eight hours", weeklyOff: "Friday", paymentTerms: "Monthly transfer", specialTerms: "Full scope terms", details: "Complete commercial service scope", detailsEn: "English scope for conversion", startDate: "2026-10-01", contractDirection: "dali_supplier", showPaymentSchedule: false, contractClauses: [
+  { section: "الأحكام التمهيدية", sectionEn: "Preliminary Provisions", title: "التمهيد", titleEn: "Preamble", body: "يشكل هذا التمهيد جزءًا من العقد", bodyEn: "This preamble forms part of the contract", included: true, isPreamble: true, subclauses: [] },
+  { section: "الالتزامات", sectionEn: "Obligations", title: "التوريد", titleEn: "Supply", body: "يلتزم المورد بتنفيذ الخدمات المعتمدة", bodyEn: "The Supplier shall deliver approved services", included: true, isPreamble: false, subclauses: [{ body: "توثيق محضر المباشرة", bodyEn: "Record the mobilization report" }, { body: "اعتماد كشف الحضور", bodyEn: "Approve the attendance record" }] },
+]};
 
 test("request attachment migration is additive and repeatable; labelled files are stored before approval", async () => {
   for (let i=0;i<2;i++) await pg.exec(await readFile("drizzle-pg/0074_commercial_attachment_snapshots.sql", "utf8"));
@@ -68,7 +71,7 @@ test("full quote editing persists rows, costs, custom VAT, all text and trusted 
   const edit = {...commercial, recordVersion:quote.recordVersion, activityLabel:"توريد العمالة", vatRate:7.25, accommodationParty:"not_applicable", transportParty:"counterparty", items:[{profession:"عامل عام",quantity:3,durationMonths:12,unitPrice:1234.57,actualSalary:987.65,sponsorshipType:"dali",ajirContractStatus:"with_ajir",notes:"kept note"}], commercialAttachments:[{id:999999,kind:"national-address",fileName:"forged.pdf"}]};
   const saved = await qa.quoteEdit.PATCH(request("/api/quote", edit,"PATCH"),ctx(quote.id)); body=await saved.json(); assert.equal(saved.status,200,body.error); quote=body.quote;
   const terms=qa.readCommercialTerms(quote.commercialTermsJson);
-  for(const [key,value] of Object.entries(commercial)) assert.equal(terms[key],value,key);
+  for(const [key,value] of Object.entries(commercial)) assert.deepEqual(terms[key],value,key);
   assert.equal(quote.vatRateBps,725); assert.equal(quote.accommodationParty,"not_applicable");
   const items=(await pg.query("select * from quote_items where quote_version_id=$1",[quote.id])).rows;
   assert.equal(items[0].quantity,3); assert.equal(items[0].unit_price_halalas,123457); assert.equal(items[0].actual_salary_halalas,98765); assert.equal(items[0].ajir_contract_status,"with_ajir");
@@ -97,6 +100,12 @@ test("approved quote converts without reuploading any of its three client files"
   for(const [key,value] of Object.entries(payload)) form.set(key,Array.isArray(value)?JSON.stringify(value):String(value));
   const response=await qa.generate.POST(new Request("https://www.dally.info/api/portal/documents/generate",{method:"POST",body:form})); const body=await response.json(); assert.equal(response.status,201,body.error); contract=body.contract;
   assert.equal(contract.amountHalalas,quote.totalHalalas);
+  const persisted = (await pg.query("select * from contract_clauses where contract_id=$1 order by clause_number", [contract.id])).rows;
+  assert.equal(persisted[0].is_preamble, true);
+  assert.deepEqual(JSON.parse(persisted[1].subclauses_json), commercial.contractClauses[1].subclauses);
+  const snapshot = await (await qa.contractEdit.GET(new Request("https://www.dally.info/api/contract"), ctx(contract.id))).json();
+  assert.deepEqual(snapshot.terms.contractClauses, commercial.contractClauses);
+
   const metadata=JSON.parse(body.document.metadataJson);
   for(const key of ["titleEn","detailsEn","workingHours","weeklyOff","clientRepresentative","clientMobile","paymentTerms","specialTerms"]) assert.equal(metadata[key],commercial[key],key);
   await assert.rejects(qa.saveCommercialAttachment({quoteId:quote.id},pdfFile("replace.pdf"),"commercial-registration","qa"),e=>e.status===409);

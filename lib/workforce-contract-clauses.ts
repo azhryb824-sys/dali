@@ -1,6 +1,8 @@
 export type WorkforceContractDirection = "dali_supplier" | "dali_purchaser";
 
 export type WorkforceContractClause = {
+  isPreamble?: boolean;
+  subclauses?: Array<{ body: string; bodyEn: string }>;
   section: string;
   sectionEn?: string;
   title: string;
@@ -87,7 +89,7 @@ function withEnglish(item: WorkforceContractClause) { return { ...item, ...(engl
 export function defaultWorkforceContractClauses(direction: WorkforceContractDirection, includeJurisdiction = false) {
   const directional = direction === "dali_purchaser" ? purchaser : supplier;
   const clauses = [...shared.slice(0, 2), ...directional, ...shared.slice(2)];
-  return (includeJurisdiction ? [...clauses, jurisdiction] : clauses).map(withEnglish);
+  return (includeJurisdiction ? [...clauses, jurisdiction] : clauses).map(withEnglish).map((item, index) => ({ ...item, isPreamble: index === 0, subclauses: [], ...(direction === "dali_purchaser" && item.title === "الحضور والتوجيه اليومي" ? { sectionEn: "Dali Obligations as Purchaser", bodyEn: "Dali shall organize daily work, approve attendance, deliver the attendance record to the Supplier on time and pay approved amounts according to the due-date schedule." } : {}) }));
 }
 
 const forbiddenDisclosure = /أجير|كفال|كفيل|ajeer|sponsor/i;
@@ -100,6 +102,8 @@ export function parseWorkforceContractClauses(value: unknown, direction: Workfor
   const clauses = source.slice(0, 80).map((item) => {
     const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
     return {
+      isPreamble: row.isPreamble === true || (row.isPreamble === undefined && row.title === "التمهيد والملاحق"),
+      subclauses: parseContractSubclauses(row.subclauses ?? row.subclausesJson),
       section: String(row.section || "بنود إضافية").trim().slice(0, 120),
       sectionEn: String(row.sectionEn || "Additional Terms").trim().slice(0, 160),
       title: String(row.title || "").trim().slice(0, 180),
@@ -109,10 +113,42 @@ export function parseWorkforceContractClauses(value: unknown, direction: Workfor
       included: row.included !== false,
     };
   }).filter((item) => item.section.length >= 2 && item.title.length >= 2 && item.body.length >= 5);
-  return clauses.filter((item) => !forbiddenDisclosure.test(`${item.section} ${item.title} ${item.body}`) && (allWorkersWithAjir || !saudiJurisdiction.test(item.body)));
+  return clauses.filter((item) => !forbiddenDisclosure.test(`${item.section} ${item.title} ${item.body} ${item.sectionEn} ${item.titleEn} ${item.bodyEn} ${item.subclauses.map(sub => `${sub.body} ${sub.bodyEn}`).join(" ")}`) && (allWorkersWithAjir || !saudiJurisdiction.test([item.body, item.bodyEn, ...item.subclauses.flatMap(sub => [sub.body, sub.bodyEn])].join(" "))));
 }
 
 export function publicManpowerText(value?: string | null) {
   if (!value) return value || "";
   return value.split(/(?<=[.!؟\n])|\s*\|\s*/).filter((part) => !forbiddenDisclosure.test(part)).join(" ").replace(/\s+/g, " ").trim();
+}
+
+export function parseContractSubclauses(value: unknown): Array<{ body: string; bodyEn: string }> {
+  let raw = value;
+  if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch { raw = []; } }
+  return Array.isArray(raw) ? raw.slice(0, 40).map(item => ({
+    body: typeof item?.body === "string" ? item.body.trim().slice(0, 4000) : "",
+    bodyEn: typeof item?.bodyEn === "string" ? item.bodyEn.trim().slice(0, 6000) : "",
+  })) : [];
+}
+
+const ordinals = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر", "الثاني عشر", "الثالث عشر", "الرابع عشر", "الخامس عشر", "السادس عشر", "السابع عشر", "الثامن عشر", "التاسع عشر", "العشرون"];
+export function contractClauseLabel(clauses: WorkforceContractClause[], index: number, language: "ar" | "en" = "ar") {
+  if (clauses[index]?.isPreamble) return language === "ar" ? "التمهيد" : "Preamble";
+  const number = clauses.slice(0, index + 1).filter(item => !item.isPreamble).length;
+  return language === "ar" ? `البند ${ordinals[number - 1] || number}` : `Article ${number}`;
+}
+export function contractClauseBody(clause: WorkforceContractClause, language: "ar" | "en") {
+  return [language === "ar" ? clause.body : clause.bodyEn || "", ...(clause.subclauses || []).map((sub, index) => `${index + 1}. ${language === "ar" ? sub.body : sub.bodyEn}`)].join("\n");
+}
+export function validateContractClauses(clauses: WorkforceContractClause[], bilingual = false): string | null {
+  const included = clauses.filter(item => item.included);
+  if (!included.length) return "يجب إبقاء بند تعاقدي واحد على الأقل";
+  if (included.filter(item => item.isPreamble).length > 1 || included.some((item, index) => item.isPreamble && index !== 0)) return "يجب أن يكون التمهيد واحدًا وفي بداية البنود";
+  for (const item of included) {
+    if (!item.title.trim() || !item.body.trim()) return "أكمل عنوان ونص كل بند بالعربية";
+    if (bilingual && (!item.titleEn?.trim() || !item.bodyEn?.trim())) return "أكمل عنوان ونص كل بند بالإنجليزية";
+    for (const sub of item.subclauses || []) {
+      if (!sub.body.trim() || (bilingual && !sub.bodyEn.trim())) return "أكمل نص الترقيمات الفرعية باللغتين";
+    }
+  }
+  return null;
 }

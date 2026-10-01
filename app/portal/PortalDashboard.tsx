@@ -1,4 +1,5 @@
 "use client";
+import ContractClauseEditor from "@/app/components/ContractClauseEditor";
 import { commercialAttachmentRefs } from "@/lib/commercial-attachments";
 import ContractFullEditDialog from "./ContractFullEditDialog";
 import ContractWorkforceBoard from "./ContractWorkforceBoard";
@@ -56,7 +57,7 @@ import ContractualDocumentsWorkspace from "./ContractualDocumentsWorkspace";
 import WorkforceSupervisionWorkspace from "./WorkforceSupervisionWorkspace";
 import LetterPdfLibrary from "./LetterPdfLibrary";
 import SystemGuide, { type SystemGuideView } from "./SystemGuide";
-import { defaultWorkforceContractClauses, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
+import { defaultWorkforceContractClauses, validateContractClauses, type WorkforceContractClause, type WorkforceContractDirection } from "@/lib/workforce-contract-clauses";
 import { ANNUAL_CONTRACT_MONTHS, annualContractSchedule, annualInstallmentPercentages } from "@/lib/payment-schedules";
 import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
 import { readApiJson } from "@/lib/client-api";
@@ -910,6 +911,7 @@ export default function PortalDashboard({
   const [operationsQuery, setOperationsQuery] = useState("");
   const [issuePreset, setIssuePreset] = useState("workforce_contract");
   const [commercialRevision, setCommercialRevision] = useState(0);
+  const [contractDefaultsRequested, setContractDefaultsRequested] = useState(false);
   const [contractualTab,setContractualTab]=useState<"contracts"|"quotes"|"letters">("contracts");
   const [selectedIncidentId,setSelectedIncidentId]=useState<number|null>(null);
   const [issueConversionMode,setIssueConversionMode]=useState<"as_is"|"modified">("as_is");
@@ -1412,6 +1414,7 @@ export default function PortalDashboard({
     if (item.entityType === "legal-record" && item.entityId) setSelectedLegalRecordId(Number(item.entityId));
     if (item.entityType === "visitor-conversation" && item.entityId) void openConversation(item.entityId);
     if (item.entityType === "data-subject-request") setOperationsTab("privacy");
+    if (item.entityType === "portal-settings" && item.entityId?.startsWith("contract-clause-defaults:")) { setContractualTab("contracts"); setContractDefaultsRequested(true); }
     if (item.entityType === "quote-version") {setOperationsTab("quotes");setContractualTab("quotes");}
     if (item.entityType === "worker-incident" && item.entityId) setSelectedIncidentId(Number(item.entityId));
     if (item.entityType === "workforce-request" && actionView === "contractual-documents") setContractualTab("quotes");
@@ -2357,6 +2360,7 @@ export default function PortalDashboard({
                 "capacity-plan": "capacity",
                 "privacy-request": "privacy",
               };
+              if (result.kind === "contract-clause-defaults") { setContractualTab("contracts"); setContractDefaultsRequested(true); }
               if (result.kind === "quote") setContractualTab("quotes");
               if (operationsKinds[result.kind]) {
                 setOperationsTab(operationsKinds[result.kind]);
@@ -2704,7 +2708,7 @@ export default function PortalDashboard({
 
           {view === "contractual-documents" && canAccessContracts && (
             <>
-              <ContractualDocumentsWorkspace key={`${contractualTab}:${commercialRevision}`} initialTab={contractualTab} documents={documents} contracts={contracts} canManage={hasPermission("contracts.write")} canWrite={canWrite} canApprove={isRoot} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId,mode) => openIssueDocument("workforce_contract", quoteId,mode)} onCreateQuotation={(requestId) => { setQuoteSourceRequestId(requestId); openIssueDocument("quotation"); }} />
+              <ContractualDocumentsWorkspace key={`${contractualTab}:${commercialRevision}:${contractDefaultsRequested}`} initialTab={contractualTab} initialContractSubtab={contractDefaultsRequested ? "defaults" : "register"} documents={documents} contracts={contracts} canManage={hasPermission("contracts.write")} canWrite={canWrite} canApprove={isRoot} isAdmin={currentUser.role === "admin" || functionalAdmin} isOwner={currentUser.functionalRoles.some((role) => role === "system_owner" || role === "system_admin")} onCreateContract={(quoteId,mode) => openIssueDocument("workforce_contract", quoteId,mode)} onCreateQuotation={(requestId) => { setQuoteSourceRequestId(requestId); openIssueDocument("quotation"); }} />
               <LetterPdfLibrary />
             </>
           )}
@@ -4402,7 +4406,22 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
       key: `clause-${index}`,
     })),
   );
-  const [translatingClauses, setTranslatingClauses] = useState(false);
+  const clausesTouched = useRef(false);
+  const [clauseDefaults, setClauseDefaults] = useState<Partial<Record<WorkforceContractDirection, WorkforceContractClause[]>>>({});
+  const [clauseDefaultsError, setClauseDefaultsError] = useState("");
+  useEffect(() => {
+    let current = true;
+    Promise.all((["dali_supplier", "dali_purchaser"] as const).map(async direction => {
+      const response = await fetch(`/api/portal/contracts/default-clauses?direction=${direction}`, { cache: "no-store" });
+      const result = await readApiJson(response) as { clauses: WorkforceContractClause[]; error?: string }; if (!response.ok) throw new Error(result.error || "تعذر تحميل البنود الافتراضية");
+      return [direction, result.clauses] as const;
+    })).then(entries => { if (current) {
+      const defaults = Object.fromEntries(entries); setClauseDefaults(defaults);
+      if (!clausesTouched.current && !initialQuoteId) setContractClauses(defaults.dali_supplier.map((item: WorkforceContractClause, index: number) => ({ ...item, key: `defaults-${index}` })));
+    } }).catch(error => { if (current) setClauseDefaultsError(error.message); });
+    return () => { current = false; };
+  }, [initialQuoteId]);
+
   const [submissionError, setSubmissionError] = useState("");
   useEffect(() => {
     if (initialType !== "workforce_contract") return;
@@ -4574,6 +4593,7 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
     setAccommodationParty(quote.accommodationParty);
     setTransportParty(quote.transportParty);
     setSelectedSourceRequestId(quote.sourceRequestId ? String(quote.sourceRequestId) : "");
+    clausesTouched.current = true;
     if (terms.contractClauses.length) setContractClauses(terms.contractClauses.map((clause, index) => ({ ...clause, key: `quote-clause-${index}` })));
     window.setTimeout(() => {
       const form = document.querySelector<HTMLFormElement>(".issue-modal form");
@@ -4767,6 +4787,8 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
         showContractValidationError(4, "أكمل جدول الدفعات الموسمية واجعل مجموع النسب 100٪.");
         return;
       }
+      const clauseError = validateContractClauses(contractClauses, true);
+      if (clauseError) { showContractValidationError(4, clauseError); return; }
       if (!contractClauses.some((item) => item.included && item.title.trim() && item.body.trim())) {
         showContractValidationError(4, "يجب إبقاء بند تعاقدي مكتمل واحد على الأقل.");
         return;
@@ -4828,65 +4850,14 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
   }
 
   function changeContractDirection(value: WorkforceContractDirection) {
+    clausesTouched.current = true;
     setContractDirection(value);
     setContractClauses(
-      defaultWorkforceContractClauses(value).map((item, index) => ({
+      (clauseDefaults[value] || defaultWorkforceContractClauses(value)).map((item, index) => ({
         ...item,
         key: `clause-${Date.now()}-${index}`,
       })),
     );
-  }
-  function updateContractClause(key: string, field: keyof WorkforceContractClause, value: string | boolean) {
-    setContractClauses((items) => items.map((item) => (item.key === key ? { ...item, [field]: value } : item)));
-  }
-  function addContractClause() {
-    setContractClauses((items) => [
-      ...items,
-      {
-        key: `clause-${Date.now()}`,
-        section: "بنود إضافية",
-        sectionEn: "Additional Terms",
-        title: "",
-        titleEn: "",
-        body: "",
-        bodyEn: "",
-        included: true,
-      },
-    ]);
-  }
-  async function translateContractClauses() {
-    const active = contractClauses.filter((item) => item.included);
-    if (!active.length) return;
-    setTranslatingClauses(true);
-    try {
-      const values = active.flatMap((item) => [item.section, item.title, item.body]);
-      const response = await fetch("/api/portal/translate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ values }),
-      });
-      const result = (await readApiJson(response)) as {
-        translated?: string[];
-        error?: string;
-      };
-      if (!response.ok || !result.translated) throw new Error(result.error || "تعذرت الترجمة");
-      let cursor = 0;
-      const translatedByKey = new Map(
-        active.map((item) => [
-          item.key,
-          {
-            sectionEn: result.translated![cursor++],
-            titleEn: result.translated![cursor++],
-            bodyEn: result.translated![cursor++],
-          },
-        ]),
-      );
-      setContractClauses((items) => items.map((item) => ({ ...item, ...translatedByKey.get(item.key) })));
-    } catch (error) {
-      await appAlert(error instanceof Error ? error.message : "تعذرت الترجمة", { title: "تعذرت الترجمة", tone: "danger" });
-    } finally {
-      setTranslatingClauses(false);
-    }
   }
 
   function applyQuote(event: React.ChangeEvent<HTMLSelectElement>) {
@@ -4974,7 +4945,9 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
         })),
   );
   const serializedClauses = JSON.stringify(
-    contractClauses.map(({ section, sectionEn, title, titleEn, body, bodyEn, included }) => ({
+    contractClauses.map(({ section, sectionEn, title, titleEn, body, bodyEn, included, isPreamble, subclauses }) => ({
+      isPreamble,
+      subclauses,
       section,
       sectionEn,
       title,
@@ -5602,58 +5575,12 @@ function IssueDocumentModal({ initialType, initialQuoteId, conversionMode, canIs
                   </span>
                   <div>
                     <strong>بنود العقد القابلة للتحرير</strong>
-                    <p>البنود الأساسية أضيفت وفق اتجاه العقد. يمكنك تعديلها أو حذفها أو إضافة بند في أي قسم، مع النص الإنجليزي المقابل للنسخة الثنائية.</p>
-                  </div>
-                  <div>
-                    <button type="button" className="admin-secondary" disabled={translatingClauses} onClick={() => void translateContractClauses()}>
-                      {translatingClauses ? "جارٍ الترجمة..." : "ترجمة الإنجليزية"}
-                    </button>
-                    <button type="button" className="admin-secondary" onClick={addContractClause}>
-                      + إضافة بند
-                    </button>
+                    <p>التمهيد ثم البند الأول والثاني وهكذا. لكل بند نص عربي وإنجليزي وترقيمات فرعية قابلة للإضافة والترتيب.</p>
                   </div>
                 </header>
-                <div className="contract-clause-editor">
-                  {contractClauses.map((clause, index) => (
-                    <article key={clause.key} className={!clause.included ? "excluded" : ""}>
-                      <header>
-                        <b>البند {index + 1}</b>
-                        <label>
-                          <input type="checkbox" checked={clause.included} onChange={(event) => updateContractClause(clause.key, "included", event.target.checked)} /> تضمين في العقد
-                        </label>
-                        <button type="button" onClick={() => setContractClauses((items) => items.filter((item) => item.key !== clause.key))}>
-                          حذف
-                        </button>
-                      </header>
-                      <div>
-                        <label>
-                          القسم بالعربية
-                          <input required={clause.included} value={clause.section} onChange={(event) => updateContractClause(clause.key, "section", event.target.value)} />
-                        </label>
-                        <label>
-                          Section in English
-                          <input required={false} dir="ltr" value={clause.sectionEn || ""} onChange={(event) => updateContractClause(clause.key, "sectionEn", event.target.value)} />
-                        </label>
-                        <label>
-                          عنوان البند بالعربية
-                          <input required={clause.included} value={clause.title} onChange={(event) => updateContractClause(clause.key, "title", event.target.value)} />
-                        </label>
-                        <label>
-                          Clause title in English
-                          <input required={false} dir="ltr" value={clause.titleEn || ""} onChange={(event) => updateContractClause(clause.key, "titleEn", event.target.value)} />
-                        </label>
-                        <label className="span-two">
-                          نص البند بالعربية
-                          <textarea required={clause.included} rows={3} value={clause.body} onChange={(event) => updateContractClause(clause.key, "body", event.target.value)} />
-                        </label>
-                        <label className="span-two">
-                          English clause text
-                          <textarea required={false} dir="ltr" rows={3} value={clause.bodyEn || ""} onChange={(event) => updateContractClause(clause.key, "bodyEn", event.target.value)} />
-                        </label>
-                      </div>
-                    </article>
-                  ))}
-                </div>
+                {clauseDefaultsError && <p role="alert">{clauseDefaultsError}</p>}
+                <button type="button" className="admin-secondary" disabled={conversionMode === "as_is" && !!selectedQuoteId || !clauseDefaults[contractDirection]} onClick={() => setContractClauses((clauseDefaults[contractDirection] || []).map((item, index) => ({ ...item, key: `defaults-${index}` })))}>تحميل البنود الافتراضية المحفوظة</button>
+                <ContractClauseEditor readOnly={conversionMode === "as_is" && !!selectedQuoteId} clauses={contractClauses} onChange={items => { clausesTouched.current = true; setContractClauses(items.map((item, index) => ({ ...item, key: `clause-${index}` }))); }}/>
                 <p className="form-hint">بيانات الكفالة وحالة أجير تشغيلية داخلية ولا تظهر في PDF. بند النظام والاختصاص يدرج آلياً فقط إذا كانت جميع عمالة العقد بعقود أجير.</p>
               </section>
               <section className="contract-final-card attachments-card">

@@ -19,6 +19,7 @@ import {
   normalizeWorkforceProfession,
 } from "@/lib/workforce-requirements";
 import IntegrationManager from "./IntegrationManager";
+import ContractClauseDefaults from "./ContractClauseDefaults";
 import ContractBillingWorkspace from "./ContractBillingWorkspace";
 import PaymentManagementDashboard from "./PaymentManagementDashboard";
 import { invoicePaymentTitleEnglish } from "@/lib/invoice-pdf-copy";
@@ -243,6 +244,7 @@ export default function OperationsWorkspace({
   isOwner,
   initialTab = "crm",
   initialQuery = "",
+  initialContractSubtab = "register",
   onCreateContract,
   onCreateQuotation,
   allowedTabs,
@@ -253,11 +255,13 @@ export default function OperationsWorkspace({
   isOwner: boolean;
   initialTab?: OperationsTab;
   initialQuery?: string;
+  initialContractSubtab?: "register" | "defaults";
   onCreateContract: (quoteId?: number, mode?: "as_is" | "modified") => void;
   onCreateQuotation?: (sourceRequestId?: number) => void;
   allowedTabs?: OperationsTab[];
   embedded?: boolean;
 }) {
+  const [contractSubtab, setContractSubtab] = useState<"register" | "defaults">(initialContractSubtab);
   const [sharingQuote, setSharingQuote] = useState<Quote | null>(null);
   const [data, setData] = useState<OperationsData | null>(null);
   const [tab, setTab] = useState<Tab>(
@@ -965,6 +969,11 @@ export default function OperationsWorkspace({
 
       {tab === "contracts" && (
         <>
+          <div role="tablist" aria-label="تبويبات العقود" className="record-actions">
+            <button type="button" role="tab" aria-selected={contractSubtab === "register"} onClick={() => setContractSubtab("register")}>العقود والدفعات</button>
+            <button type="button" role="tab" aria-selected={contractSubtab === "defaults"} onClick={() => setContractSubtab("defaults")}>البنود الافتراضية</button>
+          </div>
+          {contractSubtab === "defaults" ? <ContractClauseDefaults canWrite={data.canWriteContracts}/> : <>
           <div className="contract-create-toolbar">
             {canWrite && (
               <button
@@ -977,6 +986,7 @@ export default function OperationsWorkspace({
           </div>
           <PaymentManagementDashboard />
           <ContractBillingWorkspace />
+          </>}
         </>
       )}
 
