@@ -42,5 +42,8 @@ test("contract editing uses the creation wizard with the saved snapshot and unre
   assert.match(editor, /method:"PATCH"/);
   assert.match(wizard, /if \(editSnapshot\) \{ setStep\(target\); return; \}/);
   assert.match(wizard, /hydratedEditFields/);
+  assert.match(wizard, /key="wizard-next"/);
+  assert.match(wizard, /key="wizard-save" data-issue-submit="true"/);
+  assert.match(wizard, /submitter.dataset.issueSubmit !== "true"/);
   assert.match(wizard, /editing \? "حفظ جميع التعديلات"/);
 });

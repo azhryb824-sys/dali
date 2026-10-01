@@ -4792,6 +4792,8 @@ export function IssueDocumentModal({ editSnapshot, initialType, initialQuoteId, 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    if (isContract && (step !== 4 || !(submitter instanceof HTMLButtonElement) || submitter.dataset.issueSubmit !== "true")) return;
     setSubmissionError("");
     if (isContract) {
       const invalidProfession = professions.find((item) => (item.profession === "أخرى" && (item.customProfession || "").trim().length < 2) || !Number.isFinite(item.unitSalary) || (item.unitSalary || 0) <= 0 || !Number.isFinite(item.actualSalary) || (item.actualSalary || 0) < 0 || !["not_applicable", "with_ajir", "without_ajir"].includes(item.ajirContractStatus));
@@ -5669,11 +5671,11 @@ export function IssueDocumentModal({ editSnapshot, initialType, initialQuoteId, 
               </button>
             )}
             {isContract && step < 4 ? (
-              <button className="admin-primary" type="button" onClick={() => validateAndSetStep((step + 1) as 2 | 3 | 4)}>
+              <button key="wizard-next" className="admin-primary" type="button" onClick={event => { event.preventDefault(); validateAndSetStep((step + 1) as 2 | 3 | 4); }}>
                 التالي
               </button>
             ) : (
-              <button className="admin-primary" type="submit" disabled={busy || (!editing && !assetsReady) || (isContract && quantityMode === "fixed" && seasonType !== "regular" && Math.abs(payments.reduce((sum, item) => sum + item.percentage, 0) - 100) > 0.001)}>
+              <button key="wizard-save" data-issue-submit="true" className="admin-primary" type="submit" disabled={busy || (!editing && !assetsReady) || (isContract && quantityMode === "fixed" && seasonType !== "regular" && Math.abs(payments.reduce((sum, item) => sum + item.percentage, 0) - 100) > 0.001)}>
                 {busy ? "جارٍ الإصدار..." : editing ? "حفظ جميع التعديلات" : isContract && totalShortage ? "إصدار العقد رغم العجز" : "إصدار واعتماد PDF"}
               </button>
             )}
