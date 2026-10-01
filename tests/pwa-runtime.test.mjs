@@ -56,7 +56,9 @@ test("administrative install metadata is isolated from the public-site manifest"
   assert.match(rootLayout, /x-dali-pathname/);
   assert.match(rootLayout, /manifest:\s*isPwaRequest\s*\?\s*"\/pwa\/manifest\.webmanifest"\s*:\s*"\/manifest\.webmanifest"/);
   assert.match(rootLayout, /canonicalPath/);
-  assert.match(proxySource, /requestHeaders\.set\("x-dali-pathname", request\.nextUrl\.pathname\)/);
+  assert.match(proxySource, /requestHeaders\.set\("x-dali-pathname", originalPath\)/);
+  assert.match(proxySource, /const originalPath = trustedRewrite \? incomingPath : request\.nextUrl\.pathname/);
+  assert.match(proxySource, /publicRewriteSignature\(incomingPath, request\.method\)/);
   assert.match(proxySource, /NextResponse\.next\(\{ request: \{ headers: requestHeaders \} \}\)/);
   assert.match(setupClient, /isStandalonePwa\(\)/);
   assert.match(setupClient, /window\.location\.replace\("\/pwa\/launch"\)/);

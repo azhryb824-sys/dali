@@ -1,8 +1,9 @@
+import { localizedMetadata } from "@/lib/public-content";
 import type { Metadata } from "next";
 import PublicPageShell from "@/app/components/PublicPageShell";
 import { getPublicSearchIndex } from "@/lib/site-content";
 
-export const metadata: Metadata = { title: "البحث في الموقع", alternates: { canonical: "/search" }, robots: { index: false, follow: true } };
+export async function generateMetadata(): Promise<Metadata> { return localizedMetadata({ title: "البحث في الموقع", alternates: { canonical: "/search" }, robots: { index: false, follow: true } }); }
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const query = (await searchParams).q?.trim().slice(0, 80) || "";

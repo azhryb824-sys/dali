@@ -1,11 +1,15 @@
 "use client";
 
+import { localizedPublicTree } from "./LocalizedPublicTree";
+import { usePublicLocale } from "./PublicLocaleProvider";
+import { localizedPath } from "@/lib/public-locale";
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/app/components/PublicLink";
 import type { WebsiteContent } from "@/lib/website-content";
 
 export default function PublicHeader({ content }: { content: WebsiteContent }) {
+  const locale = usePublicLocale() ?? "ar";
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -42,7 +46,7 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
     return searchItems.filter((item) => `${item.title} ${item.text} ${item.keywords}`.toLowerCase().includes(needle)).slice(0, 6);
   }, [query, searchItems]);
 
-  return <>
+  return localizedPublicTree(<>
     <div className="location-bar"><span>{content.site.tagline}</span><span>{content.site.city} · {content.site.district}</span></div>
     <header className="site-header">
       <Link className="brand" href="/" aria-label={`${content.site.companyName} - الرئيسية`}><Image src="/dally-logo.jpg" alt={`شعار ${content.site.companyName}`} width={545} height={280} sizes="180px"/></Link>
@@ -58,10 +62,10 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
         {content.visibility.pages && content.collections.pages.filter((item) => item.status === "published" && item.featured).slice(0, 2).map((item) => <Link href={`/pages/${item.slug}`} key={item.id}>{item.shortTitle || item.title}</Link>)}
       </nav>
       <div className="site-search">
-        <label><span aria-hidden="true">⌕</span><input value={query} role="combobox" aria-controls="site-search-results" aria-autocomplete="list" onFocus={() => setSearchOpen(true)} onBlur={() => window.setTimeout(() => setSearchOpen(false), 120)} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") setSearchOpen(false); if (event.key === "Enter" && results[0]) { event.preventDefault(); window.location.href = results[0].href; } }} placeholder="ابحث في الموقع" aria-label="البحث في جميع أقسام الموقع" aria-expanded={searchOpen && query.trim().length >= 2}/></label>
+        <label><span aria-hidden="true">⌕</span><input value={query} role="combobox" aria-controls="site-search-results" aria-autocomplete="list" onFocus={() => setSearchOpen(true)} onBlur={() => window.setTimeout(() => setSearchOpen(false), 120)} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") setSearchOpen(false); if (event.key === "Enter" && results[0]) { event.preventDefault(); window.location.href = localizedPath(results[0].href, locale); } }} placeholder="ابحث في الموقع" aria-label="البحث في جميع أقسام الموقع" aria-expanded={searchOpen && query.trim().length >= 2}/></label>
         {searchOpen && query.trim().length >= 2 && <div className="site-search-results" id="site-search-results" role="listbox">{results.length ? results.map((item) => <Link href={item.href} role="option" aria-selected="false" key={item.href} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(""); setSearchOpen(false); }}><strong>{item.title}</strong><span>{item.text}</span></Link>) : <p>لا توجد نتائج مطابقة. <Link href={`/search?q=${encodeURIComponent(query)}`}>البحث الموسع</Link></p>}</div>}
       </div>
       <Link className="header-cta" href="/contact#quote">اطلب عرض سعر <span aria-hidden="true">←</span></Link>
     </header>
-  </>;
+  </>, locale, locale === "ar" ? {} : content.translations[locale]);
 }

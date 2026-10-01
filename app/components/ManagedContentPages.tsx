@@ -1,7 +1,10 @@
-import Link from "next/link";
+import { publicRequestLocale } from "@/lib/public-content";
+import { localizedPublicTree } from "./LocalizedPublicTree";
+import Link from "@/app/components/PublicLink";
 import Image from "next/image";
 import StructuredData from "@/app/components/StructuredData";
-import { absoluteUrl, SITE } from "@/lib/site";
+import { localizedPath } from "@/lib/public-locale";
+import { absoluteUrl as baseAbsoluteUrl, SITE } from "@/lib/site";
 import { entryPath, type ManagedEntry, type WebsiteCollectionKey, type WebsiteContent } from "@/lib/website-content";
 
 const collectionLabels: Record<WebsiteCollectionKey, { eyebrow: string; singular: string }> = {
@@ -16,7 +19,7 @@ const collectionLabels: Record<WebsiteCollectionKey, { eyebrow: string; singular
   pages: { eyebrow: "صفحات الشركة", singular: "الصفحة" },
 };
 
-export function ManagedCollectionIndex({ content, collectionKey, title, description, entries, emptyTitle, emptyText }: {
+export async function ManagedCollectionIndex({ content, collectionKey, title, description, entries, emptyTitle, emptyText }: {
   content: WebsiteContent;
   collectionKey: WebsiteCollectionKey;
   title: string;
@@ -25,6 +28,9 @@ export function ManagedCollectionIndex({ content, collectionKey, title, descript
   emptyTitle: string;
   emptyText: string;
 }) {
+  const locale = await publicRequestLocale();
+  const absoluteUrl = (path: string) => baseAbsoluteUrl(localizedPath(path, locale));
+
   const base = entryPath(collectionKey, { slug: "", } as ManagedEntry).replace(/\/$/, "");
   const data = {
     "@context": "https://schema.org",
@@ -33,10 +39,10 @@ export function ManagedCollectionIndex({ content, collectionKey, title, descript
         { "@type": "ListItem", position: 1, name: "الرئيسية", item: absoluteUrl("/") },
         { "@type": "ListItem", position: 2, name: collectionLabels[collectionKey].eyebrow, item: absoluteUrl(base) },
       ] },
-      { "@type": "CollectionPage", name: title, description, url: absoluteUrl(base), inLanguage: SITE.language, publisher: { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: content.site.companyName }, mainEntity: entries.map((entry) => ({ "@type": "Thing", name: entry.title, description: entry.summary, url: absoluteUrl(entryPath(collectionKey, entry)) })) },
+      { "@type": "CollectionPage", name: title, description, url: absoluteUrl(base), inLanguage: locale, publisher: { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: content.site.companyName }, mainEntity: entries.map((entry) => ({ "@type": "Thing", name: entry.title, description: entry.summary, url: absoluteUrl(entryPath(collectionKey, entry)) })) },
     ],
   };
-  return <>
+  return localizedPublicTree(<>
     <StructuredData data={data}/>
     <section className="inner-hero managed-collection-hero"><nav className="page-breadcrumbs" aria-label="مسار الصفحة"><Link href="/">الرئيسية</Link><span aria-hidden="true">/</span><span>{collectionLabels[collectionKey].eyebrow}</span></nav><p className="eyebrow light"><span/>{collectionLabels[collectionKey].eyebrow}</p><h1>{title}</h1><p>{description}</p></section>
     <section className="inner-content managed-collection-index">
@@ -47,21 +53,24 @@ export function ManagedCollectionIndex({ content, collectionKey, title, descript
       })}</div> : <div className="managed-empty-state"><span aria-hidden="true">✓</span><h2>{emptyTitle}</h2><p>{emptyText}</p><Link href="/contact">تواصل مع الشركة ←</Link></div>}
       <Link className="inner-callout" href="/contact#quote"><strong>هل لديك احتياج يحتاج إلى مراجعة؟</strong><span>شاركنا المهن والأعداد والموقع والمدة لنبدأ بنطاق واضح.</span><b>طلب عرض سعر ←</b></Link>
     </section>
-  </>;
+  </>, locale, locale === "ar" ? {} : content.translations[locale]);
 }
 
-export function ManagedEntryDetail({ content, collectionKey, entry }: { content: WebsiteContent; collectionKey: WebsiteCollectionKey; entry: ManagedEntry }) {
+export async function ManagedEntryDetail({ content, collectionKey, entry }: { content: WebsiteContent; collectionKey: WebsiteCollectionKey; entry: ManagedEntry }) {
+  const locale = await publicRequestLocale();
+  const absoluteUrl = (path: string) => baseAbsoluteUrl(localizedPath(path, locale));
+
   const basePath = entryPath(collectionKey, { slug: "", } as ManagedEntry).replace(/\/$/, "");
   const canonical = entryPath(collectionKey, entry);
   const label = collectionLabels[collectionKey];
   const primaryType = collectionKey === "articles" || collectionKey === "projects" ? "Article" : collectionKey === "services" || collectionKey === "sectors" || collectionKey === "locations" ? "Service" : "WebPage";
   const primary = primaryType === "Article" ? {
     "@type": "Article", headline: entry.title, description: entry.seoDescription, datePublished: entry.publishedAt, dateModified: entry.updatedAt,
-    author: { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: content.site.companyName }, publisher: { "@id": `${SITE.url}/#organization` }, mainEntityOfPage: absoluteUrl(canonical), inLanguage: SITE.language,
+    author: { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: content.site.companyName }, publisher: { "@id": `${SITE.url}/#organization` }, mainEntityOfPage: absoluteUrl(canonical), inLanguage: locale,
   } : primaryType === "Service" ? {
     "@type": "Service", name: entry.title, description: entry.seoDescription, url: absoluteUrl(canonical), serviceType: entry.shortTitle,
     areaServed: collectionKey === "locations" ? { "@type": "City", name: entry.shortTitle || entry.title } : { "@type": "Country", name: "المملكة العربية السعودية" }, provider: { "@type": "Organization", "@id": `${SITE.url}/#organization`, name: content.site.companyName, url: SITE.url },
-  } : { "@type": "WebPage", name: entry.title, description: entry.seoDescription, url: absoluteUrl(canonical), inLanguage: SITE.language };
+  } : { "@type": "WebPage", name: entry.title, description: entry.seoDescription, url: absoluteUrl(canonical), inLanguage: locale };
   const data = { "@context": "https://schema.org", "@graph": [
     { "@type": "BreadcrumbList", itemListElement: [
       { "@type": "ListItem", position: 1, name: "الرئيسية", item: absoluteUrl("/") },
@@ -71,7 +80,7 @@ export function ManagedEntryDetail({ content, collectionKey, entry }: { content:
     primary,
     ...(entry.faqs.length ? [{ "@type": "FAQPage", mainEntity: entry.faqs.map((faq) => ({ "@type": "Question", name: faq.question, acceptedAnswer: { "@type": "Answer", text: faq.answer } })) }] : []),
   ] };
-  return <>
+  return localizedPublicTree(<>
     <StructuredData data={data}/>
     <section className="service-detail-hero managed-entry-hero" style={{ "--service-image": `url(${entry.image})` } as React.CSSProperties}>
       <nav className="page-breadcrumbs" aria-label="مسار الصفحة"><Link href="/">الرئيسية</Link><span aria-hidden="true">/</span><Link href={basePath}>{label.eyebrow}</Link><span aria-hidden="true">/</span><span>{entry.shortTitle || entry.title}</span></nav>
@@ -84,5 +93,5 @@ export function ManagedEntryDetail({ content, collectionKey, entry }: { content:
       {entry.faqs.length > 0 && <section className="detail-faq"><div><p className="eyebrow"><span/>أسئلة شائعة</p><h2>إجابات مرتبطة بهذه الصفحة</h2></div><div>{entry.faqs.map((faq) => <details key={faq.question}><summary>{faq.question}<span aria-hidden="true">+</span></summary><p>{faq.answer}</p></details>)}</div></section>}
       <Link className="inner-callout" href="/contact#quote"><strong>حوّل المعلومات إلى طلب واضح</strong><span>أرسل المهن والأعداد والموقع والمدة ومتطلبات التشغيل.</span><b>اطلب عرض سعر ←</b></Link>
     </article>
-  </>;
+  </>, locale, locale === "ar" ? {} : content.translations[locale]);
 }

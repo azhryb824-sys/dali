@@ -1,12 +1,13 @@
+import { localizedMetadata } from "@/lib/public-content";
 import type { Metadata } from "next";
 import PublicPageShell from "@/app/components/PublicPageShell";
 import StructuredData from "@/app/components/StructuredData";
 import ConstructionRequestForm from "./ConstructionRequestForm";
 import ConstructionSectionNav from "./ConstructionSectionNav";
-import Link from "next/link";
+import Link from "@/app/components/PublicLink";
 import { absoluteUrl, SITE } from "@/lib/site";
 
-export const metadata:Metadata={title:"شركة مقاولات وأعمال إنشائية في السعودية | دالي",description:"تنفيذ وإدارة أعمال المباني والتشطيبات والترميم والأعمال المدنية والكهروميكانيكية للمشروعات في مدن المملكة، بعد دراسة النطاق والموقع والبرنامج.",alternates:{canonical:"/construction"},openGraph:{title:"خدمات المقاولات وإدارة المشروعات في السعودية | دالي",description:"مسار واضح من دراسة النطاق والمعاينة والتسعير إلى التنفيذ وضبط الجودة والتسليم.",url:"/construction",locale:"ar_SA",type:"website"}};
+export async function generateMetadata(): Promise<Metadata> { return localizedMetadata({title:"شركة مقاولات وأعمال إنشائية في السعودية | دالي",description:"تنفيذ وإدارة أعمال المباني والتشطيبات والترميم والأعمال المدنية والكهروميكانيكية للمشروعات في مدن المملكة، بعد دراسة النطاق والموقع والبرنامج.",alternates:{canonical:"/construction"},openGraph:{title:"خدمات المقاولات وإدارة المشروعات في السعودية | دالي",description:"مسار واضح من دراسة النطاق والمعاينة والتسعير إلى التنفيذ وضبط الجودة والتسليم.",url:"/construction",locale:"ar_SA",type:"website"}}); }
 
 const services=["إنشاء وتنفيذ المباني","التشطيبات الداخلية والخارجية","الترميم وإعادة التأهيل","الأعمال المدنية والبنية التحتية","الأعمال الكهربائية والميكانيكية","إدارة المقاولين والبرنامج والتكلفة"];
 const schema={"@context":"https://schema.org","@type":"Service",name:"خدمات المقاولات وإدارة المشروعات",serviceType:"مقاولات عامة وأعمال إنشائية",provider:{"@id":`${SITE.url}/#organization`},areaServed:{"@type":"Country",name:"Saudi Arabia"},url:absoluteUrl("/construction"),description:"دراسة وتنفيذ وإدارة أعمال المقاولات للمشروعات في مدن المملكة العربية السعودية بحسب النطاق والجاهزية."};

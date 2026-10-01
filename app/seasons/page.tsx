@@ -1,20 +1,21 @@
+import { getLocalizedWebsiteContent } from "@/lib/public-content";
+import { localizedMetadata } from "@/lib/public-content";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/app/components/PublicLink";
 import { notFound } from "next/navigation";
 import PublicPageShell from "@/app/components/PublicPageShell";
 import StructuredData from "@/app/components/StructuredData";
 import { absoluteUrl, SITE } from "@/lib/site";
-import { getWebsiteContent } from "@/lib/website-content";
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> { return localizedMetadata({
   title: "حلول القوى العاملة لموسمي رمضان والحج في السعودية",
   description: "تخطيط وتوفير القوى العاملة والفرق التشغيلية لموسمي رمضان والحج في مكة ومدن المملكة، بحسب المواقع والورديات وفترات الذروة.",
   alternates: { canonical: "/seasons" },
   openGraph: { type: "website", locale: SITE.locale, url: "/seasons", title: "حلول موسمي رمضان والحج", description: "خطة موسمية تبدأ من تقدير الطلب وتنتهي بمتابعة الفرق في مواقع العمل." },
-};
+}); }
 
 export default async function SeasonsPage() {
-  const content = await getWebsiteContent();
+  const content = await getLocalizedWebsiteContent();
   if (!content.visibility.hajj) notFound();
   const data = { "@context": "https://schema.org", "@graph": [
     { "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "الرئيسية", item: absoluteUrl("/") }, { "@type": "ListItem", position: 2, name: "رمضان والحج", item: absoluteUrl("/seasons") }] },

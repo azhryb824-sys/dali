@@ -1,12 +1,17 @@
 "use client";
 
+import { useWebsitePreviewMode } from "@/app/components/WebsitePreviewMode";
+import { localizedPublicTree } from "@/app/components/LocalizedPublicTree";
+import { usePublicLocale } from "@/app/components/PublicLocaleProvider";
 import Image from "next/image";
-import Link from "next/link";
-import LiveChatWidget from "./LiveChatWidget";
-import PublicHeader from "./components/PublicHeader";
-import QuoteRequestForm from "./components/QuoteRequestForm";
-import StructuredData from "./components/StructuredData";
-import { useWebsiteContent } from "./components/WebsiteContentProvider";
+import Link from "@/app/components/PublicLink";
+import LiveChatWidget from "@/app/LiveChatWidget";
+import PublicHeader from "@/app/components/PublicHeader";
+import QuoteRequestForm from "@/app/components/QuoteRequestForm";
+import StructuredData from "@/app/components/StructuredData";
+import { useWebsiteContent } from "@/app/components/WebsiteContentProvider";
+import { localBusinessSchema } from "@/lib/local-business";
+import { localizedPath } from "@/lib/public-locale";
 import { absoluteUrl, SITE } from "@/lib/site";
 
 const hajjCapabilities = [
@@ -19,7 +24,9 @@ const hajjCapabilities = [
 function Arrow() { return <span aria-hidden="true">←</span>; }
 
 export default function Home() {
+  const preview = useWebsitePreviewMode();
   const content = useWebsiteContent();
+  const locale = usePublicLocale() ?? "ar";
   const services = content.collections.services.filter((item) => item.status === "published" && item.featured).slice(0, 6).map((item, index) => ({ n: String(index + 1).padStart(2, "0"), title: item.shortTitle, text: item.summary, href: `/services/${item.slug}` }));
   const sectors = content.collections.sectors.filter((item) => item.status === "published" && item.featured).slice(0, 6);
   const professions = content.home.professions;
@@ -37,14 +44,14 @@ export default function Home() {
         logo: { "@type": "ImageObject", url: absoluteUrl(SITE.logoPath) },
         image: absoluteUrl("/images/dali-hero.webp"),
         description: content.seo.organizationDescription,
-        address: { "@type": "PostalAddress", addressLocality: content.site.city, streetAddress: content.site.district, addressCountry: SITE.countryCode },
+        address: { "@type": "PostalAddress", addressLocality: content.site.city, streetAddress: content.site.address || content.site.district, addressCountry: SITE.countryCode },
         areaServed: { "@type": "Country", name: "Saudi Arabia" },
         ...(content.site.phone ? { telephone: content.site.phone } : {}),
         ...(content.site.email ? { email: content.site.email } : {}),
         hasOfferCatalog: {
           "@type": "OfferCatalog",
           name: "خدمات القوى العاملة والمقاولات",
-          itemListElement: services.slice(0, 5).map((service) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: service.title, url: absoluteUrl(service.href), areaServed: "المملكة العربية السعودية" } })),
+          itemListElement: services.slice(0, 5).map((service) => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: service.title, url: absoluteUrl(localizedPath(service.href, locale)), areaServed: "المملكة العربية السعودية" } })),
         },
       },
       {
@@ -52,7 +59,7 @@ export default function Home() {
         "@id": `${SITE.url}/#website`,
         url: SITE.url,
         name: content.site.companyName,
-        inLanguage: SITE.language,
+        inLanguage: locale,
         publisher: { "@id": `${SITE.url}/#organization` },
         potentialAction: { "@type": "SearchAction", target: `${SITE.url}/search?q={search_term_string}`, "query-input": "required name=search_term_string" },
       },
@@ -60,8 +67,8 @@ export default function Home() {
   };
   const faqSchema = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faqs.map((item) => ({ "@type": "Question", name: item.q, acceptedAnswer: { "@type": "Answer", text: item.a } })) };
 
-  return <main>
-    <StructuredData data={businessSchema}/>
+  return localizedPublicTree(<main>
+    <StructuredData data={businessSchema}/><StructuredData data={localBusinessSchema(content)}/>
     {content.visibility.faq && <StructuredData data={faqSchema}/>}
 
     <PublicHeader content={content}/>
@@ -110,10 +117,10 @@ export default function Home() {
 
     {content.visibility.faq && <section className="faq section" id="faq"><div className="section-title"><p className="eyebrow"><span/> الأسئلة الشائعة</p><h2>معلومات تساعدك<br/><em>قبل طلب الخدمة.</em></h2></div><div className="faq-list">{faqs.slice(0, 8).map((item, index) => <details key={item.q}><summary><span>{String(index + 1).padStart(2, "0")}</span>{item.q}<b>+</b></summary><p>{item.a}</p></details>)}</div><Link className="text-link" href="/faq">عرض جميع الأسئلة <Arrow/></Link></section>}
 
-    <section className="quote section" id="quote"><div className="quote-intro"><p className="eyebrow light"><span/> طلب عرض سعر</p><h2>{content.home.quoteTitle}</h2><p>{content.home.quoteDescription}</p><div className="quote-address"><span>المقر</span><strong>{content.site.address}</strong></div><div className="quote-response-note"><b>بيانات منظمة من البداية</b><span>أدخل بنود الخدمة وشروط التشغيل لتصل إلى فريق دالي جاهزة لإعداد عرض السعر والعقد.</span></div></div><QuoteRequestForm embedded/></section>
+    <section className="quote section" id="quote"><div className="quote-intro"><p className="eyebrow light"><span/> طلب عرض سعر</p><h2>{content.home.quoteTitle}</h2><p>{content.home.quoteDescription}</p><div className="quote-address"><span>المقر</span><strong>{content.site.address}</strong></div><div className="quote-response-note"><b>بيانات منظمة من البداية</b><span>أدخل بنود الخدمة وشروط التشغيل لتصل إلى فريق دالي جاهزة لإعداد عرض السعر والعقد.</span></div></div>{preview ? <div className="preview-form-placeholder">طلب عرض سعر</div> : <QuoteRequestForm embedded/>}</section>
 
-    <LiveChatWidget/>
+    {!preview && <LiveChatWidget/>}
 
     <footer id="contact"><div className="footer-top"><a className="brand footer-brand" href="#home"><Image src="/dally-logo.jpg" alt={`شعار ${content.site.companyName}`} width={545} height={280} sizes="180px"/></a><h2>الكوادر المناسبة.<br/><em>حين يحتاجها عملك.</em></h2></div><div className="footer-grid"><div><b>المقر الرئيسي</b><p>{content.site.city}</p><p>{content.site.district}</p>{content.site.phone && <p dir="ltr">{content.site.phone}</p>}{content.site.email && <p dir="ltr">{content.site.email}</p>}</div>{content.visibility.services && <div><b>الخدمات</b>{services.slice(0, 4).map((service) => <Link href={service.href} key={service.href}>{service.title}</Link>)}</div>}<div><b>روابط سريعة</b><Link href="/about">من نحن</Link>{content.visibility.sectors && <Link href="/sectors">القطاعات</Link>}{content.visibility.locations && <Link href="/locations">مناطق الخدمة</Link>}{content.visibility.articles && <Link href="/insights">مركز المعرفة</Link>}<Link href="/contact">التواصل وطلب عرض سعر</Link><Link href="/feedback">الشكاوى والاقتراحات</Link><Link href="/privacy">سياسة الخصوصية</Link><Link href="/terms">الشروط والأحكام</Link></div></div><div className="copyright"><span>© 2026 {content.site.companyName}. جميع الحقوق محفوظة.</span><span>شركة سعودية · {content.site.address}</span></div></footer>
-  </main>;
+  </main>, locale, locale === "ar" ? {} : content.translations[locale]);
 }

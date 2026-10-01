@@ -1,3 +1,4 @@
+import { PublicLocaleProvider } from "@/app/components/PublicLocaleProvider";
 import SystemCalendar from "@/app/components/SystemCalendar";
 import "./components/system-calendar.css";
 import "./components/commercial-forms.css";
@@ -8,6 +9,8 @@ import "@fontsource/tajawal/700.css";
 import "./globals.css";
 import "./enhancements.css";
 import { WebsiteContentProvider } from "@/app/components/WebsiteContentProvider";
+import { getLocalizedWebsiteContent, localizedMetadata } from "@/lib/public-content";
+import { isPublicPath, publicRoute } from "@/lib/public-locale";
 import { SITE } from "@/lib/site";
 import { getWebsiteContent, toPublicWebsiteContent } from "@/lib/website-content";
 import { TodayDateDefaults } from "@/app/components/TodayDateDefaults";
@@ -33,7 +36,7 @@ export async function generateMetadata(): Promise<Metadata> {
     ? (requestPathname === "/pwa" ? "/pwa/launch" : requestPathname)
     : "/";
   const keywords = content.seo.focusKeywords.split(/[،,]/).map((item) => item.trim()).filter(Boolean).slice(0, 24);
-  return {
+  return localizedMetadata({
     metadataBase: new URL(SITE.url),
     title: { default: content.seo.homeTitle, template: `%s | ${content.site.shortName}` },
     description: content.seo.homeDescription,
@@ -68,12 +71,14 @@ export async function generateMetadata(): Promise<Metadata> {
     robots: isPwaRequest
       ? { index: false, follow: false, nocache: true }
       : { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
-    other: { "codex-preview": "development" },
-  };
+  });
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const content = await getWebsiteContent();
-  const stored=(await cookies()).get(localeCookieName)?.value;const locale=normalizeAppLocale(stored)??"ar";
-  return <html lang={locale} dir={localeDirection(locale)}><body><LocaleRuntime initialLocale={locale} translationCatalogs={content.translations}/><TodayDateDefaults/><SystemCalendar/><AppDialogProvider><WebsiteContentProvider content={toPublicWebsiteContent(content)}>{children}</WebsiteContentProvider></AppDialogProvider></body></html>;
+  const stored=(await cookies()).get(localeCookieName)?.value;
+  const route = publicRoute((await headers()).get("x-dali-pathname") || "/");
+  const locale = isPublicPath(route.path) ? route.locale : normalizeAppLocale(stored) ?? "ar";
+  const publicContent = isPublicPath(route.path) ? await getLocalizedWebsiteContent() : content;
+  return <html lang={locale} dir={localeDirection(locale)}><body><PublicLocaleProvider locale={isPublicPath(route.path) ? locale : null}><LocaleRuntime initialLocale={locale} translationCatalogs={content.translations}/><TodayDateDefaults/><SystemCalendar/><AppDialogProvider><WebsiteContentProvider content={toPublicWebsiteContent(publicContent)}>{children}</WebsiteContentProvider></AppDialogProvider></PublicLocaleProvider></body></html>;
 }

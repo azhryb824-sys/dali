@@ -1,5 +1,6 @@
 "use client";
 
+import { usePublicLocale } from "@/app/components/PublicLocaleProvider";
 import { useSyncExternalStore } from "react";
 import { isAppLocale, localeCookieName, normalizeAppLocale, type AppLocale } from "@/lib/i18n";
 import { readApiJson } from "@/lib/client-api";
@@ -20,7 +21,9 @@ function subscribe(listener: () => void) {
 
 /** Read one locale across the switchers and React-localized portal views. */
 export function useAppLocale(initialLocale: AppLocale = "ar") {
-  return useSyncExternalStore(subscribe, () => readClientLocale() || initialLocale, () => initialLocale);
+  const publicLocale = usePublicLocale();
+  const preference = useSyncExternalStore(subscribe, () => readClientLocale() || initialLocale, () => initialLocale);
+  return publicLocale ?? preference;
 }
 
 export function setClientLocale(locale: AppLocale) {

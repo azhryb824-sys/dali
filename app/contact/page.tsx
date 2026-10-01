@@ -1,13 +1,25 @@
+import { localizedMetadata } from "@/lib/public-content";
+import ContactDetails from "@/app/components/ContactDetails";
+import StructuredData from "@/app/components/StructuredData";
+import { getLocalizedWebsiteContent, publicRequestLocale } from "@/lib/public-content";
+import { localBusinessSchema } from "@/lib/local-business";
+import { localizedPath } from "@/lib/public-locale";
+import { absoluteUrl } from "@/lib/site";
 import type { Metadata } from "next";
 import PublicPageShell from "@/app/components/PublicPageShell";
 import QuoteRequestForm from "@/app/components/QuoteRequestForm";
 import LiveChatWidget from "@/app/LiveChatWidget";
 
-export const metadata: Metadata = { title: "التواصل وطلب عرض سعر", description: "اطلب عرض سعر للقوى العاملة أو التشغيل والصيانة أو المقاولات في أي مدينة بالمملكة العربية السعودية.", alternates: { canonical: "/contact" } };
+export async function generateMetadata(): Promise<Metadata> { return localizedMetadata({ title: "التواصل وطلب عرض سعر", description: "اطلب عرض سعر للقوى العاملة أو التشغيل والصيانة أو المقاولات في أي مدينة بالمملكة العربية السعودية.", alternates: { canonical: "/contact" } }); }
 
-export default function ContactPage() {
+export default async function ContactPage() {
+  const content = await getLocalizedWebsiteContent();
+  const locale = await publicRequestLocale();
   return <PublicPageShell>
+    <StructuredData data={localBusinessSchema(content)}/>
+    <StructuredData data={{ "@context": "https://schema.org", "@type": "ContactPage", url: absoluteUrl(localizedPath("/contact", locale)), name: "تواصل معنا", about: { "@id": `${absoluteUrl("/")}#organization` } }}/>
     <section className="inner-hero contact-inner-hero"><p className="eyebrow light"><span/>تواصل معنا</p><h1>حدّثنا عن احتياجك،<br/><em>ودعنا نقترح الحل الأنسب.</em></h1><p>سواء كنت تبحث عن قوى عاملة، أو فريق فني، أو تشغيل وصيانة، أو مقاولات في أي مدينة بالمملكة؛ فريق دالي جاهز لمراجعة طلبك.</p></section>
+    <ContactDetails content={content} locale={locale}/>
     <section className="inner-content contact-layout" id="quote">
       <div className="inner-heading"><p className="eyebrow"><span/>طلب عرض سعر</p><h2>خطوتك الأولى نحو خدمة تناسب أعمالك</h2><p>شاركنا المعلومات الأساسية عن الموقع والمهن والأعداد والمدة، وسيتواصل معك المختص لفهم التفاصيل.</p></div>
       <QuoteRequestForm/>

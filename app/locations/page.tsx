@@ -1,16 +1,18 @@
+import { getLocalizedWebsiteContent } from "@/lib/public-content";
+import { localizedMetadata } from "@/lib/public-content";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import PublicPageShell from "@/app/components/PublicPageShell";
 import { ManagedCollectionIndex } from "@/app/components/ManagedContentPages";
-import { getWebsiteContent, publishedEntries } from "@/lib/website-content";
-import Link from "next/link";
+import { publishedEntries } from "@/lib/website-content";
+import Link from "@/app/components/PublicLink";
 import { saudiRegions } from "@/lib/construction-content";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "مناطق الخدمة في جميع مدن المملكة العربية السعودية", description: "تقدم دالي خدمات القوى العاملة والتشغيل والصيانة والمقاولات في مدن ومحافظات مناطق المملكة الثلاث عشرة بحسب نطاق الطلب وخطة التعبئة والتنفيذ.", alternates: { canonical: "/locations" }, openGraph: { type: "website", url: "/locations", title: "خدمات دالي في جميع مدن المملكة", description: "تغطية تشغيلية للمشروعات والمنشآت في مناطق المملكة العربية السعودية الثلاث عشرة." } };
+export async function generateMetadata(): Promise<Metadata> { return localizedMetadata({ title: "مناطق الخدمة في جميع مدن المملكة العربية السعودية", description: "تقدم دالي خدمات القوى العاملة والتشغيل والصيانة والمقاولات في مدن ومحافظات مناطق المملكة الثلاث عشرة بحسب نطاق الطلب وخطة التعبئة والتنفيذ.", alternates: { canonical: "/locations" }, openGraph: { type: "website", url: "/locations", title: "خدمات دالي في جميع مدن المملكة", description: "تغطية تشغيلية للمشروعات والمنشآت في مناطق المملكة العربية السعودية الثلاث عشرة." } }); }
 
 export default async function LocationsPage() {
-  const content = await getWebsiteContent();
+  const content = await getLocalizedWebsiteContent();
   if (!content.visibility.locations) notFound();
   const entries = publishedEntries(content, "locations");
   return <PublicPageShell>

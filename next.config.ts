@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
           "form-action 'self'",
           "frame-ancestors 'none'",
           "object-src 'none'",
-          "frame-src https://meet.jit.si",
+          "frame-src 'self' https://meet.jit.si",
           "child-src 'none'",
           "manifest-src 'self'",
           "media-src 'self'",
@@ -48,6 +48,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       { source: "/portal/:path*", headers: protectedNoStoreHeaders },
+      { source: "/portal/website-preview", headers: securityHeaders.map(header => header.key === "X-Frame-Options" ? { ...header, value: "SAMEORIGIN" } : header.key === "Content-Security-Policy" ? { ...header, value: header.value.replace("frame-ancestors 'none'", "frame-ancestors 'self'") } : header) },
       { source: "/api/portal/:path*", headers: protectedNoStoreHeaders },
       { source: "/pwa/:path*", headers: protectedNoStoreHeaders },
       { source: "/api/pwa/:path*", headers: protectedNoStoreHeaders },

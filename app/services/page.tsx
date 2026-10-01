@@ -1,20 +1,22 @@
+import { getLocalizedWebsiteContent } from "@/lib/public-content";
+import { localizedMetadata } from "@/lib/public-content";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import PublicPageShell from "@/app/components/PublicPageShell";
 import { ManagedCollectionIndex } from "@/app/components/ManagedContentPages";
-import { getWebsiteContent, publishedEntries } from "@/lib/website-content";
-import Link from "next/link";
+import { publishedEntries } from "@/lib/website-content";
+import Link from "@/app/components/PublicLink";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> { return localizedMetadata({
   title: "خدمات القوى العاملة والتشغيل والمقاولات في السعودية",
   description: "حلول متكاملة للمنشآت والمشروعات في جميع مدن المملكة: توفير القوى العاملة، التشغيل والصيانة، والمقاولات وإدارة المشروعات.",
   alternates: { canonical: "/services" },
   openGraph: { type: "website", url: "/services", title: "خدمات دالي في جميع مدن المملكة", description: "قوى عاملة وتشغيل وصيانة ومقاولات للمشروعات والمنشآت في المملكة العربية السعودية." },
-};
+}); }
 
 export default async function ServicesPage() {
-  const content = await getWebsiteContent();
+  const content = await getLocalizedWebsiteContent();
   if (!content.visibility.services) notFound();
   const entries = publishedEntries(content, "services");
   return <PublicPageShell>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { isAppLocale, localeDirection, localeNames, translateUi, type AppLocale } from "@/lib/i18n";
 import { readClientLocale, saveClientLocale, setClientLocale, useAppLocale } from "@/lib/client-locale";
+import { localizedPath, publicRoute, isPublicPath } from "@/lib/public-locale";
 import { observeLocaleTree } from "@/lib/locale-dom";
 
 type TranslationCatalogs = Partial<Record<"en" | "bn", Record<string, string>>>;
@@ -20,9 +21,10 @@ export default function LocaleRuntime({ initialLocale, portal = false, showSwitc
   showSwitcher?: boolean;
   translationCatalogs?: TranslationCatalogs;
 }) {
-  const locale = useAppLocale(initialLocale);
+  const storedLocale = useAppLocale(initialLocale);
   const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
   const pathname = usePathname() || "";
+  const locale = !portal && isPublicPath(publicRoute(pathname).path) ? initialLocale : storedLocale;
   const portalPage = pathname === "/portal" || pathname.startsWith("/portal/");
   const host = useRef<HTMLLabelElement>(null);
   const pending = useRef(false);
@@ -52,6 +54,10 @@ export default function LocaleRuntime({ initialLocale, portal = false, showSwitc
     setBusy(true);
     setError("");
     try {
+      if (!portal && isPublicPath(publicRoute(pathname).path)) {
+        window.location.assign(localizedPath(pathname, value) + window.location.search + window.location.hash);
+        return;
+      }
       await saveClientLocale(value, portal || portalPage);
     } catch {
       setError("تعذّر حفظ اللغة. بقيت اللغة الحالية دون تغيير؛ أعد المحاولة.");

@@ -1,8 +1,9 @@
+import { localizedMetadata } from "@/lib/public-content";
 import type { Metadata } from "next";
 import PublicPageShell from "@/app/components/PublicPageShell";
 import PublicRequestForm from "@/app/components/PublicRequestForm";
 
-export const metadata: Metadata = { title: "الشكاوى والاقتراحات", description: "شارك شركة دالي للتشغيل والصيانة شكواك أو اقتراحك بسرية، واحصل على رقم لمتابعة الملاحظة.", alternates: { canonical: "/feedback" }, robots: { index: false, follow: true } };
+export async function generateMetadata(): Promise<Metadata> { return localizedMetadata({ title: "الشكاوى والاقتراحات", description: "شارك شركة دالي للتشغيل والصيانة شكواك أو اقتراحك بسرية، واحصل على رقم لمتابعة الملاحظة.", alternates: { canonical: "/feedback" }, robots: { index: false, follow: true } }); }
 
 export default function FeedbackPage() {
   return <PublicPageShell>

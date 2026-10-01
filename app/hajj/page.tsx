@@ -1,20 +1,21 @@
+import { getLocalizedWebsiteContent } from "@/lib/public-content";
+import { localizedMetadata } from "@/lib/public-content";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/app/components/PublicLink";
 import { notFound } from "next/navigation";
 import PublicPageShell from "@/app/components/PublicPageShell";
 import StructuredData from "@/app/components/StructuredData";
 import { absoluteUrl, SITE } from "@/lib/site";
-import { getWebsiteContent } from "@/lib/website-content";
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> { return localizedMetadata({
   title: "توفير قوى عاملة لموسم الحج في مكة",
   description: "حلول مرنة لتوفير القوى العاملة والفرق التشغيلية والفنية لموسم الحج في مكة، بحسب المواقع والفترات والمهن والورديات.",
   alternates: { canonical: "/hajj" },
   openGraph: { type: "website", locale: SITE.locale, url: "/hajj", title: "حلول القوى العاملة لموسم الحج في مكة", description: "فرق موسمية مرنة تدعم استمرارية الخدمة في أكثر مواسم مكة حيوية." },
-};
+}); }
 
 export default async function HajjPage() {
-  const content = await getWebsiteContent();
+  const content = await getLocalizedWebsiteContent();
   if (!content.visibility.hajj) notFound();
   const data = { "@context": "https://schema.org", "@graph": [
     { "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "الرئيسية", item: absoluteUrl("/") }, { "@type": "ListItem", position: 2, name: "رمضان والحج", item: absoluteUrl("/seasons") }, { "@type": "ListItem", position: 3, name: "موسم الحج", item: absoluteUrl("/hajj") }] },

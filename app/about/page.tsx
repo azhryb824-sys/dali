@@ -1,15 +1,16 @@
+import { getLocalizedWebsiteContent } from "@/lib/public-content";
+import { localizedMetadata } from "@/lib/public-content";
 import PublicPageShell from "@/app/components/PublicPageShell";
-import { getWebsiteContent } from "@/lib/website-content";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata() {
-  const content = await getWebsiteContent();
-  return { title: `عن ${content.site.companyName}`, description: content.site.description, alternates: { canonical: "/about" } };
+  const content = await getLocalizedWebsiteContent();
+  return localizedMetadata({ title: `عن ${content.site.companyName}`, description: content.site.description, alternates: { canonical: "/about" } });
 }
 
 export default async function AboutPage() {
-  const content = await getWebsiteContent();
+  const content = await getLocalizedWebsiteContent();
   return <PublicPageShell>
     <section className="inner-hero about-inner-hero">
       <p className="eyebrow light"><span/>عن الشركة</p>
