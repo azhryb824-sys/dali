@@ -52,6 +52,7 @@ export async function regenerateIssuedDocumentPdf(documentId: number, pdfLanguag
     title: document.title,
     titleEn: text(metadata.titleEn) || legacyInvoiceCopy?.titleEn,
     issueDate: text(metadata.issueDate) || document.createdAt.slice(0, 10),
+    contractCreatedDate: contract?.createdAt.slice(0, 10) || document.createdAt.slice(0, 10),
     expiryDate: document.expiryDate || undefined,
     amountHalalas: number(metadata.amountHalalas) || number(metadata.netAmountHalalas) || financial?.amountHalalas || undefined,
     subtotalHalalas: number(metadata.subtotalHalalas) || number(metadata.netSubtotalHalalas) || financial?.subtotalHalalas || undefined,

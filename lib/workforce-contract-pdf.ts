@@ -61,6 +61,7 @@ export async function regenerateWorkforceContractPdf(documentId: number, pdfLang
     quantityMode: contract.quantityMode as "fixed" | "open",
     vatRateBps: contract.vatRateBps,
     issueDate: contract.issueDate,
+    contractCreatedDate: contract.createdAt.slice(0, 10),
     amountHalalas: contract.amountHalalas,
     subtotalHalalas: metadata.subtotalHalalas,
     vatHalalas: metadata.vatHalalas,

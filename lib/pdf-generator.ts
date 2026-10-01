@@ -35,6 +35,7 @@ export type IssuedDocumentInput = {
   title: string;
   titleEn?: string;
   issueDate: string;
+  contractCreatedDate?: string;
   expiryDate?: string;
   amountHalalas?: number;
   subtotalHalalas?: number;
@@ -118,6 +119,60 @@ function englishText(value?: string | null) {
   return replacements.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
 }
 
+function contractAgreementIntroduction(input: IssuedDocumentInput) {
+  const date = (input.contractCreatedDate || input.issueDate).slice(0, 10);
+  const instant = new Date(`${date}T12:00:00Z`);
+  const valid = !Number.isNaN(instant.getTime());
+  const arDay = valid ? new Intl.DateTimeFormat("ar-SA", { weekday: "long", timeZone: "Asia/Riyadh" }).format(instant) : "";
+  const enDay = valid ? new Intl.DateTimeFormat("en", { weekday: "long", timeZone: "Asia/Riyadh" }).format(instant) : "";
+  return { ar: `إنه في يوم ${arDay} الموافق ${date} تم الاتفاق بين كل من:`, en: `On ${enDay}, ${date}, the following parties agreed:` };
+}
+
+/** Equal party columns; each bilingual cell places Arabic above English. */
+function drawContractPartiesTable(page: PDFPage, resources: PdfResources, input: IssuedDocumentInput, top: number, language: "ar" | "en" | "bilingual", offset = 0, limit = Infinity) {
+  const purchaser = input.contractDirection === "dali_purchaser";
+  const missing = "غير محدد";
+  const rows = [
+    ["اسم الطرف", "Party name", "شركة دالي للتشغيل والصيانة", input.clientName],
+    ["صفة الطرف", "Contract role", purchaser ? "مشتري ومستفيد من الخدمة" : "مورد ومشغل القوى العاملة", purchaser ? "مورد القوى العاملة" : "مشتري ومستفيد من الخدمة"],
+    ["السجل التجاري", "Commercial registration", missing, input.clientCr || missing],
+    ["الرقم الضريبي", "VAT number", missing, input.clientVat || missing],
+    ["العنوان", "Address", "مكة المكرمة - المملكة العربية السعودية", input.clientAddress || missing],
+    ["الممثل وصفته", "Representative / capacity", missing, [input.clientRepresentative, input.clientRepresentativeTitle].filter(Boolean).join(" - ") || missing],
+  ];
+  const width = PAGE.width - PAGE.margin * 2, half = width / 2;
+  let y = top;
+  const headers = [["الطرف الثاني", "Second Party"], ["الطرف الأول", "First Party"]];
+  headers.forEach(([ar,en], col) => {
+    const x = PAGE.margin + col * half;
+    page.drawRectangle({x,y:y-38,width:half,height:38,color:COLORS.navy});
+    if(language !== "en") drawRight(page,ar,y-15,resources.bold,10,rgb(1,1,1),x+half-12);
+    if(language !== "ar") drawLeft(page,en,y-(language === "en"?23:29),resources.latinBold,8.5,rgb(1,1,1),x+12);
+  });
+  y -= 38;
+  let consumed = 0;
+  for (const [labelAr,labelEn,first,second] of rows.slice(offset)) {
+    const cells = [second,first].map(value => {
+      const partyEnglish: Record<string, string> = { [missing]: "Not specified", "شركة دالي للتشغيل والصيانة": "Dali Operations & Maintenance Co.", "مشتري ومستفيد من الخدمة": "Purchaser and service beneficiary", "مورد ومشغل القوى العاملة": "Manpower supplier and operator", "مورد القوى العاملة": "Manpower supplier" };
+      const en = partyEnglish[value] || englishText(value);
+      return { ar:wrapWords(resources.regular,latinDigits(value),8,half-24), en:wrapWords(/[\u0600-\u06ff]/.test(en)?resources.regular:resources.latinRegular,en,8,half-24) };
+    });
+    const height = 26 + Math.max(...cells.map(cell => (language === "en"?0:cell.ar.length*12)+(language === "ar"?0:cell.en.length*12)));
+    if(top-y+height>limit && consumed) break;
+    cells.forEach((cell,col) => {
+      const x=PAGE.margin+col*half;
+      page.drawRectangle({x,y:y-height,width:half,height,color:(offset+consumed)%2?rgb(1,1,1):COLORS.pale,borderColor:COLORS.line,borderWidth:0.5});
+      if(language !== "en") drawRight(page,labelAr,y-12,resources.bold,7,COLORS.red,x+half-12);
+      if(language !== "ar") drawLeft(page,labelEn,y-12,resources.latinBold,6.6,COLORS.red,x+12);
+      let baseline=y-27;
+      if(language !== "en") {cell.ar.forEach(line=>{drawRight(page,line,baseline,resources.regular,8,COLORS.text,x+half-12);baseline-=12;});}
+      if(language !== "ar") cell.en.forEach(line=>{const font=/[\u0600-\u06ff]/.test(line)?resources.regular:resources.latinRegular;drawLeft(page,line,baseline,font,8,COLORS.text,x+12);baseline-=12;});
+    });
+    y-=height;consumed++;
+  }
+  return {y:y-12, consumed, total:rows.length};
+}
+
 async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: CompanyAsset[]) {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${englishDocumentLabels[input.documentType]} - ${input.referenceCode}`);
@@ -155,6 +210,10 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
   heading(englishDocumentLabels[input.documentType]);
   row("Reference", input.referenceCode); row("Issue date", input.issueDate); row("Client / Entity", input.clientName);
   row("Document title", input.titleEn || englishText(input.title));
+  if (input.documentType === "workforce_contract") {
+    row("Agreement", contractAgreementIntroduction(input).en);
+    let offset = 0; do { ensure(160); const table = drawContractPartiesTable(page, resources, input, y, "en", offset, y - 72); y = table.y; offset += table.consumed; if (offset < table.total) addPage(); } while (offset < 6);
+  }
   if (input.expiryDate) row("Due date", input.expiryDate);
   if (input.clientCr) row("Commercial registration", input.clientCr);
   if (input.clientVat) row("VAT number", input.clientVat);
@@ -488,7 +547,11 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
   section(issuedDocumentLabels[input.documentType], englishDocumentLabels[input.documentType]);
   pairedBlock("المرجع", input.referenceCode, "Reference", input.referenceCode, true);
   pairedBlock("تاريخ الإصدار", dateLabel(input.issueDate), "Issue date", input.issueDate);
-  pairedBlock("العميل / الجهة", input.clientName, "Client / Entity", englishText(input.clientName));
+  if (input.documentType === "workforce_contract") {
+    const introduction = contractAgreementIntroduction(input);
+    pairedBlock("الاتفاق", introduction.ar, "Agreement", introduction.en);
+    let offset = 0; do { ensure(170); const table = drawContractPartiesTable(page, resources, input, y, "bilingual", offset, y - contentBottom); y = table.y; offset += table.consumed; if (offset < table.total) addPage(); } while (offset < 6);
+  } else pairedBlock("العميل / الجهة", input.clientName, "Client / Entity", englishText(input.clientName));
   if (input.clientCr) pairedBlock("السجل التجاري", input.clientCr, "Commercial registration", input.clientCr);
   if (input.clientVat) pairedBlock("الرقم الضريبي", input.clientVat, "VAT number", input.clientVat);
   if (input.clientAddress) pairedBlock("العنوان الوطني", input.clientAddress, "National address", englishText(input.clientAddress));
@@ -1087,6 +1150,9 @@ function createComposer(pdf: PDFDocument, resources: PdfResources, input: Issued
     pair,
     paragraph,
     quotationTable,
+    partiesTable() {
+      let offset = 0; do { ensure(150); const table = drawContractPartiesTable(page, resources, input, y, "ar", offset, y - contentBottom); y = table.y; offset += table.consumed; if (offset < table.total) addPage(); } while (offset < 6);
+    },
     finish() {
       if (y < signedContentBottom) addPage();
       if (input.approvalState === "draft") drawDraftEndorsement(page, resources, input.referenceCode);
@@ -1125,11 +1191,9 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
       ? input.professions
       : [{ profession: input.profession || "عمالة فنية وإنشائية", requiredCount: input.workerCount || 0, assignedWorkers: [] }];
     const daliPurchaser = input.contractDirection === "dali_purchaser";
+    composer.paragraph("الاتفاق", contractAgreementIntroduction(input).ar);
+    composer.partiesTable();
     composer.paragraph("تمهيد", daliPurchaser ? `لما كانت شركة دالي بحاجة إلى توفير قوى عاملة لأعمالها ومواقعها، وأبدى الطرف الثاني استعداده لتوريد العمالة وفق المهن والأعداد المعتمدة؛ فقد اتفق الطرفان على إبرام هذا العقد، ويعد التمهيد والملاحق جزءاً لا يتجزأ منه.` : `لما كانت شركة دالي متخصصة في توفير وتشغيل القوى العاملة وخدمات التشغيل والصيانة، ورغب الطرف الثاني في الاستفادة من هذه الخدمات؛ فقد اتفق الطرفان على إبرام هذا العقد، ويعد التمهيد والملاحق جزءاً لا يتجزأ منه.`);
-    composer.heading("بيانات طرفي العقد");
-    composer.pair("الطرف الأول", "شركة دالي للتشغيل والصيانة", "الطرف الثاني", input.clientName);
-    composer.pair("صفة الطرف الأول", daliPurchaser ? "مشتري ومستفيد من خدمة توريد العمالة" : "مورد ومشغل القوى العاملة", "صفة الطرف الثاني", daliPurchaser ? "مورد القوى العاملة" : "المشتري والمستفيد من الخدمة");
-    composer.pair("العنوان التشغيلي", "مكة المكرمة – المملكة العربية السعودية", "الرقم الضريبي للطرف الثاني", input.clientVat || "غير محدد");
     composer.heading("نطاق التعاقد");
     composer.field("موقع العمل", input.workSite || "حسب توجيه العميل المعتمد");
     composer.heading("جدول المهن والأسعار والخدمات");

@@ -402,6 +402,7 @@ export async function POST(request: Request) {
       title,
       titleEn,
       issueDate,
+      contractCreatedDate: new Date().toISOString().slice(0, 10),
       expiryDate: documentType === "workforce_contract" ? endDate || undefined : expiryDate || undefined,
       amountHalalas,
       subtotalHalalas,
