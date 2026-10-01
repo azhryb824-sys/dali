@@ -260,9 +260,6 @@ async function createEnglishIssuedPdf(input: IssuedDocumentInput, assets: Compan
       : defaultWorkforceContractClauses(input.contractDirection || "dali_supplier", false);
     const clauses = selectedClauses.map((item, index) => [`${contractClauseLabel(selectedClauses, index, "en")}: ${item.titleEn || englishText(item.title)}`, contractClauseBody(item, "en") || englishText(item.body)]);
     clauses.forEach(([label, body], index) => { if (index > 0 && index % 5 === 0) { addPage(); heading("Terms and Conditions — Continued"); } row(label, body); });
-    const daliRole = input.contractDirection === "dali_purchaser" ? "Purchaser" : "Supplier";
-    const counterpartyRole = input.contractDirection === "dali_purchaser" ? "Supplier" : "Purchaser";
-    row("Approval and Signatures", `This contract becomes effective only after approval and signature by both parties. Appendices, schedules and linked versions form part of it. First Party: Dali Operations & Maintenance Co. (${daliRole}) | Second Party: ${counterpartyRole}.`);
   } else {
     heading(input.documentType === "official_letter" ? "Letter Body" : input.documentType === "invoice" ? "Invoice Details" : "Terms and Details");
     row(input.documentType === "official_letter" ? "Letter text" : input.documentType === "invoice" ? "Description" : "Scope", input.detailsEn || englishText(input.details));
@@ -703,14 +700,7 @@ async function createBilingualIssuedPdf(input: IssuedDocumentInput, assets: Comp
     });
     if (input.paymentTerms) pairedBlock("شروط الدفع", input.paymentTerms, "Payment terms", englishText(input.paymentTerms));
     if (input.specialTerms) pairedBlock("الشروط الخاصة", input.specialTerms, "Special terms", englishText(input.specialTerms));
-    ensureWithSignatures(92);
-    pairedBlock(
-      "الاعتماد",
-      "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.",
-      "Approval",
-      "This contract is issued electronically and becomes effective only after approval and signature by both parties. Its appendices, schedules and linked versions form an integral part of it.",
-      true,
-    );
+
   }
 
   if (input.documentType === "workforce_contract") bilingualSignaturePage();
@@ -1235,10 +1225,13 @@ export async function generateIssuedPdf(input: IssuedDocumentInput, assets: Comp
     let currentSection = "";
     clauses.forEach(([title, body], index) => {
       const source = selectedClauses[index];
-      if (source?.section && source.section !== currentSection) { currentSection = source.section; composer.heading(currentSection, 72); }
+      if (source?.section && source.section !== currentSection) {
+        currentSection = source.section;
+        if (currentSection !== "مدة العقد والتنفيذ") composer.heading(currentSection, 72);
+      }
       composer.paragraph(title, body);
     });
-    composer.paragraph("الاعتماد", "حرر هذا العقد إلكترونياً، ولا يصبح نافذاً إلا بعد اعتماده وتوقيعه من الطرفين. وتعد الملاحق والجداول والإصدارات المرتبطة به جزءاً منه.", true);
+
   } else if (input.documentType === "quotation") {
     const workforcePricing = input.activityLabel === "توريد العمالة";
     const openQuantity = input.quantityMode === "open";
