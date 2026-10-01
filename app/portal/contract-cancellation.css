@@ -1,0 +1,357 @@
+.contract-legal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  border: 1px solid #f0d6a2;
+  border-radius: 999px;
+  background: #fff8e8;
+  color: #8a5b0f;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.contract-legal-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px rgba(138, 91, 15, 0.12);
+}
+
+.pending-legal-action {
+  border-color: #ead29d !important;
+  background: #fff8e8 !important;
+  color: #8a5b0f !important;
+  cursor: progress !important;
+  opacity: 1 !important;
+}
+
+.contract-cancellation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  overflow-y: auto;
+  background: rgba(0, 19, 29, 0.72);
+  backdrop-filter: blur(7px);
+  animation: contract-cancellation-fade 160ms ease-out;
+}
+
+.contract-cancellation-modal {
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 44px);
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(0, 18, 28, 0.32);
+  animation: contract-cancellation-rise 190ms ease-out;
+}
+
+.contract-cancellation-modal > header {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 15px;
+  align-items: start;
+  padding: 24px 26px 20px;
+  border-bottom: 1px solid #e3e9ec;
+  background: linear-gradient(145deg, #fff 0%, #f8fafb 58%, #fff5f5 100%);
+}
+
+.contract-cancellation-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #fff0f0;
+  color: var(--admin-red);
+  font-size: 24px;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 1px #f4cfd1;
+}
+
+.contract-cancellation-modal > header span {
+  color: var(--admin-red);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.contract-cancellation-modal > header h2 {
+  margin: 5px 0 6px;
+  color: var(--admin-navy);
+  font-size: 23px;
+}
+
+.contract-cancellation-modal > header p {
+  max-width: 590px;
+  margin: 0;
+  color: #63757e;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.contract-cancellation-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d9e2e5;
+  border-radius: 10px;
+  background: #fff;
+  color: #677981;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.contract-cancellation-close:hover:not(:disabled) {
+  border-color: #e4a9ac;
+  color: var(--admin-red);
+}
+
+.contract-cancellation-modal form {
+  padding: 24px 26px 26px;
+}
+
+.contract-cancellation-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.contract-cancellation-summary > div {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #dfe7ea;
+  border-radius: 12px;
+  background: #f8fafb;
+}
+
+.contract-cancellation-summary span,
+.contract-cancellation-summary strong {
+  display: block;
+}
+
+.contract-cancellation-summary span {
+  margin-bottom: 5px;
+  color: #7b8a91;
+  font-size: 9px;
+}
+
+.contract-cancellation-summary strong {
+  overflow: hidden;
+  color: var(--admin-navy);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contract-cancellation-warning {
+  margin-top: 15px;
+  padding: 14px 16px;
+  border: 1px solid #f1d7a2;
+  border-right: 4px solid #d79220;
+  border-radius: 12px;
+  background: #fff9ec;
+}
+
+.contract-cancellation-warning strong {
+  display: block;
+  color: #7d520d;
+  font-size: 12px;
+}
+
+.contract-cancellation-warning p {
+  margin: 5px 0 0;
+  color: #7b653f;
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.contract-cancellation-reason {
+  display: grid;
+  gap: 8px;
+  margin-top: 17px;
+}
+
+.contract-cancellation-reason > span {
+  color: var(--admin-navy);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.contract-cancellation-reason textarea {
+  width: 100%;
+  min-height: 138px;
+  resize: vertical;
+  padding: 13px 14px;
+  border: 1px solid #ccd9de;
+  border-radius: 12px;
+  outline: none;
+  background: #fff;
+  color: var(--admin-navy);
+  font: inherit;
+  line-height: 1.8;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.contract-cancellation-reason textarea:focus {
+  border-color: #7194a3;
+  box-shadow: 0 0 0 4px rgba(0, 65, 89, 0.1);
+}
+
+.contract-cancellation-reason small {
+  color: #7c8b92;
+  font-size: 9px;
+  text-align: left;
+}
+
+.contract-cancellation-assurance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.contract-cancellation-assurance span {
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: #edf8f2;
+  color: #24754f;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.contract-cancellation-modal footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #e5ebed;
+}
+
+.contract-cancellation-modal footer button {
+  min-height: 44px;
+  padding: 9px 17px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.contract-cancellation-modal footer button:disabled,
+.contract-cancellation-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.contract-cancellation-secondary {
+  border: 1px solid #cfdadd;
+  background: #fff;
+  color: #53666f;
+}
+
+.contract-cancellation-primary {
+  min-width: 210px;
+  border: 1px solid var(--admin-red);
+  background: var(--admin-red);
+  color: #fff;
+  box-shadow: 0 9px 24px rgba(226, 28, 37, 0.18);
+}
+
+@keyframes contract-cancellation-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes contract-cancellation-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 900px) {
+  .contract-cancellation-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .contract-cancellation-backdrop {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .contract-cancellation-modal {
+    max-height: calc(100dvh - 20px);
+    border-radius: 18px;
+  }
+
+  .contract-cancellation-modal > header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 19px 17px 16px;
+  }
+
+  .contract-cancellation-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    font-size: 20px;
+  }
+
+  .contract-cancellation-modal > header h2 {
+    font-size: 19px;
+  }
+
+  .contract-cancellation-modal form {
+    padding: 17px;
+  }
+
+  .contract-cancellation-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .contract-cancellation-modal footer {
+    flex-direction: column-reverse;
+  }
+
+  .contract-cancellation-modal footer button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .contract-cancellation-modal > header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .contract-cancellation-icon {
+    display: none;
+  }
+
+  .contract-cancellation-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.contract-billing-list article:has(.contract-legal-status) .contract-card-action:not(.pending-legal-action),
+.contract-billing-list article:has(.contract-legal-status) .contract-card-approve {
+  display: none;
+}
