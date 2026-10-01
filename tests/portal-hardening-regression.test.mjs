@@ -85,8 +85,8 @@ test("construction attachment routes authenticate before identifier validation o
 
 test("production framework dependencies use patched versions", async () => {
   const packageJson = JSON.parse(await read("package.json"));
-  assert.equal(packageJson.dependencies.next, "16.3.3");
+  assert.equal(packageJson.dependencies.next, "16.3.8");
   assert.equal(packageJson.dependencies.sharp, "0.35.4");
   assert.equal(packageJson.dependencies["baseline-browser-mapping"], "2.11.0");
-  assert.equal(packageJson.devDependencies["eslint-config-next"], "16.3.3");
+  assert.equal(packageJson.devDependencies["eslint-config-next"], "16.3.8");
 });
