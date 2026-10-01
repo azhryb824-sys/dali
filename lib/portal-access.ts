@@ -286,7 +286,7 @@ export function canAccessPortalDepartment(
 }
 
 export function canAccessPortalDocuments(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.read");
+  return access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin") || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.read");
 }
 
 export function canAccessCompanyFiles(access: Pick<PortalAccess, "role" | "department" | "functionalRoles" | "functionalPermissions">) {
@@ -294,7 +294,7 @@ export function canAccessCompanyFiles(access: Pick<PortalAccess, "role" | "depar
 }
 
 export function canManagePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.write");
+  return access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin") || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("documents.write");
 }
 
 export function canSharePortalDocuments(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
@@ -302,7 +302,7 @@ export function canSharePortalDocuments(access: Pick<PortalAccess, "role" | "fun
 }
 
 export function canManageCompanyAssets(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {
-  return access.role === "admin" || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("assets.administer");
+  return access.role === "admin" || access.functionalRoles.includes("system_owner") || access.functionalRoles.includes("system_admin") || access.functionalPermissions.includes("*") || access.functionalPermissions.includes("assets.administer");
 }
 
 export function canAdministerPortalUsers(access: Pick<PortalAccess, "role" | "functionalRoles" | "functionalPermissions">) {

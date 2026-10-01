@@ -1,5 +1,5 @@
 import { emitPortalNotification } from "@/lib/portal-notifications";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { documentStamps, portalActivity } from "@/db/schema";
 import { attachmentHeaders, cleanText, objectKey, safeFileName } from "@/lib/company-documents";
@@ -41,8 +41,11 @@ export async function POST(request: Request) {
     const fileName = safeFileName(file.name);
     storageKey = objectKey("document-stamps", fileName);
     await getRuntimeEnv().BUCKET.put(storageKey, validation.bytes, { httpMetadata: { contentType: file.type }, customMetadata: { uploadedBy: access.user.email, stampName: name } });
-    const [stamp] = await getDb().insert(documentStamps).values({ name, storageKey, fileName, contentType: file.type, sizeBytes: file.size, createdBy: access.user.email }).returning();
-    await getDb().insert(portalActivity).values({ actorEmail: access.user.email, action: "document-stamp-created", entityType: "document-stamp", entityId: String(stamp.id) });
+    const stamp = await getDb().transaction(async tx => {
+      const [saved] = await tx.insert(documentStamps).values({ name, storageKey, fileName, contentType: file.type, sizeBytes: file.size, createdBy: access.user.email }).returning();
+      await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: "document-stamp-created", entityType: "document-stamp", entityId: String(saved.id) });
+      return saved;
+    });
     await emitPortalNotification({eventType:"document-stamp-created",title:"أضيف ختم جديد",message:stamp.name,severity:"info",module:"documents",entityType:"document-stamp",entityId:stamp.id,actionView:"documents",targetRole:"admin"}).catch(()=>undefined);
     return Response.json({ stamp }, { status: 201 });
   } catch {
@@ -57,8 +60,13 @@ export async function DELETE(request: Request) {
   if (!access || !canManageCompanyAssets(access)) return Response.json({ error: "إدارة الأختام متاحة للمالك ومشرف النظام فقط" }, { status: 403 });
   const id = Number(new URL(request.url).searchParams.get("id"));
   if (!Number.isInteger(id) || id < 1) return Response.json({ error: "رقم الختم غير صحيح" }, { status: 400 });
-  await getDb().update(documentStamps).set({ active: false, updatedAt: new Date().toISOString() }).where(eq(documentStamps.id, id));
-  await getDb().insert(portalActivity).values({actorEmail:access.user.email,action:"document-stamp-deactivated",entityType:"document-stamp",entityId:String(id)});
+  const stamp = await getDb().transaction(async tx => {
+    const [deleted] = await tx.update(documentStamps).set({ active: false, updatedAt: new Date().toISOString() }).where(and(eq(documentStamps.id, id), eq(documentStamps.active, true))).returning();
+    if (!deleted) return null;
+    await tx.insert(portalActivity).values({actorEmail:access.user.email,action:"document-stamp-deactivated",entityType:"document-stamp",entityId:String(id)});
+    return deleted;
+  });
+  if (!stamp) return Response.json({ error: "الختم غير موجود" }, { status: 404 });
   await emitPortalNotification({eventType:"document-stamp-deactivated",title:"عُطّل ختم للاستخدام الجديد",message:`ختم #${id}`,severity:"info",module:"documents",entityType:"document-stamp",entityId:id,actionView:"documents",targetRole:"admin"}).catch(()=>undefined);
   return Response.json({ ok: true });
 }

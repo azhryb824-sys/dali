@@ -6,6 +6,11 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "حذف الختم": { en: "Delete stamp", bn: "সিল মুছুন" },
+  "لا توجد أختام محفوظة. أضف الختم الأول من النموذج أدناه.": { en: "No saved stamps. Add your first stamp using the form below.", bn: "কোনো সিল সংরক্ষিত নেই। নিচের ফর্ম দিয়ে প্রথম সিল যোগ করুন।" },
+  "حذف الختم من قائمة الاستخدام؟ تبقى المستندات المعتمدة سابقًا محفوظة.": { en: "Delete this stamp from the available list? Previously approved documents remain preserved.", bn: "ব্যবহারযোগ্য তালিকা থেকে এই সিল মুছবেন? আগে অনুমোদিত নথিগুলো সংরক্ষিত থাকবে।" },
+  "حُذف الختم من قائمة الاستخدام؛ تبقى المستندات السابقة محفوظة": { en: "Stamp removed from the available list; previous documents remain preserved", bn: "ব্যবহারযোগ্য তালিকা থেকে সিল সরানো হয়েছে; আগের নথিগুলো সংরক্ষিত থাকবে" },
+  "حذف الختم يمنع استخدامه في الاعتمادات الجديدة ويحفظه مع المستندات السابقة.": { en: "Deleting a stamp prevents its use in new approvals and preserves it with previous documents.", bn: "সিল মুছলে নতুন অনুমোদনে এর ব্যবহার বন্ধ হয় এবং আগের নথির সঙ্গে এটি সংরক্ষিত থাকে।" },
   "تُحفظ التعديلات على العقد نفسه ويُعاد للمسودة لاعتماده مجددًا.": { en: "Changes are saved to this contract, which returns to draft for approval again.", bn: "এই চুক্তিতেই পরিবর্তন সংরক্ষিত হবে এবং পুনরায় অনুমোদনের জন্য খসড়া অবস্থায় ফিরবে।" },
   "معاينة نسخة العقد الحالية": { en: "Preview current contract version", bn: "চুক্তির বর্তমান সংস্করণ দেখুন" },
   "اختيار التاريخ": {"en": "Choose a date", "bn": "তারিখ নির্বাচন করুন"},

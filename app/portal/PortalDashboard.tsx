@@ -3766,9 +3766,10 @@ function FinanceDocumentActions({ onIssue }: { onIssue: (type: string) => void }
   );
 }
 
-function DocumentCenter({ documents, contracts, assets, query, setQuery, canManageDocuments, canShareDocuments, canIssueContracts, canManageAssets, canApprove, busy, expiringDocuments, expiredDocuments, onUpload, onIssue, onIssueQuotation, onOpenQuoteApprovals, onApproveContract, onShare, onUploadAsset }: { documents: CompanyDocument[]; contracts: WorkforceContract[]; assets: CompanyAsset[]; query: string; setQuery: (value: string) => void; canManageDocuments: boolean; canShareDocuments: boolean; canIssueContracts: boolean; canManageAssets: boolean; busy: string | null; canApprove: boolean; onOpenQuoteApprovals: () => void; onApproveContract: (contractId: number) => Promise<void>; expiringDocuments: CompanyDocument[]; expiredDocuments: CompanyDocument[]; onUpload: () => void; onIssue: () => void; onIssueQuotation: () => void; onShare: (id: number) => Promise<void>; onUploadAsset: (slot: "stamp" | "signature", form: HTMLFormElement) => Promise<void> }) {
-  const rows = filterRecords(documents, query);
-  const representedTypes = new Set(documents.map((item) => item.documentType).filter(Boolean)).size;
+function DocumentCenter({ documents, query, setQuery, canManageDocuments, canShareDocuments, canManageAssets, busy, expiringDocuments, expiredDocuments, onUpload, onShare }: { documents: CompanyDocument[]; contracts: WorkforceContract[]; assets: CompanyAsset[]; query: string; setQuery: (value: string) => void; canManageDocuments: boolean; canShareDocuments: boolean; canIssueContracts: boolean; canManageAssets: boolean; busy: string | null; canApprove: boolean; onOpenQuoteApprovals: () => void; onApproveContract: (contractId: number) => Promise<void>; expiringDocuments: CompanyDocument[]; expiredDocuments: CompanyDocument[]; onUpload: () => void; onIssue: () => void; onIssueQuotation: () => void; onShare: (id: number) => Promise<void>; onUploadAsset: (slot: "stamp" | "signature", form: HTMLFormElement) => Promise<void> }) {
+  const officialDocuments = documents.filter(isCorporateDocument);
+  const rows = filterRecords(officialDocuments, query);
+  const representedTypes = new Set(officialDocuments.map((item) => item.documentType).filter(Boolean)).size;
   return (
     <>
       <div className="content-heading module-heading documents-heading">
@@ -3777,28 +3778,8 @@ function DocumentCenter({ documents, contracts, assets, query, setQuery, canMana
           <h1>مستندات الشركة</h1>
           <span>السجل التجاري والتراخيص والشهادات النظامية الخاصة بشركة دالي فقط، مع متابعة دقيقة للصلاحية والتجديد.</span>
         </div>
-        {(canManageDocuments || canIssueContracts) && (
-          <div className="heading-actions">
-            {canApprove && (
-              <button className="admin-primary document-approval-entry" onClick={onOpenQuoteApprovals}>
-                <Icon name="check" />
-                اعتماد عروض الأسعار
-              </button>
-            )}
-            {canManageDocuments && <button className="admin-secondary" onClick={onUpload}>
-              <Icon name="upload" />
-              رفع مستند
-            </button>}
-            {canIssueContracts && <button className="admin-secondary" onClick={onIssueQuotation}>
-              <Icon name="documents" />
-              إنشاء عرض سعر
-            </button>}
-            {canIssueContracts && <button className="admin-primary" onClick={onIssue}>
-              <Icon name="plus" />
-              إنشاء عقد
-            </button>}
-          </div>
-        )}
+        {canManageDocuments && <div className="heading-actions"><button className="admin-primary" onClick={onUpload}><Icon name="upload"/>رفع مستند</button></div>}
+
       </div>
 
       {(expiringDocuments.length > 0 || expiredDocuments.length > 0) && (
@@ -3824,13 +3805,13 @@ function DocumentCenter({ documents, contracts, assets, query, setQuery, canMana
       )}
 
       <section className="metric-grid compact-metrics document-metrics">
-        <Metric label="مستندات دالي" value={documents.length} note="وثائق الشركة الرسمية" />
+        <Metric label="مستندات دالي" value={officialDocuments.length} note="وثائق الشركة الرسمية" />
         <Metric label="تنتهي خلال 30 يوماً" value={expiringDocuments.length} note="تحتاج إلى تجديد" />
         <Metric label="مستندات منتهية" value={expiredDocuments.length} note="تحتاج إلى إجراء" />
         <Metric label="أنواع موثقة" value={representedTypes} note="سجلات وتراخيص وشهادات" />
       </section>
 
-      <section className="documents-layout">
+      <section className="company-official-documents-layout">
         <article className="panel document-library">
           <div className="panel-head">
             <div>
@@ -3845,13 +3826,13 @@ function DocumentCenter({ documents, contracts, assets, query, setQuery, canMana
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث بنوع المستند أو المرجع أو الجهة المصدرة" />
             </label>
           </div>
-          <DocumentTable documents={rows} contracts={contracts} canApprove={canApprove} canShare={canShareDocuments} busy={busy} onApproveContract={onApproveContract} onOpenQuoteApprovals={onOpenQuoteApprovals} onShare={onShare} />
+          <DocumentTable documents={rows} canShare={canShareDocuments} busy={busy} onShare={onShare} />
         </article>
-        <CompanyAssetsPanel assets={assets} canManage={canManageAssets} busy={busy} onUpload={onUploadAsset} />
       </section>
+      {canManageAssets && <DocumentStampsManager/>}
       {canShareDocuments && (
         <DocumentShareManager
-          documents={documents.map(({ id, referenceCode, title }) => ({
+          documents={officialDocuments.map(({ id, referenceCode, title }) => ({
             id,
             referenceCode,
             title,
@@ -3871,7 +3852,7 @@ function expiryText(value: string | null) {
   return formatDate(value);
 }
 
-function DocumentTable({ documents, contracts, canApprove, canShare, busy, onApproveContract, onOpenQuoteApprovals, onShare }: { documents: CompanyDocument[]; contracts: WorkforceContract[]; canApprove: boolean; canShare: boolean; busy: string | null; onApproveContract: (id: number) => Promise<void>; onOpenQuoteApprovals: () => void; onShare: (id: number) => Promise<void> }) {
+function DocumentTable({ documents, canShare, busy, onShare }: { documents: CompanyDocument[]; canShare: boolean; busy: string | null; onShare: (id: number) => Promise<void> }) {
   if (!documents.length) return <EmptyRows label="ارفع أول وثيقة رسمية لشركة دالي لتظهر هنا." />;
   return (
     <div className="management-table-wrap">
@@ -3891,8 +3872,6 @@ function DocumentTable({ documents, contracts, canApprove, canShare, busy, onApp
           {documents.map((item) => {
             const days = daysUntil(item.expiryDate);
             const expiryClass = days < 0 ? "expired" : days <= 30 ? "expiring" : "";
-            const contract = contracts.find((entry) => entry.documentId === item.id);
-            const contractNeedsApproval = contract && ["draft", "internal_review", "legal_review"].includes(contract.status);
             return (
               <tr key={item.id}>
                 <td dir="ltr">
@@ -3915,20 +3894,8 @@ function DocumentTable({ documents, contracts, canApprove, canShare, busy, onApp
                 <td>{formatBytes(item.sizeBytes)}</td>
                 <td>
                   <div className="document-actions">
-                    {canApprove && contractNeedsApproval && (
-                      <button className="document-direct-approve" disabled={busy === `contract-status-${contract.id}`} onClick={() => void onApproveContract(contract.id)}>
-                        <Icon name="check" />
-                        <span>{busy === `contract-status-${contract.id}` ? "جارٍ الاعتماد" : "اعتماد العقد"}</span>
-                      </button>
-                    )}
-                    {canApprove && item.documentType === "quotation" && (
-                      <button className="document-direct-approve" onClick={onOpenQuoteApprovals}>
-                        <Icon name="check" />
-                        <span>اعتماد العرض</span>
-                      </button>
-                    )}
-                    <PdfDownloadButton href={`/api/portal/documents/${item.id}?inline=1`} title={item.title} inline icon="documents" label="معاينة" />
-                    <PdfDownloadButton href={`/api/portal/documents/${item.id}`} title={item.title} icon="download" label="تنزيل" />
+                    <PdfDownloadButton href={`/api/portal/documents/${item.id}?inline=1`} title={item.title} fileName={item.fileName} inline icon="documents" label="معاينة" />
+                    <PdfDownloadButton href={`/api/portal/documents/${item.id}`} title={item.title} fileName={item.fileName} icon="download" label="تنزيل" />
                     {canShare && (
                       <button disabled={busy === `share-${item.id}`} onClick={() => void onShare(item.id)} aria-label={`مشاركة ${item.title}`}>
                         <Icon name="share" />
@@ -3946,14 +3913,14 @@ function DocumentTable({ documents, contracts, canApprove, canShare, busy, onApp
   );
 }
 
-function PdfDownloadButton({ href, title, label, icon, inline = false }: { href: string; title: string; label: string; icon: IconName; inline?: boolean }) {
+function PdfDownloadButton({ href, title, fileName, label, icon, inline = false }: { href: string; title: string; fileName?: string; label: string; icon: IconName; inline?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   async function openPdf() {
     setLoading(true);
     try {
       const requestUrl = new URL(href, window.location.origin);
-      if (/عقد|عرض سعر|فاتورة|contract|quotation|invoice/i.test(title)) {
+      if (!fileName && /عقد|عرض سعر|فاتورة|contract|quotation|invoice/i.test(title)) {
         const choice = await appPrompt("اختر لغة ملف PDF: اكتب 1 للعربية فقط، أو 2 لعربي/English", { title: "لغة ملف PDF", defaultValue: "1", inputMode: "numeric" });
         if (choice === null) return;
         if (!["1", "2"].includes(choice.trim())) throw new Error("اختيار اللغة غير صحيح؛ استخدم 1 أو 2");
@@ -3971,7 +3938,7 @@ function PdfDownloadButton({ href, title, label, icon, inline = false }: { href:
       else {
         const anchor = document.createElement("a");
         anchor.href = url;
-        anchor.download = `${title}.pdf`;
+        anchor.download = fileName || `${title}.pdf`;
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
@@ -4057,7 +4024,7 @@ function CompanyAssetsPanel({ assets, canManage, busy, onUpload }: { assets: Com
           );
         })}
       </div>
-      {canManage && <DocumentStampsManager/>}
+
       <div className="asset-security">
         <strong>حماية الأصول الرسمية</strong>
         <p>الصيغ المقبولة PNG وJPG حتى 5 ميجابايت. المعاينة متاحة للمستخدمين المخولين داخل النظام فقط ولا تدخل روابط المشاركة.</p>
