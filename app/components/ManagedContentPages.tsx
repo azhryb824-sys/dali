@@ -1,3 +1,4 @@
+import ManagedSections from "./ManagedSections";
 import { publicRequestLocale } from "@/lib/public-content";
 import { localizedPublicTree } from "./LocalizedPublicTree";
 import Link from "@/app/components/PublicLink";
@@ -88,7 +89,7 @@ export async function ManagedEntryDetail({ content, collectionKey, entry }: { co
     </section>
     <article className="service-detail inner-content" id="details">
       <section className="detail-overview"><div><p className="eyebrow"><span/>نطاق واضح</p><h2>{entry.shortTitle || label.singular}</h2><p>{entry.summary}</p></div><ul aria-label="المجالات المرتبطة">{entry.tags.map((tag) => <li key={tag}>{tag}</li>)}</ul></section>
-      {entry.blocks.length > 0 && <div className="scope-grid">{entry.blocks.map((block, index) => <section key={`${block.title}-${index}`}><span>{String(index + 1).padStart(2, "0")}</span><h2>{block.title}</h2>{block.text.split(/\n{2,}/).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}{block.checklist.length > 0 && <ul>{block.checklist.map((item) => <li key={item}>{item}</li>)}</ul>}</section>)}</div>}
+      <ManagedSections blocks={entry.blocks}/>
       {entry.checklist.length > 0 && <section className="request-checklist"><div><p className="eyebrow"><span/>قبل التواصل</p><h2>بيانات تساعد على مراجعة أدق</h2><p>كلما كان نطاق الطلب محددًا، قلّت الافتراضات وأصبح العرض أوضح.</p></div><ul>{entry.checklist.map((item) => <li key={item}>{item}</li>)}</ul></section>}
       {entry.faqs.length > 0 && <section className="detail-faq"><div><p className="eyebrow"><span/>أسئلة شائعة</p><h2>إجابات مرتبطة بهذه الصفحة</h2></div><div>{entry.faqs.map((faq) => <details key={faq.question}><summary>{faq.question}<span aria-hidden="true">+</span></summary><p>{faq.answer}</p></details>)}</div></section>}
       <Link className="inner-callout" href="/contact#quote"><strong>حوّل المعلومات إلى طلب واضح</strong><span>أرسل المهن والأعداد والموقع والمدة ومتطلبات التشغيل.</span><b>اطلب عرض سعر ←</b></Link>

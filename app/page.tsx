@@ -1,5 +1,6 @@
 "use client";
 
+import ManagedSections from "@/app/components/ManagedSections";
 import { useWebsitePreviewMode } from "@/app/components/WebsitePreviewMode";
 import { localizedPublicTree } from "@/app/components/LocalizedPublicTree";
 import { usePublicLocale } from "@/app/components/PublicLocaleProvider";
@@ -117,6 +118,7 @@ export default function Home() {
 
     {content.visibility.faq && <section className="faq section" id="faq"><div className="section-title"><p className="eyebrow"><span/> الأسئلة الشائعة</p><h2>معلومات تساعدك<br/><em>قبل طلب الخدمة.</em></h2></div><div className="faq-list">{faqs.slice(0, 8).map((item, index) => <details key={item.q}><summary><span>{String(index + 1).padStart(2, "0")}</span>{item.q}<b>+</b></summary><p>{item.a}</p></details>)}</div><Link className="text-link" href="/faq">عرض جميع الأسئلة <Arrow/></Link></section>}
 
+    <ManagedSections blocks={content.home.blocks || []} sourcePrefix={preview?"home.blocks":undefined}/>
     <section className="quote section" id="quote"><div className="quote-intro"><p className="eyebrow light"><span/> طلب عرض سعر</p><h2>{content.home.quoteTitle}</h2><p>{content.home.quoteDescription}</p><div className="quote-address"><span>المقر</span><strong>{content.site.address}</strong></div><div className="quote-response-note"><b>بيانات منظمة من البداية</b><span>أدخل بنود الخدمة وشروط التشغيل لتصل إلى فريق دالي جاهزة لإعداد عرض السعر والعقد.</span></div></div>{preview ? <div className="preview-form-placeholder">طلب عرض سعر</div> : <QuoteRequestForm embedded/>}</section>
 
     {!preview && <LiveChatWidget/>}

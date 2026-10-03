@@ -1,4 +1,5 @@
 "use client";
+import ManagedSections from "@/app/components/ManagedSections";
 import { previewDestination, previewCollectionPaths } from "@/lib/website-preview-navigation";
 import { visualFieldValue, visualFields } from "@/lib/website-visual-fields";
 import { localizedPublicTree } from "@/app/components/LocalizedPublicTree";
@@ -16,12 +17,12 @@ import ContactDetails from "@/app/components/ContactDetails";
 import { WebsiteContentProvider } from "@/app/components/WebsiteContentProvider";
 export default function WebsitePreviewCanvas() {
   const canvas = useRef<HTMLDivElement>(null);
-  const [draft, setDraft] = useState<{ content: WebsiteContent; view: string; canManage: boolean; selected: string; locale: AppLocale; entryId: string; hash: string } | null>(null);
+  const [draft, setDraft] = useState<{ content: WebsiteContent; view: string; canManage: boolean; selected: string; locale: AppLocale; entryId: string; hash: string; editLinks:boolean } | null>(null);
   useEffect(() => {
     function receive(event: MessageEvent) {
       if (event.source !== window.parent || event.origin !== window.location.origin || event.data?.type !== "dali-website-draft") return;
       const value = event.data.content;
-      if (value?.site && value?.home && value?.collections && value?.visibility && typeof event.data.view === "string") setDraft({ content: value, view: event.data.view, canManage: event.data.canManage === true, hash: typeof event.data.hash === "string" ? event.data.hash : "", entryId: typeof event.data.entryId === "string" ? event.data.entryId : "", locale: event.data.locale === "en" || event.data.locale === "bn" ? event.data.locale : "ar", selected: typeof event.data.selected === "string" ? event.data.selected : "" });
+      if (value?.site && value?.home && value?.collections && value?.visibility && typeof event.data.view === "string") setDraft({ content: value, view: event.data.view, canManage: event.data.canManage === true, editLinks:event.data.editLinks===true, hash: typeof event.data.hash === "string" ? event.data.hash : "", entryId: typeof event.data.entryId === "string" ? event.data.entryId : "", locale: event.data.locale === "en" || event.data.locale === "bn" ? event.data.locale : "ar", selected: typeof event.data.selected === "string" ? event.data.selected : "" });
     }
     window.addEventListener("message", receive);
     window.parent.postMessage({ type: "dali-preview-ready" }, window.location.origin);
@@ -55,11 +56,12 @@ export default function WebsitePreviewCanvas() {
   const content = translatePublicValue(draft.content,locale,locale === "ar" ? {} : draft.content.translations[locale]);
   const entries = content.collections[view as WebsiteCollectionKey];
   const visibleEntries = (entries || []).map((entry,index)=>({entry,index})).filter(({entry})=>!draft.entryId || entry.id===draft.entryId);
-  return localizedPublicTree(<div ref={canvas} onKeyDown={event=>{if(event.key === "Enter" || event.key === " "){const element=event.target as HTMLElement;if(element.dataset.visualField && !element.closest("a,button")){event.preventDefault();select(element);}}}} dir={locale === "ar" ? "rtl" : "ltr"} lang={locale} className="website-preview-canvas" onClickCapture={event => {
+  return localizedPublicTree(<div ref={canvas} onKeyDown={event=>{if(event.key === "Enter" || event.key === " "){const element=event.target as HTMLElement;if(element.dataset.visualField && (!element.closest("a,button") || draft?.editLinks)){event.preventDefault();select(element);}}}} dir={locale === "ar" ? "rtl" : "ltr"} lang={locale} className="website-preview-canvas" onClickCapture={event => {
     const target=event.target as HTMLElement;
     const anchor=target.closest<HTMLAnchorElement>("a[href]");
     if(anchor) {
       event.preventDefault();event.stopPropagation();
+      if(draft.editLinks && anchor.dataset.visualField){select(anchor);return;}
       const href=anchor.getAttribute("href") || "";
       if(href.startsWith("#")) {try {document.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView({behavior:"smooth"});}catch{}return;}
       if(previewDestination(draft.content,href))window.parent.postMessage({type:"dali-preview-navigate",href},window.location.origin);
@@ -74,7 +76,7 @@ export default function WebsitePreviewCanvas() {
       {view === "about" ? <main className="public-inner-page"><PublicHeader content={content}/><section className="inner-hero"><h1 data-visual-source="home.aboutTitle">{content.home.aboutTitle}</h1><p data-visual-source="site.description">{content.site.description}</p></section><section className="inner-content prose-content"><p data-visual-source="home.aboutDescription">{content.home.aboutDescription}</p><Image data-visual-source="home.aboutImage" src={content.home.aboutImage} alt={content.home.aboutTitle} width={800} height={450}/></section></main>
       : view === "faq" ? <main className="public-inner-page"><PublicHeader content={content}/><section className="inner-hero"><h1>الأسئلة الشائعة</h1></section><section className="inner-content">{content.faq.map((faq,index)=><article key={index}><h3 data-visual-source={`faq.${index}.question`}>{faq.question}</h3><p data-visual-source={`faq.${index}.answer`}>{faq.answer}</p></article>)}</section></main>
       : view === "contact" ? <main className="public-inner-page"><PublicHeader content={content}/><section className="inner-hero contact-inner-hero"><p className="eyebrow light">تواصل معنا</p><h1>حدّثنا عن احتياجك،<br/><em>ودعنا نقترح الحل الأنسب.</em></h1></section><ContactDetails content={content} locale={locale}/><section className="inner-content"><div className="preview-form-placeholder">طلب عرض سعر</div></section></main>
-        : entries ? <main className="public-inner-page"><PublicHeader content={content}/><section className="inner-hero"><p className="eyebrow light">{content.site.companyName}</p><h1 data-visual-source={visibleEntries.length ? `collections.${view}.${visibleEntries[0].index}.shortTitle` : undefined}>{visibleEntries[0]?.entry.shortTitle || content.home.servicesTitle}</h1><p>{content.site.tagline}</p></section><section className="preview-entries">{visibleEntries.map(({entry, index}) => <article key={entry.id}>{entry.image && <Image data-visual-source={`collections.${view}.${index}.image`} src={entry.image} alt={entry.imageAlt} width={800} height={450} unoptimized/>}<small>{entry.status === "draft" ? "مسودة" : "منشور"}</small><Link href={`${previewCollectionPaths[view as WebsiteCollectionKey]}/${entry.slug}`}>معاينة الصفحة</Link><h3 data-visual-source={`collections.${view}.${index}.title`}>{entry.title}</h3><p data-visual-source={`collections.${view}.${index}.summary`}>{entry.summary}</p><p data-visual-source={`collections.${view}.${index}.body`}>{entry.body}</p>{entry.blocks.map((block, blockIndex) => <section key={blockIndex}><h4 data-visual-source={`collections.${view}.${index}.blocks.${blockIndex}.title`}>{block.title}</h4><p data-visual-source={`collections.${view}.${index}.blocks.${blockIndex}.text`}>{block.text}</p></section>)}</article>)}</section></main>
+        : entries ? <main className="public-inner-page"><PublicHeader content={content}/><section className="inner-hero"><p className="eyebrow light">{content.site.companyName}</p><h1 data-visual-source={visibleEntries.length ? `collections.${view}.${visibleEntries[0].index}.shortTitle` : undefined}>{visibleEntries[0]?.entry.shortTitle || content.home.servicesTitle}</h1><p>{content.site.tagline}</p></section><section className="preview-entries">{visibleEntries.map(({entry, index}) => <article key={entry.id}>{entry.image && <Image data-visual-source={`collections.${view}.${index}.image`} src={entry.image} alt={entry.imageAlt} width={800} height={450} unoptimized/>}<small>{entry.status === "draft" ? "مسودة" : "منشور"}</small><Link href={`${previewCollectionPaths[view as WebsiteCollectionKey]}/${entry.slug}`}>معاينة الصفحة</Link><h3 data-visual-source={`collections.${view}.${index}.title`}>{entry.title}</h3><p data-visual-source={`collections.${view}.${index}.summary`}>{entry.summary}</p><p data-visual-source={`collections.${view}.${index}.body`}>{entry.body}</p><ManagedSections blocks={entry.blocks} sourcePrefix={`collections.${view}.${index}.blocks`}/></article>)}</section></main>
         : <PublicHome/>}
     </WebsiteContentProvider></WebsitePreviewMode></PublicLocaleProvider>
   </div>, locale, locale === "ar" ? {} : draft.content.translations[locale]);

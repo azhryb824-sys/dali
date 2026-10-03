@@ -21,7 +21,7 @@ export async function getPublicSearchIndex() {
     title: entry.shortTitle || entry.title,
     excerpt: entry.summary,
     href: entryPath(key, entry),
-    keywords: `${entry.focusKeywords} ${entry.tags.join(" ")} ${entry.title}`,
+    keywords: `${entry.focusKeywords} ${entry.tags.join(" ")} ${entry.title} ${entry.body} ${entry.blocks.filter(block=>!block.hidden).map(block=>`${block.title} ${block.text} ${block.checklist.join(" ")}`).join(" ")}`,
   })));
-  return [...staticItems, ...managedItems];
+  return [...staticItems, ...(content.home.blocks || []).filter(block=>!block.hidden).map(block=>({title:block.title,excerpt:block.text,href:block.id?`/#section-${block.id}`:"/",keywords:block.checklist.join(" ")})), ...managedItems];
 }

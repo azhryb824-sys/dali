@@ -36,9 +36,9 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
         title: item.shortTitle || item.title,
         text: item.summary,
         href: `${paths[key as keyof typeof paths]}${["credentials", "partners"].includes(key) ? "" : `/${item.slug}`}`,
-        keywords: `${item.focusKeywords} ${item.tags.join(" ")}`,
+        keywords: `${item.focusKeywords} ${item.tags.join(" ")} ${item.body} ${item.blocks.filter(block=>!block.hidden).map(block=>`${block.title} ${block.text} ${block.checklist.join(" ")}`).join(" ")}`,
       })));
-    return [...base, ...managed];
+    return [...base, ...(content.home.blocks || []).filter(block=>!block.hidden).map(block=>({title:block.title,text:block.text,href:block.id?`/#section-${block.id}`:"/",keywords:block.checklist.join(" ")})), ...managed];
   }, [content]);
   const results = useMemo(() => {
     const needle = query.trim().toLowerCase();

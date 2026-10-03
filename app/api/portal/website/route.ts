@@ -49,7 +49,7 @@ export async function PUT(request: Request) {
     const previous = existing ? sanitizeWebsiteContent(JSON.parse(existing.valueJson)) : DEFAULT_WEBSITE_CONTENT;
     if (expectedVersion !== previous.version) return jsonNoStore({ error: "عدّل مستخدم آخر محتوى الموقع. حدّث الصفحة قبل الحفظ.", currentVersion: previous.version }, { status: 409 });
 
-    if (invalidWebsiteBlock(payload.content)) return jsonNoStore({ error: "أكمل عنوان ومحتوى أقسام الصفحة أو احذف القسم الفارغ قبل النشر." }, { status: 400 });
+    if (invalidWebsiteBlock(payload.content)) return jsonNoStore({ error: "أكمل عنوان ومحتوى الأقسام وروابط الأزرار قبل النشر." }, { status: 400 });
     const next = sanitizeWebsiteContent(payload.content, previous);
     const translationAudit = completeWebsiteTranslations(next);
     if (!translationAudit.complete) return jsonNoStore({

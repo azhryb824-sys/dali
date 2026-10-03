@@ -1,3 +1,4 @@
+import { sanitizeSectionDesign } from "@/lib/website-section-design";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { portalSettings } from "@/db/schema";
@@ -8,7 +9,14 @@ export type PublicationStatus = "draft" | "published";
 export type WebsiteCollectionKey = "services" | "sectors" | "locations" | "projects" | "credentials" | "articles" | "jobs" | "partners" | "pages";
 
 export type ManagedFaq = { question: string; answer: string };
-export type ManagedBlock = { title: string; text: string; checklist: string[] };
+export type ManagedBlock = {
+  title: string; text: string; checklist: string[];
+  id?: string; layout?: "text" | "split" | "features" | "steps" | "callout" | "image";
+  tone?: "light" | "dark" | "gold"; align?: "start" | "center" | "end";
+  spacing?: "compact" | "normal" | "spacious"; hidden?: boolean;
+  image?: string; imageAlt?: string;
+  buttons?: {label:string;href:string;style:"solid"|"outline";newTab:boolean}[];
+};
 export type ManagedEntry = {
   id: string;
   slug: string;
@@ -59,6 +67,7 @@ export type WebsiteContent = {
     focusKeywords: string;
   };
   home: {
+    blocks?: ManagedBlock[];
     heroImage: string;
     aboutImage: string;
     hajjImage: string;
@@ -343,7 +352,7 @@ function sanitizeBlocks(value: unknown, fallback: ManagedBlock[] = []) {
   if (!Array.isArray(value)) return fallback;
   return value.slice(0, 24).map((item) => {
     const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
-    return { title: plainText(record.title, 180), text: plainText(record.text, 4000), checklist: stringList(record.checklist, 20, 240) };
+    return { title: plainText(record.title, 180), text: plainText(record.text, 4000), checklist: stringList(record.checklist, 20, 240), ...sanitizeSectionDesign(record), ...(record.image !== undefined ? {image: record.image === "" ? "" : safeImage(record.image, "/images/dali-capabilities.webp"),imageAlt:plainText(record.imageAlt,240)} : {}) };
   }).filter((item) => item.title.length >= 2 && item.text.length >= 5);
 }
 
@@ -446,6 +455,7 @@ export function sanitizeWebsiteContent(value: unknown, fallback = DEFAULT_WEBSIT
       focusKeywords: plainText(seo.focusKeywords, 1200, fallback.seo.focusKeywords),
     },
     home: {
+      blocks: sanitizeBlocks(home.blocks,fallback.home.blocks || []),
       heroImage: safeImage(home.heroImage, fallback.home.heroImage || "/images/dali-hero.webp"),
       aboutImage: safeImage(home.aboutImage, fallback.home.aboutImage || "/images/hajj-readiness.webp"),
       hajjImage: safeImage(home.hajjImage, fallback.home.hajjImage || "/images/hajj-operations.webp"),
