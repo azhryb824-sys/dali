@@ -1,0 +1,1 @@
+After merging this change, the production smoke workflow must observe `/api/health/live` and `/api/health/ready`. If the old routes remain absent, the Render service is not consuming the repository's `main` branch and requires reconnecting or a manual deploy in the Render dashboard.

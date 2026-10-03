@@ -1,0 +1,1 @@
+The production runtime must never replace a missing persistent database with a new empty database. Render recovery is allowed only when `/var/data/dali.db` already exists, is a regular file, and is non-empty.
