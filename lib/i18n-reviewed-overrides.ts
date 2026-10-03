@@ -6,6 +6,13 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+"مساعد الترجمة الفوري": {"en": "Instant translation assistant", "bn": "তাৎক্ষণিক অনুবাদ সহায়ক"},
+"راجع الترجمة ثم طبّقها على الحقل. تظهر في المعاينة قبل النشر.": {"en": "Review the translation, then apply it to the field. Preview it before publishing.", "bn": "অনুবাদ পর্যালোচনা করে ঘরে প্রয়োগ করুন। প্রকাশের আগে প্রিভিউতে দেখা যাবে।"},
+"ترجمة النص المحدد": {"en": "Translate selected text", "bn": "নির্বাচিত লেখা অনুবাদ করুন"},
+"فتح النص في ترجمة Google": {"en": "Open text in Google Translate", "bn": "Google Translate-এ লেখাটি খুলুন"},
+"يفتح Google في نافذة مستقلة؛ انسخ النتيجة هنا لتطبيقها.": {"en": "Google opens in a separate window; paste the result here to apply it.", "bn": "Google আলাদা উইন্ডোতে খুলবে; প্রয়োগ করতে ফলাফল এখানে পেস্ট করুন।"},
+"مسودة الترجمة": {"en": "Translation draft", "bn": "অনুবাদের খসড়া"},
+"تطبيق الترجمة على الحقل": {"en": "Apply translation to field", "bn": "ঘরে অনুবাদ প্রয়োগ করুন"},
   "الصفحة المستهدفة": {en:"Destination page",bn:"গন্তব্য পৃষ্ঠা"},
   "رابط مخصص": {en:"Custom link",bn:"নিজস্ব লিংক"},
   "تحرير نصوص الروابط": {en:"Edit link text",bn:"লিংকের লেখা সম্পাদনা করুন"},

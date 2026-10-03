@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import WebsiteTranslationAssistant from "./WebsiteTranslationAssistant";
 import { previewDestination, type PreviewDestination } from "@/lib/website-preview-navigation";
 import { readApiJson } from "@/lib/client-api";
 import { visualFieldValue, visualFields } from "@/lib/website-visual-fields";
 import type { AppLocale } from "@/lib/i18n";
 import type { WebsiteContent } from "@/lib/website-content";
 export default function WebsiteVisualPreview({ content, section, entryId, onOpenTools, canManage, onEdit, onUploadStateChange }: { content: WebsiteContent; section: string; entryId: string; onOpenTools: (view:string,id:string)=>void; canManage: boolean; onEdit: (path: string,value: string, locale: AppLocale) => void; onUploadStateChange: (busy: boolean) => void }) {
+  const [assistantBusy,setAssistantBusy] = useState(false);
   const [editLinks,setEditLinks] = useState(false);
   const [locale, setLocale] = useState<AppLocale>("ar");
   const [uploading,setUploading] = useState(false);
@@ -20,7 +22,8 @@ export default function WebsiteVisualPreview({ content, section, entryId, onOpen
   const [selected, setSelected] = useState("");
   const fields = visualFields(content);
   const active = fields.find(field => field.path === selected);
-  const translatedField = active && locale !== "ar" && active.kind === "text" && /[\u0600-\u06ff]/.test(active.value) && !/^(phone|email|mapUrl|googleBusinessUrl|commercialRegistration|vatNumber)$/.test(active.path.split(".").at(-1)!);
+  const translatableField = active && active.kind === "text" && /[\u0600-\u06ff]/.test(active.value) && !/^(phone|email|mapUrl|googleBusinessUrl|commercialRegistration|vatNumber)$/.test(active.path.split(".").at(-1)!);
+  const translatedField = translatableField && locale !== "ar";
   const screen = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ width: 640, height: 700 });
   const frame = useRef<HTMLIFrameElement>(null);
@@ -57,7 +60,7 @@ export default function WebsiteVisualPreview({ content, section, entryId, onOpen
   }, [content, view, ready, canManage, selected, locale, entryId, page, activeNavigation,editLinks]);
   return <aside className="website-live-preview" aria-label="المعاينة المرئية للموقع">
     <header><div><span className="preview-status-dot"/><strong>معاينة فورية</strong><small>مسودة قبل النشر</small></div><div className="preview-device-switch" role="group" aria-label="حجم المعاينة"><button type="button" aria-pressed={device === "desktop"} onClick={() => setDevice("desktop")}>كمبيوتر</button><button type="button" aria-pressed={device === "mobile"} onClick={() => setDevice("mobile")}>جوال</button></div></header>
-    <label className="preview-page-select">لغة المحتوى والمعاينة<select value={locale} disabled={uploading} onChange={event => setLocale(event.target.value as AppLocale)}><option value="ar">العربية</option><option value="en">English</option><option value="bn">বাংলা</option></select></label>
+    <label className="preview-page-select">لغة المحتوى والمعاينة<select value={locale} disabled={uploading || assistantBusy} onChange={event => setLocale(event.target.value as AppLocale)}><option value="ar">العربية</option><option value="en">English</option><option value="bn">বাংলা</option></select></label>
     <div className="preview-page-select"><button type="button" aria-pressed={editLinks} onClick={()=>setEditLinks(!editLinks)}>{editLinks?"تحرير نصوص الروابط":"التنقل عبر الروابط"}</button><button type="button" onClick={()=>onOpenTools(view,activeNavigation?.current.entryId || entryId)}>إعدادات الصفحة والأقسام</button><button type="button" disabled={!activeNavigation?.past.length} onClick={()=>setNavigation(current=>!current || !current.past.length ? current : {...current,current:current.past.at(-1)!,past:current.past.slice(0,-1)})}>رجوع في المعاينة</button><button type="button" onClick={()=>{setPageSelection({page:"home",scope});setNavigation(null);setSelected("");}}>الصفحة الرئيسية</button></div>
     <div className={`preview-browser device-${device}`}><div className="preview-browser-bar"><i/><i/><i/><span>dally.info · {view === "contact" ? "contact" : view}</span></div><div className="preview-screen" ref={screen}><iframe style={device === "desktop" ? { width: 1280, height: Math.round(viewport.height * 1280 / Math.max(viewport.width, 1)), transform: `scale(${viewport.width / 1280})`, transformOrigin: "top right", position: "absolute", right: 0, top: 0 } : undefined} ref={frame} title="معاينة مسودة الموقع" src="/portal/website-preview" sandbox="allow-scripts allow-same-origin" onLoad={() => setLoaded(true)}/></div></div>
     {!ready && loaded && <p role="status">تعذّر تشغيل المعاينة. تحقق من جلسة الدخول ثم أعد فتح قسم الموقع.</p>}
@@ -66,6 +69,7 @@ export default function WebsiteVisualPreview({ content, section, entryId, onOpen
       <input className="visual-field-search" aria-label="البحث في أدوات التحرير" placeholder="البحث في أدوات التحرير" value={search} onChange={event=>setSearch(event.target.value)}/>
       <select aria-label="اختيار حقل للتحرير" value={active?.path || ""} onChange={event=>setSelected(event.target.value)}><option value="">اختر عنصرًا من الصفحة</option>{fields.filter(field=>field.path===selected || field.label.includes(search.trim())).map(field=><option value={field.path} key={field.path}>{field.label}</option>)}</select>
       {active ? <div>{active.label}{translatedField && <p dir="rtl">{active.value}</p>}<textarea aria-label={active.label} key={active.path} value={translatedField ? visualFieldValue(content,active,locale) : active.value} disabled={!canManage} rows={active.kind === "image" ? 2 : 4} maxLength={translatedField ? 6000 : 8000} dir={locale !== "ar" || active.kind !== "text" ? "ltr" : "rtl"} lang={translatedField ? locale : undefined} onChange={event=>onEdit(active.path,event.target.value,translatedField ? locale : "ar")}/>{active.kind === "image" && <label className="visual-image-upload">رفع صورة<input type="file" accept="image/png,image/jpeg" disabled={!canManage || uploading} onChange={event=>{const file=event.target.files?.[0];if(file)void uploadImage(file,active.path);event.target.value="";}}/>{uploading && <small>جارٍ رفع الصورة...</small>}</label>}</div> : <p>اضغط على النص أو الصورة داخل الصفحة لفتح أدوات تحريره.</p>}
+      {translatableField && active && <WebsiteTranslationAssistant key={`${active.path}:${locale}:${active.value}`} source={active.value} target={locale === "bn" ? "bn" : "en"} disabled={!canManage || uploading} onBusy={value=>{setAssistantBusy(value);onUploadStateChange(value);}} onApply={(value,target)=>{onEdit(active.path,value,target);setLocale(target);}}/>}
       {uploadError && <p role="alert">{uploadError}</p>}
     </div>
     <p className="preview-hint">تنقّل بين الصفحات من داخل المعاينة، واضغط على النص أو الصورة لتحريرهما. النماذج معطلة في المسودة.</p>
