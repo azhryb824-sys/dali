@@ -26,7 +26,7 @@ export function translationCoverage(content: WebsiteContent, target: Translation
   const missing = sources.filter((source) => {
     const explicit = memory[source]?.trim();
     const validScript = target === "en" ? /[A-Za-z]/.test(explicit || "") : /[\u0980-\u09ff]/.test(explicit || "");
-    if (explicit && explicit !== source && !/[\u0600-\u06ff]/.test(explicit) && validScript) return false;
+    if (explicit) return explicit === source || /[\u0600-\u06ff]/.test(explicit) || !validScript;
     const catalog = translateUi(source, target).trim();
     const validCatalogScript = target === "en" ? /[A-Za-z]/.test(catalog) : /[\u0980-\u09ff]/.test(catalog);
     return !catalog || catalog === source || /[\u0600-\u06ff]/.test(catalog) || !validCatalogScript;
@@ -38,4 +38,18 @@ export function completeWebsiteTranslations(content: WebsiteContent) {
   const en = translationCoverage(content, "en");
   const bn = translationCoverage(content, "bn");
   return { en, bn, complete: en.complete && bn.complete };
+}
+
+// Leave room below the translation endpoint's 60 KB JSON limit.
+export function translationBatches(values: string[], target: TranslationTarget) {
+  const batches: string[][] = [];
+  let batch: string[] = [];
+  for (const value of values) {
+    const candidate = [...batch, value];
+    if (batch.length && (candidate.length > 100 || new TextEncoder().encode(JSON.stringify({values: candidate, target})).byteLength > 50_000)) {
+      batches.push(batch); batch = [value];
+    } else batch = candidate;
+  }
+  if (batch.length) batches.push(batch);
+  return batches;
 }

@@ -4,7 +4,7 @@ import { readApiJson } from "@/lib/client-api";
 import { visualFieldValue, visualFields } from "@/lib/website-visual-fields";
 import type { AppLocale } from "@/lib/i18n";
 import type { WebsiteContent } from "@/lib/website-content";
-export default function WebsiteVisualPreview({ content, section, canManage, onEdit, onUploadStateChange }: { content: WebsiteContent; section: string; canManage: boolean; onEdit: (path: string,value: string, locale: AppLocale) => void; onUploadStateChange: (busy: boolean) => void }) {
+export default function WebsiteVisualPreview({ content, section, entryId, canManage, onEdit, onUploadStateChange }: { content: WebsiteContent; section: string; entryId: string; canManage: boolean; onEdit: (path: string,value: string, locale: AppLocale) => void; onUploadStateChange: (busy: boolean) => void }) {
   const [locale, setLocale] = useState<AppLocale>("ar");
   const [uploading,setUploading] = useState(false);
   const [uploadError,setUploadError] = useState("");
@@ -23,7 +23,9 @@ export default function WebsiteVisualPreview({ content, section, canManage, onEd
   const [viewport, setViewport] = useState({ width: 640, height: 700 });
   const frame = useRef<HTMLIFrameElement>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const [page, setPage] = useState("auto");
+  const scope = `${section}:${entryId}`;
+  const [pageSelection, setPageSelection] = useState({page:"auto",scope:""});
+  const page = pageSelection.scope === scope ? pageSelection.page : "auto";
   const [ready, setReady] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const view = page === "auto" ? section === "identity" ? "contact" : section : page;
@@ -42,13 +44,13 @@ export default function WebsiteVisualPreview({ content, section, canManage, onEd
   }, []);
   useEffect(() => {
     if (!ready) return;
-    const timer = window.setTimeout(() => frame.current?.contentWindow?.postMessage({ type: "dali-website-draft", content, view, canManage, selected, locale }, window.location.origin), 120);
+    const timer = window.setTimeout(() => frame.current?.contentWindow?.postMessage({ type: "dali-website-draft", content, view, canManage, selected, locale, entryId: page === "auto" ? entryId : "" }, window.location.origin), 120);
     return () => window.clearTimeout(timer);
-  }, [content, view, ready, canManage, selected, locale]);
+  }, [content, view, ready, canManage, selected, locale, entryId, page]);
   return <aside className="website-live-preview" aria-label="المعاينة المرئية للموقع">
     <header><div><span className="preview-status-dot"/><strong>معاينة فورية</strong><small>مسودة قبل النشر</small></div><div className="preview-device-switch" role="group" aria-label="حجم المعاينة"><button type="button" aria-pressed={device === "desktop"} onClick={() => setDevice("desktop")}>كمبيوتر</button><button type="button" aria-pressed={device === "mobile"} onClick={() => setDevice("mobile")}>جوال</button></div></header>
     <label className="preview-page-select">لغة المحتوى والمعاينة<select value={locale} disabled={uploading} onChange={event => setLocale(event.target.value as AppLocale)}><option value="ar">العربية</option><option value="en">English</option><option value="bn">বাংলা</option></select></label>
-    <label className="preview-page-select">الصفحة المعروضة<select value={page} onChange={event => setPage(event.target.value)}><option value="auto">حسب القسم المحدد</option><option value="home">الصفحة الرئيسية</option><option value="contact">تواصل معنا</option>{Object.keys(content.collections).map(key => <option key={key} value={key}>{({ services: "الخدمات", sectors: "القطاعات", locations: "مناطق الخدمة", projects: "المشروعات", credentials: "التراخيص", articles: "المعرفة", jobs: "الوظائف", partners: "الشركاء", pages: "الصفحات الإضافية" } as Record<string, string>)[key]}</option>)}</select></label>
+    <label className="preview-page-select">الصفحة المعروضة<select value={page} onChange={event => setPageSelection({page:event.target.value,scope})}><option value="auto">حسب القسم المحدد</option><option value="home">الصفحة الرئيسية</option><option value="contact">تواصل معنا</option>{Object.keys(content.collections).map(key => <option key={key} value={key}>{({ services: "الخدمات", sectors: "القطاعات", locations: "مناطق الخدمة", projects: "المشروعات", credentials: "التراخيص", articles: "المعرفة", jobs: "الوظائف", partners: "الشركاء", pages: "الصفحات الإضافية" } as Record<string, string>)[key]}</option>)}</select></label>
     <div className={`preview-browser device-${device}`}><div className="preview-browser-bar"><i/><i/><i/><span>dally.info · {view === "contact" ? "contact" : view}</span></div><div className="preview-screen" ref={screen}><iframe style={device === "desktop" ? { width: 1280, height: Math.round(viewport.height * 1280 / Math.max(viewport.width, 1)), transform: `scale(${viewport.width / 1280})`, transformOrigin: "top right", position: "absolute", right: 0, top: 0 } : undefined} ref={frame} title="معاينة مسودة الموقع" src="/portal/website-preview" sandbox="allow-scripts allow-same-origin" onLoad={() => setLoaded(true)}/></div></div>
     {!ready && loaded && <p role="status">تعذّر تشغيل المعاينة. تحقق من جلسة الدخول ثم أعد فتح قسم الموقع.</p>}
     <div className="visual-field-inspector">

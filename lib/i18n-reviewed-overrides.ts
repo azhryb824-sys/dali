@@ -6,6 +6,24 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "البحث في الترجمة": {en:"Search translations",bn:"অনুবাদ অনুসন্ধান করুন"},
+  "كل النصوص": {en:"All texts",bn:"সব লেখা"},
+  "النصوص الناقصة": {en:"Missing translations",bn:"অসম্পূর্ণ অনুবাদ"},
+  "أكمل عنوان ومحتوى أقسام الصفحة أو احذف القسم الفارغ قبل النشر.": {en:"Complete each section title and content or remove empty sections before publishing.",bn:"প্রকাশের আগে প্রতিটি বিভাগের শিরোনাম ও বিষয়বস্তু পূরণ করুন অথবা খালি বিভাগ সরান।"},
+  "إدارة الصفحات والأقسام": {"en": "Pages and sections management", "bn": "পৃষ্ঠা ও বিভাগ পরিচালনা"},
+  "إضافة قسم": {"en": "Add section", "bn": "বিভাগ যোগ করুন"},
+  "أقسام الصفحة": {"en": "Page sections", "bn": "পৃষ্ঠার বিভাগসমূহ"},
+  "البحث في الصفحات": {"en": "Search pages", "bn": "পৃষ্ঠা অনুসন্ধান করুন"},
+  "تقديم": {"en": "Move earlier", "bn": "আগে সরান"},
+  "حذف القسم": {"en": "Delete section", "bn": "বিভাগ মুছুন"},
+  "عنوان القسم": {"en": "Section title", "bn": "বিভাগের শিরোনাম"},
+  "محتوى القسم": {"en": "Section content", "bn": "বিভাগের বিষয়বস্তু"},
+  "معاينة الصفحة": {"en": "Preview page", "bn": "পৃষ্ঠা প্রিভিউ"},
+  "نسخ إلى مسودة": {"en": "Duplicate as draft", "bn": "খসড়া হিসেবে অনুলিপি করুন"},
+  "نقاط القسم": {"en": "Section bullet points", "bn": "বিভাগের তালিকার বিষয়সমূহ"},
+
+  "توجد نصوص تحتاج ترجمة قبل النشر.": {en:"Some texts need translation before publishing.",bn:"প্রকাশের আগে কিছু লেখার অনুবাদ প্রয়োজন।"},
+  "مراجعة الترجمة المطلوبة": {en:"Review required translations",bn:"প্রয়োজনীয় অনুবাদ পর্যালোচনা করুন"},
   "لغة المحتوى والمعاينة": {en:"Content and preview language",bn:"বিষয়বস্তু ও প্রিভিউয়ের ভাষা"},
   "العربية": {en:"Arabic",bn:"আরবি"},
   "حذف الختم": { en: "Delete stamp", bn: "সিল মুছুন" },

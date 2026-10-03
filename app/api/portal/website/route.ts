@@ -1,3 +1,5 @@
+import { invalidWebsiteBlock } from "@/lib/website-page-management";
+import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { portalSettings } from "@/db/schema";
@@ -47,6 +49,7 @@ export async function PUT(request: Request) {
     const previous = existing ? sanitizeWebsiteContent(JSON.parse(existing.valueJson)) : DEFAULT_WEBSITE_CONTENT;
     if (expectedVersion !== previous.version) return jsonNoStore({ error: "عدّل مستخدم آخر محتوى الموقع. حدّث الصفحة قبل الحفظ.", currentVersion: previous.version }, { status: 409 });
 
+    if (invalidWebsiteBlock(payload.content)) return jsonNoStore({ error: "أكمل عنوان ومحتوى أقسام الصفحة أو احذف القسم الفارغ قبل النشر." }, { status: 400 });
     const next = sanitizeWebsiteContent(payload.content, previous);
     const translationAudit = completeWebsiteTranslations(next);
     if (!translationAudit.complete) return jsonNoStore({
@@ -75,6 +78,7 @@ export async function PUT(request: Request) {
 
     await auditPortalAction({ actorEmail: next.updatedBy, action: "website-content-published", entityType: "website-content", entityId: WEBSITE_CONTENT_KEY, before: previous, after: next, reason: `الإصدار ${next.version}` });
     await emitPortalNotification({ eventType: "website-content-published", title: "نُشر تحديث للموقع الإلكتروني", message: `الإصدار ${next.version} — بواسطة ${access.user.displayName}.`, severity: "success", module: "website", entityType: "website-content", entityId: WEBSITE_CONTENT_KEY, actionView: "website", targetRole: "admin" }).catch(() => undefined);
+    revalidatePath("/", "layout");
     return jsonNoStore({ content: next });
   } catch (error) {
     console.error("website-content-save-failed", error);

@@ -410,7 +410,7 @@ export function sanitizeWebsiteContent(value: unknown, fallback = DEFAULT_WEBSIT
       const translatedText = plainText(translated, 6000);
       if (sourceText && translatedText) result[sourceText] = translatedText;
     }
-    return Object.keys(result).length ? result : fallbackMap;
+    return input && typeof input === "object" && !Array.isArray(input) ? result : fallbackMap;
   };
   const processValue = Array.isArray(home.process) ? home.process.slice(0, 12).map((item) => {
     const row = record(item);
