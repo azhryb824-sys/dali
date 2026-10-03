@@ -186,4 +186,3 @@ function FaqEditor({ faqs, onChange, disabled }: { faqs: ManagedFaq[]; onChange:
   function update(index: number, key: keyof ManagedFaq, value: string) { const next = structuredClone(faqs); next[index][key] = value; onChange(next); }
   return <div className="faq-editor"><button type="button" onClick={() => onChange([...faqs, { question: "سؤال جديد", answer: "أضف إجابة دقيقة ومباشرة." }])} disabled={disabled}>إضافة سؤال</button>{faqs.map((faq, index) => <article key={index}><Field label="السؤال" value={faq.question} onChange={(value) => update(index, "question", value)} disabled={disabled}/><Field label="الإجابة" value={faq.answer} onChange={(value) => update(index, "answer", value)} disabled={disabled} multiline/><button type="button" className="danger" disabled={disabled} onClick={() => onChange(faqs.filter((_, itemIndex) => itemIndex !== index))}>حذف</button></article>)}</div>;
 }
-
