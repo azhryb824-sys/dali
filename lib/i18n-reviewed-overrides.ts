@@ -6,6 +6,8 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "لغة المحتوى والمعاينة": {en:"Content and preview language",bn:"বিষয়বস্তু ও প্রিভিউয়ের ভাষা"},
+  "العربية": {en:"Arabic",bn:"আরবি"},
   "حذف الختم": { en: "Delete stamp", bn: "সিল মুছুন" },
   "لا توجد أختام محفوظة. أضف الختم الأول من النموذج أدناه.": { en: "No saved stamps. Add your first stamp using the form below.", bn: "কোনো সিল সংরক্ষিত নেই। নিচের ফর্ম দিয়ে প্রথম সিল যোগ করুন।" },
   "حذف الختم من قائمة الاستخدام؟ تبقى المستندات المعتمدة سابقًا محفوظة.": { en: "Delete this stamp from the available list? Previously approved documents remain preserved.", bn: "ব্যবহারযোগ্য তালিকা থেকে এই সিল মুছবেন? আগে অনুমোদিত নথিগুলো সংরক্ষিত থাকবে।" },
