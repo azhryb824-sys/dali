@@ -1,0 +1,474 @@
+name: Repair Render production safely v5
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/render-repair-v5.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: repair-render-production-safely-v5
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      PR_NUMBER: "13"
+      BASE_URL: https://dali-ql1q.onrender.com
+      TARGET_HOST: dali-ql1q.onrender.com
+      TARGET_REPO: azhryb824-sys/dali
+      RENDER_CLI_VERSION: 2.22.0
+      RENDER_CLI_SHA256: 6cdcd11897b7bd7e673317e6f4aaf041b654d818444f3b1efec7240a835f79ec
+      RENDER_CLI_DISABLE_ANALYTICS: "1"
+      NO_COLOR: "1"
+      TERM: dumb
+    steps:
+      - name: Authorize, diagnose, deploy, and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export RENDER_CLI_CONFIG_PATH="${RUNNER_TEMP}/render-cli.yaml"
+          trap 'rm -f "${RENDER_CLI_CONFIG_PATH}" "${RUNNER_TEMP}/render-login.log"' EXIT
+
+          post_comment() {
+            local source_file="$1"
+            COMMENT_SOURCE="$source_file" python <<'PY' > "${RUNNER_TEMP}/comment-payload.json"
+          import json
+          import os
+          from pathlib import Path
+          print(json.dumps({"body": Path(os.environ["COMMENT_SOURCE"]).read_text()}, ensure_ascii=False))
+          PY
+            curl --fail --silent --show-error \
+              --request POST \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              --header 'Content-Type: application/json' \
+              "https://api.github.com/repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --data-binary "@${RUNNER_TEMP}/comment-payload.json" \
+              --output "${RUNNER_TEMP}/comment-response.json"
+          }
+
+          github_main_sha() {
+            curl --fail --silent --show-error \
+              --header 'Accept: application/vnd.github+json' \
+              --header "Authorization: Bearer ${GH_TOKEN}" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}/branches/main" \
+              --output "${RUNNER_TEMP}/main-branch.json"
+            python -c 'import json; print(json.load(open("'"${RUNNER_TEMP}/main-branch.json"'"))["commit"]["sha"])'
+          }
+
+          render_get() {
+            local path="$1"
+            local destination="$2"
+            curl --fail --silent --show-error \
+              --header 'Accept: application/json' \
+              --header "Authorization: Bearer ${RENDER_TOKEN}" \
+              "https://api.render.com/v1${path}" \
+              --output "$destination"
+          }
+
+          update_env_var() {
+            local key="$1"
+            local value="$2"
+            ENV_VALUE="$value" python <<'PY' > "${RUNNER_TEMP}/env-payload.json"
+          import json
+          import os
+          print(json.dumps({"value": os.environ["ENV_VALUE"]}))
+          PY
+            curl --fail --silent --show-error \
+              --request PUT \
+              --header 'Accept: application/json' \
+              --header "Authorization: Bearer ${RENDER_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              "https://api.render.com/v1/services/${SERVICE_ID}/env-vars/${key}" \
+              --data-binary "@${RUNNER_TEMP}/env-payload.json" \
+              --output "${RUNNER_TEMP}/env-${key}.json"
+          }
+
+          cli_zip="${RUNNER_TEMP}/render-cli.zip"
+          cli_dir="${RUNNER_TEMP}/render-cli-bin"
+          mkdir -p "$cli_dir"
+          curl --fail --location --silent --show-error \
+            --retry 3 --retry-all-errors \
+            "https://github.com/render-oss/cli/releases/download/v${RENDER_CLI_VERSION}/cli_${RENDER_CLI_VERSION}_linux_amd64.zip" \
+            --output "$cli_zip"
+          echo "${RENDER_CLI_SHA256}  ${cli_zip}" | sha256sum --check --status
+          unzip -q "$cli_zip" -d "$cli_dir"
+          RENDER_BIN="${cli_dir}/cli_v${RENDER_CLI_VERSION}"
+          [[ -f "$RENDER_BIN" ]] || { echo "::error::Verified Render CLI executable was not found."; exit 1; }
+          chmod +x "$RENDER_BIN"
+          "$RENDER_BIN" --version
+
+          : > "${RUNNER_TEMP}/render-login.log"
+          timeout 600 "$RENDER_BIN" login > "${RUNNER_TEMP}/render-login.log" 2>&1 &
+          LOGIN_PID=$!
+
+          AUTH_URL=""
+          USER_CODE=""
+          for _ in $(seq 1 90); do
+            if ! kill -0 "$LOGIN_PID" 2>/dev/null; then
+              break
+            fi
+            LOGIN_LOG="${RUNNER_TEMP}/render-login.log" python <<'PY' > "${RUNNER_TEMP}/render-auth.json"
+          import json
+          import os
+          import re
+          from pathlib import Path
+          text = Path(os.environ["LOGIN_LOG"]).read_text(errors="replace")
+          text = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", text)
+          urls = [item.rstrip(".,);]>") for item in re.findall(r"https://[^\s<]+", text)]
+          url = next((item for item in urls if "dashboard.render.com/device-authorization/" in item), "")
+          code_match = re.search(r"(?i)code:\s*([A-Z0-9-]{4,32})", text)
+          print(json.dumps({"url": url, "code": code_match.group(1) if code_match else ""}))
+          PY
+            AUTH_URL="$(python -c 'import json; print(json.load(open("'"${RUNNER_TEMP}/render-auth.json"'"))["url"])')"
+            USER_CODE="$(python -c 'import json; print(json.load(open("'"${RUNNER_TEMP}/render-auth.json"'"))["code"])')"
+            [[ -n "$AUTH_URL" ]] && break
+            sleep 1
+          done
+
+          if [[ -z "$AUTH_URL" ]]; then
+            python <<'PY' > "${RUNNER_TEMP}/comment.md"
+          print("### تعذر إنشاء رابط تفويض Render\n\nلم تبدأ جلسة التفويض، ولم تُغيّر أي إعدادات أو بيانات في Render.")
+          PY
+            post_comment "${RUNNER_TEMP}/comment.md"
+            kill "$LOGIN_PID" 2>/dev/null || true
+            wait "$LOGIN_PID" 2>/dev/null || true
+            exit 1
+          fi
+
+          AUTH_URL="$AUTH_URL" USER_CODE="$USER_CODE" python <<'PY' > "${RUNNER_TEMP}/comment.md"
+          import os
+          print("### تفويض Render المؤقت مطلوب الآن")
+          print()
+          print("افتح رابط Render الرسمي التالي بالحساب الذي يملك خدمة **dali**، ثم اضغط **Authorize CLI**:")
+          print()
+          print(os.environ["AUTH_URL"])
+          print()
+          print(f"رمز التفويض: **{os.environ['USER_CODE']}**")
+          print()
+          print("بعد الموافقة ستفحص الجلسة القرص وإعدادات الخدمة، وتنشر أحدث نسخة محمية من main، ثم تتحقق من قاعدة البيانات والمصادقة وصفحة الدخول. لا تُنشئ الجلسة قاعدة بديلة فارغة.")
+          PY
+          post_comment "${RUNNER_TEMP}/comment.md"
+
+          set +e
+          wait "$LOGIN_PID"
+          LOGIN_STATUS=$?
+          set -e
+          if [[ "$LOGIN_STATUS" -ne 0 ]]; then
+            python <<'PY' > "${RUNNER_TEMP}/comment.md"
+          print("### انتهت جلسة تفويض Render دون موافقة\n\nلم تُغيّر المهمة أي إعداد أو بيانات في Render.")
+          PY
+            post_comment "${RUNNER_TEMP}/comment.md"
+            exit 1
+          fi
+
+          RENDER_TOKEN="$(CONFIG_PATH="$RENDER_CLI_CONFIG_PATH" python <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          text = Path(os.environ["CONFIG_PATH"]).read_text()
+          match = re.search(r'(?m)^\s+key:\s*["\x27]?([^"\x27\s]+)', text)
+          print(match.group(1) if match else "")
+          PY
+          )"
+          [[ -n "$RENDER_TOKEN" ]] || { echo "::error::Temporary Render token was not found."; exit 1; }
+          echo "::add-mask::${RENDER_TOKEN}"
+
+          MAIN_SHA="$(github_main_sha)"
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "::error::Unable to resolve main SHA."; exit 1; }
+
+          "$RENDER_BIN" workspaces --output json > "${RUNNER_TEMP}/workspaces.json"
+          WORKSPACES_JSON="${RUNNER_TEMP}/workspaces.json" python <<'PY' > "${RUNNER_TEMP}/workspaces.tsv"
+          import json
+          import os
+          from pathlib import Path
+          data = json.loads(Path(os.environ["WORKSPACES_JSON"]).read_text())
+          found = {}
+          def walk(value):
+              if isinstance(value, dict):
+                  lower = {str(k).lower(): v for k, v in value.items()}
+                  identifier = str(lower.get("id") or "").strip()
+                  name = str(lower.get("name") or lower.get("email") or "").strip()
+                  if identifier and name and not identifier.startswith(("srv-", "dpg-", "red-", "crn-", "job-")):
+                      found[identifier] = name
+                  for child in value.values():
+                      walk(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      walk(child)
+          walk(data)
+          for identifier, name in sorted(found.items()):
+              print(f"{identifier}\t{name.replace(chr(9), ' ')}")
+          PY
+          [[ -s "${RUNNER_TEMP}/workspaces.tsv" ]] || { echo "::error::No Render workspace was available."; exit 1; }
+
+          : > "${RUNNER_TEMP}/service-candidates.jsonl"
+          workspace_index=0
+          while IFS=$'\t' read -r WORKSPACE_ID WORKSPACE_NAME; do
+            workspace_index=$((workspace_index + 1))
+            export RENDER_WORKSPACE="$WORKSPACE_ID"
+            services_file="${RUNNER_TEMP}/services-${workspace_index}.json"
+            if ! "$RENDER_BIN" services --output json > "$services_file" 2>/dev/null; then
+              continue
+            fi
+            SERVICES_JSON="$services_file" WORKSPACE_ID="$WORKSPACE_ID" WORKSPACE_NAME="$WORKSPACE_NAME" TARGET_HOST="$TARGET_HOST" TARGET_REPO="$TARGET_REPO" python <<'PY' >> "${RUNNER_TEMP}/service-candidates.jsonl"
+          import json
+          import os
+          from pathlib import Path
+          data = json.loads(Path(os.environ["SERVICES_JSON"]).read_text())
+          target_host = os.environ["TARGET_HOST"].lower()
+          target_repo = os.environ["TARGET_REPO"].lower()
+          found = {}
+          def walk(value):
+              if isinstance(value, dict):
+                  lower = {str(k).lower(): v for k, v in value.items()}
+                  identifier = str(lower.get("id") or "").strip()
+                  if identifier.startswith("srv-"):
+                      name = str(lower.get("name") or "").strip()
+                      text = json.dumps(value, ensure_ascii=False).lower()
+                      score = (100 if target_host in text else 0) + (50 if target_repo in text else 0) + (20 if name.lower() == "dali" else 0) + (5 if str(lower.get("branch") or "").lower() == "main" else 0)
+                      found[identifier] = {"service_id": identifier, "workspace_id": os.environ["WORKSPACE_ID"], "workspace_name": os.environ["WORKSPACE_NAME"], "name": name, "score": score}
+                  for child in value.values():
+                      walk(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      walk(child)
+          walk(data)
+          for record in found.values():
+              print(json.dumps(record, ensure_ascii=False))
+          PY
+          done < "${RUNNER_TEMP}/workspaces.tsv"
+
+          CANDIDATES_FILE="${RUNNER_TEMP}/service-candidates.jsonl" python <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          records = [json.loads(line) for line in Path(os.environ["CANDIDATES_FILE"]).read_text().splitlines() if line.strip()]
+          ranked = sorted(records, key=lambda item: (-item["score"], item["service_id"]))
+          if not ranked or ranked[0]["score"] < 70:
+              raise SystemExit("Unable to identify the Dali Render service safely.")
+          if len(ranked) > 1 and ranked[0]["score"] == ranked[1]["score"]:
+              raise SystemExit("Multiple Render services matched with equal confidence.")
+          selected = ranked[0]
+          root = Path(os.environ["RUNNER_TEMP"])
+          root.joinpath("service-id").write_text(selected["service_id"])
+          root.joinpath("workspace-id").write_text(selected["workspace_id"])
+          root.joinpath("service-name").write_text(selected["name"])
+          root.joinpath("workspace-name").write_text(selected["workspace_name"])
+          PY
+
+          SERVICE_ID="$(cat "${RUNNER_TEMP}/service-id")"
+          WORKSPACE_ID="$(cat "${RUNNER_TEMP}/workspace-id")"
+          export RENDER_WORKSPACE="$WORKSPACE_ID"
+          echo "::add-mask::${SERVICE_ID}"
+          echo "::add-mask::${WORKSPACE_ID}"
+
+          render_get "/services/${SERVICE_ID}" "${RUNNER_TEMP}/service.json"
+          render_get "/services/${SERVICE_ID}/env-vars" "${RUNNER_TEMP}/env-vars.json" || echo '[]' > "${RUNNER_TEMP}/env-vars.json"
+          render_get "/disks?serviceId=${SERVICE_ID}&limit=20" "${RUNNER_TEMP}/disks.json" || echo '[]' > "${RUNNER_TEMP}/disks.json"
+          render_get "/services/${SERVICE_ID}/deploys?limit=20" "${RUNNER_TEMP}/deploys.json" || echo '[]' > "${RUNNER_TEMP}/deploys.json"
+
+          START_TIME="$(date -u -d '180 minutes ago' +'%Y-%m-%dT%H:%M:%SZ')"
+          END_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          set +e
+          "$RENDER_BIN" logs --resources "$SERVICE_ID" --start "$START_TIME" --end "$END_TIME" --type build --direction forward --limit 500 --output text > "${RUNNER_TEMP}/build.log" 2>&1
+          "$RENDER_BIN" logs --resources "$SERVICE_ID" --start "$START_TIME" --end "$END_TIME" --type app --direction forward --limit 500 --output text > "${RUNNER_TEMP}/app.log" 2>&1
+          set -e
+
+          SERVICE_JSON="${RUNNER_TEMP}/service.json" ENV_JSON="${RUNNER_TEMP}/env-vars.json" DISKS_JSON="${RUNNER_TEMP}/disks.json" DEPLOYS_JSON="${RUNNER_TEMP}/deploys.json" BUILD_LOG="${RUNNER_TEMP}/build.log" APP_LOG="${RUNNER_TEMP}/app.log" SERVICE_ID="$SERVICE_ID" WORKSPACE_ID="$WORKSPACE_ID" MAIN_SHA="$MAIN_SHA" python <<'PY' > "${RUNNER_TEMP}/diagnostic.md"
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          def read_json(name, default):
+              try:
+                  return json.loads(Path(os.environ[name]).read_text())
+              except Exception:
+                  return default
+
+          def walk(value):
+              if isinstance(value, dict):
+                  yield value
+                  for child in value.values():
+                      yield from walk(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      yield from walk(child)
+
+          def safe_log(name):
+              text = Path(os.environ[name]).read_text(errors="replace")
+              text = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", text)
+              text = text.replace(os.environ["SERVICE_ID"], "[SERVICE_ID]").replace(os.environ["WORKSPACE_ID"], "[WORKSPACE_ID]")
+              text = re.sub(r"(?i)(authorization:\s*bearer\s+)[^\s]+", r"\1[REDACTED]", text)
+              text = re.sub(r"(?i)(DATABASE_URL|AUTH_SECRET|PASSWORD_HASH|API_KEY)\s*[=:]\s*\S+", r"\1=[REDACTED]", text)
+              lines = [line for line in text.splitlines() if re.search(r"(?i)error|failed|exception|npm err|enoent|eacces|sqlite|libsql|migration|startup|health|exit|cannot|missing|invalid", line)]
+              return "\n".join(lines[-100:])[-12000:] or "(لا توجد سطور خطأ متاحة)"
+
+          service = read_json("SERVICE_JSON", {})
+          env_payload = read_json("ENV_JSON", [])
+          disks_payload = read_json("DISKS_JSON", [])
+          deploys_payload = read_json("DEPLOYS_JSON", [])
+          env_map = {}
+          for item in walk(env_payload):
+              key = str(item.get("key") or item.get("name") or "")
+              if key:
+                  env_map[key] = str(item.get("value") or "")
+          mounts = sorted({str(item.get("mountPath") or item.get("mount_path")) for item in walk(disks_payload) if item.get("mountPath") or item.get("mount_path")})
+          Path(os.environ["RUNNER_TEMP"], "disk-ok").write_text("yes" if "/var/data" in mounts else "no")
+          details = service.get("serviceDetails") or service.get("service_details") or {}
+          statuses = [str(item.get("status")) for item in walk(deploys_payload) if str(item.get("id") or "").startswith("dep-")]
+          print("### تشخيص Render قبل النشر")
+          print()
+          print(f"- الالتزام المستهدف: {os.environ['MAIN_SHA']}")
+          print(f"- الفرع: {details.get('branch') or service.get('branch') or 'غير معروف'}")
+          print(f"- أمر البناء الحالي: {details.get('buildCommand') or details.get('build_command') or 'غير معروف'}")
+          print(f"- أمر التشغيل الحالي: {details.get('startCommand') or details.get('start_command') or 'غير معروف'}")
+          print(f"- مسار فحص الصحة الحالي: {details.get('healthCheckPath') or details.get('health_check_path') or 'غير معروف'}")
+          print(f"- مسارات الأقراص: {', '.join(mounts) if mounts else 'لم يظهر قرص'}")
+          print(f"- DATABASE_URL صحيح: {'نعم' if env_map.get('DATABASE_URL') == 'file:/var/data/dali.db' else 'لا'}")
+          print(f"- UPLOADS_DIR صحيح: {'نعم' if env_map.get('UPLOADS_DIR') == '/var/data/uploads' else 'لا'}")
+          print(f"- AUTH_MODE صحيح: {'نعم' if env_map.get('AUTH_MODE') == 'credentials' else 'لا'}")
+          print(f"- حالات أحدث عمليات النشر: {', '.join(statuses[:8]) if statuses else 'غير متاحة'}")
+          print()
+          print("#### أخطاء البناء المنقحة")
+          print("```text")
+          print(safe_log("BUILD_LOG"))
+          print("```")
+          print()
+          print("#### أخطاء التشغيل المنقحة")
+          print("```text")
+          print(safe_log("APP_LOG"))
+          print("```")
+          print()
+          print("لم تُحذف أو تُستبدل أي بيانات أو أقراص.")
+          PY
+          post_comment "${RUNNER_TEMP}/diagnostic.md"
+
+          if [[ "$(cat "${RUNNER_TEMP}/disk-ok")" != "yes" ]]; then
+            python <<'PY' > "${RUNNER_TEMP}/comment.md"
+          print("### أُوقف النشر لحماية البيانات\n\nلم يظهر القرص الدائم عند المسار /var/data في Render API، لذلك لم تُشغّل نسخة قد تنشئ قاعدة جديدة. لم تُحذف أو تُستبدل أي بيانات.")
+          PY
+            post_comment "${RUNNER_TEMP}/comment.md"
+            exit 1
+          fi
+
+          update_env_var DATABASE_URL 'file:/var/data/dali.db'
+          update_env_var UPLOADS_DIR '/var/data/uploads'
+          update_env_var AUTH_MODE 'credentials'
+
+          "$RENDER_BIN" services update "$SERVICE_ID" \
+            --branch main \
+            --build-command 'npm ci && npm run build' \
+            --start-command 'npm run start:render' \
+            --health-check-path '/api/health/live' \
+            --auto-deploy \
+            --output json > "${RUNNER_TEMP}/service-update.json"
+
+          set +e
+          "$RENDER_BIN" deploys create "$SERVICE_ID" --commit "$MAIN_SHA" --wait --confirm --output json > "${RUNNER_TEMP}/deploy.json" 2> "${RUNNER_TEMP}/deploy.err"
+          DEPLOY_STATUS=$?
+          set -e
+
+          if [[ "$DEPLOY_STATUS" -ne 0 ]]; then
+            FAILURE_START="$(date -u -d '60 minutes ago' +'%Y-%m-%dT%H:%M:%SZ')"
+            FAILURE_END="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            set +e
+            "$RENDER_BIN" logs --resources "$SERVICE_ID" --start "$FAILURE_START" --end "$FAILURE_END" --type build --direction forward --limit 500 --output text > "${RUNNER_TEMP}/failure-build.log" 2>&1
+            "$RENDER_BIN" logs --resources "$SERVICE_ID" --start "$FAILURE_START" --end "$FAILURE_END" --type app --direction forward --limit 500 --output text > "${RUNNER_TEMP}/failure-app.log" 2>&1
+            set -e
+            BUILD_LOG="${RUNNER_TEMP}/failure-build.log" APP_LOG="${RUNNER_TEMP}/failure-app.log" SERVICE_ID="$SERVICE_ID" WORKSPACE_ID="$WORKSPACE_ID" MAIN_SHA="$MAIN_SHA" python <<'PY' > "${RUNNER_TEMP}/comment.md"
+          import os
+          import re
+          from pathlib import Path
+          def clean(path):
+              text = Path(path).read_text(errors="replace")
+              text = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", text)
+              text = text.replace(os.environ["SERVICE_ID"], "[SERVICE_ID]").replace(os.environ["WORKSPACE_ID"], "[WORKSPACE_ID]")
+              text = re.sub(r"(?i)(authorization:\s*bearer\s+)[^\s]+", r"\1[REDACTED]", text)
+              text = re.sub(r"(?i)(DATABASE_URL|AUTH_SECRET|PASSWORD_HASH|API_KEY)\s*[=:]\s*\S+", r"\1=[REDACTED]", text)
+              lines = [line for line in text.splitlines() if re.search(r"(?i)error|failed|exception|npm err|enoent|eacces|sqlite|libsql|migration|startup|health|exit|cannot|missing|invalid", line)]
+              return "\n".join(lines[-120:])[-14000:] or "(تعذر استخراج سطور الخطأ)"
+          print("### فشل نشر Render بعد تطبيق الإعدادات")
+          print()
+          print(f"الالتزام: {os.environ['MAIN_SHA']}")
+          print()
+          print("#### سجل البناء المنقح")
+          print("```text")
+          print(clean(os.environ["BUILD_LOG"]))
+          print("```")
+          print()
+          print("#### سجل التشغيل المنقح")
+          print("```text")
+          print(clean(os.environ["APP_LOG"]))
+          print("```")
+          print()
+          print("لم تُحذف أي بيانات، وتبقى النسخة السابقة متاحة.")
+          PY
+            post_comment "${RUNNER_TEMP}/comment.md"
+            exit 1
+          fi
+
+          legacy_code="000"
+          live_code="000"
+          ready_code="000"
+          login_code="000"
+          for attempt in $(seq 1 30); do
+            legacy_code="$(curl --location --silent --show-error --max-time 35 --output "${RUNNER_TEMP}/legacy.json" --write-out '%{http_code}' "${BASE_URL}/api/health" || true)"
+            live_code="$(curl --location --silent --show-error --max-time 35 --output "${RUNNER_TEMP}/live.json" --write-out '%{http_code}' "${BASE_URL}/api/health/live" || true)"
+            ready_code="$(curl --location --silent --show-error --max-time 35 --output "${RUNNER_TEMP}/ready.json" --write-out '%{http_code}' "${BASE_URL}/api/health/ready" || true)"
+            login_code="$(curl --location --silent --show-error --max-time 35 --output "${RUNNER_TEMP}/login.html" --write-out '%{http_code}' "${BASE_URL}/login" || true)"
+            echo "attempt=${attempt} health=${legacy_code:-000} live=${live_code:-000} ready=${ready_code:-000} login=${login_code:-000}"
+            if [[ "$legacy_code" == "200" && "$live_code" == "200" && "$ready_code" == "200" && "$login_code" == "200" ]] \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/legacy.json" \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/live.json" \
+              && grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/ready.json" \
+              && grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/ready.json" \
+              && grep -Eq '"auth"[[:space:]]*:[[:space:]]*"ok"' "${RUNNER_TEMP}/ready.json" \
+              && grep -q 'تسجيل الدخول الآمن' "${RUNNER_TEMP}/login.html"; then
+              MAIN_SHA="$MAIN_SHA" python <<'PY' > "${RUNNER_TEMP}/comment.md"
+          import os
+          print("### تم إصلاح Render والتحقق من النسخة المنشورة")
+          print()
+          print(f"- نُشر الالتزام {os.environ['MAIN_SHA']}.")
+          print("- فحص حياة الخدمة: **سليم**.")
+          print("- اتصال قاعدة البيانات: **سليم**.")
+          print("- إعداد المصادقة: **سليم**.")
+          print("- صفحة تسجيل الدخول: **متاحة**.")
+          print("- لم تُحذف أي بيانات، وظلت حماية النسخ الاحتياطية ومنع القاعدة الفارغة مفعلة.")
+          PY
+              post_comment "${RUNNER_TEMP}/comment.md"
+              "$RENDER_BIN" logout >/dev/null 2>&1 || true
+              exit 0
+            fi
+            sleep 10
+          done
+
+          LEGACY_CODE="$legacy_code" LIVE_CODE="$live_code" READY_CODE="$ready_code" LOGIN_CODE="$login_code" python <<'PY' > "${RUNNER_TEMP}/comment.md"
+          import os
+          print("### اكتمل النشر لكن فحص الجاهزية لم ينجح")
+          print()
+          print(f"- /api/health: HTTP {os.environ['LEGACY_CODE']}")
+          print(f"- /api/health/live: HTTP {os.environ['LIVE_CODE']}")
+          print(f"- /api/health/ready: HTTP {os.environ['READY_CODE']}")
+          print(f"- /login: HTTP {os.environ['LOGIN_CODE']}")
+          print()
+          print("لم تُحذف أي بيانات.")
+          PY
+          post_comment "${RUNNER_TEMP}/comment.md"
+          exit 1
