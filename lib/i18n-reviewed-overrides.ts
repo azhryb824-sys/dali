@@ -6,6 +6,9 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "رجوع في المعاينة": {en:"Back in preview",bn:"প্রিভিউতে ফিরে যান"},
+  "صفحات الموقع": {en:"Website pages",bn:"ওয়েবসাইটের পৃষ্ঠাসমূহ"},
+  "تنقّل بين الصفحات من داخل المعاينة، واضغط على النص أو الصورة لتحريرهما. النماذج معطلة في المسودة.": {en:"Navigate between pages inside the preview and click text or images to edit. Forms are disabled in the draft.",bn:"প্রিভিউ থেকে পৃষ্ঠা পরিবর্তন করুন এবং লেখা বা ছবি সম্পাদনা করতে ক্লিক করুন। খসড়ায় ফর্ম নিষ্ক্রিয় থাকে।"},
   "البحث في الترجمة": {en:"Search translations",bn:"অনুবাদ অনুসন্ধান করুন"},
   "كل النصوص": {en:"All texts",bn:"সব লেখা"},
   "النصوص الناقصة": {en:"Missing translations",bn:"অসম্পূর্ণ অনুবাদ"},

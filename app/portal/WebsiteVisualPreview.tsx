@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { previewDestination, type PreviewDestination } from "@/lib/website-preview-navigation";
 import { readApiJson } from "@/lib/client-api";
 import { visualFieldValue, visualFields } from "@/lib/website-visual-fields";
 import type { AppLocale } from "@/lib/i18n";
@@ -28,7 +29,9 @@ export default function WebsiteVisualPreview({ content, section, entryId, canMan
   const page = pageSelection.scope === scope ? pageSelection.page : "auto";
   const [ready, setReady] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const view = page === "auto" ? section === "identity" ? "contact" : section : page;
+  const [navigation,setNavigation] = useState<{scope:string;current:PreviewDestination;past:PreviewDestination[]} | null>(null);
+  const activeNavigation = navigation?.scope === scope ? navigation : null;
+  const view = activeNavigation?.current.view || (page === "auto" ? section === "identity" ? "contact" : section : page);
   useEffect(() => {
     const element = screen.current; if (!element) return;
     const observer = new ResizeObserver(([entry]) => setViewport({ width: entry.contentRect.width, height: entry.contentRect.height }));
@@ -38,19 +41,23 @@ export default function WebsiteVisualPreview({ content, section, entryId, canMan
     function listen(event: MessageEvent) {
       if (event.origin !== window.location.origin || event.source !== frame.current?.contentWindow) return;
       if(event.data?.type === "dali-preview-ready") setReady(true);
+      if(event.data?.type === "dali-preview-navigate" && typeof event.data.href === "string") {
+        const next=previewDestination(content,event.data.href);
+        if(next){setSelected("");setNavigation(current=>({scope,current:next,past:[...(current?.scope===scope ? current.past : []),current?.scope===scope ? current.current : {view,entryId:page === "auto" ? entryId : "",hash:""}].slice(-30)}));}
+      }
       if(event.data?.type === "dali-visual-select" && typeof event.data.path === "string") setSelected(event.data.path);
     }
     window.addEventListener("message", listen); return () => window.removeEventListener("message", listen);
-  }, []);
+  }, [content,scope,view,page,entryId]);
   useEffect(() => {
     if (!ready) return;
-    const timer = window.setTimeout(() => frame.current?.contentWindow?.postMessage({ type: "dali-website-draft", content, view, canManage, selected, locale, entryId: page === "auto" ? entryId : "" }, window.location.origin), 120);
+    const timer = window.setTimeout(() => frame.current?.contentWindow?.postMessage({ type: "dali-website-draft", content, view, canManage, selected, locale, entryId: activeNavigation?.current.entryId ?? (page === "auto" ? entryId : ""), hash: activeNavigation?.current.hash || "" }, window.location.origin), 120);
     return () => window.clearTimeout(timer);
-  }, [content, view, ready, canManage, selected, locale, entryId, page]);
+  }, [content, view, ready, canManage, selected, locale, entryId, page, activeNavigation]);
   return <aside className="website-live-preview" aria-label="المعاينة المرئية للموقع">
     <header><div><span className="preview-status-dot"/><strong>معاينة فورية</strong><small>مسودة قبل النشر</small></div><div className="preview-device-switch" role="group" aria-label="حجم المعاينة"><button type="button" aria-pressed={device === "desktop"} onClick={() => setDevice("desktop")}>كمبيوتر</button><button type="button" aria-pressed={device === "mobile"} onClick={() => setDevice("mobile")}>جوال</button></div></header>
     <label className="preview-page-select">لغة المحتوى والمعاينة<select value={locale} disabled={uploading} onChange={event => setLocale(event.target.value as AppLocale)}><option value="ar">العربية</option><option value="en">English</option><option value="bn">বাংলা</option></select></label>
-    <label className="preview-page-select">الصفحة المعروضة<select value={page} onChange={event => setPageSelection({page:event.target.value,scope})}><option value="auto">حسب القسم المحدد</option><option value="home">الصفحة الرئيسية</option><option value="contact">تواصل معنا</option>{Object.keys(content.collections).map(key => <option key={key} value={key}>{({ services: "الخدمات", sectors: "القطاعات", locations: "مناطق الخدمة", projects: "المشروعات", credentials: "التراخيص", articles: "المعرفة", jobs: "الوظائف", partners: "الشركاء", pages: "الصفحات الإضافية" } as Record<string, string>)[key]}</option>)}</select></label>
+    <div className="preview-page-select"><button type="button" disabled={!activeNavigation?.past.length} onClick={()=>setNavigation(current=>!current || !current.past.length ? current : {...current,current:current.past.at(-1)!,past:current.past.slice(0,-1)})}>رجوع في المعاينة</button><button type="button" onClick={()=>{setPageSelection({page:"home",scope});setNavigation(null);setSelected("");}}>الصفحة الرئيسية</button></div>
     <div className={`preview-browser device-${device}`}><div className="preview-browser-bar"><i/><i/><i/><span>dally.info · {view === "contact" ? "contact" : view}</span></div><div className="preview-screen" ref={screen}><iframe style={device === "desktop" ? { width: 1280, height: Math.round(viewport.height * 1280 / Math.max(viewport.width, 1)), transform: `scale(${viewport.width / 1280})`, transformOrigin: "top right", position: "absolute", right: 0, top: 0 } : undefined} ref={frame} title="معاينة مسودة الموقع" src="/portal/website-preview" sandbox="allow-scripts allow-same-origin" onLoad={() => setLoaded(true)}/></div></div>
     {!ready && loaded && <p role="status">تعذّر تشغيل المعاينة. تحقق من جلسة الدخول ثم أعد فتح قسم الموقع.</p>}
     <div className="visual-field-inspector">
@@ -60,6 +67,6 @@ export default function WebsiteVisualPreview({ content, section, entryId, canMan
       {active ? <div>{active.label}{translatedField && <p dir="rtl">{active.value}</p>}<textarea aria-label={active.label} key={active.path} value={translatedField ? visualFieldValue(content,active,locale) : active.value} disabled={!canManage} rows={active.kind === "image" ? 2 : 4} maxLength={translatedField ? 6000 : 8000} dir={locale !== "ar" || active.kind === "image" ? "ltr" : "rtl"} lang={translatedField ? locale : undefined} onChange={event=>onEdit(active.path,event.target.value,translatedField ? locale : "ar")}/>{active.kind === "image" && <label className="visual-image-upload">رفع صورة<input type="file" accept="image/png,image/jpeg" disabled={!canManage || uploading} onChange={event=>{const file=event.target.files?.[0];if(file)void uploadImage(file,active.path);event.target.value="";}}/>{uploading && <small>جارٍ رفع الصورة...</small>}</label>}</div> : <p>اضغط على النص أو الصورة داخل الصفحة لفتح أدوات تحريره.</p>}
       {uploadError && <p role="alert">{uploadError}</p>}
     </div>
-    <p className="preview-hint">تظهر تغييرات النصوص والصور والأقسام هنا قبل حفظها. الروابط والنماذج معطلة داخل المعاينة.</p>
+    <p className="preview-hint">تنقّل بين الصفحات من داخل المعاينة، واضغط على النص أو الصورة لتحريرهما. النماذج معطلة في المسودة.</p>
   </aside>;
 }
