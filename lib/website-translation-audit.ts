@@ -46,7 +46,7 @@ export function translationBatches(values: string[], target: TranslationTarget) 
   let batch: string[] = [];
   for (const value of values) {
     const candidate = [...batch, value];
-    if (batch.length && (candidate.length > 100 || new TextEncoder().encode(JSON.stringify({values: candidate, target})).byteLength > 50_000)) {
+    if (batch.length && (candidate.length > 3 || new TextEncoder().encode(JSON.stringify({values: candidate, target})).byteLength > 50_000)) {
       batches.push(batch); batch = [value];
     } else batch = candidate;
   }

@@ -1,3 +1,4 @@
+import { translateWebsiteText } from "@/lib/website-machine-translation";
 import { requirePortalApiRole } from "@/lib/portal-access";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest } from "@/lib/security";
 
@@ -9,7 +10,13 @@ export async function POST(request:Request){
   const requestedTarget=String((parsed.value as {target?:unknown}).target||"en");
   const target=requestedTarget==="bn"?"bn":"en";
   if(!values.length||values.some(value=>!value))return jsonNoStore({error:"النصوص المطلوب ترجمتها غير مكتملة"},{status:400});
-  const endpoint=process.env.LIBRETRANSLATE_URL?.trim();if(!endpoint)return jsonNoStore({error:"مساعد الترجمة المجاني غير مفعّل على الخادم؛ أدخل النص الإنجليزي يدوياً أو اضبط LIBRETRANSLATE_URL"},{status:503});
+  const endpoint=process.env.LIBRETRANSLATE_URL?.trim();
+  if (!endpoint) {
+    const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 45000);
+    try { return jsonNoStore({translated: await translateWebsiteText(values, target, controller.signal)}); }
+    catch (error) { controller.abort(); return jsonNoStore({error: error instanceof Error && error.message === "TRANSLATION_QUOTA" ? "بلغت خدمة الترجمة المجانية حد الاستخدام اليومي؛ حاول لاحقًا أو استخدم ترجمة Google." : "تعذّر إكمال الترجمة الآن؛ حاول مجددًا أو استخدم ترجمة Google. لم تُحفظ تغييرات."}, {status:502}); }
+    finally {clearTimeout(timeout);}
+  }
   let url:URL;try{url=new URL(endpoint)}catch{return jsonNoStore({error:"عنوان خدمة الترجمة غير صحيح"},{status:503})}if(url.protocol!=="https:")return jsonNoStore({error:"خدمة الترجمة يجب أن تستخدم HTTPS"},{status:503});
   const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),20000);
   try{
