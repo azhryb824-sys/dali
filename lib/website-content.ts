@@ -59,6 +59,11 @@ export type WebsiteContent = {
     focusKeywords: string;
   };
   home: {
+    heroImage: string;
+    aboutImage: string;
+    hajjImage: string;
+    localImage: string;
+    capabilitiesImage: string;
     heroKicker: string;
     heroTitle: string;
     heroAccent: string;
@@ -251,6 +256,11 @@ export const DEFAULT_WEBSITE_CONTENT: WebsiteContent = {
     focusKeywords: "شركة توفير عمالة السعودية، شركة مقاولات السعودية، تشغيل وصيانة منشآت، عمالة للشركات، إدارة مشاريع إنشائية",
   },
   home: {
+    heroImage: "/images/dali-hero.webp",
+    aboutImage: "/images/hajj-readiness.webp",
+    hajjImage: "/images/hajj-operations.webp",
+    localImage: "/images/dali-mecca.webp",
+    capabilitiesImage: "/images/dali-capabilities.webp",
     heroKicker: "حلول موثوقة لأعمالك في مدن المملكة",
     heroTitle: "الكوادر المناسبة،",
     heroAccent: "في الوقت الذي تحتاجها.",
@@ -436,6 +446,11 @@ export function sanitizeWebsiteContent(value: unknown, fallback = DEFAULT_WEBSIT
       focusKeywords: plainText(seo.focusKeywords, 1200, fallback.seo.focusKeywords),
     },
     home: {
+      heroImage: safeImage(home.heroImage, fallback.home.heroImage || "/images/dali-hero.webp"),
+      aboutImage: safeImage(home.aboutImage, fallback.home.aboutImage || "/images/hajj-readiness.webp"),
+      hajjImage: safeImage(home.hajjImage, fallback.home.hajjImage || "/images/hajj-operations.webp"),
+      localImage: safeImage(home.localImage, fallback.home.localImage || "/images/dali-mecca.webp"),
+      capabilitiesImage: safeImage(home.capabilitiesImage, fallback.home.capabilitiesImage || "/images/dali-capabilities.webp"),
       heroKicker: plainText(home.heroKicker, 180, fallback.home.heroKicker),
       heroTitle: plainText(home.heroTitle, 180, fallback.home.heroTitle),
       heroAccent: plainText(home.heroAccent, 180, fallback.home.heroAccent),

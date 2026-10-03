@@ -4,6 +4,8 @@ import { readApiJson } from "@/lib/client-api";
 import { appAlert, appConfirm } from "@/app/components/AppDialogProvider";
 
 
+import { useWebsiteDraft } from "./useWebsiteDraft";
+import { updateVisualField } from "@/lib/website-visual-fields";
 import WebsiteVisualPreview from "./WebsiteVisualPreview";
 import "./website-visual-editor.css";
 import { useMemo, useState } from "react";
@@ -50,8 +52,9 @@ function faqsText(value: ManagedFaq[]) { return value.map((item) => `${item.ques
 function parseFaqs(value: string): ManagedFaq[] { return lines(value).map((line) => { const separator = line.indexOf("|"); return separator < 0 ? { question: line, answer: "" } : { question: line.slice(0, separator).trim(), answer: line.slice(separator + 1).trim() }; }).filter((item) => item.question && item.answer); }
 function dateOnly() { return new Date().toISOString().slice(0, 10); }
 export default function WebsiteManager({ initialContent, canManage }: { initialContent: WebsiteContent; canManage: boolean }) {
-  const [content, setContent] = useState(initialContent);
+  const { content, setContent, markSaved, undo, redo, canUndo, canRedo, dirty } = useWebsiteDraft(initialContent);
   const [tab, setTab] = useState<Tab>("overview");
+  const [assetBusy, setAssetBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -66,13 +69,13 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
   }
 
   async function save() {
-    if (!canManage || busy) return;
+    if (!canManage || busy || assetBusy) return;
     setBusy(true); setNotice(""); setError("");
     try {
       const response = await fetch("/api/portal/website", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ content, expectedVersion: content.version }) });
       const result = await readApiJson(response) as { content?: WebsiteContent; error?: string };
       if (!response.ok || !result.content) throw new Error(result.error || "تعذّر حفظ الموقع");
-      setContent(result.content);
+      markSaved(result.content);
       setNotice(`تم حفظ ونشر الإصدار ${result.content.version} بنجاح.`);
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "تعذّر حفظ الموقع"); }
     finally { setBusy(false); }
@@ -99,11 +102,12 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
   }
 
   return <section className="website-manager visual-website-manager">
-    <header className="website-manager-head"><div><p className="section-kicker">إدارة الموقع الإلكتروني</p><h2>محرر الموقع المرئي</h2><p>تغييرات الأقسام المنشورة تظهر مباشرة في الموقع العام. لا يسمح النظام بالنشر النهائي قبل اكتمال الإنجليزية والبنغالية لكل نص عربي.</p></div><div className="website-publish-actions"><a href="/" target="_blank" rel="noreferrer">فتح الموقع العام</a><button type="button" onClick={save} disabled={!canManage || busy || !translationAudit.complete} title={translationAudit.complete ? "" : "أكمل ترجمة جميع النصوص قبل النشر"}>{busy ? "جارٍ الحفظ..." : translationAudit.complete ? "حفظ ونشر التغييرات" : "النشر متوقف حتى اكتمال الترجمة"}</button></div></header>
+    <header className="website-manager-head"><div><p className="section-kicker">إدارة الموقع الإلكتروني</p><h2>محرر الموقع المرئي</h2><p>تغييرات الأقسام المنشورة تظهر مباشرة في الموقع العام. لا يسمح النظام بالنشر النهائي قبل اكتمال الإنجليزية والبنغالية لكل نص عربي.</p></div><div className="website-publish-actions"><a href="/" target="_blank" rel="noreferrer">فتح الموقع العام</a><button type="button" onClick={save} disabled={!canManage || busy || assetBusy || !translationAudit.complete} title={translationAudit.complete ? "" : "أكمل ترجمة جميع النصوص قبل النشر"}>{assetBusy ? "جارٍ رفع الصورة..." : busy ? "جارٍ الحفظ..." : translationAudit.complete ? "حفظ ونشر التغييرات" : "النشر متوقف حتى اكتمال الترجمة"}</button></div></header>
     {(notice || error) && <div className={error ? "website-message error" : "website-message success"} role={error ? "alert" : "status"}>{error || notice}</div>}
     {!canManage && <div className="website-message warning">يمكنك الاطلاع على المحتوى، لكن حسابك لا يملك صلاحية النشر.</div>}
-    <div className="website-visual-workspace"><WebsiteVisualPreview content={content} section={tab}/>
-    <div className="website-manager-layout"><nav className="website-tabs" aria-label="أقسام إدارة الموقع">{tabs.map((item) => <button type="button" key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}{item.id in content.collections && <small>{content.collections[item.id as WebsiteCollectionKey].length}</small>}</button>)}</nav>
+    <div className="visual-edit-toolbar"><span>{dirty ? "تغييرات غير منشورة" : "جميع التغييرات محفوظة"}</span><button type="button" onClick={undo} disabled={!canManage || busy || assetBusy || !canUndo}>تراجع</button><button type="button" onClick={redo} disabled={!canManage || busy || assetBusy || !canRedo}>إعادة</button></div>
+    <div className="website-visual-workspace"><WebsiteVisualPreview content={content} section={tab} onUploadStateChange={setAssetBusy} canManage={canManage && !busy && !assetBusy} onEdit={(path,value) => { if (canManage && !busy) setContent(current => updateVisualField(current,path,value) || current); }}/>
+    <details className="website-advanced-tools"><summary>إدارة الأقسام والإعدادات</summary><div className="website-manager-layout" inert={busy || assetBusy}><nav className="website-tabs" aria-label="أقسام إدارة الموقع">{tabs.map((item) => <button type="button" key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}{item.id in content.collections && <small>{content.collections[item.id as WebsiteCollectionKey].length}</small>}</button>)}</nav>
       <div className="website-editor">
         {tab === "overview" && <div className="website-overview"><div className="website-stats"><article><span>الإصدار</span><strong>{content.version}</strong><small>آخر تحديث {new Date(content.updatedAt).toLocaleString("ar-SA")}</small></article><article><span>منشور</span><strong>{publishedCount}</strong><small>صفحة أو عنصر ظاهر</small></article><article><span>مسودات</span><strong>{draftCount}</strong><small>غير ظاهرة لمحركات البحث</small></article><article><span>العنوان المحلي</span><strong>{content.site.district}</strong><small>{content.site.city}</small></article></div><div className="website-guidance"><h3>ضوابط النشر الأساسية</h3><ul><li>استخدم اسم الشركة وعنوانها وهاتفها بالطريقة نفسها في الموقع وملف Google Business Profile.</li><li>لا تنشئ صفحة لكل حي أو مرادف للكلمة؛ أنشئ صفحة فقط عندما يكون لها محتوى ونية بحث مختلفة.</li><li>لا تنشر عميلًا أو مشروعًا أو ترخيصًا أو رقمًا إلا بعد التحقق والموافقة.</li><li>حوّل العنصر إلى مسودة قبل حذفه إذا كان له رابط مفهرس، ثم راجع الحاجة إلى إعادة توجيه الرابط.</li></ul></div></div>}
         {tab === "identity" && <EditorPanel title="بيانات الشركة العامة" description="هذه البيانات تغذي العناوين والتذييل والبيانات المنظمة لمحركات البحث."><div className="website-form-grid"><Field label="الاسم الرسمي" value={content.site.companyName} onChange={(value) => mutate((draft) => { draft.site.companyName = value; })} disabled={!canManage}/><Field label="الاسم المختصر" value={content.site.shortName} onChange={(value) => mutate((draft) => { draft.site.shortName = value; })} disabled={!canManage}/><Field wide label="الوصف المختصر" value={content.site.description} onChange={(value) => mutate((draft) => { draft.site.description = value; })} disabled={!canManage} multiline/><Field wide label="العبارة التعريفية" value={content.site.tagline} onChange={(value) => mutate((draft) => { draft.site.tagline = value; })} disabled={!canManage}/><Field label="المدينة" value={content.site.city} onChange={(value) => mutate((draft) => { draft.site.city = value; })} disabled={!canManage}/><Field label="الحي" value={content.site.district} onChange={(value) => mutate((draft) => { draft.site.district = value; })} disabled={!canManage}/><Field wide label="العنوان الكامل" value={content.site.address} onChange={(value) => mutate((draft) => { draft.site.address = value; })} disabled={!canManage}/><Field label="الهاتف العام" value={content.site.phone} onChange={(value) => mutate((draft) => { draft.site.phone = value; })} disabled={!canManage} dir="ltr"/><Field label="البريد العام" value={content.site.email} onChange={(value) => mutate((draft) => { draft.site.email = value; })} disabled={!canManage} dir="ltr"/><Field label="رقم السجل التجاري" value={content.site.commercialRegistration} onChange={(value) => mutate((draft) => { draft.site.commercialRegistration = value; })} disabled={!canManage} dir="ltr"/><Field label="الرقم الضريبي" value={content.site.vatNumber} onChange={(value) => mutate((draft) => { draft.site.vatNumber = value; })} disabled={!canManage} dir="ltr"/><Field wide label="رابط ملف Google Business Profile" value={content.site.googleBusinessUrl} onChange={(value) => mutate((draft) => { draft.site.googleBusinessUrl = value; })} disabled={!canManage} dir="ltr"/><Field wide label="رابط الموقع على الخريطة" value={content.site.mapUrl} onChange={(value) => mutate((draft) => { draft.site.mapUrl = value; })} disabled={!canManage} dir="ltr"/></div></EditorPanel>}
@@ -115,7 +119,7 @@ export default function WebsiteManager({ initialContent, canManage }: { initialC
         {tab === "visibility" && <EditorPanel title="ظهور الأقسام" description="إخفاء القسم يزيل رابطه من التنقل، بينما تتحكم حالة كل عنصر في نشر صفحته."><div className="visibility-grid">{Object.entries(content.visibility).map(([key, value]) => <label key={key}><input type="checkbox" checked={value} disabled={!canManage} onChange={(event) => mutate((draft) => { draft.visibility[key as keyof WebsiteContent["visibility"]] = event.target.checked; })}/><span>{({ hajj: "موسما رمضان والحج", services: "الخدمات", sectors: "القطاعات", locations: "مناطق الخدمة", projects: "المشروعات", credentials: "التراخيص", articles: "مركز المعرفة", jobs: "الوظائف", partners: "الموردون والشركاء", pages: "الصفحات الإضافية", faq: "الأسئلة الشائعة" } as Record<string, string>)[key]}</span></label>)}</div></EditorPanel>}
       </div>
     </div>
-  </div></section>;
+  </details></div></section>;
 }
 
 function EditorPanel({ title, description, children }: { title: string; description: string; children: React.ReactNode }) { return <section className="website-editor-panel"><header><h3>{title}</h3><p>{description}</p></header>{children}</section>; }
