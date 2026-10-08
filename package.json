@@ -16,6 +16,7 @@
     "auth:hash": "node scripts/hash-password.mjs",
     "test": "npm run build && node --experimental-strip-types --test tests/*.test.mjs",
     "test:production": "node scripts/production-smoke.mjs",
+    "test:security:lab": "node scripts/run-security-lab.mjs",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit --pretty false",

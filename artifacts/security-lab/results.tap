@@ -1,0 +1,643 @@
+TAP version 13
+# Subtest: production uses PostgreSQL with safe pooled-connection settings
+ok 1 - production uses PostgreSQL with safe pooled-connection settings
+  ---
+  duration_ms: 4.60667
+  type: 'test'
+  ...
+# Subtest: portal authorization uses trusted configuration
+ok 2 - portal authorization uses trusted configuration
+  ---
+  duration_ms: 2.943849
+  type: 'test'
+  ...
+# Subtest: functional roles actively control departments and privileged actions
+ok 3 - functional roles actively control departments and privileged actions
+  ---
+  duration_ms: 2.356149
+  type: 'test'
+  ...
+# Subtest: only owner and system administrator can manage dynamic user roles
+ok 4 - only owner and system administrator can manage dynamic user roles
+  ---
+  duration_ms: 1.361747
+  type: 'test'
+  ...
+# Subtest: liveness and readiness are separate deployment signals
+ok 5 - liveness and readiness are separate deployment signals
+  ---
+  duration_ms: 0.967876
+  type: 'test'
+  ...
+# Subtest: canonical roles have exact least-privilege grants
+ok 6 - canonical roles have exact least-privilege grants
+  ---
+  duration_ms: 1.499911
+  type: 'test'
+  ...
+# Subtest: new users require and persist multiple roles
+ok 7 - new users require and persist multiple roles
+  ---
+  duration_ms: 2.586452
+  type: 'test'
+  ...
+# Subtest: access scope roles follow active role definitions instead of a stale hard-coded check
+ok 8 - access scope roles follow active role definitions instead of a stale hard-coded check
+  ---
+  duration_ms: 0.774341
+  type: 'test'
+  ...
+# Subtest: sales and purchasing representatives are assignable with isolated request permissions
+ok 9 - sales and purchasing representatives are assignable with isolated request permissions
+  ---
+  duration_ms: 2.073826
+  type: 'test'
+  ...
+# Subtest: unauthorized pages are hidden and direct APIs enforce dedicated permissions
+ok 10 - unauthorized pages are hidden and direct APIs enforce dedicated permissions
+  ---
+  duration_ms: 5.310627
+  type: 'test'
+  ...
+# Subtest: approval bypass is limited to owner and supervisor
+ok 11 - approval bypass is limited to owner and supervisor
+  ---
+  duration_ms: 0.443964
+  type: 'test'
+  ...
+# Subtest: pending requests cannot convert, managers cannot approve, root approval uses a version check
+ok 12 - pending requests cannot convert, managers cannot approve, root approval uses a version check
+  ---
+  duration_ms: 2969.817613
+  type: 'test'
+  ...
+# Subtest: conversion preserves client contact and every populated commercial term
+ok 13 - conversion preserves client contact and every populated commercial term
+  ---
+  duration_ms: 30.501505
+  type: 'test'
+  ...
+# Subtest: both generic and quotation sharing require approval, a permission bit cannot bypass root approval
+ok 14 - both generic and quotation sharing require approval, a permission bit cannot bypass root approval
+  ---
+  duration_ms: 21.830996
+  type: 'test'
+  ...
+# Subtest: approved quotation converts into a complete contract, mismatches and missing client files are rejected
+ok 15 - approved quotation converts into a complete contract, mismatches and missing client files are rejected
+  ---
+  duration_ms: 86.731515
+  type: 'test'
+  ...
+# Subtest: WhatsApp share returns the actual PDF and editable normalized recipient, revoked approval blocks old links
+ok 16 - WhatsApp share returns the actual PDF and editable normalized recipient, revoked approval blocks old links
+  ---
+  duration_ms: 42.839825
+  type: 'test'
+  ...
+# Subtest: invoice recipient comes from linked contract metadata when no contact number exists
+ok 17 - invoice recipient comes from linked contract metadata when no contact number exists
+  ---
+  duration_ms: 11.009096
+  type: 'test'
+  ...
+# Subtest: working hours are writable by owner and system supervisor only, including a fully closed week
+ok 18 - working hours are writable by owner and system supervisor only, including a fully closed week
+  ---
+  duration_ms: 15.813577
+  type: 'test'
+  ...
+# Subtest: background video polling preserves away and busy availability
+ok 19 - background video polling preserves away and busy availability
+  ---
+  duration_ms: 6.841744
+  type: 'test'
+  ...
+# Subtest: request approval alerts reach owner and supervisor, deduplicate, retain read/hide and resolve
+ok 20 - request approval alerts reach owner and supervisor, deduplicate, retain read/hide and resolve
+  ---
+  duration_ms: 107.577415
+  type: 'test'
+  ...
+# Subtest: requests without CRM records remain linked; editing the start date realigns all annual installments
+ok 21 - requests without CRM records remain linked; editing the start date realigns all annual installments
+  ---
+  duration_ms: 27.213789
+  type: 'test'
+  ...
+# Subtest: invoice recipient is recovered from a client's chat even without a quote request or stored phone
+ok 22 - invoice recipient is recovered from a client's chat even without a quote request or stored phone
+  ---
+  duration_ms: 9.51203
+  type: 'test'
+  ...
+# Subtest: owner completion releases the actual employee without fabricating a heartbeat or changing owner availability
+ok 23 - owner completion releases the actual employee without fabricating a heartbeat or changing owner availability
+  ---
+  duration_ms: 29.0526
+  type: 'test'
+  ...
+# Subtest: owner transfer releases the original employee and records the correct transfer history
+ok 24 - owner transfer releases the original employee and records the correct transfer history
+  ---
+  duration_ms: 25.472522
+  type: 'test'
+  ...
+# Subtest: cancelling a ringing call preserves manually selected away status
+ok 25 - cancelling a ringing call preserves manually selected away status
+  ---
+  duration_ms: 16.16819
+  type: 'test'
+  ...
+# Subtest: releasing an old call preserves a newer active call and its busy presence
+ok 26 - releasing an old call preserves a newer active call and its busy presence
+  ---
+  duration_ms: 12.155224
+  type: 'test'
+  ...
+# Subtest: concurrent accepts cannot give one employee two active video calls
+ok 27 - concurrent accepts cannot give one employee two active video calls
+  ---
+  duration_ms: 20.875889
+  type: 'test'
+  ...
+# Subtest: visitor polling expires only its own call, removes stale join links and permits retry
+ok 28 - visitor polling expires only its own call, removes stale join links and permits retry
+  ---
+  duration_ms: 46.330455
+  type: 'test'
+  ...
+# Subtest: old expired calls are processed even behind more than 300 recent requests
+ok 29 - old expired calls are processed even behind more than 300 recent requests
+  ---
+  duration_ms: 39.010076
+  type: 'test'
+  ...
+# Subtest: system_owner converts approved requests and quotes with complete data and no duplicate records
+ok 30 - system_owner converts approved requests and quotes with complete data and no duplicate records
+  ---
+  duration_ms: 125.748346
+  type: 'test'
+  ...
+# Subtest: system_admin converts approved requests and quotes with complete data and no duplicate records
+ok 31 - system_admin converts approved requests and quotes with complete data and no duplicate records
+  ---
+  duration_ms: 124.152774
+  type: 'test'
+  ...
+# quote-full-edit-failed Error: بيانات بنود عرض السعر غير صحيحة
+#     at integer2 (file:///workspace/scratch/faf1254da442/dali/node_modules/.cache/dali-contract-parity-ysFX8R/qa.mjs:6153:76)
+#     at file:///workspace/scratch/faf1254da442/dali/node_modules/.cache/dali-contract-parity-ysFX8R/qa.mjs:6175:60
+#     at Array.map (<anonymous>)
+#     at parseCommercialLineItems (file:///workspace/scratch/faf1254da442/dali/node_modules/.cache/dali-contract-parity-ysFX8R/qa.mjs:6171:21)
+#     at Object.PATCH4 (file:///workspace/scratch/faf1254da442/dali/node_modules/.cache/dali-contract-parity-ysFX8R/qa.mjs:6717:19)
+#     at async TestContext.<anonymous> (file:///workspace/scratch/faf1254da442/dali/tests/contract-field-parity-postgres.test.mjs:80:17)
+#     at async Test.run (node:internal/test_runner/test:1389:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+# Subtest: request attachment migration is additive and repeatable; labelled files are stored before approval
+ok 32 - request attachment migration is additive and repeatable; labelled files are stored before approval
+  ---
+  duration_ms: 2518.143193
+  type: 'test'
+  ...
+# Subtest: full quote editing persists rows, costs, custom VAT, all text and trusted source files atomically
+ok 33 - full quote editing persists rows, costs, custom VAT, all text and trusted source files atomically
+  ---
+  duration_ms: 57.388923
+  type: 'test'
+  ...
+# Subtest: quote file access is permission checked and restricted to its immutable source lineage
+ok 34 - quote file access is permission checked and restricted to its immutable source lineage
+  ---
+  duration_ms: 26.531064
+  type: 'test'
+  ...
+# Subtest: approved quote converts without reuploading any of its three client files
+ok 35 - approved quote converts without reuploading any of its three client files
+  ---
+  duration_ms: 68.00792
+  type: 'test'
+  ...
+# Subtest: full contract edit saves metadata and financial rows; stale changes and malformed bodies do not mutate
+ok 36 - full contract edit saves metadata and financial rows; stale changes and malformed bodies do not mutate
+  ---
+  duration_ms: 47.697731
+  type: 'test'
+  ...
+# Subtest: open quantity contract editing keeps agreed unit rates but no fictitious invoice commitments
+ok 37 - open quantity contract editing keeps agreed unit rates but no fictitious invoice commitments
+  ---
+  duration_ms: 25.700243
+  type: 'test'
+  ...
+# Subtest: legal recommendations remain advisory and never change contract approval state
+ok 38 - legal recommendations remain advisory and never change contract approval state
+  ---
+  duration_ms: 30.268947
+  type: 'test'
+  ...
+# Subtest: coverage counts each profession independently and open contracts remain unbounded
+ok 39 - coverage counts each profession independently and open contracts remain unbounded
+  ---
+  duration_ms: 0.563801
+  type: 'test'
+  ...
+# Subtest: database assignment guard permits open capacity while retaining duplicate and fixed-capacity protection
+ok 40 - database assignment guard permits open capacity while retaining duplicate and fixed-capacity protection
+  ---
+  duration_ms: 23.805331
+  type: 'test'
+  ...
+# Subtest: leave requests exclude Friday and holidays with independent policy and locked approval
+ok 41 - leave requests exclude Friday and holidays with independent policy and locked approval
+  ---
+  duration_ms: 1.251975
+  type: 'test'
+  ...
+# Subtest: legal evidence, hearings, submissions and settlements have dedicated controlled workflows
+ok 42 - legal evidence, hearings, submissions and settlements have dedicated controlled workflows
+  ---
+  duration_ms: 0.455001
+  type: 'test'
+  ...
+# Subtest: finance enterprise controls use posting rules and guard bank imports and period closure
+ok 43 - finance enterprise controls use posting rules and guard bank imports and period closure
+  ---
+  duration_ms: 0.350266
+  type: 'test'
+  ...
+# Subtest: payroll uses an actual bank and confirms individual payment only after journal posting
+ok 44 - payroll uses an actual bank and confirms individual payment only after journal posting
+  ---
+  duration_ms: 0.971201
+  type: 'test'
+  ...
+# Subtest: lawyer users manage all cases while external counsel is assigned from the lawyer registry
+ok 45 - lawyer users manage all cases while external counsel is assigned from the lawyer registry
+  ---
+  duration_ms: 1.214039
+  type: 'test'
+  ...
+# Subtest: legal case closure and judgment lifecycle are guarded
+ok 46 - legal case closure and judgment lifecycle are guarded
+  ---
+  duration_ms: 0.360801
+  type: 'test'
+  ...
+# Subtest: employee documents require a stored file and termination is a separated approval workflow
+ok 47 - employee documents require a stored file and termination is a separated approval workflow
+  ---
+  duration_ms: 0.42067
+  type: 'test'
+  ...
+# Subtest: payroll exposes frozen payslips and a WPS export
+ok 48 - payroll exposes frozen payslips and a WPS export
+  ---
+  duration_ms: 0.374031
+  type: 'test'
+  ...
+# Subtest: performance reviews support employee acknowledgement, appeal, and separated resolution
+ok 49 - performance reviews support employee acknowledgement, appeal, and separated resolution
+  ---
+  duration_ms: 0.456483
+  type: 'test'
+  ...
+# Subtest: sensitive finance and organizational employee changes require an independent decision
+ok 50 - sensitive finance and organizational employee changes require an independent decision
+  ---
+  duration_ms: 0.62426
+  type: 'test'
+  ...
+# Subtest: migration tolerates historical invalid snapshots and enables protected referral storage
+ok 51 - migration tolerates historical invalid snapshots and enables protected referral storage
+  ---
+  duration_ms: 2217.309813
+  type: 'test'
+  ...
+# Subtest: a duplicate referral rolls back its case, returning enables a new case, another installment is independent
+ok 52 - a duplicate referral rolls back its case, returning enables a new case, another installment is independent
+  ---
+  duration_ms: 24.51321
+  type: 'test'
+  ...
+# Subtest: SQL itself rejects duplicate open referrals and mismatched source identities
+ok 53 - SQL itself rejects duplicate open referrals and mismatched source identities
+  ---
+  duration_ms: 4.295201
+  type: 'test'
+  ...
+# Subtest: cancellation preserves accrued debt, holds partial service, cancels future schedules and captures linked evidence
+ok 54 - cancellation preserves accrued debt, holds partial service, cancels future schedules and captures linked evidence
+  ---
+  duration_ms: 17.105001
+  type: 'test'
+  ...
+# Subtest: a downstream legal insert failure rolls back cancellation schedule changes
+ok 55 - a downstream legal insert failure rolls back cancellation schedule changes
+  ---
+  duration_ms: 13.61729
+  type: 'test'
+  ...
+# Subtest: live contract approval gates both bundle collection and an existing bundle download
+ok 56 - live contract approval gates both bundle collection and an existing bundle download
+  ---
+  duration_ms: 9.98737
+  type: 'test'
+  ...
+# Subtest: journal creation participates in the caller transaction and rolls back on downstream failure
+ok 57 - journal creation participates in the caller transaction and rolls back on downstream failure
+  ---
+  duration_ms: 13.887529
+  type: 'test'
+  ...
+# Subtest: executive API rejects a department manager and admits only a root actor
+ok 58 - executive API rejects a department manager and admits only a root actor
+  ---
+  duration_ms: 6.661067
+  type: 'test'
+  ...
+# Subtest: employee referral API enforces department permission, rejects closed returns and exposes the return reason
+ok 59 - employee referral API enforces department permission, rejects closed returns and exposes the return reason
+  ---
+  duration_ms: 31.811567
+  type: 'test'
+  ...
+# Subtest: returned-file notifications deduplicate, enforce visibility, persist read/hide and resolve after re-referral
+ok 60 - returned-file notifications deduplicate, enforce visibility, persist read/hide and resolve after re-referral
+  ---
+  duration_ms: 139.963391
+  type: 'test'
+  ...
+# Subtest: infers the role_default permission profile from its exhaustive stored rules
+ok 61 - infers the role_default permission profile from its exhaustive stored rules
+  ---
+  duration_ms: 1.208782
+  type: 'test'
+  ...
+# Subtest: infers the operator permission profile from its exhaustive stored rules
+ok 62 - infers the operator permission profile from its exhaustive stored rules
+  ---
+  duration_ms: 0.297228
+  type: 'test'
+  ...
+# Subtest: infers the read_only permission profile from its exhaustive stored rules
+ok 63 - infers the read_only permission profile from its exhaustive stored rules
+  ---
+  duration_ms: 0.189379
+  type: 'test'
+  ...
+# Subtest: preserves partial or scope-specific rules as a custom profile
+ok 64 - preserves partial or scope-specific rules as a custom profile
+  ---
+  duration_ms: 0.12871
+  type: 'test'
+  ...
+# Subtest: root permissions always remain the full role-default profile
+ok 65 - root permissions always remain the full role-default profile
+  ---
+  duration_ms: 1.399212
+  type: 'test'
+  ...
+# Subtest: representatives submit the full canonical form; identity, validation and idempotency are enforced
+ok 66 - representatives submit the full canonical form; identity, validation and idempotency are enforced
+  ---
+  duration_ms: 2263.705395
+  type: 'test'
+  ...
+# Subtest: owner requests changes, origin resubmits populated data, and the owner approves using a version guard
+ok 67 - owner requests changes, origin resubmits populated data, and the owner approves using a version guard
+  ---
+  duration_ms: 36.504874
+  type: 'test'
+  ...
+# Subtest: final rejection has no mandatory amendment and cannot be resubmitted
+ok 68 - final rejection has no mandatory amendment and cannot be resubmitted
+  ---
+  duration_ms: 16.315947
+  type: 'test'
+  ...
+# Subtest: approved representative request converts via standard quote flow; only its representative can share or request conversion after approval
+ok 69 - approved representative request converts via standard quote flow; only its representative can share or request conversion after approval
+  ---
+  duration_ms: 104.557237
+  type: 'test'
+  ...
+# Subtest: edited conversion preserves approved quote and contract clauses, creates a draft contract and completes its conversion request
+ok 70 - edited conversion preserves approved quote and contract clauses, creates a draft contract and completes its conversion request
+  ---
+  duration_ms: 56.384414
+  type: 'test'
+  ...
+# Subtest: owner can add multiple named stamps and disabling one preserves other stamps and history
+ok 71 - owner can add multiple named stamps and disabling one preserves other stamps and history
+  ---
+  duration_ms: 25.898562
+  type: 'test'
+  ...
+# Subtest: worker incidents use historical assignment and contract salary; medical evidence and reporting roles are enforced
+ok 72 - worker incidents use historical assignment and contract salary; medical evidence and reporting roles are enforced
+  ---
+  duration_ms: 41.463062
+  type: 'test'
+  ...
+# Subtest: rejecting an excuse can combine warning and deduction, excludes Friday, and cannot apply twice
+ok 73 - rejecting an excuse can combine warning and deduction, excludes Friday, and cannot apply twice
+  ---
+  duration_ms: 47.077596
+  type: 'test'
+  ...
+# Subtest: salary net uses the contract rate and approved deductions; unpaid contract installments, stale amounts and duplicate salaries are blocked
+ok 74 - salary net uses the contract rate and approved deductions; unpaid contract installments, stale amounts and duplicate salaries are blocked
+  ---
+  duration_ms: 47.852829
+  type: 'test'
+  ...
+# Subtest: cancelling an unposted salary releases deduction allocations once and forces approval before payment
+ok 75 - cancelling an unposted salary releases deduction allocations once and forces approval before payment
+  ---
+  duration_ms: 80.23062
+  type: 'test'
+  ...
+# Subtest: archive and release preserve worker history and financial records
+ok 76 - archive and release preserve worker history and financial records
+  ---
+  duration_ms: 17.784392
+  type: 'test'
+  ...
+# Subtest: worker assignment refuses a contract whose active status outlived its term
+ok 77 - worker assignment refuses a contract whose active status outlived its term
+  ---
+  duration_ms: 5.948067
+  type: 'test'
+  ...
+# Subtest: deductions cannot make net salary negative; a remainder carries to the next month
+ok 78 - deductions cannot make net salary negative; a remainder carries to the next month
+  ---
+  duration_ms: 36.233554
+  type: 'test'
+  ...
+# Subtest: employee payroll prorates salary, excludes Friday from unpaid leave and consumes bonuses only once
+ok 79 - employee payroll prorates salary, excludes Friday from unpaid leave and consumes bonuses only once
+  ---
+  duration_ms: 29.431559
+  type: 'test'
+  ...
+# Subtest: incident and conversion alerts deduplicate and resolve after review without restoring hidden alerts
+ok 80 - incident and conversion alerts deduplicate and resolve after review without restoring hidden alerts
+  ---
+  duration_ms: 128.125691
+  type: 'test'
+  ...
+# Subtest: legacy attendance for a salary already recorded cannot be charged again through an incident
+ok 81 - legacy attendance for a salary already recorded cannot be charged again through an incident
+  ---
+  duration_ms: 15.7342
+  type: 'test'
+  ...
+# Subtest: identity: valid token, payload tampering and forged signatures
+ok 82 - identity: valid token, payload tampering and forged signatures
+  ---
+  duration_ms: 1456.266433
+  type: 'test'
+  ...
+# Subtest: identity: reject ambiguous token framing
+ok 83 - identity: reject ambiguous token framing
+  ---
+  duration_ms: 0.780591
+  type: 'test'
+  ...
+# Subtest: identity: reject expired or malformed signed claims
+ok 84 - identity: reject expired or malformed signed claims
+  ---
+  duration_ms: 2.207434
+  type: 'test'
+  ...
+# Subtest: password: incorrect password and weak hashes fail closed
+ok 85 - password: incorrect password and weak hashes fail closed
+  ---
+  duration_ms: 131.40536
+  type: 'test'
+  ...
+# Subtest: CSRF: foreign, malformed, suffix-confusion and cross-site origins rejected
+ok 86 - CSRF: foreign, malformed, suffix-confusion and cross-site origins rejected
+  ---
+  duration_ms: 3.867681
+  type: 'test'
+  ...
+# Subtest: JSON: oversized actual body bypassing declared length, invalid UTF-8 and invalid syntax
+ok 87 - JSON: oversized actual body bypassing declared length, invalid UTF-8 and invalid syntax
+  ---
+  duration_ms: 2.697966
+  type: 'test'
+  ...
+# Subtest: uploads: MIME spoofing, empty and oversized files rejected
+ok 88 - uploads: MIME spoofing, empty and oversized files rejected
+  ---
+  duration_ms: 0.415863
+  type: 'test'
+  ...
+# Subtest: rate-limit: concurrent requests cannot exceed quota through query races
+ok 89 - rate-limit: concurrent requests cannot exceed quota through query races
+  ---
+  duration_ms: 19.841794
+  type: 'test'
+  ...
+# Subtest: permission profiles: cannot grant permissions absent from the supplied role
+ok 90 - permission profiles: cannot grant permissions absent from the supplied role
+  ---
+  duration_ms: 1.130896
+  type: 'test'
+  ...
+# Subtest: rate-limit: rotating User-Agent on one IP cannot reset the quota
+ok 91 - rate-limit: rotating User-Agent on one IP cannot reset the quota
+  ---
+  duration_ms: 20.788339
+  type: 'test'
+  ...
+# Subtest: secure identity cookie: browser protections remain enforced
+ok 92 - secure identity cookie: browser protections remain enforced
+  ---
+  duration_ms: 0.558002
+  type: 'test'
+  ...
+# Subtest: storage repair is idempotent and safe on standalone PostgreSQL
+ok 93 - storage repair is idempotent and safe on standalone PostgreSQL
+  ---
+  duration_ms: 0.909351
+  type: 'test'
+  ...
+# Subtest: storage audit performs round-trip and checks every storage_key reference
+ok 94 - storage audit performs round-trip and checks every storage_key reference
+  ---
+  duration_ms: 0.161618
+  type: 'test'
+  ...
+# Subtest: legacy file importer preserves existing database objects
+ok 95 - legacy file importer preserves existing database objects
+  ---
+  duration_ms: 0.179675
+  type: 'test'
+  ...
+# Subtest: owners and system admins retain contract management authority
+ok 96 - owners and system admins retain contract management authority
+  ---
+  duration_ms: 0.118835
+  type: 'test'
+  ...
+# Subtest: owner can read, record, replace and void worker absence without extra role permissions
+ok 97 - owner can read, record, replace and void worker absence without extra role permissions
+  ---
+  duration_ms: 2250.36628
+  type: 'test'
+  ...
+# Subtest: system admin can read, record, replace and void worker absence without extra role permissions
+ok 98 - system admin can read, record, replace and void worker absence without extra role permissions
+  ---
+  duration_ms: 69.255434
+  type: 'test'
+  ...
+# Subtest: legacy admin can read, record, replace and void worker absence without extra role permissions
+ok 99 - legacy admin can read, record, replace and void worker absence without extra role permissions
+  ---
+  duration_ms: 61.895453
+  type: 'test'
+  ...
+# Subtest: movement, finance, approval and wildcard permissions do not confer owner attendance authority
+ok 100 - movement, finance, approval and wildcard permissions do not confer owner attendance authority
+  ---
+  duration_ms: 31.591603
+  type: 'test'
+  ...
+# Subtest: unauthenticated and suspended actors cannot manage or inspect attendance
+ok 101 - unauthenticated and suspended actors cannot manage or inspect attendance
+  ---
+  duration_ms: 8.072307
+  type: 'test'
+  ...
+# Subtest: owner and admin retain processed-payment and settled-payroll protections
+ok 102 - owner and admin retain processed-payment and settled-payroll protections
+  ---
+  duration_ms: 79.224059
+  type: 'test'
+  ...
+# Subtest: Friday, date limits, replacement identity and historical assignment remain enforced
+ok 103 - Friday, date limits, replacement identity and historical assignment remain enforced
+  ---
+  duration_ms: 45.806193
+  type: 'test'
+  ...
+# Subtest: dashboard wires the same role policy without using contract ownership as an attendance gate
+ok 104 - dashboard wires the same role policy without using contract ownership as an attendance gate
+  ---
+  duration_ms: 3.0122
+  type: 'test'
+  ...
+1..104
+# tests 104
+# suites 0
+# pass 104
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22005.336543

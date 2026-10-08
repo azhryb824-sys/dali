@@ -98,9 +98,13 @@ export async function sha256(value: string) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function requestSourceHash(request: Request) {
+function requestSourceIp(request: Request) {
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = request.headers.get("cf-connecting-ip")?.trim() || forwarded || "unknown";
+  return request.headers.get("cf-connecting-ip")?.trim() || forwarded || "unknown";
+}
+
+export async function requestSourceHash(request: Request) {
+  const ip = requestSourceIp(request);
   const agent = request.headers.get("user-agent") || "unknown";
   return sha256(`${ip}|${agent}`);
 }
@@ -109,7 +113,9 @@ export async function enforcePublicRateLimit(request: Request, options: RateLimi
   const now = new Date();
   const windowStart = new Date(now.getTime() - options.windowSeconds * 1000).toISOString();
   const blockUntil = new Date(now.getTime() + (options.blockSeconds ?? options.windowSeconds) * 1000).toISOString();
-  const sourceHash = await requestSourceHash(request);
+  // User-Agent is attacker-controlled: rotating it must not reset an IP quota.
+  // The reverse proxy must overwrite the trusted client-IP headers.
+  const sourceHash = await sha256(`rate-limit-ip-v2|${requestSourceIp(request)}`);
   const key = await sha256(`${options.scope}|${sourceHash}`);
   const database = getRuntimeEnv().DB;
   const statement = `
