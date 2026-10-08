@@ -99,8 +99,11 @@ export async function sha256(value: string) {
 }
 
 function requestSourceIp(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return request.headers.get("cf-connecting-ip")?.trim() || forwarded || "unknown";
+  // Nginx appends its observed peer via $proxy_add_x_forwarded_for.
+  // Values before that peer, including cf-connecting-ip on a direct VPS,
+  // can be supplied by the caller and must not choose the rate-limit bucket.
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim();
+  return forwarded || "unknown";
 }
 
 export async function requestSourceHash(request: Request) {

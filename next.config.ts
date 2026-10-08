@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
           "font-src 'self' data:",
           "style-src 'self' 'unsafe-inline'",
           "script-src 'self' 'unsafe-inline'",
+          "script-src-attr 'none'",
           "connect-src 'self'",
           "worker-src 'self' blob:",
           "upgrade-insecure-requests",

@@ -89,3 +89,14 @@ test('secure identity cookie: browser protections remain enforced', async () => 
   for (const flag of ['__Host-dali_identity=', '; HttpOnly', '; SameSite=Strict', '; Secure', '; Path=/']) assert.ok(cookie.includes(flag));
   assert.ok(!cookie.includes('Domain='));
 });
+test('rate-limit: forged proxy prefixes and Cloudflare headers cannot rotate a trusted peer quota', async () => {
+  const options={scope:'qa-forwarded-spoof',limit:5,windowSeconds:60};
+  const responses=[];
+  for(let i=0;i<20;i++) responses.push(await qa.security.enforcePublicRateLimit(request({
+    'x-forwarded-for':`198.51.100.${i+1}, 192.0.2.3`,
+    'cf-connecting-ip':`203.0.113.${i+1}`,
+  }),options));
+  assert.equal(responses.filter(x=>x.allowed).length,5);
+  const other=await qa.security.enforcePublicRateLimit(request({'x-forwarded-for':'192.0.2.4'}),options);
+  assert.equal(other.allowed,true);
+});
