@@ -1,0 +1,61 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { generateDrizzleJson, generateMigration } from 'drizzle-kit/api';
+
+test('account setup honors root functional roles, repairs missing defaults and creates independent bank ledgers atomically', async () => {
+  const dir = await mkdtemp(resolve('node_modules/.account-creation-'));
+  const pg = new PGlite();
+  try {
+    const outfile = resolve(dir, 'qa.mjs');
+    await build({ stdin: { contents: `export * as schema from './db/schema.ts'; export { POST } from './app/api/portal/accounting/route.ts'; export { setDb, setAccess, events } from 'qa-state';`, resolveDir: process.cwd() }, outfile, bundle: true, platform: 'node', format: 'esm', packages: 'external', plugins: [{ name: 'isolate', setup(b) {
+      b.onResolve({ filter: /^(qa-state|@\/db|@\/lib\/(portal-access|portal-notifications|accounting))$/ }, () => ({ path: 'state', namespace: 'qa' }));
+      b.onLoad({ filter: /.*/, namespace: 'qa' }, () => ({ contents: `let db;let access={role:'employee',functionalRoles:['system_owner'],user:{email:'owner@test.local'}};let write=true;export const events=[];export const setDb=v=>db=v;export const getDb=()=>db;export const getSqlClient=()=>{throw Error('Unexpected SQL call')};export const setAccess=(v,w=true)=>{access=v;write=w};export const requirePortalApiRole=async()=>access;export const hasPortalPermission=async()=>write;export const emitPortalNotification=async e=>events.push(e);export const approveJournal=()=>{throw Error('Unexpected journal action')};export const createDraftJournal=approveJournal;export const postJournal=approveJournal;` }));
+    } }] });
+    const qa = await import(pathToFileURL(outfile).href);
+    for (const statement of await generateMigration(generateDrizzleJson({}), generateDrizzleJson(qa.schema))) await pg.exec(statement);
+    qa.setDb(drizzle(pg, { schema: qa.schema }));
+    const send = body => qa.POST(new Request('https://www.dally.info/api/portal/accounting', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+    const count = async table => Number((await pg.query(`select count(*) as n from ${table}`)).rows[0].n);
+    assert.equal((await send({ action: 'initialize' })).status, 200, 'functional owner can initialize');
+    assert.equal(await count('chart_of_accounts'), 16);
+    await pg.exec("update chart_of_accounts set name_ar='Existing label' where code='1200'; update fiscal_periods set status='closed'; delete from chart_of_accounts where code='1100';");
+    qa.setAccess({ role: 'employee', functionalRoles: ['system_admin'], user: { email: 'admin@test.local' } });
+    assert.equal((await send({ action: 'initialize' })).status, 200, 'functional admin repairs incomplete setup');
+    assert.equal(await count('chart_of_accounts'), 16);
+    assert.equal((await pg.query("select name_ar from chart_of_accounts where code='1200'")).rows[0].name_ar, 'Existing label');
+    assert.equal((await pg.query('select status from fiscal_periods')).rows[0].status, 'closed');
+    assert.equal(await count('journal_entries'), 0, 'setup never writes balances');
+    const add = { action: 'add-account', code: '1201', nameAr: 'حساب بنك مستقل', accountType: 'asset' };
+    const created = await send(add); assert.equal(created.status, 201);
+    const ledger = (await created.json()).account;
+    assert.equal(ledger.normalBalance, 'debit'); assert.equal(ledger.isPosting, true); assert.equal(ledger.isSystem, false);
+    assert.equal((await send(add)).status, 409, 'nested PG unique error mapped to conflict');
+    assert.equal((await send({ ...add, code: '1100' })).status, 409, 'system codes reserved');
+    assert.equal((await send({ ...add, code: 'BAD!', accountType: 'invalid' })).status, 400);
+    const bank = { action: 'add-bank', accountCode: 'BANK1', accountName: 'شركة اختبار', iban: 'SA0380000000608010167519', ledgerAccountId: ledger.id };
+    const bankResult = await send(bank); assert.equal(bankResult.status, 201, JSON.stringify(await bankResult.clone().json()));
+    assert.equal((await bankResult.json()).bank.bankName, 'مصرف الراجحي');
+    assert.equal((await send({ ...bank, accountCode: 'BANK2', iban: 'SA0380000000608010167520' })).status, 409);
+    const cash = (await pg.query("select id from chart_of_accounts where code='1100'")).rows[0];
+    assert.equal((await send({ ...bank, ledgerAccountId: cash.id })).status, 400, 'cash cannot become a bank ledger');
+    await pg.exec(`CREATE FUNCTION qa_reject_account_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private SQL details'; END $$; CREATE TRIGGER qa_reject_account_audit BEFORE INSERT ON portal_activity FOR EACH ROW EXECUTE FUNCTION qa_reject_account_audit();`);
+    const priorEvents = qa.events.length;
+    const failure = await send({ ...add, code: '1202' }); assert.equal(failure.status, 500);
+    assert.doesNotMatch(JSON.stringify(await failure.json()), /private SQL|insert into/i);
+    assert.equal((await pg.query("select count(*)::int n from chart_of_accounts where code='1202'")).rows[0].n, 0, 'audit failure rolls back account');
+    assert.equal(qa.events.length, priorEvents, 'failed save sends no notification');
+    await pg.exec('DROP TRIGGER qa_reject_account_audit ON portal_activity;');
+    qa.setAccess({ role: 'employee', functionalRoles: ['accountant'], user: { email: 'accountant@test.local' } });
+    assert.equal((await send({ action: 'initialize' })).status, 403);
+    assert.equal((await send({ ...add, code: '5201', accountType: 'expense' })).status, 201);
+    qa.setAccess({ role: 'employee', functionalRoles: ['accountant'], user: { email: 'reader@test.local' } }, false);
+    assert.equal((await send({ ...add, code: '1203' })).status, 403, 'write permission enforced');
+    assert.equal(await count('bank_accounts'), 1);
+  } finally { await pg.close(); await rm(dir, { recursive: true, force: true }); }
+});

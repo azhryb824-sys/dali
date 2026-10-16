@@ -1,7 +1,7 @@
 import { bankNameFromSaudiIban } from "@/lib/saudi-banks";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { bankAccounts, chartOfAccounts, fiscalPeriods, journalEntries, journalLines } from "@/db/schema";
+import { bankAccounts, chartOfAccounts, fiscalPeriods, journalEntries, journalLines, portalActivity } from "@/db/schema";
 import { approveJournal, createDraftJournal, postJournal } from "@/lib/accounting";
 import { auditPortalAction } from "@/lib/audit";
 import { emitPortalNotification } from "@/lib/portal-notifications";
@@ -75,15 +75,33 @@ export async function POST(request: Request) {
     const db = getDb();
 
     if (action === "initialize") {
-      if (access.role !== "admin") return jsonNoStore({ error: "تهيئة المحاسبة متاحة لمدير النظام فقط" }, { status: 403 });
-      for (const account of defaultAccounts) {
-        await db.insert(chartOfAccounts).values(account).onConflictDoNothing({ target: chartOfAccounts.code });
-      }
+      if (!(access.role === "admin" || access.functionalRoles.some(role => ["system_owner", "system_admin"].includes(role)))) return jsonNoStore({ error: "تهيئة المحاسبة متاحة للمالك ومشرف النظام فقط" }, { status: 403 });
       const year = new Date().getUTCFullYear();
-      await db.insert(fiscalPeriods).values({ periodCode: String(year), nameAr: `السنة المالية ${year}`, startDate: `${year}-01-01`, endDate: `${year}-12-31` })
-        .onConflictDoNothing({ target: fiscalPeriods.periodCode });
-      await auditPortalAction({ actorEmail: access.user.email, action: "accounting-initialized", entityType: "accounting", entityId: String(year), after: { year, accounts: defaultAccounts.length } });
+      await db.transaction(async tx => {
+        for (const account of defaultAccounts) {
+          await tx.insert(chartOfAccounts).values(account).onConflictDoNothing({ target: chartOfAccounts.code });
+        }
+        await tx.insert(fiscalPeriods).values({ periodCode: String(year), nameAr: `السنة المالية ${year}`, startDate: `${year}-01-01`, endDate: `${year}-12-31` })
+          .onConflictDoNothing({ target: fiscalPeriods.periodCode });
+        await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: "accounting-initialized", entityType: "accounting", entityId: String(year), afterJson: JSON.stringify({ year, accounts: defaultAccounts.length }) });
+      });
+      await emitPortalNotification({ eventType: "accounting-initialized", title: "اكتملت تهيئة الحسابات الأساسية", message: `السنة المالية ${year}`, module: "finance", severity: "info", entityType: "accounting", entityId: String(year), actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
       return jsonNoStore({ ok: true });
+    }
+
+    if (action === "add-account") {
+      const code = clean(payload.code, 30).toUpperCase();
+      const nameAr = clean(payload.nameAr, 160);
+      const accountType = clean(payload.accountType, 20);
+      if (!/^[A-Z0-9][A-Z0-9_-]{1,29}$/.test(code) || nameAr.length < 2 || !["asset", "liability", "equity", "revenue", "expense"].includes(accountType)) return jsonNoStore({ error: "أدخل رمزاً واسم حساب صحيحين واختر نوع الحساب" }, { status: 400 });
+      if (defaultAccounts.some(account => account.code === code)) return jsonNoStore({ error: "هذا الرمز محجوز للحسابات الأساسية؛ استخدم استكمال الحسابات الأساسية" }, { status: 409 });
+      const saved = await db.transaction(async tx => {
+        const [account] = await tx.insert(chartOfAccounts).values({ code, nameAr, accountType, normalBalance: ["asset", "expense"].includes(accountType) ? "debit" : "credit", isPosting: true, isSystem: false }).returning();
+        await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: "ledger-account-created", entityType: "ledger-account", entityId: String(account.id), afterJson: JSON.stringify(account) });
+        return account;
+      });
+      await emitPortalNotification({ eventType: "ledger-account-created", title: "أُنشئ حساب محاسبي", message: `${saved.code} — ${saved.nameAr}`, module: "finance", severity: "info", entityType: "ledger-account", entityId: saved.id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
+      return jsonNoStore({ account: saved }, { status: 201 });
     }
 
     if (action === "create-journal") {
@@ -144,19 +162,36 @@ export async function POST(request: Request) {
       const bankName = bankNameFromSaudiIban(iban) || "";
       const ledgerAccountId = positiveId(payload.ledgerAccountId);
       if (bankName.length < 2 || accountName.length < 2 || !accountCode || !/^SA\d{22}$/.test(iban) || !ledgerAccountId) return jsonNoStore({ error: "بيانات الحساب البنكي غير صحيحة" }, { status: 400 });
-      const account = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, ledgerAccountId) });
-      if (!account || account.accountType !== "asset" || !account.isPosting) return jsonNoStore({ error: "يجب ربط البنك بحساب أصول قابل للترحيل" }, { status: 400 });
-      const ledgerAlreadyUsed = await db.query.bankAccounts.findFirst({ where: eq(bankAccounts.ledgerAccountId, ledgerAccountId) });
-      if (ledgerAlreadyUsed) return jsonNoStore({ error: "هذا الحساب المحاسبي مرتبط ببنك آخر؛ أنشئ حساب أصول مستقل لكل بنك" }, { status: 409 });
-      const [saved] = await db.insert(bankAccounts).values({ accountCode, bankName, accountName, iban, ledgerAccountId }).returning();
-      await auditPortalAction({ actorEmail: access.user.email, action: "bank-account-created", entityType: "bank-account", entityId: saved.id, after: { ...saved, iban: `${iban.slice(0, 6)}••••${iban.slice(-4)}` } });
+      const result = await db.transaction(async tx => {
+        // Serialize banks linked to the same ledger account, including concurrent requests.
+        const [account] = await tx.select().from(chartOfAccounts).where(eq(chartOfAccounts.id, ledgerAccountId)).for("update");
+        if (!account || account.accountType !== "asset" || !account.isPosting || account.status !== "active" || account.code === "1100") return { error: "يجب ربط البنك بحساب أصول نشط ومستقل عن الخزينة", status: 400 };
+        const ledgerAlreadyUsed = await tx.query.bankAccounts.findFirst({ where: eq(bankAccounts.ledgerAccountId, ledgerAccountId) });
+        if (ledgerAlreadyUsed) return { error: "هذا الحساب المحاسبي مرتبط ببنك آخر؛ أنشئ حساب أصول مستقل لكل بنك", status: 409 };
+        const [bank] = await tx.insert(bankAccounts).values({ accountCode, bankName, accountName, iban, ledgerAccountId }).returning();
+        await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: "bank-account-created", entityType: "bank-account", entityId: String(bank.id), afterJson: JSON.stringify({ ...bank, iban: `${iban.slice(0, 6)}••••${iban.slice(-4)}` }) });
+        return { bank };
+      });
+      if ("error" in result) return jsonNoStore({ error: result.error }, { status: result.status });
+      const saved = result.bank;
+      await emitPortalNotification({ eventType: "bank-account-created", title: "أُضيف حساب بنكي", message: `${saved.accountCode} — ${saved.bankName}`, module: "finance", severity: "info", entityType: "bank-account", entityId: saved.id, actionView: "finance", targetDepartment: "finance" }).catch(() => undefined);
       return jsonNoStore({ bank: saved }, { status: 201 });
     }
 
     return jsonNoStore({ error: "العملية غير مدعومة" }, { status: 400 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "تعذّر تنفيذ العملية المحاسبية";
-    return jsonNoStore({ error: message.toLowerCase().includes("unique") ? "القيمة مستخدمة في سجل آخر" : message }, { status: message.toLowerCase().includes("unique") ? 409 : 400 });
+    let cause: unknown = error;
+    for (let depth = 0; depth < 6 && cause && typeof cause === "object"; depth++) {
+      const detail = cause as { code?: string; cause?: unknown };
+      if (detail.code === "23505") return jsonNoStore({ error: "رمز الحساب أو الآيبان مستخدم مسبقاً؛ راجع الحسابات المسجلة" }, { status: 409 });
+      if (detail.code && /^[0-9A-Z]{5}$/.test(detail.code)) {
+        const referenceId = crypto.randomUUID();
+        console.error("accounting-operation-failed", { referenceId, code: detail.code });
+        return jsonNoStore({ error: "تعذّر حفظ العملية المحاسبية حالياً", referenceId }, { status: 500 });
+      }
+      cause = detail.cause;
+    }
+    return jsonNoStore({ error: error instanceof SyntaxError ? "بيانات الطلب غير صحيحة" : error instanceof Error ? error.message : "تعذّر تنفيذ العملية المحاسبية" }, { status: 400 });
   }
 }
 

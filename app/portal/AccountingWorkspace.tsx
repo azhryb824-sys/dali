@@ -44,6 +44,7 @@ type Bank = {
   accountCode: string;
   bankName: string;
   accountName: string;
+  ledgerAccountId: number;
   iban: string;
   status: string;
   balanceHalalas: number;
@@ -153,8 +154,10 @@ export default function AccountingWorkspace({
       if (!response.ok) throw new Error(result.error || "تعذّر تنفيذ العملية");
       await load();
       setNotice("تمت العملية بنجاح وسُجلت في سجل التدقيق.");
+      return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "تعذّر تنفيذ العملية");
+      return false;
     } finally {
       setBusy("");
     }
@@ -175,7 +178,14 @@ export default function AccountingWorkspace({
         creditAccountId: fd.get("creditAccountId"),
       },
       "journal",
-    ).then(() => form.reset());
+    ).then(saved => { if (saved) form.reset(); });
+  }
+
+  function submitAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const fd = new FormData(form);
+    void action("POST", { action: "add-account", code: fd.get("code"), nameAr: fd.get("nameAr"), accountType: fd.get("accountType") }, "account").then(saved => { if (saved) form.reset(); });
   }
 
   function submitBank(event: FormEvent<HTMLFormElement>) {
@@ -193,7 +203,7 @@ export default function AccountingWorkspace({
         ledgerAccountId: fd.get("ledgerAccountId"),
       },
       "bank",
-    ).then(() => form.reset());
+    ).then(saved => { if (saved) form.reset(); });
   }
 
   function submitLiquidityTransfer(event: FormEvent<HTMLFormElement>) {
@@ -211,7 +221,7 @@ export default function AccountingWorkspace({
         reference: fd.get("reference"),
       },
       "liquidity-transfer",
-    ).then(() => form.reset());
+    ).then(saved => { if (saved) form.reset(); });
   }
 
   if (!data.accounts.length)
@@ -222,7 +232,7 @@ export default function AccountingWorkspace({
           لم يُنشأ دليل الحسابات والفترة المالية بعد. التهيئة لا تغيّر السجلات
           المالية القديمة.
         </p>
-        {isAdmin ? (
+        {isAdmin && canWrite ? (
           <button
             className="admin-primary"
             disabled={busy === "initialize"}
@@ -266,6 +276,7 @@ export default function AccountingWorkspace({
           {notice}
         </div>
       )}
+      {isAdmin && canWrite && <button className="admin-secondary" disabled={Boolean(busy)} onClick={() => void action("POST", { action: "initialize" }, "initialize")}>استكمال الحسابات الأساسية والفترة المالية</button>}
       <div className="accounting-metrics">
         <article>
           <span>رصيد الخزينة المرحل</span>
@@ -296,6 +307,16 @@ export default function AccountingWorkspace({
       </div>
       {canWrite && (
         <div className="accounting-forms">
+          <details>
+            <summary>إضافة حساب محاسبي</summary>
+            <form onSubmit={submitAccount}>
+              <label>رمز الحساب<input name="code" required minLength={2} maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,29}" dir="ltr" /></label>
+              <label>اسم الحساب<input name="nameAr" required minLength={2} maxLength={160} /></label>
+              <label>نوع الحساب<select name="accountType" required defaultValue="asset"><option value="asset">الأصول</option><option value="liability">الالتزامات</option><option value="equity">حقوق الملكية</option><option value="revenue">الإيرادات</option><option value="expense">المصروفات</option></select></label>
+              <p>الحساب الجديد قابل للترحيل ويبدأ دون رصيد. تُسجّل الأرصدة بقيد معتمد ومرحل.</p>
+              <button disabled={Boolean(busy)}>حفظ الحساب المحاسبي</button>
+            </form>
+          </details>
           <details open>
             <summary>تحويل بين الخزينة والبنك</summary>
             <form onSubmit={submitLiquidityTransfer}>
@@ -415,7 +436,7 @@ export default function AccountingWorkspace({
                   حساب الأستاذ المرتبط
                 </option>
                 {postingAccounts
-                  .filter((item) => item.accountType === "asset")
+                  .filter((item) => item.accountType === "asset" && item.code !== "1100" && !data.banks.some(bank => bank.ledgerAccountId === item.id))
                   .map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.code} · {item.nameAr}
