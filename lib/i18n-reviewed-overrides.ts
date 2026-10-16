@@ -6,6 +6,13 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+"تعذّر الاتصال بالخادم؛ تحقق من قائمة العمال قبل إعادة المحاولة.": {"en": "Unable to connect to the server; check the worker list before retrying.", "bn": "সার্ভারে সংযোগ করা যায়নি; আবার চেষ্টা করার আগে কর্মীদের তালিকা দেখুন।"},
+"انقطع رفع المرفقات؛ تحقق من قائمة العمال قبل إعادة المحاولة.": {"en": "Attachment upload was interrupted; check the worker list before retrying.", "bn": "সংযুক্তি আপলোড বাধাগ্রস্ত হয়েছে; আবার চেষ্টা করার আগে কর্মীদের তালিকা দেখুন।"},
+
+"جارٍ رفع المرفقات...": {"en": "Uploading attachments...", "bn": "সংযুক্তি আপলোড হচ্ছে..."},
+"جارٍ حفظ ملف العامل...": {"en": "Saving worker file...", "bn": "কর্মীর ফাইল সংরক্ষণ হচ্ছে..."},
+"تقدم رفع المرفقات": {"en": "Attachment upload progress", "bn": "সংযুক্তি আপলোডের অগ্রগতি"},
+
 "الحركات والمستندات": {"en": "Transactions and documents", "bn": "লেনদেন ও নথি"},
 "الدفعات والتحصيل": {"en": "Payments and collections", "bn": "পরিশোধ ও আদায়"},
 "الحسابات والخزينة": {"en": "Accounts and treasury", "bn": "হিসাব ও কোষাগার"},

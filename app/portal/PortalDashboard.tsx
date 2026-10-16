@@ -1,5 +1,6 @@
 "use client";
 
+import { uploadWithProgress } from "@/lib/upload-with-progress";
 import FinanceWorkspaceTabs from "./FinanceWorkspaceTabs";
 import EmployeeWorkspaceTabs from "./EmployeeWorkspaceTabs";
 import SaudiBankFields from "./SaudiBankFields";
@@ -932,6 +933,7 @@ export default function PortalDashboard({
     stamps: ContractApprovalStamp[];
   } | null>(null);
   const [notice, setNotice] = useState("");
+  const [workerUploadProgress, setWorkerUploadProgress] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1585,10 +1587,8 @@ export default function PortalDashboard({
         payload.set("profession", source.get("profession") as FormDataEntryValue);
         for (const requirement of requirementsForProfession(String(source.get("profession") || ""))) payload.set(`requirement:${requirement.code}`, source.get(`requirement:${requirement.code}:${index}`) as FormDataEntryValue);
         for (const file of source.getAll(`extraCertificates:${index}`)) payload.append("extraCertificates", file);
-        const response = await fetch("/api/portal/workers", {
-          method: "POST",
-          body: payload,
-        });
+        setWorkerUploadProgress(0);
+        const response = await uploadWithProgress("/api/portal/workers", payload, setWorkerUploadProgress);
         const result = (await readApiJson(response)) as {
           worker?: WorkerRecord;
           attachments?: WorkerAttachment[];
@@ -2809,7 +2809,7 @@ export default function PortalDashboard({
 
       {modal && modal !== "workforce" && modal !== "finance" && <RecordModal entity={modal} users={initialUsers} linkedEmployeeEmails={new Set(employees.map((item) => item.portalUserEmail).filter((email): email is string => Boolean(email)))} busy={busy === `create-${modal}`} onClose={() => setModal(null)} onSubmit={modal === "employees" ? (_entity, form) => createEmployee(form) : createRecord} />}
       {modal === "finance" && <FinanceRecordModal busy={busy === "create-finance"} workers={workers} contracts={contracts} assignments={contractAssignments} onClose={() => setModal(null)} onSubmit={(form) => createRecord("finance", form)} />}
-      {modal === "workforce" && <WorkerModal busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker} />}
+      {modal === "workforce" && <WorkerModal uploadProgress={workerUploadProgress} busy={busy === "create-workforce"} onClose={() => setModal(null)} onSubmit={createWorker} />}
       {sharingDocumentId && <WhatsAppFileShareDialog title="مشاركة المستند" endpoint="/api/portal/documents/share" source={{ documentId: sharingDocumentId }} onClose={() => setSharingDocumentId(null)} />}
       {documentModal === "upload" && <UploadDocumentModal busy={busy === "upload-document"} onClose={() => setDocumentModal(null)} onSubmit={uploadDocument} />}
       {documentModal === "issue" && issuePreset === "quotation" && (
@@ -7042,7 +7042,7 @@ function SearchableCombobox({ name, value, options, onChange, placeholder, requi
   );
 }
 
-function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+function WorkerModal({ busy, uploadProgress, onClose, onSubmit }: { uploadProgress: number; busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const [step, setStep] = useState(1);
   const formRef = useRef<HTMLFormElement>(null);
   const submitting = useRef(false);
@@ -7206,8 +7206,9 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
             </button>
             {step > 1 && <button type="button" disabled={busy} onClick={() => setStep(step - 1)}>السابق</button>}
             {step < 3 && <button type="button" className="admin-primary" disabled={busy} onClick={next}>التالي</button>}
+            {busy && <div role="status" aria-live="polite"><progress max={100} value={uploadProgress} aria-label="تقدم رفع المرفقات" /><span dir="ltr"> {uploadProgress}%</span></div>}
             <button hidden={step !== 3} className="admin-primary" type="submit" disabled={busy}>
-              {busy ? "جارٍ إنشاء الملف..." : "إنشاء ملف العامل"}
+              {busy ? (uploadProgress < 100 ? "جارٍ رفع المرفقات..." : "جارٍ حفظ ملف العامل...") : "إنشاء ملف العامل"}
             </button>
           </div>
         </form>

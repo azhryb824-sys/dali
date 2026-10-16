@@ -96,17 +96,22 @@ export async function POST(request: Request) {
 
     stage = "storage";
     const uploaded: Array<(typeof validated)[number] & { fileName: string; storageKey: string }> = [];
-    // Sequential writes prevent a still-running upload from completing after
-    // failure cleanup has already finished.
-    for (const item of validated) {
-      const fileName = safeFileName(item.file.name);
-      const storageKey = objectKey("worker-files", fileName);
-      storedKeys.push(storageKey);
-      await getRuntimeEnv().BUCKET.put(storageKey, item.bytes, {
-        httpMetadata: { contentType: item.file.type },
-        customMetadata: { uploadedBy: access.user.email, documentType: item.documentType, iqamaNumber, validation: item.validationDetails },
-      });
-      uploaded.push({ ...item, fileName, storageKey });
+    // Bound concurrent writes and settle the entire batch before cleanup.
+    // A late successful upload must never outlive failure cleanup.
+    for (let offset = 0; offset < validated.length; offset += 3) {
+      const results = await Promise.allSettled(validated.slice(offset, offset + 3).map(async item => {
+        const fileName = safeFileName(item.file.name);
+        const storageKey = objectKey("worker-files", fileName);
+        storedKeys.push(storageKey);
+        await getRuntimeEnv().BUCKET.put(storageKey, item.bytes, {
+          httpMetadata: { contentType: item.file.type },
+          customMetadata: { uploadedBy: access.user.email, documentType: item.documentType, iqamaNumber, validation: item.validationDetails },
+        });
+        return { ...item, fileName, storageKey };
+      }));
+      const failed = results.find(result => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+      for (const result of results) if (result.status === "fulfilled") uploaded.push(result.value);
     }
 
     stage = "database";

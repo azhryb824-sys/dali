@@ -13,9 +13,9 @@ test('worker creation accepts both sponsorship types under the production databa
  const pg = new PGlite();
  try {
   const outfile = resolve(directory, 'qa.mjs');
-  await build({stdin:{contents:`export * as schema from './db/schema.ts'; export { POST } from './app/api/portal/workers/route.ts'; export { workforceNationalities, workforceProfessions } from './lib/workforce-requirements.ts'; export { saudiBanks } from './lib/saudi-banks.ts'; export {setDb, events, objects, failStorageAfter} from 'qa-state';`,resolveDir:process.cwd()},outfile,bundle:true,platform:'node',format:'esm',packages:'external',plugins:[{name:'isolate',setup(b){
+  await build({stdin:{contents:`export * as schema from './db/schema.ts'; export { POST } from './app/api/portal/workers/route.ts'; export { workforceNationalities, workforceProfessions } from './lib/workforce-requirements.ts'; export { saudiBanks } from './lib/saudi-banks.ts'; export {setDb, events, objects, failStorageAfter, concurrency} from 'qa-state';`,resolveDir:process.cwd()},outfile,bundle:true,platform:'node',format:'esm',packages:'external',plugins:[{name:'isolate',setup(b){
    b.onResolve({filter:/^(qa-state|@\/db|@\/lib\/(portal-access|runtime-env|portal-notifications))$/},()=>({path:'state',namespace:'qa'}));
-   b.onLoad({filter:/.*/,namespace:'qa'},()=>({contents:`let db; export function getSqlClient(){throw new Error('Unexpected SQL call')} export const events=[]; export const objects=new Map(); let remaining=Infinity; export const failStorageAfter=n=>remaining=n; export const setDb=v=>db=v; export const getDb=()=>db; export async function requirePortalApiRole(){return {role:'admin',user:{email:'qa@test.local'}}} export const canAccessPortalDepartment=()=>true; export const getRuntimeEnv=()=>({BUCKET:{async put(key,bytes){objects.set(key,bytes); if(--remaining<0) throw Object.assign(new Error("private storage details"),{code:"ENOSPC"})},async delete(key){objects.delete(key)}}}); export async function emitPortalNotification(event){events.push(event)}`}));
+   b.onLoad({filter:/.*/,namespace:'qa'},()=>({contents:`let db; export function getSqlClient(){throw new Error('Unexpected SQL call')} export const events=[]; export const objects=new Map(); export const concurrency={active:0,max:0}; let remaining=Infinity; export const failStorageAfter=n=>remaining=n; export const setDb=v=>db=v; export const getDb=()=>db; export async function requirePortalApiRole(){return {role:'admin',user:{email:'qa@test.local'}}} export const canAccessPortalDepartment=()=>true; export const getRuntimeEnv=()=>({BUCKET:{async put(key,bytes){const fails=--remaining<0; concurrency.active++; concurrency.max=Math.max(concurrency.max,concurrency.active); try {await new Promise(resolve=>setTimeout(resolve,fails?1:20)); objects.set(key,bytes); if(fails) throw Object.assign(new Error("private storage details"),{code:"ENOSPC"});} finally {concurrency.active--}},async delete(key){objects.delete(key)}}}); export async function emitPortalNotification(event){events.push(event)}`}));
   }}]});
   const qa=await import(pathToFileURL(outfile).href);
   const statements=await generateMigration(generateDrizzleJson({}),generateDrizzleJson(qa.schema));
@@ -68,7 +68,9 @@ test('worker creation accepts both sponsorship types under the production databa
   assert.match(storageBody.error,/المرفقات/);
   assert.ok(storageBody.referenceId);
   assert.doesNotMatch(JSON.stringify(storageBody),/private storage details|ENOSPC/);
-  assert.equal(qa.objects.size,6,'partial uploads are cleaned up');
+  assert.equal(qa.objects.size,6,'partial uploads including delayed successes are cleaned up');
+  assert.equal(qa.concurrency.active,0,'all uploads settle before cleanup');
+  assert.equal(qa.concurrency.max,3,'at most three uploads run concurrently');
   qa.failStorageAfter(Infinity);
   await pg.exec(`CREATE FUNCTION qa_reject_activity() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'private failure'; END $$; CREATE TRIGGER qa_reject_activity BEFORE INSERT ON portal_activity FOR EACH ROW EXECUTE FUNCTION qa_reject_activity();`);
   assert.equal((await send(form)).status,500,'activity failure aborts the creation transaction');
