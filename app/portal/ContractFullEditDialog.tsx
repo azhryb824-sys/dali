@@ -27,6 +27,6 @@ export default function ContractFullEditDialog(props:Props) {
       await props.onSaved();props.onClose();
     } finally {setSaving(false);}
   }
-  const loading=<div className="modal-layer"><section className="issue-modal" role="dialog" aria-modal="true" aria-label="تعديل العقد بالكامل"><button type="button" onClick={props.onClose}>إغلاق</button><p role={error?"alert":"status"}>{error||"جارٍ تحميل بيانات العقد..."}</p></section></div>;
+  const loading=<div className="modal-layer"><section className="issue-modal" role="dialog" aria-modal="true" aria-label="تعديل العقد بالكامل"><button data-dialog-close type="button" onClick={props.onClose}>إغلاق</button><p role={error?"alert":"status"}>{error||"جارٍ تحميل بيانات العقد..."}</p></section></div>;
   return snapshot?<Suspense fallback={loading}><ContractWizard editSnapshot={snapshot} initialType="workforce_contract" initialQuoteId={null} conversionMode="modified" canIssueContracts canIssueFinance={false} assetsReady busy={props.busy||saving} workers={[]} contracts={[]} requests={[]} onClose={props.onClose} onSubmit={save}/></Suspense>:loading;
 }

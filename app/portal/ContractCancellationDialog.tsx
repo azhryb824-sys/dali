@@ -46,7 +46,7 @@ export default function ContractCancellationDialog({
 
   return (
     <div className="modal-layer">
-      <button
+      <button data-dialog-close
         className="drawer-backdrop"
         aria-label="إغلاق نافذة سبب إلغاء العقد"
         onClick={onClose}
@@ -64,7 +64,7 @@ export default function ContractCancellationDialog({
               سبب {terminating ? "إنهاء" : "إلغاء"} العقد
             </h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close type="button" onClick={onClose} aria-label="إغلاق">
             ×
           </button>
         </div>
@@ -116,7 +116,7 @@ export default function ContractCancellationDialog({
             </p>
           )}
           <div className="modal-actions span-two">
-            <button type="button" onClick={onClose} disabled={busy}>
+            <button data-dialog-close type="button" onClick={onClose} disabled={busy}>
               رجوع
             </button>
             <button className="admin-primary cancel-action" disabled={busy}>

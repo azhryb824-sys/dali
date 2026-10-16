@@ -24,6 +24,6 @@ test("contract and quotation creation cannot close from backdrop click", async (
     /aria-label="إغلاق نموذج عرض السعر"[\s\S]*?onClick=\{onClose\}/,
   );
 
-  assert.match(dashboard, /<button onClick=\{onClose\} aria-label="إغلاق">/);
-  assert.match(operations, /<button onClick=\{onClose\} aria-label="إغلاق">/);
+  assert.match(dashboard, /<button(?: data-dialog-close)? onClick=\{onClose\} aria-label="إغلاق">/);
+  assert.match(operations, /<button(?: data-dialog-close)? onClick=\{onClose\} aria-label="إغلاق">/);
 });

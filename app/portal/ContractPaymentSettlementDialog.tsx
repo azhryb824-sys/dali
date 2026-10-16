@@ -142,7 +142,7 @@ export default function ContractPaymentSettlementDialog({
   const supplierPayment = contract.contractDirection === "dali_purchaser";
   return (
     <div className="modal-layer">
-      <button
+      <button data-dialog-close
         className="drawer-backdrop"
         aria-label="إغلاق نموذج تسجيل السداد"
         onClick={onClose}
@@ -158,7 +158,7 @@ export default function ContractPaymentSettlementDialog({
             <span>{contract.referenceCode} · {payment.title}</span>
             <h2>{supplierPayment ? "تسجيل سداد المورد" : "تسجيل تحصيل الفاتورة"}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="إغلاق">×</button>
+          <button data-dialog-close type="button" onClick={onClose} aria-label="إغلاق">×</button>
         </div>
         <div className="settlement-balance-grid">
           <span><small>قيمة الفاتورة</small><b>{money(payment.invoiceAmountHalalas)}</b></span>
@@ -257,7 +257,7 @@ export default function ContractPaymentSettlementDialog({
             يمكن تسجيل جزء من المتبقي الآن وإضافة الباقي لاحقًا. ينشئ النظام قيدًا متوازنًا مستقلًا لكل عملية ويحفظ توزيع النقد والبنك.
           </p>
           <div className="modal-actions span-two">
-            <button type="button" onClick={onClose}>إلغاء</button>
+            <button data-dialog-close type="button" onClick={onClose}>إلغاء</button>
             <button
               className="admin-primary"
               disabled={busy || (["bank", "mixed", "cheque"].includes(mode) && !banks.length) || (["cash", "mixed"].includes(mode) && !cashAccounts.length)}

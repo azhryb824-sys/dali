@@ -2377,7 +2377,7 @@ export function QuotationIssueModal({
             <span>نموذج المستندات المعتمد</span>
             <h2>إنشاء عرض سعر احترافي</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <span aria-hidden>×</span>
           </button>
         </div>

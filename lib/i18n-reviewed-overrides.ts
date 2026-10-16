@@ -707,4 +707,8 @@ export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
   "العقود والمواقع": {"en": "Contracts and sites", "bn": "চুক্তি ও কর্মস্থল"},
   "طلبات العملاء": {"en": "Client requests", "bn": "গ্রাহকদের অনুরোধ"},
   "الإحالات القانونية": {"en": "Legal referrals", "bn": "আইনি রেফারেল"},
+  "إغلاق وفقدان التعديلات": {"en": "Close and discard changes", "bn": "বন্ধ করুন ও পরিবর্তন বাতিল করুন"},
+  "تأكيد إغلاق النموذج": {"en": "Confirm closing the form", "bn": "ফর্ম বন্ধ করার নিশ্চয়তা"},
+  "لديك بيانات غير محفوظة. هل تريد إغلاق النافذة وفقدان التعديلات؟": {"en": "You have unsaved data. Close this window and discard your changes?", "bn": "আপনার তথ্য সংরক্ষিত হয়নি। উইন্ডো বন্ধ করে পরিবর্তনগুলো বাতিল করবেন?"},
+  "متابعة الإدخال": {"en": "Continue editing", "bn": "সম্পাদনা চালিয়ে যান"},
 };

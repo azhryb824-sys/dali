@@ -36,7 +36,7 @@ export default function ContractApprovalStampDialog({
               التأكيد.
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close type="button" onClick={onClose} aria-label="إغلاق">
             ×
           </button>
         </header>

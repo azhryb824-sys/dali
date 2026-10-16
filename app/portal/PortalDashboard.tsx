@@ -3043,14 +3043,14 @@ function CreateUserModal({ roles, busy, onClose, onSubmit }: { roles: PortalRole
   }
   return (
     <div className="modal-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق نافذة إضافة مستخدم" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق نافذة إضافة مستخدم" onClick={onClose} />
       <section className="record-modal create-user-modal" role="dialog" aria-modal="true" aria-label="إضافة مستخدم">
         <div className="drawer-head">
           <div>
             <span>إدارة المستخدمين</span>
             <h2>إضافة مستخدم جديد</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -3122,7 +3122,7 @@ function CreateUserModal({ roles, busy, onClose, onSubmit }: { roles: PortalRole
           {loadError && <p className="form-error span-two">{loadError}</p>}
           <p className="form-hint span-two">اختيار دور واحد على الأقل إلزامي. تُجمع صلاحيات الأدوار المختارة، ولا يمنح أي منها اعتماداً إلا المالك أو مشرف النظام.</p>
           <div className="modal-actions span-two">
-            <button type="button" onClick={onClose}>
+            <button data-dialog-close type="button" onClick={onClose}>
               إلغاء
             </button>
             <button className="admin-primary" type="submit" disabled={busy || !availableSelectedRoles.length}>
@@ -3574,14 +3574,14 @@ function ConversationDrawer({ conversation, messages, businessHours, canWrite, b
   }
   return (
     <div className="drawer-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق المحادثة" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق المحادثة" onClick={onClose} />
       <aside className="request-drawer portal-chat-drawer" role="dialog" aria-modal="true" aria-label={`محادثة ${conversation.trackingCode}`}>
         <div className="drawer-head">
           <div>
             <span>{conversation.trackingCode}</span>
             <h2>{conversation.visitorName}</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -3646,14 +3646,14 @@ function ChatSettingsModal({ businessHours, automation, busy, onClose, onSubmit 
   }
   return (
     <div className="modal-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق إعدادات الرد الآلي" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق إعدادات الرد الآلي" onClick={onClose} />
       <section className="record-modal chat-settings-modal" role="dialog" aria-modal="true" aria-label="إعدادات نظام الرد الآلي">
         <div className="drawer-head">
           <div>
             <span>المحادثة المباشرة</span>
             <h2>نظام الرد الآلي وساعات الخدمة</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -3753,7 +3753,7 @@ function ChatSettingsModal({ businessHours, automation, busy, onClose, onSubmit 
             ))}
           </section>
           <div className="modal-actions span-two">
-            <button type="button" onClick={onClose}>
+            <button data-dialog-close type="button" onClick={onClose}>
               إلغاء
             </button>
             <button className="admin-primary" disabled={busy}>
@@ -4062,14 +4062,14 @@ function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClo
   }
   return (
     <div className="modal-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق نافذة رفع المستند" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق نافذة رفع المستند" onClick={onClose} />
       <section className="record-modal document-modal" role="dialog" aria-modal="true" aria-label="رفع مستند شركة">
         <div className="drawer-head">
           <div>
             <span>مركز المستندات</span>
             <h2>رفع مستند شركة</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -4111,7 +4111,7 @@ function UploadDocumentModal({ busy, onClose, onSubmit }: { busy: boolean; onClo
           </label>
           <p className="form-hint span-two">هذه الصفحة مخصصة لوثائق شركة دالي النظامية فقط. الحد الأقصى 20 ميجابايت، ويُستخدم تاريخ الانتهاء لتنبيه التجديد، ويمنع الحجز النظامي أي حذف آلي قبل انتهائه.</p>
           <div className="modal-actions span-two">
-            <button type="button" onClick={onClose}>
+            <button data-dialog-close type="button" onClick={onClose}>
               إلغاء
             </button>
             <button className="admin-primary" type="submit" disabled={busy}>
@@ -4201,14 +4201,14 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
   }
   return (
     <div className="modal-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق نافذة الحركة المالية" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق نافذة الحركة المالية" onClick={onClose} />
       <section className="record-modal finance-modal" role="dialog" aria-modal="true" aria-label="إضافة حركة مالية للعمالة">
         <div className="drawer-head">
           <div>
             <span>الإدارة المالية</span>
             <h2>إضافة حركة مالية للعمالة</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -4319,7 +4319,7 @@ function FinanceRecordModal({ busy, workers, contracts, assignments, onClose, on
           </label>
           <p className="form-hint span-two">يظهر السجل في كشف العامل والعقد، ويمكن إصدار الفواتير والسندات الرسمية من لوحة المالية.</p>
           <div className="modal-actions span-two">
-            <button type="button" onClick={onClose}>
+            <button data-dialog-close type="button" onClick={onClose}>
               إلغاء
             </button>
             <button className="admin-primary" type="submit" disabled={busy}>
@@ -4979,7 +4979,7 @@ export function IssueDocumentModal({ editSnapshot, initialType, initialQuoteId, 
             <span>{editing?.referenceCode || "الإصدار الرسمي"}</span>
             <h2>{editing ? "تعديل العقد بالكامل" : isContract ? "إنشاء عقد توفير عمالة" : "إنشاء ملف PDF"}</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -5655,7 +5655,7 @@ export function IssueDocumentModal({ editSnapshot, initialType, initialQuoteId, 
                 السابق
               </button>
             ) : (
-              <button type="button" onClick={onClose}>
+              <button data-dialog-close type="button" onClick={onClose}>
                 إلغاء
               </button>
             )}
@@ -6453,14 +6453,14 @@ function ContractDrawer({
   }, [contract.id, canManageAttendance, attendanceRevision]);
   return (
     <div className="drawer-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق إدارة العقد" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق إدارة العقد" onClick={onClose} />
       <aside className="request-drawer contract-drawer contract-workforce-workspace" role="dialog" aria-modal="true" aria-label={`إدارة عمالة العقد ${contract.referenceCode}`}>
         <div className="drawer-head">
           <div>
             <span dir="ltr">{contract.referenceCode}</span>
             <h2>إدارة عمالة العقد</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -6761,14 +6761,14 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
   }
   return (
     <div className="modal-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق النافذة" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق النافذة" onClick={onClose} />
       <section className="record-modal" role="dialog" aria-modal="true" aria-label={titles[entity]}>
         <div className="drawer-head">
           <div>
             <span>سجل جديد</span>
             <h2>{titles[entity]}</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -6954,7 +6954,7 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
             </>
           )}
           <div className="modal-actions span-two">
-            <button type="button" onClick={onClose}>
+            <button data-dialog-close type="button" onClick={onClose}>
               إلغاء
             </button>
             <button className="admin-primary" type="submit" disabled={busy}>
@@ -7077,14 +7077,14 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
   }
   return (
     <div className="modal-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق نافذة إضافة عامل" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق نافذة إضافة عامل" onClick={onClose} />
       <section className="record-modal worker-modal" role="dialog" aria-modal="true" aria-label="إنشاء ملف عامل">
         <div className="drawer-head">
           <div>
             <span>شؤون العمالة</span>
             <h2>إنشاء ملف عامل متكامل</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -7195,7 +7195,7 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
           <p hidden={step !== 3} className="form-hint span-two">لن يُنشأ الملف قبل إرفاق الصورة وجميع المستندات المطلوبة للمهنة. يُسجّل العامل متاحاً، ثم تُحدّد الجهة المستفيدة تلقائياً عند اختياره في عقد نشط.</p>
           {error && <p className="form-hint span-two" role="alert">{error}</p>}
           <div className="modal-actions span-two">
-            <button type="button" onClick={onClose}>
+            <button data-dialog-close type="button" onClick={onClose}>
               إلغاء
             </button>
             {step > 1 && <button type="button" disabled={busy} onClick={() => setStep(step - 1)}>السابق</button>}
@@ -7236,14 +7236,14 @@ function WorkerDrawer({ worker, attachments, contracts, contractAssignments, can
   }
   return (
     <div className="drawer-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق ملف العامل" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق ملف العامل" onClick={onClose} />
       <aside className="request-drawer worker-drawer" role="dialog" aria-modal="true" aria-label={`ملف العامل ${worker.fullName}`}>
         <div className="drawer-head">
           <div>
             <span>{worker.workerNumber}</span>
             <h2>ملف العامل</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
@@ -7548,14 +7548,14 @@ function RequestDrawer({ canConvert, canApprove, onApproval, onConvert, request,
   };
   return (
     <div className="drawer-layer">
-      <button className="drawer-backdrop" aria-label="إغلاق تفاصيل الطلب" onClick={onClose} />
+      <button data-dialog-close className="drawer-backdrop" aria-label="إغلاق تفاصيل الطلب" onClick={onClose} />
       <aside className="request-drawer visitor-request-drawer" role="dialog" aria-modal="true" aria-label="تفاصيل طلب الزائر">
         <div className="drawer-head">
           <div>
             <span>{request.trackingCode}</span>
             <h2>{request.requestType === "quotation" ? "طلب عرض سعر" : "طلب الزائر والردود"}</h2>
           </div>
-          <button onClick={onClose} aria-label="إغلاق">
+          <button data-dialog-close onClick={onClose} aria-label="إغلاق">
             <Icon name="close" />
           </button>
         </div>
