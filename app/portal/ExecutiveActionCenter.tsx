@@ -24,12 +24,13 @@ export default function ExecutiveActionCenter() {
     {error && <p role="alert">{error}</p>}
     <div className="executive-kpis">
       <button onClick={() => setTab("approvals")}><span>عقود تنتظر الاعتماد</span><strong>{metrics.pendingContracts}</strong><small>قرار المالك أو المشرف</small></button>
-      <button onClick={() => setTab("payments")}><span>مستحقات عملاء متأخرة</span><strong>{money(metrics.overdueReceivablesHalalas)}</strong><small>دون الدفعات الملغاة أو قيد التسوية</small></button>
+      <button onClick={() => setTab("overdue")}><span>مستحقات عملاء متأخرة</span><strong>{money(metrics.overdueReceivablesHalalas)}</strong><small>دون الدفعات الملغاة أو قيد التسوية</small></button>
       <button onClick={() => setTab("legal")}><span>طلبات سداد قانونية</span><strong>{metrics.legalPaymentRequests}</strong><small>{money(metrics.legalPaymentAmountHalalas)}</small></button>
       <button onClick={() => setTab("payments")}><span>دفعات تنتظر تسوية إلغاء</span><strong>{metrics.cancellationReviews}</strong><small>{metrics.openLegalCases} ملفات قانونية مفتوحة</small></button>
     </div>
-    <nav className="legal-tabs" aria-label="مهام الإدارة">{[["approvals", "اعتماد العقود"], ["payments", "الفواتير والتحصيل والتسويات"], ["posting", "الاعتماد والترحيل المالي"], ["legal", "طلبات السداد القانونية"]].map(([id, label]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</nav>
+    <nav className="legal-tabs" aria-label="مهام الإدارة">{[["approvals", "اعتماد العقود"], ["overdue", "الفواتير المتأخرة والإحالة القانونية"], ["payments", "الفواتير والتحصيل والتسويات"], ["posting", "الاعتماد والترحيل المالي"], ["legal", "طلبات السداد القانونية"]].map(([id, label]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</nav>
     {tab === "approvals" && <ContractBillingWorkspace onlyPendingApproval />}
+    {tab === "overdue" && <ContractBillingWorkspace key="overdue" onlyOverdue />}
     {tab === "payments" && <><PaymentManagementDashboard /><ContractBillingWorkspace /></>}
     {tab === "posting" && <><AccountingWorkspace canWrite isAdmin /><FinancialPostingWorkspace canWrite /></>}
     {tab === "legal" && <LegalCaseWorkspace paymentsOnly />}

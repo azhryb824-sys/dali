@@ -685,4 +685,7 @@ export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
   "خطوات العمل": {en:"Process steps",bn:"কাজের ধাপ"},
   "قائمة التحقق": {en:"Checklist",bn:"যাচাই তালিকা"},
   "إدارة الأقسام والإعدادات": {en:"Manage sections and settings",bn:"বিভাগ ও সেটিংস পরিচালনা করুন"},
+  "الفواتير المتأخرة والإحالة القانونية": {en:"Overdue invoices and legal referrals",bn:"বকেয়া চালান ও আইনি রেফারেল"},
+  "الفواتير والدفعات المتأخرة": {en:"Overdue invoices and installments",bn:"বকেয়া চালান ও কিস্তি"},
+  "لا توجد فواتير أو دفعات عملاء متأخرة.": {en:"There are no overdue customer invoices or installments.",bn:"কোনো গ্রাহকের চালান বা কিস্তি বকেয়া নেই।"},
 };

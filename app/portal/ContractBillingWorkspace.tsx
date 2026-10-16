@@ -178,7 +178,7 @@ const contractLabels: Record<string, string> = {
   cancelled: "ملغى",
   superseded: "مستبدل",
 };
-export default function ContractBillingWorkspace({ onlyPendingApproval = false }: { onlyPendingApproval?: boolean }) {
+export default function ContractBillingWorkspace({ onlyPendingApproval = false, onlyOverdue = false }: { onlyPendingApproval?: boolean; onlyOverdue?: boolean }) {
   const [sharingInvoiceId, setSharingInvoiceId] = useState<number | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [busy, setBusy] = useState(0);
@@ -725,6 +725,12 @@ export default function ContractBillingWorkspace({ onlyPendingApproval = false }
         <p>{notice || "جارٍ تحميل العقود والدفعات..."}</p>
       </section>
     );
+  const overduePayments = data.payments.filter(payment => payment.isOverdue && payment.remainingAmountHalalas > 0 && payment.status !== "cancelled" && !payment.cancellationDisposition?.startsWith("review_"));
+  const overdueContractIds = new Set(overduePayments.map(payment => payment.contractId));
+  const visibleContracts = data.contracts.filter(contract =>
+    (!onlyPendingApproval || ["draft", "internal_review", "legal_review"].includes(contract.status)) &&
+    (!onlyOverdue || (Boolean(contract.approvedBy) && contract.contractDirection === "dali_supplier" && overdueContractIds.has(contract.id)))
+  );
   return (
     <>
       {sharingInvoiceId && <WhatsAppFileShareDialog key={sharingInvoiceId} title="مشاركة الفاتورة" endpoint="/api/portal/documents/share" source={{ documentId: sharingInvoiceId }} onClose={() => setSharingInvoiceId(null)} />}
@@ -736,20 +742,22 @@ export default function ContractBillingWorkspace({ onlyPendingApproval = false }
       <section className="panel contract-billing">
         <header>
           <div>
-            <h2>العقود وجدول الدفعات</h2>
+            <h2>{onlyOverdue ? "الفواتير والدفعات المتأخرة" : "العقود وجدول الدفعات"}</h2>
             <p>
               إحالة الدفعات المستحقة، إصدار الفواتير، تسجيل السداد، والإحالة
               القانونية عند التأخر.
             </p>
           </div>
-          <b>{data.contracts.length} عقد</b>
+          <b>{visibleContracts.length} عقد</b>
         </header>
-        {!onlyPendingApproval && <LegalReferralPanel sourceType="contract" records={data.contracts.map(item => ({id:item.id,label:`${item.referenceCode} — ${item.clientName}`}))} />}
+        {!onlyPendingApproval && !onlyOverdue && <LegalReferralPanel sourceType="contract" records={data.contracts.map(item => ({id:item.id,label:`${item.referenceCode} — ${item.clientName}`}))} />}
         <div className="contract-billing-list">
-          {data.contracts.filter(contract => !onlyPendingApproval || ["draft", "internal_review", "legal_review"].includes(contract.status)).map((contract) => {
-            const payments = data.payments.filter(
+          {onlyOverdue && visibleContracts.length === 0 && <p className="empty-operational">لا توجد فواتير أو دفعات عملاء متأخرة.</p>}
+          {visibleContracts.map((contract) => {
+            const payments = (onlyOverdue ? overduePayments : data.payments).filter(
               (item) => item.contractId === contract.id,
             );
+            const expanded = onlyOverdue ? !expandedContracts.has(contract.id) : expandedContracts.has(contract.id);
             const needsApproval = [
               "draft",
               "internal_review",
@@ -790,10 +798,10 @@ export default function ContractBillingWorkspace({ onlyPendingApproval = false }
                     <button
                       className="contract-card-toggle"
                       type="button"
-                      aria-expanded={expandedContracts.has(contract.id)}
+                      aria-expanded={expanded}
                       onClick={() => toggleContract(contract.id)}
                     >
-                      {expandedContracts.has(contract.id)
+                      {expanded
                         ? "إغلاق البطاقة"
                         : "فتح واستعراض"}
                     </button>
@@ -883,7 +891,7 @@ export default function ContractBillingWorkspace({ onlyPendingApproval = false }
                     )}
                   </div>
                 </header>
-                {expandedContracts.has(contract.id) && (
+                {expanded && (
                   <div className="contract-card-details">
                     <div className="contract-card-facts">
                       <span>
@@ -1071,7 +1079,7 @@ export default function ContractBillingWorkspace({ onlyPendingApproval = false }
                                   })}
                               </details>
                             )}
-                            {data.canReferLegal &&
+                            {data.canReferLegal && !purchaser &&
                               payment.isOverdue && payment.status !== "cancelled" && (!payment.legalReferralStatus || payment.legalReferralStatus === "returned") && (
                                 <button
                                   className="legal-referral"
