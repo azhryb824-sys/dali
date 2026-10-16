@@ -6,6 +6,15 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+"الحركات والمستندات": {"en": "Transactions and documents", "bn": "লেনদেন ও নথি"},
+"الدفعات والتحصيل": {"en": "Payments and collections", "bn": "পরিশোধ ও আদায়"},
+"الحسابات والخزينة": {"en": "Accounts and treasury", "bn": "হিসাব ও কোষাগার"},
+"الترحيل المالي": {"en": "Financial posting", "bn": "আর্থিক পোস্টিং"},
+"المشتريات والموردون": {"en": "Purchasing and suppliers", "bn": "ক্রয় ও সরবরাহকারী"},
+"التقارير المالية": {"en": "Financial reports", "bn": "আর্থিক প্রতিবেদন"},
+"التسوية البنكية": {"en": "Bank reconciliation", "bn": "ব্যাংক সমন্বয়"},
+"أقسام الإدارة المالية": {"en": "Finance management sections", "bn": "আর্থিক ব্যবস্থাপনার বিভাগসমূহ"},
+
 "ملفات الموظفين": {"en":"Employee files","bn":"কর্মচারীদের ফাইল"},
 "الرواتب والموافقات": {"en":"Payroll and approvals","bn":"বেতন ও অনুমোদন"},
 "أقسام إدارة الموظفين": {"en":"Employee management sections","bn":"কর্মচারী ব্যবস্থাপনার বিভাগসমূহ"},

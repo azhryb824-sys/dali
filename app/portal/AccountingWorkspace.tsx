@@ -307,7 +307,7 @@ export default function AccountingWorkspace({
       </div>
       {canWrite && (
         <div className="accounting-forms">
-          <details>
+          <details open>
             <summary>إضافة حساب محاسبي</summary>
             <form onSubmit={submitAccount}>
               <label>رمز الحساب<input name="code" required minLength={2} maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,29}" dir="ltr" /></label>
@@ -416,7 +416,7 @@ export default function AccountingWorkspace({
               </button>
             </form>
           </details>
-          <details>
+          <details open>
             <summary>إضافة حساب بنكي</summary>
             <form onSubmit={submitBank}>
               <input

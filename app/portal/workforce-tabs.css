@@ -12,3 +12,6 @@
 
 .employee-workspace-tabs .workforce-tab-list{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:600px){.employee-workspace-tabs .workforce-tab-list{grid-template-columns:1fr}.employee-workspace-tabs .workforce-tab-list [role=tab]{justify-content:center}}
+
+.finance-workspace-tabs .workforce-tab-list{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:600px){.finance-workspace-tabs .workforce-tab-list{grid-template-columns:repeat(2,minmax(0,1fr))}}

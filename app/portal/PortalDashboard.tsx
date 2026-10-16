@@ -1,5 +1,6 @@
 "use client";
 
+import FinanceWorkspaceTabs from "./FinanceWorkspaceTabs";
 import EmployeeWorkspaceTabs from "./EmployeeWorkspaceTabs";
 import SaudiBankFields from "./SaudiBankFields";
 import "./overview.css";
@@ -2653,17 +2654,18 @@ export default function PortalDashboard({
                 <Metric label="فواتير ومستخلصات" value={formatMoney(workforceInvoicesTotal)} note="مرتبطة بعقود العمالة" />
                 <Metric label="إجمالي الحركات" value={formatMoney(financialTotal)} note={`${finance.length} حركة مالية`} />
               </section>
-              <PaymentManagementDashboard />
+              <FinanceWorkspaceTabs
+                payments={<PaymentManagementDashboard />}
+                accounts={<AccountingWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} />}
+                posting={<FinancialPostingWorkspace canWrite={canWrite} />}
+                purchasing={<PurchasingWorkspace canWrite={canWrite} canApprove={canApproveFinance} canPay={canPayFinance} />}
+                reports={<><ReportsWorkspace canWrite={canWrite} contracts={contracts} />{canExportReports && <ReportPdfDownload />}</>}
+                reconciliation={<BankReconciliationWorkspace canWrite={canWrite} />}>
               {canWrite && <FinanceDocumentActions onIssue={openIssueDocument} />}
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالمرجع أو العامل أو العقد أو البيان">
                 <FinanceTable records={finance} workers={workers} contracts={contracts} query={query} canWrite={canWrite} busy={busy} onStatus={(id, status) => updateRecordStatus("finance", id, status)} />
               </ManagementPanel>
-              <AccountingWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} />
-              <FinancialPostingWorkspace canWrite={canWrite} />
-              <PurchasingWorkspace canWrite={canWrite} canApprove={canApproveFinance} canPay={canPayFinance} />
-              <ReportsWorkspace canWrite={canWrite} contracts={contracts} />
-              {canExportReports && <ReportPdfDownload />}
-              <BankReconciliationWorkspace canWrite={canWrite} />
+              </FinanceWorkspaceTabs>
             </ModuleSection>
           )}
 
