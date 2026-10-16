@@ -80,5 +80,5 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const route = publicRoute((await headers()).get("x-dali-pathname") || "/");
   const locale = isPublicPath(route.path) ? route.locale : normalizeAppLocale(stored) ?? "ar";
   const publicContent = isPublicPath(route.path) ? await getLocalizedWebsiteContent() : content;
-  return <html lang={locale} dir={localeDirection(locale)}><body><PublicLocaleProvider locale={isPublicPath(route.path) ? locale : null}><LocaleRuntime initialLocale={locale} translationCatalogs={content.translations}/><TodayDateDefaults/><SystemCalendar/><AppDialogProvider><WebsiteContentProvider content={toPublicWebsiteContent(publicContent)}>{children}</WebsiteContentProvider></AppDialogProvider></PublicLocaleProvider></body></html>;
+  return <html lang={locale} dir={localeDirection(locale)}><body><PublicLocaleProvider locale={isPublicPath(route.path) ? locale : null}><LocaleRuntime initialLocale={locale} showSwitcher={!isPublicPath(route.path)} translationCatalogs={content.translations}/><TodayDateDefaults/><SystemCalendar/><AppDialogProvider><WebsiteContentProvider content={toPublicWebsiteContent(publicContent)}>{children}</WebsiteContentProvider></AppDialogProvider></PublicLocaleProvider></body></html>;
 }

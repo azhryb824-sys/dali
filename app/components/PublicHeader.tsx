@@ -1,5 +1,6 @@
 "use client";
 
+import PublicLanguageSwitcher from "./PublicLanguageSwitcher";
 import { localizedPublicTree } from "./LocalizedPublicTree";
 import { usePublicLocale } from "./PublicLocaleProvider";
 import { localizedPath } from "@/lib/public-locale";
@@ -47,7 +48,7 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
   }, [query, searchItems]);
 
   return localizedPublicTree(<>
-    <div className="location-bar"><span>{content.site.tagline}</span><span>{content.site.city} · {content.site.district}</span></div>
+    <div className="location-bar"><span>{content.site.tagline}</span><span>{content.site.city} · {content.site.district}</span><PublicLanguageSwitcher /></div>
     <header className="site-header">
       <Link className="brand" href="/" aria-label={`${content.site.companyName} - الرئيسية`}><Image src="/dally-logo-v2.jpg" alt={`شعار ${content.site.companyName}`} width={545} height={280} sizes="180px"/></Link>
       <button className="menu-btn" type="button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? "إغلاق القائمة" : "فتح القائمة"} aria-expanded={menuOpen}>☰</button>

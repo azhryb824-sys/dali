@@ -723,3 +723,11 @@
 }
 .local-section > * { min-width: 0; overflow-wrap: anywhere; }
 @media(max-width:820px){.local-section{grid-template-columns:minmax(0,1fr)}}
+
+/* Keep public language selection in the header, clear of floating chat. */
+.location-bar:has(.public-header-language){flex-wrap:wrap;gap:10px 18px}
+.public-header-language{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-inline-start:auto;color:#fff;white-space:nowrap}
+.public-header-language>span{display:inline!important;color:#fff}
+.public-header-language select{min-height:36px;max-width:150px;border:1px solid #637783;border-radius:8px;padding:5px 9px;background:#102d3d;color:#fff;font:inherit;font-size:12px;cursor:pointer}
+.public-header-language select:focus-visible{outline:2px solid #e4ba76;outline-offset:3px}
+@media(max-width:600px){.location-bar:has(.public-header-language){justify-content:space-between;padding:8px 16px}.public-header-language select{min-height:40px}.public-header-language>span{display:none!important}}
