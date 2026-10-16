@@ -1,4 +1,6 @@
 "use client";
+
+import EmployeeWorkspaceTabs from "./EmployeeWorkspaceTabs";
 import SaudiBankFields from "./SaudiBankFields";
 import "./overview.css";
 import ContractClauseEditor from "@/app/components/ContractClauseEditor";
@@ -2631,11 +2633,13 @@ export default function PortalDashboard({
                 <Metric label="في إجازة" value={employees.filter((item) => item.status === "leave").length} note="إجازات حالية" />
                 <Metric label="ملفات موقوفة" value={employees.filter((item) => ["suspended", "ended"].includes(item.status.trim().toLowerCase())).length} note="تحتاج إلى متابعة" />
               </section>
+              <EmployeeWorkspaceTabs employeeCount={employees.length}
+                hr={<HrWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} generalOnly />}
+                legal={<LegalReferralPanel sourceType="employee" records={employees.map(item => ({ id: item.id, label: `${item.employeeNumber} — ${item.fullName}` }))} />}>
               <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث باسم الموظف أو الرقم أو المسمى">
                 <EmployeeTable records={employees} users={initialUsers} query={query} canWrite={canWrite} canArchive={canArchiveEmployees} busy={busy} onStatus={(id, status) => updateRecordStatus("employees", id, status)} onUpdate={updateEmployeeCompliance} onDelete={deleteEmployee} />
               </ManagementPanel>
-              <LegalReferralPanel sourceType="employee" records={employees.map(item => ({ id: item.id, label: `${item.employeeNumber} — ${item.fullName}` }))} />
-              <HrWorkspace canWrite={canWrite} isAdmin={currentUser.role === "admin" || functionalAdmin} generalOnly />
+              </EmployeeWorkspaceTabs>
             </ModuleSection>
           )}
 

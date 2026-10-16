@@ -6,6 +6,9 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+"ملفات الموظفين": {"en":"Employee files","bn":"কর্মচারীদের ফাইল"},
+"الرواتب والموافقات": {"en":"Payroll and approvals","bn":"বেতন ও অনুমোদন"},
+"أقسام إدارة الموظفين": {"en":"Employee management sections","bn":"কর্মচারী ব্যবস্থাপনার বিভাগসমূহ"},
 "اسم العامل": {"en":"Worker name","bn":"কর্মীর নাম"},
 "نزاع عمالي": {"en": "Labor dispute", "bn": "শ্রম বিরোধ"},
 "انقطاع عن العمل": {"en": "Absence from work", "bn": "কাজে অনুপস্থিতি"},
