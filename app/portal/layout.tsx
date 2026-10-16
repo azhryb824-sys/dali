@@ -24,6 +24,7 @@ import "./legal-lifecycle.css";
 import "./contract-workforce-management.css";
 import "./mobile-responsive.css";
 import "./table-polish.css";
+import "./select-polish.css";
 
 export const metadata: Metadata = {
   title: { absolute: "النظام الإداري | شركة دالي للتشغيل والصيانة" },
