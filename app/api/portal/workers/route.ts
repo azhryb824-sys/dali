@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   if (!access) return Response.json({ error: "غير مصرح بإضافة العمالة" }, { status: 403 });
 
   const storedKeys: string[] = [];
-  let workerId: number | null = null;
+  let stage = "request";
   const db = getDb();
   try {
     const form = await request.formData();
@@ -85,68 +85,96 @@ export async function POST(request: Request) {
       return Response.json({ error: "إجمالي المرفقات يتجاوز 50 ميجابايت" }, { status: 400 });
     }
 
-    const uploaded = await Promise.all(pending.map(async (item) => {
+    // Validate the whole batch before writing any object. Invalid uploads are
+    // client errors, not generic database/storage failures.
+    const validated = [];
+    for (const item of pending) {
       const validation = await validateUploadedFile(item.file, { contentTypes: item.documentType === "photo" ? PHOTO_TYPES : CERTIFICATE_TYPES, maxBytes: item.documentType === "photo" ? MAX_PHOTO_BYTES : MAX_CERTIFICATE_BYTES });
-      if (!validation.valid) throw new Error(`${item.title}: ${validation.error}`);
+      if (!validation.valid) return Response.json({ error: `${item.title}: ${validation.error}`, code: "INVALID_ATTACHMENT" }, { status: 400 });
+      validated.push({ ...item, bytes: validation.bytes, validationDetails: validation.validationDetails });
+    }
+
+    stage = "storage";
+    const uploaded: Array<(typeof validated)[number] & { fileName: string; storageKey: string }> = [];
+    // Sequential writes prevent a still-running upload from completing after
+    // failure cleanup has already finished.
+    for (const item of validated) {
       const fileName = safeFileName(item.file.name);
       const storageKey = objectKey("worker-files", fileName);
-      await getRuntimeEnv().BUCKET.put(storageKey, validation.bytes, {
-        httpMetadata: { contentType: item.file.type },
-        customMetadata: { uploadedBy: access.user.email, documentType: item.documentType, iqamaNumber, validation: validation.validationDetails },
-      });
       storedKeys.push(storageKey);
-      return { ...item, fileName, storageKey, validationDetails: validation.validationDetails };
-    }));
+      await getRuntimeEnv().BUCKET.put(storageKey, item.bytes, {
+        httpMetadata: { contentType: item.file.type },
+        customMetadata: { uploadedBy: access.user.email, documentType: item.documentType, iqamaNumber, validation: item.validationDetails },
+      });
+      uploaded.push({ ...item, fileName, storageKey });
+    }
 
-    const now = new Date().toISOString();
-    const [worker] = await db.insert(workers).values({
-      workerNumber,
-      iqamaNumber,
-      fullName,
-      nationality,
-      profession,
-      mobile,
-      iban,
-      bankName,
-      monthlySalaryHalalas: Math.round(monthlySalary * 100),
-      isCompanySponsored,
-      sponsorshipType,
-      sponsorName: sponsorshipType === "other" ? sponsorName : null,
-      ajirContractStatus,
-      beneficiaryName: null,
-      clientSite: "غير مسند",
-      assignmentStartDate: null,
-      iqamaExpiry,
-      medicalInsuranceExpiry,
-      status: "available",
-      updatedAt: now,
-    }).returning();
-    workerId = worker.id;
+    stage = "database";
+    const { worker, attachments } = await db.transaction(async (tx) => {
+      const now = new Date().toISOString();
+      const [worker] = await tx.insert(workers).values({
+        workerNumber,
+        iqamaNumber,
+        fullName,
+        nationality,
+        profession,
+        mobile,
+        iban,
+        bankName,
+        monthlySalaryHalalas: Math.round(monthlySalary * 100),
+        isCompanySponsored,
+        sponsorshipType,
+        sponsorName: sponsorshipType === "other" ? sponsorName : null,
+        ajirContractStatus,
+        beneficiaryName: null,
+        clientSite: "غير مسند",
+        assignmentStartDate: null,
+        iqamaExpiry,
+        medicalInsuranceExpiry,
+        status: "available",
+        updatedAt: now,
+      }).returning();
 
-    const attachments = await db.insert(workerAttachments).values(uploaded.map((item) => ({
-      workerId: worker.id,
-      documentType: item.documentType,
-      requirementCode: item.requirementCode,
-      expiryDate: item.expiryDate,
-      title: item.title,
-      fileName: item.fileName,
-      storageKey: item.storageKey,
-      contentType: item.file.type,
-      sizeBytes: item.file.size,
-      validationStatus: "signature-validated",
-      validationDetails: item.validationDetails,
-      createdBy: access.user.email,
-    }))).returning();
+      const attachments = await tx.insert(workerAttachments).values(uploaded.map((item) => ({
+        workerId: worker.id,
+        documentType: item.documentType,
+        requirementCode: item.requirementCode,
+        expiryDate: item.expiryDate,
+        title: item.title,
+        fileName: item.fileName,
+        storageKey: item.storageKey,
+        contentType: item.file.type,
+        sizeBytes: item.file.size,
+        validationStatus: "signature-validated",
+        validationDetails: item.validationDetails,
+        createdBy: access.user.email,
+      }))).returning();
 
-    await db.insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-profile-created", entityType: "worker", entityId: String(worker.id) });
+      await tx.insert(portalActivity).values({ actorEmail: access.user.email, action: "worker-profile-created", entityType: "worker", entityId: String(worker.id) });
+      return { worker, attachments };
+    });
     await emitPortalNotification({ eventType: "worker-profile-created", title: "ملف عامل جديد جاهز للمراجعة", message: `${worker.fullName} — ${worker.profession} — ${worker.workerNumber}.`, severity: "success", module: "workforce", entityType: "worker", entityId: worker.id, actionView: "workforce", targetDepartment: "workforce" }).catch(() => undefined);
     return Response.json({ worker, attachments }, { status: 201 });
   } catch (error) {
     await Promise.all(storedKeys.map((key) => getRuntimeEnv().BUCKET.delete(key).catch(() => undefined)));
-    if (workerId) await db.delete(workers).where(eq(workers.id, workerId)).catch(() => undefined);
-    const message = error instanceof Error ? error.message.toLowerCase() : "";
-    if (message.includes("unique")) return Response.json({ error: "رقم العامل أو رقم الإقامة مستخدم في ملف آخر" }, { status: 409 });
-    return Response.json({ error: "تعذّر إنشاء ملف العامل حالياً" }, { status: 500 });
+    // Drizzle wraps PostgreSQL errors in `cause`; the outer message is only
+    // the query and must never be logged or sent to the browser (it has PII).
+    let code = "";
+    let constraint = "";
+    let cause: unknown = error;
+    for (let depth = 0; depth < 6 && cause && typeof cause === "object"; depth++) {
+      const current = cause as { code?: unknown; constraint?: unknown; constraint_name?: unknown; cause?: unknown };
+      if (typeof current.code === "string" && /^[A-Z0-9_]{3,32}$/.test(current.code)) code = current.code;
+      const constraintName = current.constraint_name ?? current.constraint;
+      if (typeof constraintName === "string" && /^[a-zA-Z0-9_]{1,100}$/.test(constraintName)) constraint = constraintName;
+      cause = current.cause;
+    }
+    if (stage === "database" && code === "23505" && constraint === "workers_iban_unique") return Response.json({ error: "رقم الآيبان مستخدم في ملف عامل آخر", code: "DUPLICATE_WORKER_IBAN" }, { status: 409 });
+    if (stage === "database" && code === "23505" && ["workers_worker_number_unique", "workers_iqama_number_unique"].includes(constraint)) return Response.json({ error: "رقم العامل أو رقم الإقامة مستخدم في ملف آخر", code: "DUPLICATE_WORKER" }, { status: 409 });
+    if (stage === "request") return Response.json({ error: "تعذّر قراءة بيانات العامل؛ أعد فتح النموذج وحاول مجدداً", code: "INVALID_FORM" }, { status: 400 });
+    const referenceId = crypto.randomUUID();
+    console.error("worker-profile-create-failed", { referenceId, stage, code: code || "UNKNOWN", constraint: constraint || undefined });
+    return Response.json({ error: stage === "storage" ? "تعذّر حفظ المرفقات؛ يرجى التواصل مع مشرف النظام" : "تعذّر حفظ ملف العامل؛ يرجى التواصل مع مشرف النظام", code: "WORKER_CREATE_FAILED", referenceId }, { status: 500 });
   }
 }
 

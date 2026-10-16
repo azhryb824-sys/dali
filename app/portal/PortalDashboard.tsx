@@ -1577,8 +1577,9 @@ export default function PortalDashboard({
           worker?: WorkerRecord;
           attachments?: WorkerAttachment[];
           error?: string;
+          referenceId?: string;
         };
-        if (!response.ok || !result.worker || !result.attachments) throw new Error(`العامل ${index + 1}: ${result.error || "تعذّر إنشاء الملف"}`);
+        if (!response.ok || !result.worker || !result.attachments) throw new Error(`العامل ${index + 1}: ${result.error || "تعذّر إنشاء الملف"}` + (result.referenceId ? ` [${result.referenceId}]` : ""));
         createdWorkers.push(result.worker);
         createdAttachments.push(...result.attachments);
         setWorkers((items) => [result.worker as WorkerRecord, ...items]);

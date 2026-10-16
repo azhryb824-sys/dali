@@ -6,6 +6,11 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+  "رقم الآيبان مستخدم في ملف عامل آخر": {"en": "This IBAN is already used in another worker profile", "bn": "এই আইবিএএন অন্য কর্মীর প্রোফাইলে ব্যবহৃত হচ্ছে"},
+  "تعذّر قراءة بيانات العامل؛ أعد فتح النموذج وحاول مجدداً": {"en": "Unable to read worker details; reopen the form and try again", "bn": "কর্মীর তথ্য পড়া যায়নি; ফর্মটি আবার খুলে চেষ্টা করুন"},
+  "تعذّر حفظ المرفقات؛ يرجى التواصل مع مشرف النظام": {"en": "Unable to save attachments; contact the system administrator", "bn": "সংযুক্তি সংরক্ষণ করা যায়নি; সিস্টেম প্রশাসকের সঙ্গে যোগাযোগ করুন"},
+  "تعذّر حفظ ملف العامل؛ يرجى التواصل مع مشرف النظام": {"en": "Unable to save the worker profile; contact the system administrator", "bn": "কর্মীর প্রোফাইল সংরক্ষণ করা যায়নি; সিস্টেম প্রশাসকের সঙ্গে যোগাযোগ করুন"},
+
 "مساعد الترجمة الفوري": {"en": "Instant translation assistant", "bn": "তাৎক্ষণিক অনুবাদ সহায়ক"},
 "راجع الترجمة ثم طبّقها على الحقل. تظهر في المعاينة قبل النشر.": {"en": "Review the translation, then apply it to the field. Preview it before publishing.", "bn": "অনুবাদ পর্যালোচনা করে ঘরে প্রয়োগ করুন। প্রকাশের আগে প্রিভিউতে দেখা যাবে।"},
 "ترجمة النص المحدد": {"en": "Translate selected text", "bn": "নির্বাচিত লেখা অনুবাদ করুন"},
