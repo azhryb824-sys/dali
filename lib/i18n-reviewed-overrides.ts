@@ -6,6 +6,10 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+"رمز البنك غير معروف؛ راجع رقم الآيبان": {"en": "Unknown bank code; check the IBAN", "bn": "ব্যাংক কোড অজানা; আইবিএএন পরীক্ষা করুন"},
+"أرقام الآيبان بعد SA": {"en": "IBAN digits after SA", "bn": "SA-এর পরের আইবিএএন সংখ্যা"},
+"يظهر بعد اكتمال الآيبان": {"en": "Appears when the IBAN is complete", "bn": "আইবিএএন সম্পূর্ণ হলে দেখা যাবে"},
+
   "رقم الآيبان مستخدم في ملف عامل آخر": {"en": "This IBAN is already used in another worker profile", "bn": "এই আইবিএএন অন্য কর্মীর প্রোফাইলে ব্যবহৃত হচ্ছে"},
   "تعذّر قراءة بيانات العامل؛ أعد فتح النموذج وحاول مجدداً": {"en": "Unable to read worker details; reopen the form and try again", "bn": "কর্মীর তথ্য পড়া যায়নি; ফর্মটি আবার খুলে চেষ্টা করুন"},
   "تعذّر حفظ المرفقات؛ يرجى التواصل مع مشرف النظام": {"en": "Unable to save attachments; contact the system administrator", "bn": "সংযুক্তি সংরক্ষণ করা যায়নি; সিস্টেম প্রশাসকের সঙ্গে যোগাযোগ করুন"},

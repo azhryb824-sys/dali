@@ -6,7 +6,7 @@ import { canAccessPortalDepartment, requirePortalApiRole } from "@/lib/portal-ac
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import { requirementsForProfession, workforceNationalities, workforceProfessions } from "@/lib/workforce-requirements";
-import { isSaudiBank } from "@/lib/saudi-banks";
+import { bankNameFromSaudiIban, isSaudiBank } from "@/lib/saudi-banks";
 import { rejectCrossSiteRequest, validateUploadedFile } from "@/lib/security";
 
 const PHOTO_TYPES = new Set(["image/png", "image/jpeg"]);
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const profession = cleanText(form.get("profession"), 120);
     const mobile = cleanText(form.get("mobile"), 20);
     const iban = cleanText(form.get("iban"), 40).replace(/\s+/g, "").toUpperCase();
-    const bankName = cleanText(form.get("bankName"), 120);
+    const bankName = bankNameFromSaudiIban(iban) || "";
     const monthlySalary = Number(form.get("monthlySalary") || 0);
     const sponsorshipType = form.get("sponsorshipType") === "dali" ? "dali" : form.get("sponsorshipType") === "other" ? "other" : "";
     const sponsorName = cleanText(form.get("sponsorName"), 160);

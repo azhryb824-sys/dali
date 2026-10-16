@@ -6,7 +6,7 @@ import ts from "typescript";
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
-test("every maintained bank selector uses the complete shared bank list", async () => {
+test("bank entry forms use the shared automatic IBAN fields", async () => {
   const [source, accounting, hr, employeeProfile, portal] = await Promise.all([
     read("lib/saudi-banks.ts"),
     read("app/portal/AccountingWorkspace.tsx"),
@@ -31,7 +31,7 @@ test("every maintained bank selector uses the complete shared bank list", async 
   );
 
   for (const ui of [accounting, hr, employeeProfile, portal]) {
-    assert.match(ui, /saudiBanks\.map\(\(bank\) =>/);
+    assert.match(ui, /<SaudiBankFields/);
   }
   for (const ui of [accounting, hr, employeeProfile]) {
     assert.doesNotMatch(ui, /<input name="bankName"/);

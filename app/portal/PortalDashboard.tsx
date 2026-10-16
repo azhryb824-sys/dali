@@ -1,4 +1,5 @@
 "use client";
+import SaudiBankFields from "./SaudiBankFields";
 import ContractClauseEditor from "@/app/components/ContractClauseEditor";
 import { commercialAttachmentRefs } from "@/lib/commercial-attachments";
 import ContractFullEditDialog from "./ContractFullEditDialog";
@@ -14,7 +15,7 @@ import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { matchesWorkforceProfession, requirementsForProfession, workforceNationalities, workforceProfessions } from "@/lib/workforce-requirements";
-import { bankNameFromSaudiIban, formatSaudiIban, normalizeSaudiIban, saudiBanks } from "@/lib/saudi-banks";
+import { formatSaudiIban, normalizeSaudiIban } from "@/lib/saudi-banks";
 import { commercialTextFields, readCommercialTerms } from "@/lib/commercial-terms";
 import WhatsAppFileShareDialog from "./WhatsAppFileShareDialog";
 import OperationsWorkspace, { QuotationIssueModal, type OperationsTab } from "./OperationsWorkspace";
@@ -5959,14 +5960,7 @@ function EmployeeComplianceEditor({ employee, employees, users, busy, onCancel, 
         بدلات أخرى
         <input name="otherAllowance" type="number" min="0" step="0.01" required value={otherAllowance} onChange={(event) => setOtherAllowance(event.target.value)} dir="ltr" />
       </label>
-      <label>
-        رقم الآيبان — اختياري
-        <input name="iban" value={iban} onChange={(event) => setIban(formatSaudiIban(event.target.value))} inputMode="numeric" maxLength={29} dir="ltr" />
-      </label>
-      <label>
-        اسم البنك — تلقائي
-        <input value={bankNameFromSaudiIban(iban) || ""} readOnly />
-      </label>
+      <SaudiBankFields value={iban} onChange={setIban} />
       {sensitiveChanged && <>
         <label>
           تاريخ نفاذ التغيير الحساس
@@ -6741,7 +6735,6 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
   const [employeeNationality, setEmployeeNationality] = useState("");
   const [employeeSponsorship, setEmployeeSponsorship] = useState<"dali" | "other">("dali");
   const [employeeContractType, setEmployeeContractType] = useState<"fixed_term" | "indefinite">("fixed_term");
-  const detectedBank = bankNameFromSaudiIban(iban) || "";
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void onSubmit(entity, event.currentTarget);
@@ -6897,15 +6890,7 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
                 بدلات أخرى
                 <input name="otherAllowance" type="number" min="0" step="0.01" defaultValue="0" dir="ltr" />
               </label>
-              <label>
-                رقم الآيبان — اختياري
-                <input name="iban" value={iban} onChange={(event) => setIban(formatSaudiIban(event.target.value))} inputMode="numeric" maxLength={29} placeholder="SA00 0000 0000 0000 0000 0000" dir="ltr" />
-                <small>يبقى SA ثابتًا، وتضاف مسافة تلقائيًا بعد كل أربع خانات.</small>
-              </label>
-              <label>
-                اسم البنك — تلقائي
-                <input name="bankName" value={detectedBank} readOnly placeholder={iban.length > 2 ? "سيظهر بعد اكتمال رمز البنك" : "يُعبأ من الآيبان"} />
-              </label>
+              <SaudiBankFields value={iban} onChange={setIban} />
               <label className="file-drop">
                 صورة شخصية — اختيارية
                 <input name="photo" type="file" accept="image/png,image/jpeg" />
@@ -7124,23 +7109,7 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
                     <input name={`sponsorName:${index}`} required minLength={2} maxLength={160} />
                   </label>
                 )}
-                <label>
-                  اسم البنك
-                  <select name={`bankName:${index}`} required defaultValue="">
-                    <option value="" disabled>
-                      اختر البنك
-                    </option>
-                    {saudiBanks.map((bank) => (
-                      <option value={bank} key={bank}>
-                        {bank}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  رقم الآيبان السعودي
-                  <input name={`iban:${index}`} required pattern="SA[0-9]{22}" minLength={24} maxLength={24} placeholder="SA0000000000000000000000" dir="ltr" />
-                </label>
+                <SaudiBankFields ibanName={`iban:${index}`} bankName={`bankName:${index}`} required />
                 <label>
                   تاريخ انتهاء الإقامة
                   <input name={`iqamaExpiry:${index}`} required type="date" />

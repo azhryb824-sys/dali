@@ -1,3 +1,4 @@
+import { bankNameFromSaudiIban } from "@/lib/saudi-banks";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { bankAccounts, chartOfAccounts, fiscalPeriods, journalEntries, journalLines } from "@/db/schema";
@@ -137,10 +138,10 @@ export async function POST(request: Request) {
     }
 
     if (action === "add-bank") {
-      const bankName = clean(payload.bankName, 120);
       const accountName = clean(payload.accountName, 160);
       const accountCode = clean(payload.accountCode, 30).toUpperCase();
       const iban = clean(payload.iban, 40).replaceAll(" ", "").toUpperCase();
+      const bankName = bankNameFromSaudiIban(iban) || "";
       const ledgerAccountId = positiveId(payload.ledgerAccountId);
       if (bankName.length < 2 || accountName.length < 2 || !accountCode || !/^SA\d{22}$/.test(iban) || !ledgerAccountId) return jsonNoStore({ error: "بيانات الحساب البنكي غير صحيحة" }, { status: 400 });
       const account = await db.query.chartOfAccounts.findFirst({ where: eq(chartOfAccounts.id, ledgerAccountId) });

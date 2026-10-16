@@ -34,6 +34,7 @@ test('worker creation accepts both sponsorship types under the production databa
    const result=await response.json();
    assert.equal(response.status,201,JSON.stringify(result));
    assert.equal(result.attachments.length,3);
+   assert.equal(result.worker.bankName,"مصرف الراجحي","bank is derived from IBAN, ignoring submitted bank name");
    assert.equal(result.worker.sponsorshipType,sponsorship);
    const duplicate=await qa.POST(new Request('https://www.dally.info/api/portal/workers',{method:'POST',body:form}));
    assert.equal(duplicate.status,409,JSON.stringify(await duplicate.json()));

@@ -1,3 +1,4 @@
+import { bankNameFromSaudiIban } from "@/lib/saudi-banks";
 import { isValidIsoDate } from "@/lib/workforce-finance-integrity";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
@@ -411,7 +412,7 @@ export async function POST(request: Request) {
           transportAllowanceHalalas,
           otherAllowanceHalalas,
         ].some((amount) => !Number.isSafeInteger(amount) || amount < 0) ||
-        (iban && !/^SA\d{22}$/.test(iban))
+        (iban && (!/^SA\d{22}$/.test(iban) || !bankNameFromSaudiIban(iban)))
       ) {
         return jsonNoStore(
           { error: "بيانات الراتب أو الآيبان غير صحيحة" },
@@ -423,7 +424,7 @@ export async function POST(request: Request) {
         housingAllowanceHalalas,
         transportAllowanceHalalas,
         otherAllowanceHalalas,
-        bankName: clean(payload.bankName, 120) || null,
+        bankName: iban ? bankNameFromSaudiIban(iban) : null,
         iban,
       };
       const reason = clean(payload.reason, 500);

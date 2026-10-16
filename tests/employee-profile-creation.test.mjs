@@ -15,7 +15,8 @@ test("employee creation is one integrated multipart workflow", () => {
   assert.match(portal, /صورة شخصية — اختيارية/);
   assert.match(portal, /صورة الإقامة — إلزامية/);
   assert.match(portal, /عقد العمل — إلزامي ويُحفظ في ملف الموظف/);
-  assert.match(portal, /اسم البنك — تلقائي/);
+  assert.match(portal, /<SaudiBankFields value=\{iban\} onChange=\{setIban\}/);
+  assert.match(read("app/portal/SaudiBankFields.tsx"), /اسم البنك — تلقائي/);
 });
 
 test("Saudi IBAN remains formatted, validated with MOD-97 and resolves the bank", async () => {

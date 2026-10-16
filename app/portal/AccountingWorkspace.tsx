@@ -1,7 +1,7 @@
 "use client";
 
 import { readApiJson } from "@/lib/client-api";
-import { saudiBanks } from "@/lib/saudi-banks";
+import SaudiBankFields from "./SaudiBankFields";
 import { useDesktopLiveRefresh } from "@/lib/use-desktop-live-refresh";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import FinanceEnterpriseWorkspace from "./FinanceEnterpriseWorkspace";
@@ -403,28 +403,13 @@ export default function AccountingWorkspace({
                 required
                 placeholder="رمز الحساب البنكي"
               />
-              <select name="bankName" required defaultValue="">
-                <option value="" disabled>
-                  اختر البنك
-                </option>
-                {saudiBanks.map((bank) => (
-                  <option key={bank} value={bank}>
-                    {bank}
-                  </option>
-                ))}
-              </select>
+              <SaudiBankFields required />
               <input
                 name="accountName"
                 required
                 placeholder="اسم صاحب الحساب"
               />
-              <input
-                name="iban"
-                required
-                dir="ltr"
-                pattern="SA[0-9 ]{22,28}"
-                placeholder="SA00 0000 0000 0000 0000 0000"
-              />
+
               <select name="ledgerAccountId" required defaultValue="">
                 <option value="" disabled>
                   حساب الأستاذ المرتبط
