@@ -52,6 +52,7 @@ import VideoInterviewDesk from "./VideoInterviewDesk";
 import ServiceRatingsPanel from "./ServiceRatingsPanel";
 import ExecutivePeopleCommandCenter from "./ExecutivePeopleCommandCenter";
 import LocaleRuntime from "@/app/components/LocaleRuntime";
+import { translateUi } from "@/lib/i18n";
 import { useAppLocale } from "@/lib/client-locale";
 import GovernmentAffairsWorkspace from "./GovernmentAffairsWorkspace";
 import TaskCenter, { GlobalTaskReminder } from "./TaskCenter";
@@ -6961,17 +6962,19 @@ function RecordModal({ entity, users, linkedEmployeeEmails, busy, onClose, onSub
 }
 
 function SearchableCombobox({ name, value, options, onChange, placeholder, required = false }: { name: string; value: string; options: readonly string[]; onChange: (value: string) => void; placeholder: string; required?: boolean }) {
+  const locale = useAppLocale();
+  const label = (option: string) => translateUi(option, locale);
   const [open, setOpen] = useState(false);
   const hasExactSelection = options.includes(value);
-  const filtered = options.filter((option) => hasExactSelection || !value.trim() || matchesWorkforceProfession(option, value)).slice(0, 40);
+  const filtered = options.filter((option) => hasExactSelection || !value.trim() || (matchesWorkforceProfession(option, value) || label(option).toLocaleLowerCase().includes(value.toLocaleLowerCase()))).slice(0, 40);
   const listId = `combobox-${name.replace(/[^a-zA-Z0-9_-]/g, "-")}-options`;
   return (
     <div className="searchable-combobox">
+      <input type="hidden" name={name} value={value} />
       <div>
         <Icon name="search" />
         <input
-          name={name}
-          value={value}
+          value={hasExactSelection ? label(value) : value}
           required={required}
           autoComplete="off"
           placeholder={placeholder}
@@ -7006,7 +7009,7 @@ function SearchableCombobox({ name, value, options, onChange, placeholder, requi
                 type="button"
                 role="option"
                 aria-selected={option === value}
-                key={option}
+                key={label(option)}
                 className={option === value ? "selected" : ""}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
@@ -7014,7 +7017,7 @@ function SearchableCombobox({ name, value, options, onChange, placeholder, requi
                   setOpen(false);
                 }}
               >
-                {option}
+                {label(option)}
                 {option === value && <Icon name="check" />}
               </button>
             ))
@@ -7028,19 +7031,42 @@ function SearchableCombobox({ name, value, options, onChange, placeholder, requi
 }
 
 function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  const [step, setStep] = useState(1);
+  const formRef = useRef<HTMLFormElement>(null);
+  const submitting = useRef(false);
   const [error, setError] = useState("");
   const [profession, setProfession] = useState(workforceProfessions[0].label);
   const [nationality, setNationality] = useState("");
   const [workerCount, setWorkerCount] = useState(1);
   const [workerSponsorship, setWorkerSponsorship] = useState<Record<number, "dali" | "other">>({});
   const requirements = requirementsForProfession(profession);
+  function validStep(targetStep: number) {
+    const fields = formRef.current?.querySelectorAll(`[data-worker-step="${targetStep}"] input, [data-worker-step="${targetStep}"] select`);
+    for (const field of fields || []) {
+      if ((field instanceof HTMLInputElement || field instanceof HTMLSelectElement) && !field.checkValidity()) {
+        setStep(targetStep);
+        requestAnimationFrame(() => field.reportValidity());
+        return false;
+      }
+    }
+    return true;
+  }
+  function next() {
+    if (validStep(step)) setStep(current => Math.min(3, current + 1));
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy || submitting.current) return;
+    if (step < 3) { next(); return; }
+    if (!validStep(1) || !validStep(2)) return;
+    submitting.current = true;
     setError("");
     try {
       await onSubmit(event.currentTarget);
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذّر إنشاء ملف العامل.");
+    } finally {
+      submitting.current = false;
     }
   }
   return (
@@ -7057,12 +7083,13 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
           </button>
         </div>
         <div className="worker-modal-steps">
-          <span className="active">1 البيانات</span>
-          <span className="active">2 متطلبات المهنة</span>
-          <span className="active">3 الجاهزية للعقود</span>
+          <button type="button" className={step === 1 ? "active" : ""} onClick={() => !busy && setStep(1)}>1 البيانات</button>
+          <button type="button" className={step === 2 ? "active" : ""} onClick={() => !busy && validStep(1) && setStep(2)}>2 متطلبات المهنة</button>
+          <button type="button" className={step === 3 ? "active" : ""} onClick={() => !busy && validStep(1) && validStep(2) && setStep(3)}>3 الجاهزية للعقود</button>
         </div>
-        <form onSubmit={submit}>
+        <form ref={formRef} onSubmit={submit} noValidate>
           <input type="hidden" name="workerCount" value={workerCount} />
+          <div className="worker-data-fields span-two" data-worker-step="1" hidden={step !== 1}>
           <p className="form-section-title span-two">الإعداد المشترك للدفعة</p>
           <label>
             عدد العمال المراد إضافتهم
@@ -7076,10 +7103,11 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
             المهنة
             <SearchableCombobox name="profession" value={profession} options={workforceProfessions.map((item) => item.label)} onChange={setProfession} placeholder="اكتب للبحث عن المهنة" required />
           </label>
+          </div>
           {Array.from({ length: workerCount }, (_, index) => (
-            <div className="bulk-worker-entry span-two" key={index}>
+            <div className="bulk-worker-entry span-two" key={index} hidden={step === 3}>
               <h3>بيانات العامل {index + 1}</h3>
-              <div>
+              <div data-worker-step="1" hidden={step !== 1}>
                 <label>
                   رقم العامل
                   <input name={`workerNumber:${index}`} required maxLength={30} placeholder={`WRK-${String(index + 1).padStart(3, "0")}`} dir="ltr" />
@@ -7131,6 +7159,8 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
                   تاريخ انتهاء التأمين الطبي
                   <input name={`medicalInsuranceExpiry:${index}`} required type="date" />
                 </label>
+              </div>
+              <div data-worker-step="2" hidden={step !== 2}>
                 <label className="file-drop requirement-file">
                   صورة الإقامة — إلزامية
                   <input name={`iqamaDocument:${index}`} type="file" required accept="application/pdf,image/png,image/jpeg" />
@@ -7156,13 +7186,15 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
               </div>
             </div>
           ))}
-          <p className="form-hint span-two">لن يُنشأ الملف قبل إرفاق الصورة وجميع المستندات المطلوبة للمهنة. يُسجّل العامل متاحاً، ثم تُحدّد الجهة المستفيدة تلقائياً عند اختياره في عقد نشط.</p>
+          <p hidden={step !== 3} className="form-hint span-two">لن يُنشأ الملف قبل إرفاق الصورة وجميع المستندات المطلوبة للمهنة. يُسجّل العامل متاحاً، ثم تُحدّد الجهة المستفيدة تلقائياً عند اختياره في عقد نشط.</p>
           {error && <p className="form-hint span-two" role="alert">{error}</p>}
           <div className="modal-actions span-two">
             <button type="button" onClick={onClose}>
               إلغاء
             </button>
-            <button className="admin-primary" type="submit" disabled={busy}>
+            {step > 1 && <button type="button" disabled={busy} onClick={() => setStep(step - 1)}>السابق</button>}
+            {step < 3 && <button type="button" className="admin-primary" disabled={busy} onClick={next}>التالي</button>}
+            <button hidden={step !== 3} className="admin-primary" type="submit" disabled={busy}>
               {busy ? "جارٍ إنشاء الملف..." : "إنشاء ملف العامل"}
             </button>
           </div>
