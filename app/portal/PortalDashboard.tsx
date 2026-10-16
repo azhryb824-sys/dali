@@ -1,4 +1,5 @@
 "use client";
+import "./overview.css";
 import ContractClauseEditor from "@/app/components/ContractClauseEditor";
 import { commercialAttachmentRefs } from "@/lib/commercial-attachments";
 import ContractFullEditDialog from "./ContractFullEditDialog";
@@ -1160,6 +1161,14 @@ export default function PortalDashboard({
   const unreadNotifications = notifications.filter((item) => !item.readAt).length;
   const unreadConversationMessages = conversationMessages.filter((item) => item.senderType === "visitor" && !item.readByStaffAt).length;
   const waitingConversations = conversations.filter((item) => item.status === "waiting").length;
+
+  const overviewPriorities: { view: View; label: string; note: string; count: number }[] = [
+    ...(canAccessConversations && waitingConversations > 0 ? [{ view: "conversations" as View, label: "محادثات تنتظر الرد", note: "متابعة استفسارات زوار الموقع", count: waitingConversations }] : []),
+    ...(canAccessGovernment && employeeComplianceAlerts > 0 ? [{ view: "government" as View, label: "استحقاقات الموظفين", note: "وثائق وعقود تستحق المتابعة خلال أقل من 29 يوماً", count: employeeComplianceAlerts }] : []),
+    ...(canAccessDocuments && documentAlerts > 0 ? [{ view: "documents" as View, label: "مستندات تحتاج تجديداً", note: "منتهية أو تنتهي خلال 30 يوماً", count: documentAlerts }] : []),
+    ...(canAccess("legal") && legalAlerts > 0 ? [{ view: "legal" as View, label: "متابعة الملفات القانونية", note: "مواعيد خلال 45 يوماً أو مواعيد تجاوزت استحقاقها", count: legalAlerts }] : []),
+    ...(canAccess("workforce") && incompleteWorkerFiles > 0 ? [{ view: "workforce" as View, label: "ملفات عمالة غير مكتملة", note: "مراجعة البيانات والمرفقات المطلوبة", count: incompleteWorkerFiles }] : []),
+  ];
 
   function canOpenView(next: View) {
     if (["overview", "notifications", "tasks", "guide"].includes(next)) return true;
@@ -2413,16 +2422,18 @@ export default function PortalDashboard({
         <div className="admin-content">
           {view === "executive-center" && isRoot && <><div className="panel-head"><h2>مركز المالك والمشرف</h2><button className="admin-secondary" onClick={() => setChatSettingsOpen(true)}>تعديل ساعات العمل والرد الآلي</button></div><ExecutiveActionCenter /><WorkerIncidentsPanel/></>}
           {view === "overview" && (
-            <>
-              <div className="content-heading">
+            <div className="portal-overview">
+              <div className="content-heading overview-hero">
                 <div>
-                  <p className="admin-eyebrow">مركز العمليات</p>
+                  <p className="admin-eyebrow">دالي · مركز العمليات</p>
                   <h1>مرحباً، {currentUser.displayName.split(" ")[0]}</h1>
                   <span>{currentUser.functionalRoles.length ? `مساحة عمل مهيأة لصلاحيات: ${activeRoleLabel}.` : currentUser.role === "employee" ? `مساحة عملك في قسم ${departmentLabels[currentUser.department]}.` : "متابعة موحّدة لأعمال الشركة من لوحة واحدة."}</span>
                 </div>
-                <time>{currentDateLabel}</time>
+                <div className="overview-hero-side"><time>{currentDateLabel}</time><span>{activeRoleLabel}</span><div className="overview-hero-actions"><button type="button" onClick={() => changeView("tasks")}><Icon name="check" />مهامي وتذكيراتي</button><button type="button" onClick={() => changeView("notifications")}><Icon name="bell" />الإشعارات <b>{unreadNotifications}</b></button></div></div>
               </div>
-              <section className="metric-grid module-metrics">
+              <div className="overview-section-heading"><div><span>01 / ملخص الأعمال</span><h2>المؤشرات الرئيسية</h2></div><p>اضغط على أي مؤشر لفتح القسم</p></div>
+              <section className="metric-grid module-metrics" aria-label="المؤشرات الرئيسية">
+                {canAccessContracts && <button onClick={() => changeView("contractual-documents")}><span className="metric-icon navy"><Icon name="documents" /></span><p>العقود<strong>{contracts.length}</strong></p><small>{contracts.filter(item => item.status === "active").length} عقد نشط</small></button>}
                 {canAccess("employees") && (
                   <button onClick={() => changeView("employees")}>
                     <span className="metric-icon red">
@@ -2462,10 +2473,10 @@ export default function PortalDashboard({
                       <Icon name="workforce" />
                     </span>
                     <p>
-                      العمالة<strong>{workers.length}</strong>
+                      العمالة<strong>{workers.filter(item => !item.archivedAt).length}</strong>
                     </p>
                     <small>
-                      {workers.filter((item) => item.status === "available").length} متاح · {activeBeneficiaries} جهة مستفيدة
+                      {workers.filter((item) => !item.archivedAt && item.status === "available").length} متاح · {activeBeneficiaries} جهة مستفيدة
                     </small>
                   </button>
                 )}
@@ -2493,15 +2504,6 @@ export default function PortalDashboard({
                     <small>{documentAlerts} تنبيه انتهاء خلال 30 يوماً أو مستند منتهٍ</small>
                   </button>
                 )}
-                <button onClick={() => changeView("tasks")}>
-                  <span className="metric-icon green">
-                    <Icon name="check" />
-                  </span>
-                  <p>
-                    المهام<strong>✓</strong>
-                  </p>
-                  <small>مهامك وتذكيراتك في مكان واحد</small>
-                </button>
                 {canAccessGovernment && (
                   <button className={employeeComplianceAlerts ? "metric-attention" : ""} onClick={() => changeView("government")}>
                     <span className="metric-icon sand">
@@ -2515,7 +2517,12 @@ export default function PortalDashboard({
                   </button>
                 )}
               </section>
-              {isRoot && <ExecutivePeopleCommandCenter isOwner={isSystemOwner || (currentUser.role === "admin" && !isSystemAdmin)} isSystemAdmin={isSystemAdmin} />}
+              <section className="overview-focus" aria-label="قائمة المتابعة">
+                <div className="overview-focus-intro"><span>02 / المتابعة</span><h2>ما يحتاج انتباهك</h2><p>تنبيهات الأقسام المتاحة لحسابك، مع وصول مباشر إلى التفاصيل.</p><button type="button" onClick={() => changeView("notifications")}>مركز الإشعارات <span aria-hidden="true">←</span></button></div>
+                <div className="overview-focus-list">
+                  {overviewPriorities.length ? overviewPriorities.map(item => <button type="button" key={item.view} onClick={() => changeView(item.view)}><span className="overview-priority-count">{item.count}</span><span><strong>{item.label}</strong><small>{item.note}</small></span><span className="overview-go" aria-hidden="true">←</span></button>) : <div className="overview-clear"><Icon name="check" /><strong>لا توجد تنبيهات في المؤشرات المعروضة</strong><p>يمكنك متابعة مهامك أو الانتقال إلى أحد الأقسام أدناه.</p></div>}
+                </div>
+              </section>
               {currentUser.role === "employee" && currentUser.department === "general" && currentUser.functionalRoles.length === 0 ? (
                 <section className="employee-home">
                   <p className="admin-eyebrow">الحساب مفعّل</p>
@@ -2533,8 +2540,8 @@ export default function PortalDashboard({
                   <article className="panel operations-panel">
                     <div className="panel-head">
                       <div>
-                        <h2>الأقسام التشغيلية</h2>
-                        <p>الوحدات المتاحة وفقاً لصلاحية حسابك</p>
+                        <span className="overview-kicker">03 / خريطة النظام</span><h2>كل أعمالك، في مكان واحد</h2>
+                        <p>اختر القسم للوصول إلى ملفاته وإجراءاته وتقاريره.</p>
                       </div>
                     </div>
                     <div className="department-grid">
@@ -2548,6 +2555,11 @@ export default function PortalDashboard({
                       {canAccessDocuments && <DepartmentCard icon="documents" title="مركز المستندات" text="المرفقات والعقود والإصدارات الرسمية والتنبيهات." count={`${documents.length} مستند`} onClick={() => changeView("documents")} />}
                       {canAccessContracts && <DepartmentCard icon="documents" title="العقود والعروض والخطابات" text="دورات التحرير والاعتماد والإلغاء للمحررات الرسمية." count="مركز مستقل" onClick={() => changeView("contractual-documents")} />}
                       {canAccessGovernment && <DepartmentCard icon="website" title="العلاقات الحكومية والامتثال" text="الإقامات والتراخيص والمنصات الحكومية وطلبات سدادها." count="خزنة مشفّرة" onClick={() => changeView("government")} />}
+                      {canAccessRepresentatives && <DepartmentCard icon="employees" title="المناديب" text="طلبات المندوبين ومتابعة العملاء ومسار اعتماد العروض." count="المبيعات والمتابعة" onClick={() => changeView("representatives")} />}
+                      {canAccessContracts && canAccess("workforce") && <DepartmentCard icon="workforce" title="الإشراف على العمالة" text="الحضور والمواقع والحالات العمالية المرتبطة بالعقود." count="المتابعة الميدانية" onClick={() => changeView("workforce-supervision")} />}
+                      {isRoot && <DepartmentCard icon="employees" title="إدارة المستخدمين" text="الحسابات والأدوار والصلاحيات ونطاقات الوصول." count="إدارة الوصول" onClick={() => changeView("users")} />}
+                      {isRoot && <DepartmentCard icon="check" title="مركز المالك والمشرف" text="القرارات التشغيلية والاعتمادات والحالات العمالية." count="القرارات والاعتمادات" onClick={() => changeView("executive-center")} />}
+                      {canAccessBrand && <DepartmentCard icon="website" title="الهوية البصرية" text="أصول هوية الشركة وقوالبها الرسمية." count="هوية دالي" onClick={() => changeView("brand")} />}
                       <DepartmentCard icon="guide" title="دليل استخدام النظام" text="شرح عملي للصفحات وسير العمل والصلاحيات باللغات الثلاث." count="مخصّص لحسابك" onClick={() => changeView("guide")} />
                       {canAccessWebsite && <DepartmentCard icon="website" title="إدارة الموقع الإلكتروني" text="الأقسام والمحتوى والنشر وإعدادات الظهور في محركات البحث." count={`الإصدار ${initialWebsiteContent.version}`} onClick={() => changeView("website")} />}
                     </div>
@@ -2580,7 +2592,8 @@ export default function PortalDashboard({
                   )}
                 </section>
               )}
-            </>
+              {isRoot && <details className="overview-governance"><summary><span><small>04 / إدارة الفريق</small><strong>الموظفون والحضور والأداء</strong></span><span className="overview-expand" aria-hidden="true">+</span></summary><ExecutivePeopleCommandCenter isOwner={isSystemOwner || (currentUser.role === "admin" && !isSystemAdmin)} isSystemAdmin={isSystemAdmin} /></details>}
+            </div>
           )}
 
           {view === "notifications" && <NotificationCenterView notifications={notifications} onOpen={openNotification} onRead={(id) => void updateNotificationState("read", [id])} onDismiss={(id) => void updateNotificationState("dismiss", [id])} onReadAll={() => void updateNotificationState("read-all")} onRefresh={() => void refreshNotifications()} />}
