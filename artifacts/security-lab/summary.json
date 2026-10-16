@@ -1,0 +1,21 @@
+{
+  "startedAt": "2026-10-08T21:01:40.227Z",
+  "finishedAt": "2026-10-08T21:02:02.295Z",
+  "exitCode": 0,
+  "signal": null,
+  "files": [
+    "tests/security-adversarial.test.mjs",
+    "tests/worker-attendance-access-postgres.test.mjs",
+    "tests/commercial-workflow-postgres.test.mjs",
+    "tests/representative-worker-workflow-postgres.test.mjs",
+    "tests/legal-lifecycle-postgres.test.mjs",
+    "tests/contract-field-parity-postgres.test.mjs",
+    "tests/canonical-rbac.test.mjs",
+    "tests/portal-permission-profile.test.mjs",
+    "tests/storage-and-contract-authority.test.mjs",
+    "tests/auth-db-safety.test.mjs",
+    "tests/enterprise-critical-controls.test.mjs"
+  ],
+  "isolated": true,
+  "scope": "in-process handlers and ephemeral PostgreSQL; not a deployed-site scan"
+}

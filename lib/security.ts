@@ -98,9 +98,16 @@ export async function sha256(value: string) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function requestSourceIp(request: Request) {
+  // Nginx appends its observed peer via $proxy_add_x_forwarded_for.
+  // Values before that peer, including cf-connecting-ip on a direct VPS,
+  // can be supplied by the caller and must not choose the rate-limit bucket.
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim();
+  return forwarded || "unknown";
+}
+
 export async function requestSourceHash(request: Request) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = request.headers.get("cf-connecting-ip")?.trim() || forwarded || "unknown";
+  const ip = requestSourceIp(request);
   const agent = request.headers.get("user-agent") || "unknown";
   return sha256(`${ip}|${agent}`);
 }
@@ -109,7 +116,9 @@ export async function enforcePublicRateLimit(request: Request, options: RateLimi
   const now = new Date();
   const windowStart = new Date(now.getTime() - options.windowSeconds * 1000).toISOString();
   const blockUntil = new Date(now.getTime() + (options.blockSeconds ?? options.windowSeconds) * 1000).toISOString();
-  const sourceHash = await requestSourceHash(request);
+  // User-Agent is attacker-controlled: rotating it must not reset an IP quota.
+  // The reverse proxy must overwrite the trusted client-IP headers.
+  const sourceHash = await sha256(`rate-limit-ip-v2|${requestSourceIp(request)}`);
   const key = await sha256(`${options.scope}|${sourceHash}`);
   const database = getRuntimeEnv().DB;
   const statement = `

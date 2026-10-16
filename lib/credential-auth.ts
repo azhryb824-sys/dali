@@ -45,7 +45,9 @@ export async function readCredentialIdentity() {
   let payload = "";
   let signature = "";
   try {
-    [payload, signature] = decodeURIComponent(token).split(".");
+    const parts = decodeURIComponent(token).split(".");
+    if (parts.length !== 2 || !parts.every((part) => /^[A-Za-z0-9_-]+$/.test(part))) return null;
+    [payload, signature] = parts;
   } catch {
     return null;
   }
@@ -58,7 +60,11 @@ export async function readCredentialIdentity() {
   if (difference !== 0) return null;
   try {
     const identity = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as Identity;
-    if (!identity.email || identity.exp <= Math.floor(Date.now() / 1000)) return null;
+    if (!identity || typeof identity !== "object"
+      || typeof identity.email !== "string" || !identity.email.trim()
+      || typeof identity.displayName !== "string"
+      || !Number.isSafeInteger(identity.exp)
+      || identity.exp <= Math.floor(Date.now() / 1000)) return null;
     if (identity.authStrength !== "mfa") identity.authStrength = "password";
     return identity;
   } catch {
