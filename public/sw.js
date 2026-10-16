@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "dali-pwa";
-const STATIC_CACHE = `${CACHE_PREFIX}-static-v1`;
+const STATIC_CACHE = `${CACHE_PREFIX}-static-v2`;
 const OFFLINE_PAGE = "/offline.html";
 const PRECACHE_URLS = [
   OFFLINE_PAGE,
@@ -29,7 +29,7 @@ function isCacheableStaticRequest(request, url) {
   return url.pathname.startsWith("/_next/static/")
     || PRECACHE_URLS.includes(url.pathname)
     || url.pathname.startsWith("/fonts/")
-    || url.pathname === "/dally-logo.jpg";
+    || url.pathname === "/dally-logo-v2.jpg";
 }
 
 self.addEventListener("install", (event) => {

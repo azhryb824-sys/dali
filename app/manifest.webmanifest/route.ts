@@ -15,7 +15,7 @@ export async function GET() {
     theme_color: "#001d2d",
     lang: "ar",
     dir: "rtl",
-    icons: [{ src: "/dally-logo.jpg", sizes: "any", type: "image/jpeg", purpose: "any" }],
+    icons: [{ src: "/dally-logo-v2.jpg", sizes: "any", type: "image/jpeg", purpose: "any" }],
   };
 
   return Response.json(manifest, {

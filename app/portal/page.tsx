@@ -51,7 +51,7 @@ async function ProtectedPortal() {
     return (
       <main className="portal-gate">
         <section className="gate-card secure-gate-card">
-          <Image src="/dally-logo.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" />
+          <Image src="/dally-logo-v2.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" />
           <div className={`gate-status ${suspended ? "suspended" : "pending"}`} aria-hidden="true">
             {suspended ? "!" : "⌛"}
           </div>

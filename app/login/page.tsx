@@ -44,7 +44,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="portal-gate" dir="rtl">
       <section className="gate-card secure-gate-card">
-        <Image src="/dally-logo.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" priority />
+        <Image src="/dally-logo-v2.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" priority />
         <p className="gate-kicker">النظام الإداري الداخلي</p>
         <h1>تسجيل الدخول الآمن</h1>
         <p className="gate-copy">أدخل رقم الهوية الوطنية أو الإقامة وكلمة المرور. تُحد الجلسة تلقائيًا ويُسجل كل دخول في سجل النشاط.</p>

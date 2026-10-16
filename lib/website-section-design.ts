@@ -31,5 +31,5 @@ export function newWebsiteSection(layout: ManagedBlock["layout"]): ManagedBlock 
 }
 
 export function safeWebsiteSectionImage(value:string) {
-  return value === "" || value === "/dally-logo.jpg" || /^\/images\/[a-zA-Z0-9][a-zA-Z0-9/_-]*\.(?:avif|gif|jpe?g|png|webp)$/.test(value) || /^\/api\/website-assets\/[a-f0-9-]{36}\.(?:jpg|png)$/.test(value);
+  return value === "" || (value === "/dally-logo-v2.jpg" || value === "/dally-logo.jpg") || /^\/images\/[a-zA-Z0-9][a-zA-Z0-9/_-]*\.(?:avif|gif|jpe?g|png|webp)$/.test(value) || /^\/api\/website-assets\/[a-f0-9-]{36}\.(?:jpg|png)$/.test(value);
 }

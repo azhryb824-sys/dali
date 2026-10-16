@@ -42,7 +42,7 @@ const server = createServer(async (req, res) => {
     }
     res.end(JSON.stringify({ notifications: [], tasks: [], incoming: [], requests: [], roleDefinitions: [], conversations: [], messages: [], results: [], status: "ok" })); return;
   }
-  if (url.pathname === "/dally-logo.jpg") { res.setHeader("content-type", "image/jpeg"); res.end(await readFile("public/dally-logo.jpg")); return; }
+  if (url.pathname === "/dally-logo-v2.jpg") { res.setHeader("content-type", "image/jpeg"); res.end(await readFile("public/dally-logo-v2.jpg")); return; }
   if (url.pathname !== "/") { res.statusCode = 204; res.end(); return; }
   documents.push(req.url);
   const locale = req.headers.cookie?.match(/dali_locale=([^;]+)/)?.[1] || url.searchParams.get("locale") || "ar";

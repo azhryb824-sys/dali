@@ -2212,7 +2212,7 @@ export default function PortalDashboard({
       <LocaleRuntime initialLocale={currentUser.preferredLanguage} portal translationCatalogs={initialWebsiteContent.translations} />
       <aside className={`admin-sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
-          <Image src="/dally-logo.jpg" alt="شعار شركة دالي" width={545} height={280} sizes="160px" />
+          <Image src="/dally-logo-v2.jpg" alt="شعار شركة دالي" width={545} height={280} sizes="160px" />
           <span>النظام الإداري</span>
         </div>
         <nav aria-label="أقسام النظام">

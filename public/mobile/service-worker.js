@@ -2,7 +2,7 @@
 
 const DB_NAME = "dali-mobile-secure-v1";
 const DB_VERSION = 1;
-const SHELL_CACHE = "dali-mobile-shell-v3";
+const SHELL_CACHE = "dali-mobile-shell-v4";
 const SYNC_PATH = "/api/portal/desktop/sync";
 const MAX_CACHE_BYTES = 2_000_000;
 const privilegedActions = new Set(["approve", "post", "mark-paid", "pay-judgment", "assign-case", "initialize", "add-bank", "reset-password", "activate"]);
@@ -182,7 +182,7 @@ async function sync() {
   await broadcast({ type: "dali-sync-complete", state: { cursor: serverState?.cursor || 0, changes: serverState?.changes?.length || 0, queued: (await storeAll("queue")).length, conflicts: (await storeAll("conflicts")).length } });
 }
 
-self.addEventListener("install", (event) => event.waitUntil(Promise.all([caches.open(SHELL_CACHE).then((cache) => cache.addAll(["/mobile/offline.html", "/dally-logo.jpg"])), self.skipWaiting()])));
+self.addEventListener("install", (event) => event.waitUntil(Promise.all([caches.open(SHELL_CACHE).then((cache) => cache.addAll(["/mobile/offline.html", "/dally-logo-v2.jpg"])), self.skipWaiting()])));
 self.addEventListener("activate", (event) => event.waitUntil(Promise.all([caches.keys().then((names) => Promise.all(names.filter((name) => name.startsWith("dali-mobile-shell-") && name !== SHELL_CACHE).map((name) => caches.delete(name)))), self.clients.claim()])));
 self.addEventListener("message", (event) => { if (event.data?.type === "dali-sync") event.waitUntil(sync()); });
 self.addEventListener("sync", (event) => { if (event.tag === "dali-mobile-sync") event.waitUntil(sync()); });
@@ -195,7 +195,7 @@ self.addEventListener("fetch", (event) => {
     // custom user-agent. Capacitor's bundled errorPath handles failed loads.
     return;
   }
-  if (url.pathname.startsWith("/_next/static/") || url.pathname === "/dally-logo.jpg") {
+  if (url.pathname.startsWith("/_next/static/") || url.pathname === "/dally-logo-v2.jpg") {
     event.respondWith(caches.open(SHELL_CACHE).then(async (cache) => {
       const cached = await cache.match(request);
       if (cached) return cached;

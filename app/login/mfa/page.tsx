@@ -25,7 +25,7 @@ export default async function MfaPage({ searchParams }: { searchParams: Promise<
     : query.error === "attempts" ? "تم إيقاف هذا التحدي بعد محاولات متعددة. أعد تسجيل الدخول لبدء تحقق جديد."
       : null;
   return <main className="portal-gate" dir="rtl"><section className="gate-card secure-gate-card mfa-card">
-    <Image src="/dally-logo.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" priority/>
+    <Image src="/dally-logo-v2.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" priority/>
     <p className="gate-kicker">حماية الحسابات الحساسة</p>
     <h1>{enrollment ? "إعداد التحقق بخطوتين" : "أدخل رمز التحقق"}</h1>
     <p className="gate-copy">{enrollment

@@ -18,7 +18,7 @@ export default async function ForgotPasswordPage({ searchParams }: { searchParam
       : null;
 
   return <main className="portal-gate" dir="rtl"><section className="gate-card secure-gate-card">
-    <Image src="/dally-logo.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" priority/>
+    <Image src="/dally-logo-v2.jpg" alt="شعار شركة دالي" className="gate-logo" width={545} height={280} sizes="180px" priority/>
     <p className="gate-kicker">استعادة الوصول</p><h1>نسيت كلمة المرور</h1>
     <p className="gate-copy">أدخل رقم الهوية الوطنية أو الإقامة. إذا كان الحساب مسجلًا فسيصل رابط صالح لمدة 30 دقيقة إلى البريد المرتبط به.</p>
     {query.sent && <p role="status" className="operations-notice">إذا كانت البيانات مطابقة فقد أرسلنا رابط إعادة التعيين إلى البريد المسجل.</p>}

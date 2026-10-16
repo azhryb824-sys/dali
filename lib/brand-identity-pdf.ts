@@ -87,7 +87,7 @@ export async function generateBrandIdentityPdf(id: BrandIdentityAssetId) {
     pdf.embedFont(cairoRegular, { subset: true }),
     pdf.embedFont(cairoBold, { subset: true }),
   ]);
-  const logoResponse = await getRuntimeEnv().ASSETS.fetch(new Request("https://assets.local/dally-logo.jpg"));
+  const logoResponse = await getRuntimeEnv().ASSETS.fetch(new Request("https://assets.local/dally-logo-v2.jpg"));
   const logo = logoResponse.ok ? await pdf.embedJpg(new Uint8Array(await logoResponse.arrayBuffer())) : null;
   let page = pdf.addPage([PAGE.width, PAGE.height]);
   let pageNumber = 1;

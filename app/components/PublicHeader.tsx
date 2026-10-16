@@ -49,7 +49,7 @@ export default function PublicHeader({ content }: { content: WebsiteContent }) {
   return localizedPublicTree(<>
     <div className="location-bar"><span>{content.site.tagline}</span><span>{content.site.city} · {content.site.district}</span></div>
     <header className="site-header">
-      <Link className="brand" href="/" aria-label={`${content.site.companyName} - الرئيسية`}><Image src="/dally-logo.jpg" alt={`شعار ${content.site.companyName}`} width={545} height={280} sizes="180px"/></Link>
+      <Link className="brand" href="/" aria-label={`${content.site.companyName} - الرئيسية`}><Image src="/dally-logo-v2.jpg" alt={`شعار ${content.site.companyName}`} width={545} height={280} sizes="180px"/></Link>
       <button className="menu-btn" type="button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? "إغلاق القائمة" : "فتح القائمة"} aria-expanded={menuOpen}>☰</button>
       <nav className={menuOpen ? "open" : ""} onClick={() => setMenuOpen(false)} aria-label="التنقل الرئيسي">
         <Link href="/about">من نحن</Link>

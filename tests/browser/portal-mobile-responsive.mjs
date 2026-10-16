@@ -30,7 +30,7 @@ const server=createServer(async(req,res)=>{
  const url=new URL(req.url,"http://localhost");
  if(url.pathname==="/client.js"){res.setHeader("content-type","text/javascript");res.end(js);return}
  if(url.pathname==="/style.css"){res.setHeader("content-type","text/css");res.end(css);return}
- if(url.pathname==="/dally-logo.jpg"){res.setHeader("content-type","image/jpeg");res.end(await readFile("public/dally-logo.jpg"));return}
+ if(url.pathname==="/dally-logo-v2.jpg"){res.setHeader("content-type","image/jpeg");res.end(await readFile("public/dally-logo-v2.jpg"));return}
  if(url.pathname.startsWith("/api/")){res.setHeader("content-type","application/json");res.end(JSON.stringify({notifications:[],tasks:[],incoming:[],requests:[],roleDefinitions:[],conversations:[],messages:[],results:[],status:"ok"}));return}
  if(url.pathname!=="/"){res.statusCode=204;res.end();return}
  const locale=url.searchParams.get("locale")||"ar";

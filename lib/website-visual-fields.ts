@@ -19,7 +19,7 @@ export function visualFields(content: WebsiteContent): VisualField[] {
 export function updateVisualField(content: WebsiteContent, path: string, value: string): WebsiteContent | null {
   const field=visualFields(content).find(item=>item.path===path); if(!field || typeof value!=="string" || value.length>8000)return null;
   if(field.kind==="link" && !safeWebsiteButtonHref(value))return null;
-  if(field.kind==="image" && !(value === "" && path.includes(".blocks.") ||value === "/dally-logo.jpg" || /^\/images\/[a-zA-Z0-9][a-zA-Z0-9/_-]*\.(?:avif|gif|jpe?g|png|webp)$/.test(value) || /^\/api\/website-assets\/[a-f0-9-]{36}\.(?:jpg|png)$/.test(value)))return null;
+  if(field.kind==="image" && !(value === "" && path.includes(".blocks.") ||(value === "/dally-logo-v2.jpg" || value === "/dally-logo.jpg") || /^\/images\/[a-zA-Z0-9][a-zA-Z0-9/_-]*\.(?:avif|gif|jpe?g|png|webp)$/.test(value) || /^\/api\/website-assets\/[a-f0-9-]{36}\.(?:jpg|png)$/.test(value)))return null;
   const next=structuredClone(content);let target: unknown=next;const parts=path.split(".");
   for(const part of parts.slice(0,-1))target=(target as Record<string,unknown>)[part];
   (target as Record<string,unknown>)[parts.at(-1)!]=value;

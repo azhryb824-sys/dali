@@ -27,8 +27,8 @@ export const metadata: Metadata = {
   description: "النظام الإداري الداخلي لشركة دالي للتشغيل والصيانة.",
   applicationName: "نظام دالي الإداري",
   icons: {
-    icon: [{ url: "/dally-logo.jpg", type: "image/jpeg" }],
-    shortcut: "/dally-logo.jpg",
+    icon: [{ url: "/dally-logo-v2.jpg", type: "image/jpeg" }],
+    shortcut: "/dally-logo-v2.jpg",
     apple: [{ url: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   robots: { index: false, follow: false, nocache: true },

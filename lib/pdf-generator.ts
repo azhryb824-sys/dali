@@ -768,7 +768,7 @@ async function loadResources(pdf: PDFDocument, assets: CompanyAsset[]): Promise<
   const runtime = getRuntimeEnv();
 
   const [logoResponse, letterheadResponse, transparentStampResponse, transparentSignatureResponse] = await Promise.all([
-    runtime.ASSETS.fetch(new Request("https://assets.local/dally-logo.jpg")),
+    runtime.ASSETS.fetch(new Request("https://assets.local/dally-logo-v2.jpg")),
     runtime.ASSETS.fetch(new Request("https://assets.local/images/dali-letterhead.png")),
     runtime.ASSETS.fetch(new Request("https://assets.local/images/company-stamp-transparent.png")),
     runtime.ASSETS.fetch(new Request("https://assets.local/images/company-signature-transparent.png")),

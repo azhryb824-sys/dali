@@ -177,7 +177,7 @@ export default function LiveChatWidget() {
   return <div className={`live-chat ${open ? "open" : ""}`}>
     {open && <section ref={dialogRef} className="chat-window" role="dialog" aria-modal="false" aria-label="محادثة مباشرة مع شركة دالي">
       <header className="chat-header">
-        <div className="chat-brand"><Image src="/dally-logo.jpg" alt="" width={545} height={280} sizes="48px"/><p><strong>فريق دالي</strong><span><i className={businessHours?.isOpen ? "online" : "offline"}/>{businessHours?.isOpen ? "متاحون الآن" : "خارج ساعات الدوام"}</span></p></div>
+        <div className="chat-brand"><Image src="/dally-logo-v2.jpg" alt="" width={545} height={280} sizes="48px"/><p><strong>فريق دالي</strong><span><i className={businessHours?.isOpen ? "online" : "offline"}/>{businessHours?.isOpen ? "متاحون الآن" : "خارج ساعات الدوام"}</span></p></div>
         <button type="button" ref={closeRef} onClick={() => { setOpen(false); window.setTimeout(() => launcherRef.current?.focus(), 0); }} aria-label="إغلاق المحادثة">×</button>
       </header>
       {businessHours && <div className={`chat-hours ${businessHours.isOpen ? "open" : "closed"}`}><span>{businessHours.isOpen ? "فريقنا جاهز لخدمتك الآن" : `موعد العودة: ${businessHours.nextOpenLabel || "خلال ساعات العمل القادمة"}`}</span><b>{businessHours.opensAt} — {businessHours.closesAt} · بتوقيت مكة</b></div>}

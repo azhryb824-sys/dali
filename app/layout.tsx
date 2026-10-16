@@ -53,9 +53,9 @@ export async function generateMetadata(): Promise<Metadata> {
           apple: [{ url: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
         }
       : {
-          icon: [{ url: "/dally-logo.jpg", type: "image/jpeg" }],
-          shortcut: "/dally-logo.jpg",
-          apple: "/dally-logo.jpg",
+          icon: [{ url: "/dally-logo-v2.jpg", type: "image/jpeg" }],
+          shortcut: "/dally-logo-v2.jpg",
+          apple: "/dally-logo-v2.jpg",
         },
     manifest: isPwaRequest ? "/pwa/manifest.webmanifest" : "/manifest.webmanifest",
     openGraph: {
