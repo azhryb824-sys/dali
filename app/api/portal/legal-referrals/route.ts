@@ -7,6 +7,8 @@ import { hasPortalPermission, requirePortalApiRole } from "@/lib/portal-access";
 import { emitPortalNotification } from "@/lib/portal-notifications";
 import { jsonNoStore, readLimitedJson, rejectCrossSiteRequest } from "@/lib/security";
 
+import { workerLegalReason } from "@/lib/worker-legal-reasons";
+
 const sourceModule = { contract: "contracts", employee: "employees", worker: "workforce" } as const;
 type Source = keyof typeof sourceModule;
 const isSource = (value: unknown): value is Source => typeof value === "string" && Object.hasOwn(sourceModule, value);
@@ -40,6 +42,10 @@ export async function POST(request: Request) {
     return jsonNoStore({ error: "اختر السجل واكتب سبب الإحالة بما لا يقل عن 10 أحرف" }, { status: 400 });
   if (!(await hasPortalPermission(actor, sourceModule[sourceType], "write")))
     return jsonNoStore({ error: "غير مصرح بإحالة سجلات هذا القسم" }, { status: 403 });
+  const selectedReason = sourceType === "worker" ? workerLegalReason(body.reasonCode) : undefined;
+  if (sourceType === "worker" && !selectedReason)
+    return jsonNoStore({ error: "اختر سبب الإحالة" }, { status: 400 });
+  const referralReason = selectedReason ? `${selectedReason.label}: ${reason}` : reason;
   const db = getDb(), now = new Date().toISOString();
   try {
     const result = await db.transaction(async tx => {
@@ -48,11 +54,11 @@ export async function POST(request: Request) {
           await tx.query.workers.findFirst({ where: eq(workers.id, sourceId) });
       if (!source) throw new Error("السجل المرتبط غير موجود");
       const name = "clientName" in source ? source.clientName : source.fullName;
-      const reference = "referenceCode" in source ? source.referenceCode : "employeeNumber" in source ? source.employeeNumber : String(sourceId);
+      const reference = "referenceCode" in source ? source.referenceCode : "employeeNumber" in source ? source.employeeNumber : "workerNumber" in source ? source.workerNumber : String(sourceId);
       return registerLegalReferral(tx, { sourceType, sourceId, contractId: sourceType === "contract" ? sourceId : null,
-        clientId: "clientId" in source ? source.clientId : null, reason, actorEmail: actor.user.email, now,
-        counterparty: name, title: `${sourceType === "contract" ? "إحالة عقد" : sourceType === "employee" ? "قضية موظف" : "قضية عامل"} — ${reference} — ${name}`,
-        snapshot: { source: { type: sourceType, id: sourceId, name, reference }, capturedAt: now },
+        clientId: "clientId" in source ? source.clientId : null, reason: referralReason, actorEmail: actor.user.email, now,
+        counterparty: name, title: `${sourceType === "contract" ? "إحالة عقد" : sourceType === "employee" ? "قضية موظف" : "إحالة ملف عامل"} — ${reference} — ${name}`,
+        snapshot: { source: { type: sourceType, id: sourceId, name, reference }, ...(sourceType === "worker" ? { worker: "workerNumber" in source ? { workerNumber: source.workerNumber, fullName: source.fullName, iqamaNumber: source.iqamaNumber, nationality: source.nationality, profession: source.profession, mobile: source.mobile, clientSite: source.clientSite, status: source.status } : undefined, referralReasonCode: selectedReason!.value, referralReasonLabel: selectedReason!.label } : {}), capturedAt: now },
       });
     });
     await auditPortalAction({ actorEmail: actor.user.email, action: "legal-source-referred", entityType: "legal-record", entityId: result.matter.id, after: result.referral, reason });

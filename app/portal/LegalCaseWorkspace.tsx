@@ -191,6 +191,7 @@ type JudgmentPayment = {
   responseReason: string | null;
 };
 type Snapshot = {
+  worker?: Record<string, unknown>;
   contract?: Record<string, unknown>;
   documents?: Array<Record<string, unknown>>;
   payments?: Array<Record<string, unknown>>;
@@ -1560,7 +1561,18 @@ export default function LegalCaseWorkspace({ initialRecordId = 0, paymentsOnly =
                   إجراءات مفتوحة
                 </span>
               </div>
-              {snapshot && (
+              {snapshot?.worker && <section className="legal-linked-file legal-detail-card">
+                <h3>ملف العامل المحال</h3>
+                <dl>
+                  <div><dt>اسم العامل</dt><dd>{text(snapshot.worker.fullName)}</dd></div>
+                  <div><dt>رقم العامل</dt><dd>{text(snapshot.worker.workerNumber)}</dd></div>
+                  <div><dt>رقم الإقامة</dt><dd>{text(snapshot.worker.iqamaNumber)}</dd></div>
+                  <div><dt>المهنة</dt><dd>{text(snapshot.worker.profession)}</dd></div>
+                  <div><dt>الجنسية</dt><dd>{text(snapshot.worker.nationality)}</dd></div>
+                  <div><dt>رقم الجوال</dt><dd>{text(snapshot.worker.mobile)}</dd></div>
+                </dl>
+              </section>}
+              {snapshot && !snapshot.worker && (
                 <details className="legal-linked-file legal-detail-card"><summary>العقد والملف المحال</summary>
                   <div className="legal-section-heading">
                     <div>

@@ -6,6 +6,21 @@ type ReviewedTranslation = { en: string; bn: string };
  * load after the generated catalog.
  */
 export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
+"اسم العامل": {"en":"Worker name","bn":"কর্মীর নাম"},
+"نزاع عمالي": {"en": "Labor dispute", "bn": "শ্রম বিরোধ"},
+"انقطاع عن العمل": {"en": "Absence from work", "bn": "কাজে অনুপস্থিতি"},
+"مخالفة تستدعي إجراء قانونياً": {"en": "Violation requiring legal action", "bn": "আইনি ব্যবস্থা প্রয়োজন এমন লঙ্ঘন"},
+"مطالبة مالية عمالية": {"en": "Worker financial claim", "bn": "কর্মীর আর্থিক দাবি"},
+"مشكلة في الإقامة أو المستندات": {"en": "Residency or document issue", "bn": "ইকামা বা নথি সংক্রান্ত সমস্যা"},
+"سبب آخر": {"en": "Other reason", "bn": "অন্যান্য কারণ"},
+"ملف العامل": {"en": "Worker file", "bn": "কর্মীর ফাইল"},
+"تُحال بيانات ملف العامل إلى الشؤون القانونية لمتابعتها، مع تسجيل سبب الإحالة.": {"en": "The worker file is referred to Legal Affairs for follow-up, with the referral reason recorded.", "bn": "রেফারেলের কারণ নথিভুক্ত করে কর্মীর ফাইল আইনি বিভাগে পাঠানো হবে।"},
+"اختر سبب الإحالة": {"en": "Select a referral reason", "bn": "রেফারেলের কারণ নির্বাচন করুন"},
+"تفاصيل الإحالة": {"en": "Referral details", "bn": "রেফারেলের বিবরণ"},
+"إحالة ملف العامل إلى القانونية": {"en": "Refer worker file to Legal Affairs", "bn": "কর্মীর ফাইল আইনি বিভাগে পাঠান"},
+"ملف العامل المحال": {"en": "Referred worker file", "bn": "রেফার করা কর্মীর ফাইল"},
+"رقم العامل": {"en": "Worker number", "bn": "কর্মীর নম্বর"},
+
 "رمز البنك غير معروف؛ راجع رقم الآيبان": {"en": "Unknown bank code; check the IBAN", "bn": "ব্যাংক কোড অজানা; আইবিএএন পরীক্ষা করুন"},
 "أرقام الآيبان بعد SA": {"en": "IBAN digits after SA", "bn": "SA-এর পরের আইবিএএন সংখ্যা"},
 "يظهر بعد اكتمال الآيبان": {"en": "Appears when the IBAN is complete", "bn": "আইবিএএন সম্পূর্ণ হলে দেখা যাবে"},

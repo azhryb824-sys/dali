@@ -3,6 +3,8 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { readApiJson } from "@/lib/client-api";
 
+import { workerLegalReasons } from "@/lib/worker-legal-reasons";
+
 type Referral = { id: number; sourceId: number; referenceCode: string; reason: string; status: string; returnReason: string | null; referredAt: string };
 export default function LegalReferralPanel({ sourceType, records }: {
   sourceType: "contract" | "employee" | "worker"; records: { id: number; label: string }[];
@@ -19,7 +21,7 @@ export default function LegalReferralPanel({ sourceType, records }: {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = event.currentTarget; const fd = new FormData(form); setBusy(true); setNotice("");
     try {
-      const response = await fetch("/api/portal/legal-referrals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sourceType, sourceId: Number(fd.get("sourceId")), reason: fd.get("reason") }) });
+      const response = await fetch("/api/portal/legal-referrals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sourceType, sourceId: Number(fd.get("sourceId")), reason: fd.get("reason"), reasonCode: fd.get("reasonCode") }) });
       const result = await readApiJson(response) as { error?: string };
       if (!response.ok) throw new Error(result.error || "تعذرت الإحالة");
       form.reset(); await load(); setNotice("أحيل الملف إلى القانونية وسُجل السبب وأُشعر القسم المختص.");
@@ -29,9 +31,13 @@ export default function LegalReferralPanel({ sourceType, records }: {
   return <details className="panel legal-source-panel"><summary>الإحالات القانونية ومتابعة الإرجاع <b>{referrals.length}</b></summary>
     {notice && <p role="status" className="operations-notice">{notice}</p>}
     {canRefer && <form className="legal-activity-form" onSubmit={submit}>
-      <label>السجل المرتبط<select name="sourceId" required defaultValue=""><option value="" disabled>اختر السجل</option>{records.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-      <label>سبب الإحالة<textarea name="reason" required minLength={10} maxLength={2000} /></label>
-      <button disabled={busy}>إحالة إلى القانونية</button>
+      <label>{sourceType === "worker" ? "ملف العامل" : "السجل المرتبط"}<select name="sourceId" required defaultValue=""><option value="" disabled>اختر السجل</option>{records.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+      {sourceType === "worker" && <>
+        <p>تُحال بيانات ملف العامل إلى الشؤون القانونية لمتابعتها، مع تسجيل سبب الإحالة.</p>
+        <label>سبب الإحالة<select name="reasonCode" required defaultValue=""><option value="" disabled>اختر سبب الإحالة</option>{workerLegalReasons.map(reason => <option key={reason.value} value={reason.value}>{reason.label}</option>)}</select></label>
+      </>}
+      <label>{sourceType === "worker" ? "تفاصيل الإحالة" : "سبب الإحالة"}<textarea name="reason" required minLength={10} maxLength={2000} /></label>
+      <button disabled={busy}>{sourceType === "worker" ? "إحالة ملف العامل إلى القانونية" : "إحالة إلى القانونية"}</button>
     </form>}
     <div className="legal-card-grid">{referrals.map(item => <details key={item.id} className={`legal-source-card ${item.status}`}>
       <summary><strong>{records.find(record => record.id === item.sourceId)?.label || item.referenceCode}</strong><span>{item.status === "returned" ? "أعيد من القانونية — يتطلب إجراء" : item.status === "closed" ? "ملف مغلق" : "محال إلى القانونية"}</span></summary>
