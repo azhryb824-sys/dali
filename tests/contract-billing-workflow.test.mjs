@@ -75,7 +75,7 @@ test("sponsorship and Ajir status remain operationally consistent but private in
   for(const field of ["sponsorshipType","sponsorName","ajirContractStatus"]){
     for(const code of [workersRoute,operationsRoute,contractRoute,portal,operations,schema])assert.match(code,new RegExp(field));
   }
-  assert.match(workersRoute,/const ajirContractStatus = "not_applicable"/);assert.doesNotMatch(workersRoute,/worker-without-ajir/);
+  assert.match(workersRoute,/const ajirContractStatus = sponsorshipType === "dali" \? "not_applicable" : "without_ajir"/);assert.doesNotMatch(workersRoute,/worker-without-ajir/);
   assert.doesNotMatch(operations,/اسم الكفيل/);assert.match(operationsRoute,/actualSalaryHalalas/);assert.match(operationsRoute,/not_applicable/);assert.match(contractRoute,/تطابق عرض السعر المقبول/);
   assert.match(assignmentRoute,/جهة كفالة العامل لا تطابق جهة الكفالة المعتمدة في العقد/);assert.doesNotMatch(assignmentRoute,/worker\.ajirContractStatus !== profession\.ajirContractStatus/);assert.match(portal,/sponsorshipMatches/);
   for(const label of ["بعقد أجير","بدون عقد أجير"]){assert.match(portal,new RegExp(label));assert.match(operations,new RegExp(label));}
