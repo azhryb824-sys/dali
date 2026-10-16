@@ -1,0 +1,49 @@
+/* Shared screen presentation for portal data tables. */
+@media screen {
+  :is(.admin-shell,.modal-layer) table {
+    width:100%;border-collapse:separate!important;border-spacing:0!important;
+    background:#fff;border:1px solid #dce5eb;border-radius:14px;
+    font-variant-numeric:tabular-nums;
+  }
+  :is(.admin-shell,.modal-layer) table thead th {
+    background:#123449!important;color:#fff!important;
+    padding:16px 20px!important;height:auto!important;
+    border:0!important;border-bottom:3px solid #c6a66e!important;
+    font-size:12px!important;font-weight:800!important;line-height:1.7!important;
+    text-align:start;vertical-align:middle;white-space:nowrap;
+  }
+  :is(.admin-shell,.modal-layer) table thead tr:first-child th:first-child{border-start-start-radius:13px}
+  :is(.admin-shell,.modal-layer) table thead tr:first-child th:last-child{border-start-end-radius:13px}
+  :is(.admin-shell,.modal-layer) table tbody td {
+    padding:16px 20px!important;height:auto!important;min-height:58px;
+    border-bottom:1px solid #e7edf1!important;
+    font-size:13px!important;line-height:1.8!important;vertical-align:middle;
+  }
+  :is(.admin-shell,.modal-layer) table tbody tr:nth-child(even){background:#f7f9fb}
+  :is(.admin-shell,.modal-layer) table tbody tr:hover,
+  :is(.admin-shell,.modal-layer) table tbody tr:focus-within{background:#eef5f7!important}
+  :is(.admin-shell,.modal-layer) table tbody tr:last-child td{border-bottom:0!important}
+  :is(.admin-shell,.modal-layer) table tbody td strong{font-size:13px!important;line-height:1.8}
+  :is(.admin-shell,.modal-layer) table tbody td small{font-size:11px!important;line-height:1.8;margin-top:4px}
+  :is(.admin-shell,.modal-layer) table td button {
+    width:auto!important;height:auto!important;min-width:36px;min-height:38px;
+    padding:8px 13px!important;border-radius:9px!important;
+    font-size:12px!important;line-height:1.6!important;white-space:nowrap;
+  }
+  :is(.admin-shell,.modal-layer) table :is(button,a,input,select):focus-visible{outline:3px solid #b28b48;outline-offset:3px}
+  :is(.admin-shell,.modal-layer) table .status-pill{padding:6px 11px;border-radius:8px;font-size:11px;font-weight:700}
+  :is(.admin-shell,.modal-layer) table tfoot :is(td,th){background:#edf3f6;padding:16px 20px;border-top:2px solid #c6a66e;font-weight:800}
+  .admin-shell :is(.management-table-wrap,.request-table-wrap,.accounting-table,.hr-table,.posting-table,.reports-table,.reconciliation-table,.access-scope-table,.compliance-table,.construction-table-wrap,.conversation-table-wrap,.workforce-history-table){
+    max-width:100%;min-width:0;overflow-x:auto;border-radius:14px;
+    scrollbar-width:thin;scrollbar-color:#a4b5bf #edf2f5;
+  }
+  .admin-shell .table-tools{padding:20px!important;gap:14px;background:#f8fafc;border-bottom:1px solid #dce5eb}
+  .admin-shell .search-box{border-radius:10px;min-height:44px;background:#fff}
+  .admin-shell .search-box input{font-size:12px}
+  .admin-shell .empty-table{padding:50px 24px;background:#f8fafc}
+  @media(max-width:700px){
+    :is(.admin-shell,.modal-layer) table thead th{padding:13px 15px!important;font-size:11px!important}
+    :is(.admin-shell,.modal-layer) table tbody td{padding:13px 15px!important;font-size:12px!important}
+    :is(.admin-shell,.modal-layer) table td button{min-height:44px}
+  }
+}
