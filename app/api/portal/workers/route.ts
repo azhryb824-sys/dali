@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     const monthlySalary = Number(form.get("monthlySalary") || 0);
     const sponsorshipType = form.get("sponsorshipType") === "dali" ? "dali" : form.get("sponsorshipType") === "other" ? "other" : "";
     const sponsorName = cleanText(form.get("sponsorName"), 160);
-    const ajirContractStatus = "not_applicable";
+    const ajirContractStatus = sponsorshipType === "dali" ? "not_applicable" : "without_ajir";
     const isCompanySponsored = sponsorshipType === "dali";
     const iqamaExpiry = cleanDate(form.get("iqamaExpiry"));
     const medicalInsuranceExpiry = cleanDate(form.get("medicalInsuranceExpiry"));

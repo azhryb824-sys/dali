@@ -1587,7 +1587,7 @@ export default function PortalDashboard({
       setModal(null);
       notify(`تم إنشاء ${createdWorkers.length} ملف عامل وإرفاق صور الإقامة والمتطلبات.`);
     } catch (error) {
-      notify(`${createdWorkers.length ? `تم حفظ ${createdWorkers.length} عامل بنجاح. ` : ""}${error instanceof Error ? error.message : "تعذّر إنشاء ملف العامل."}`);
+      throw new Error(`${createdWorkers.length ? `تم حفظ ${createdWorkers.length} عامل بنجاح. ` : ""}${error instanceof Error ? error.message : "تعذّر إنشاء ملف العامل."}`);
     } finally {
       setBusy(null);
     }
@@ -7029,14 +7029,20 @@ function SearchableCombobox({ name, value, options, onChange, placeholder, requi
 }
 
 function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
+  const [error, setError] = useState("");
   const [profession, setProfession] = useState(workforceProfessions[0].label);
   const [nationality, setNationality] = useState("");
   const [workerCount, setWorkerCount] = useState(1);
   const [workerSponsorship, setWorkerSponsorship] = useState<Record<number, "dali" | "other">>({});
   const requirements = requirementsForProfession(profession);
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void onSubmit(event.currentTarget);
+    setError("");
+    try {
+      await onSubmit(event.currentTarget);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذّر إنشاء ملف العامل.");
+    }
   }
   return (
     <div className="modal-layer">
@@ -7168,6 +7174,7 @@ function WorkerModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () =
             </div>
           ))}
           <p className="form-hint span-two">لن يُنشأ الملف قبل إرفاق الصورة وجميع المستندات المطلوبة للمهنة. يُسجّل العامل متاحاً، ثم تُحدّد الجهة المستفيدة تلقائياً عند اختياره في عقد نشط.</p>
+          {error && <p className="form-hint span-two" role="alert">{error}</p>}
           <div className="modal-actions span-two">
             <button type="button" onClick={onClose}>
               إلغاء
