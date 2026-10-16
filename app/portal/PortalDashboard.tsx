@@ -50,6 +50,7 @@ import LegalCaseWorkspace from "./LegalCaseWorkspace";
 import PaymentManagementDashboard from "./PaymentManagementDashboard";
 import VideoInterviewDesk from "./VideoInterviewDesk";
 import ServiceRatingsPanel from "./ServiceRatingsPanel";
+import WorkforceWorkspaceTabs from "./WorkforceWorkspaceTabs";
 import ExecutivePeopleCommandCenter from "./ExecutivePeopleCommandCenter";
 import LocaleRuntime from "@/app/components/LocaleRuntime";
 import { translateUi } from "@/lib/i18n";
@@ -903,6 +904,7 @@ export default function PortalDashboard({
   const [selectedLegalRecordId, setSelectedLegalRecordId] = useState<number | null>(null);
   const [requestFilter, setRequestFilter] = useState<"all" | RequestStatus>("all");
   const [query, setQuery] = useState("");
+  const [workforceWorkerQuery, setWorkforceWorkerQuery] = useState("");
   const [globalQuery, setGlobalQuery] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationShellRef = useRef<HTMLDivElement>(null);
@@ -2687,12 +2689,11 @@ export default function PortalDashboard({
                 <Metric label="متاحون للعقود" value={workers.filter((item) => item.status === "available").length} note="جاهزون للإسناد" />
                 <Metric label="ملفات تحتاج استكمالاً" value={incompleteWorkerFiles} note={`${workerAlerts} تنبيه إقامة`} />
               </section>
-              <LegalReferralPanel sourceType="worker" records={workers.map(item => ({ id: item.id, label: `${item.fullName} — ${item.iqamaNumber || item.profession}` }))} />
-              <WorkforceOperations workers={workers} attachments={workerAttachments} />
-              <ContractOperations contracts={contracts} professions={contractProfessions} assignments={contractAssignments} onSelect={setSelectedContractId} />
-              <ManagementPanel query={query} setQuery={setQuery} placeholder="ابحث بالاسم أو رقم الإقامة أو المهنة أو الجهة">
-                <WorkerTable records={workers} attachments={workerAttachments} contracts={contracts} assignments={contractAssignments} query={query} onSelect={setSelectedWorkerId} />
-              </ManagementPanel>
+              <WorkforceWorkspaceTabs workerCount={workers.length} contractCount={contracts.length} requestCount={requestCounts.new}
+                legal={<LegalReferralPanel sourceType="worker" records={workers.map(item => ({ id: item.id, label: `${item.fullName} — ${item.iqamaNumber || item.profession}` }))} />}
+                readiness={<WorkforceOperations workers={workers} attachments={workerAttachments} />}
+                contracts={<ContractOperations contracts={contracts} professions={contractProfessions} assignments={contractAssignments} onSelect={setSelectedContractId} />}
+                requests={<>
               <section className="panel request-panel workforce-requests">
                 <div className="panel-head">
                   <div>
@@ -2716,6 +2717,11 @@ export default function PortalDashboard({
                 </div>
                 <RequestTable requests={visibleRequests} onSelect={setSelectedId} />
               </section>
+                </>}>
+              <ManagementPanel query={workforceWorkerQuery} setQuery={setWorkforceWorkerQuery} placeholder="ابحث بالاسم أو رقم الإقامة أو المهنة أو الجهة">
+                <WorkerTable records={workers} attachments={workerAttachments} contracts={contracts} assignments={contractAssignments} query={workforceWorkerQuery} onSelect={setSelectedWorkerId} />
+              </ManagementPanel>
+              </WorkforceWorkspaceTabs>
             </ModuleSection>
           )}
 

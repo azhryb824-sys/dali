@@ -701,4 +701,10 @@ export const reviewedUiTranslations: Record<string, ReviewedTranslation> = {
   "يجب ربط البنك بحساب أصول نشط ومستقل عن الخزينة": {"en": "Link the bank to an active asset account separate from cash in hand", "bn": "ব্যাংককে নগদ হিসাব থেকে পৃথক সক্রিয় সম্পদ হিসাবের সাথে যুক্ত করুন"},
   "رمز الحساب أو الآيبان مستخدم مسبقاً؛ راجع الحسابات المسجلة": {"en": "The account code or IBAN is already in use; review existing accounts", "bn": "হিসাব কোড বা IBAN ইতিমধ্যে ব্যবহৃত; বিদ্যমান হিসাব দেখুন"},
   "تعذّر حفظ العملية المحاسبية حالياً": {"en": "The accounting operation could not be saved at this time", "bn": "এই মুহূর্তে হিসাবের কার্যক্রম সংরক্ষণ করা যায়নি"},
+  "أقسام شؤون العمالة": {"en": "Workforce sections", "bn": "শ্রমিক ব্যবস্থাপনার বিভাগ"},
+  "ملفات العمال": {"en": "Worker files", "bn": "শ্রমিকদের ফাইল"},
+  "التوزيع والجاهزية": {"en": "Allocation and readiness", "bn": "বণ্টন ও প্রস্তুতি"},
+  "العقود والمواقع": {"en": "Contracts and sites", "bn": "চুক্তি ও কর্মস্থল"},
+  "طلبات العملاء": {"en": "Client requests", "bn": "গ্রাহকদের অনুরোধ"},
+  "الإحالات القانونية": {"en": "Legal referrals", "bn": "আইনি রেফারেল"},
 };
